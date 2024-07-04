@@ -1046,7 +1046,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_xinfo_stream(
-            self, redis_client: TGlideClient, cluster_mode: bool
+        self, redis_client: TGlideClient, cluster_mode: bool
     ):
         key = get_random_string(10)
         stream_id1_0 = "1-0"
@@ -1060,24 +1060,16 @@ class TestTransaction:
         # transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
         assert response[0] == stream_id1_0.encode()
         # transaction.xinfo_stream(key)
-        info = response[1]
+        info = cast(dict, response[1])
         assert info.get(b"length") == 1
         assert info.get(b"groups") == 0
-        assert info.get(b"first-entry") == [
-            stream_id1_0.encode(),
-            [b"foo", b"bar"]
-        ]
+        assert info.get(b"first-entry") == [stream_id1_0.encode(), [b"foo", b"bar"]]
         assert info.get(b"first-entry") == info.get(b"last-entry")
 
         # transaction.xinfo_stream_full(key)
-        info_full = response[2]
+        info_full = cast(dict, response[2])
         assert info_full.get(b"length") == 1
-        assert info_full.get(b"entries") == [
-            [
-                stream_id1_0.encode(),
-                [b"foo", b"bar"]
-            ]
-        ]
+        assert info_full.get(b"entries") == [[stream_id1_0.encode(), [b"foo", b"bar"]]]
         assert info_full.get(b"groups") == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

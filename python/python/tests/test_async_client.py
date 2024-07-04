@@ -6816,9 +6816,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xinfo_stream(
-            self, redis_client: TGlideClient, protocol
-    ):
+    async def test_xinfo_stream(self, redis_client: TGlideClient, protocol):
         key = get_random_string(10)
         group_name = get_random_string(10)
         consumer = get_random_string(10)
@@ -6827,23 +6825,20 @@ class TestCommands:
         stream_id1_1 = "1-1"
 
         # setup: add stream entry, create consumer group and consumer, read from stream with consumer
-        assert await redis_client.xadd(key, [("a", "b"), ("c", "d")], StreamAddOptions(stream_id1_0)) == stream_id1_0.encode()
+        assert (
+            await redis_client.xadd(
+                key, [("a", "b"), ("c", "d")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0.encode()
+        )
         assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key.encode(): {
-                stream_id1_0.encode(): [
-                    [b"a", b"b"],
-                    [b"c", b"d"]
-                ]
-            }
+            key.encode(): {stream_id1_0.encode(): [[b"a", b"b"], [b"c", b"d"]]}
         }
 
         result = await redis_client.xinfo_stream(key)
         assert result.get(b"length") == 1
-        expected_first_entry = [
-            stream_id1_0.encode(),
-            [b"a", b"b", b"c", b"d"]
-        ]
+        expected_first_entry = [stream_id1_0.encode(), [b"a", b"b", b"c", b"d"]]
         assert result.get(b"first-entry") == expected_first_entry
 
         # only one entry exists, so first and last entry should be the same
@@ -6854,15 +6849,21 @@ class TestCommands:
         assert result2 == result
 
         # add one more entry
-        assert await redis_client.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_1)) == stream_id1_1.encode()
+        assert (
+            await redis_client.xadd(
+                key, [("foo", "bar")], StreamAddOptions(stream_id1_1)
+            )
+            == stream_id1_1.encode()
+        )
 
         result_full = await redis_client.xinfo_stream_full(key, count=1)
         assert result_full.get(b"length") == 2
+        entries = cast(list, result_full.get(b"entries"))
         # only the first entry will be returned since we passed count=1
-        assert len(result_full.get(b"entries")) == 1
-        assert result_full.get(b"entries")[0] == expected_first_entry
+        assert len(entries) == 1
+        assert entries[0] == expected_first_entry
 
-        groups = result_full.get(b"groups")
+        groups = cast(list, result_full.get(b"groups"))
         assert len(groups) == 1
         group_info = groups[0]
         assert group_info.get(b"name") == group_name.encode()
@@ -6881,12 +6882,12 @@ class TestCommands:
         # call XINFO STREAM FULL with byte arg
         result_full2 = await redis_client.xinfo_stream_full(key.encode())
         # 2 entries should be returned, since we didn't pass the COUNT arg this time
-        assert len(result_full2.get(b"entries")) == 2
+        assert len(cast(list, result_full2.get(b"entries"))) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xinfr_stream_edge_cases_and_failures(
-            self, redis_client: TGlideClient, protocol
+    async def test_xinfo_stream_edge_cases_and_failures(
+        self, redis_client: TGlideClient, protocol
     ):
         key = get_random_string(10)
         string_key = get_random_string(10)
@@ -6894,7 +6895,12 @@ class TestCommands:
         stream_id1_0 = "1-0"
 
         # setup: create empty stream
-        assert await redis_client.xadd(key, [("field", "value")], StreamAddOptions(stream_id1_0)) == stream_id1_0.encode()
+        assert (
+            await redis_client.xadd(
+                key, [("field", "value")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0.encode()
+        )
         assert await redis_client.xdel(key, [stream_id1_0]) == 1
 
         # XINFO STREAM called against empty stream

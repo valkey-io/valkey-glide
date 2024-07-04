@@ -55,7 +55,13 @@ from glide.async_commands.stream import (
     StreamTrimOptions,
     _create_xpending_range_args,
 )
-from glide.constants import TOK, TEncodable, TResult, TXInfoStreamResponse, TXInfoStreamFullResponse
+from glide.constants import (
+    TOK,
+    TEncodable,
+    TResult,
+    TXInfoStreamFullResponse,
+    TXInfoStreamResponse,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 

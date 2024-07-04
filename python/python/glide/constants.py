@@ -53,8 +53,7 @@ TFunctionStatsResponse = Mapping[
 ]
 
 TXInfoStreamResponse = Mapping[
-    bytes,
-    Union[bytes, int, Mapping[bytes, Optional[List[List[bytes]]]]]
+    bytes, Union[bytes, int, Mapping[bytes, Optional[List[List[bytes]]]]]
 ]
 TXInfoStreamFullResponse = Mapping[
     bytes,
@@ -62,6 +61,6 @@ TXInfoStreamFullResponse = Mapping[
         bytes,
         int,
         Mapping[bytes, List[List[bytes]]],
-        List[Mapping[bytes, Union[bytes, int, List[List[Union[bytes, int]]]]]]
-    ]
+        List[Mapping[bytes, Union[bytes, int, List[List[Union[bytes, int]]]]]],
+    ],
 ]
