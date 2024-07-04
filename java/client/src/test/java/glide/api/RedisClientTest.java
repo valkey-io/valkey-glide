@@ -9272,6 +9272,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void functionList_binary_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object>[] value = new Map[0];
+        CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
+                        eq(FunctionList), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>[]> response = service.functionListBinary(false);
+        Map<GlideString, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void functionList_with_pattern_returns_success() {
         // setup
         String pattern = "*";
@@ -9288,6 +9312,33 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, Object>[]> response = service.functionList(pattern, true);
         Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_binary_with_pattern_returns_success() {
+        // setup
+        GlideString pattern = gs("*");
+        GlideString[] args =
+                new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern, gs(WITH_CODE_REDIS_API)};
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object>[] value = new Map[0];
+        CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
+                        eq(FunctionList), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>[]> response =
+                service.functionListBinary(pattern, true);
+        Map<GlideString, Object>[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

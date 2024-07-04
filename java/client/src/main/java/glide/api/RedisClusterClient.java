@@ -580,12 +580,39 @@ public class RedisClusterClient extends BaseClient
         }
     }
 
+    /** Process a <code>FUNCTION LIST</code> cluster response. */
+    protected ClusterValue<Map<GlideString, Object>[]> handleFunctionListResponseBinary(
+            Response response, Route route) {
+        if (route instanceof SingleNodeRoute) {
+            Map<GlideString, Object>[] data =
+                    handleFunctionListResponseBinary(handleArrayResponseBinary(response));
+            return ClusterValue.ofSingleValue(data);
+        } else {
+            // each `Object` is a `Map<GlideString, Object>[]` actually
+            Map<GlideString, Object> info = handleBinaryStringMapResponse(response);
+            Map<GlideString, Map<GlideString, Object>[]> data = new HashMap<>();
+            for (var nodeInfo : info.entrySet()) {
+                data.put(
+                        nodeInfo.getKey(), handleFunctionListResponseBinary((Object[]) nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValueBinary(data);
+        }
+    }
+
     @Override
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
     @Override
@@ -600,6 +627,19 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
+            @NonNull GlideString libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder()
+                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(libNamePattern)
+                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .toArray(),
+                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
+    }
+
+    @Override
     public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
             boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
@@ -607,6 +647,15 @@ public class RedisClusterClient extends BaseClient
                 withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
                 route,
                 response -> handleFunctionListResponse(response, route));
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(
+            boolean withCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                route,
+                response -> handleFunctionListResponseBinary(response, route));
     }
 
     @Override
@@ -619,6 +668,19 @@ public class RedisClusterClient extends BaseClient
                         : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 route,
                 response -> handleFunctionListResponse(response, route));
+    }
+
+    public CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(
+            @NonNull GlideString libNamePattern, boolean withCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder()
+                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(libNamePattern)
+                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .toArray(),
+                route,
+                response -> handleFunctionListResponseBinary(response, route));
     }
 
     @Override
