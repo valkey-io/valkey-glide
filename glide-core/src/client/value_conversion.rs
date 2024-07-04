@@ -782,7 +782,7 @@ pub(crate) fn convert_to_expected_type(
             Value::Array(mut array) => {
                 // Response is in RESP2 format. We need to convert to RESP3 format.
                 let groups_key = Value::SimpleString("groups".into());
-                let opt_groups_index = array
+                let opt_groups_key_index = array
                     .iter()
                     .position(
                         |key| {
@@ -798,15 +798,16 @@ pub(crate) fn convert_to_expected_type(
                         }
                     );
 
-                let Some(groups_index) = opt_groups_index else {
-                    return Err((ErrorKind::TypeError, "Groups key not found").into());
+                let Some(groups_key_index) = opt_groups_key_index else {
+                    return Err((ErrorKind::TypeError, "No groups key found").into());
                 };
 
-                if array.get(groups_index + 1).is_none() {
+                let groups_value_index = groups_key_index + 1;
+                if array.get(groups_value_index).is_none() {
                     return Err((ErrorKind::TypeError, "No groups value found.").into());
                 }
 
-                let Value::Array(groups) = array[groups_index + 1].clone() else {
+                let Value::Array(groups) = array[groups_value_index].clone() else {
                     return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted an Array.").into());
                 };
 
@@ -830,7 +831,7 @@ pub(crate) fn convert_to_expected_type(
                     };
 
                     let consumers_key = Value::SimpleString("consumers".into());
-                    let opt_consumers_index = group
+                    let opt_consumers_key_index = group
                         .iter()
                         .position(
                             |key| {
@@ -846,15 +847,16 @@ pub(crate) fn convert_to_expected_type(
                             }
                         );
 
-                    let Some(consumers_index) = opt_consumers_index else {
+                    let Some(consumers_key_index) = opt_consumers_key_index else {
                         return Err((ErrorKind::TypeError, "No consumers key found").into());
                     };
 
-                    if group.get(consumers_index + 1).is_none() {
+                    let consumers_value_index = consumers_key_index + 1;
+                    if group.get(consumers_value_index).is_none() {
                         return Err((ErrorKind::TypeError, "No consumers value found.").into());
                     }
 
-                    let Value::Array(ref consumers) = group[consumers_index + 1] else {
+                    let Value::Array(ref consumers) = group[consumers_value_index] else {
                         return Err((ErrorKind::TypeError, "Incorrect value type received for consumers. Wanted an Array.").into());
                     };
 
@@ -876,7 +878,7 @@ pub(crate) fn convert_to_expected_type(
                         }))?);
                     }
 
-                    group[consumers_index + 1] = Value::Array(consumers_as_maps);
+                    group[consumers_value_index] = Value::Array(consumers_as_maps);
                     let group_map = convert_to_expected_type(Value::Array(group), Some(ExpectedReturnType::Map {
                         key_type: &Some(ExpectedReturnType::BulkString),
                         value_type: &None,
@@ -884,7 +886,7 @@ pub(crate) fn convert_to_expected_type(
                     groups_as_maps.push(group_map);
                 }
 
-                array[groups_index + 1] = Value::Array(groups_as_maps);
+                array[groups_value_index] = Value::Array(groups_as_maps);
                 let converted_response = convert_to_expected_type(Value::Array(array.to_vec()), Some(ExpectedReturnType::Map {
                     key_type: &Some(ExpectedReturnType::BulkString),
                     value_type: &None,
