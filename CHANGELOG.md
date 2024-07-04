@@ -72,17 +72,20 @@
 * Python: Add ZSCAN and HSCAN commands ([#1732](https://github.com/aws/glide-for-redis/pull/1732))
 * Python: Added FCALL_RO command ([#1721](https://github.com/aws/glide-for-redis/pull/1721))
 * Python: Added WATCH and UNWATCH command ([#1736](https://github.com/aws/glide-for-redis/pull/1736))
+* Python: Added XCLAIM command ([#1772](https://github.com/aws/glide-for-redis/pull/1772))
 * Python: Added XINFO GROUPS and XINFO CONSUMERS commands ([#1753](https://github.com/aws/glide-for-redis/pull/1753))
 * Python: Added LPOS command ([#1740](https://github.com/aws/glide-for-redis/pull/1740))
 * Python: Added SCAN command ([#1623](https://github.com/aws/glide-for-redis/pull/1623))
 * Python: Added DUMP and Restore commands ([#1733](https://github.com/aws/glide-for-redis/pull/1733))
 * Java: Added SCAN command ([#1751](https://github.com/aws/glide-for-redis/pull/1751))
-
+* Python: Type migration for entries_read ([#1768](https://github.com/aws/glide-for-redis/pull/1768))
+* Python: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#1769](https://github.com/aws/glide-for-redis/pull/1769))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
 * Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/aws/glide-for-redis/pull/1670))
 * Python: Rename RedisClient to GlideClient, RedisClusterClient to GlideClusterClient and BaseRedisClient to BaseClient([#1669](https://github.com/aws/glide-for-redis/pull/1669))
+* Python: Rename ClusterClientConfiguration to GlideClusterClientConfiguration ([#1806](https://github.com/aws/glide-for-redis/pull/1806))
 
 ## 0.4.1 (2024-02-06)
 

@@ -5,11 +5,11 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 from glide.config import (
-    ClusterClientConfiguration,
     GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     NodeAddress,
     ProtocolVersion,
-    RedisCredentials,
+    ServerCredentials,
 )
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
@@ -28,14 +28,14 @@ def pytest_addoption(parser):
         "--host",
         default=DEFAULT_HOST,
         action="store",
-        help="Redis host endpoint, defaults to `%(default)s`",
+        help="Server host endpoint, defaults to `%(default)s`",
     )
 
     parser.addoption(
         "--port",
         default=DEFAULT_PORT,
         action="store",
-        help="Redis port, defaults to `%(default)s`",
+        help="Server port, defaults to `%(default)s`",
     )
 
     parser.addoption(
@@ -204,7 +204,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture()
-async def redis_client(
+async def glide_client(
     request, cluster_mode: bool, protocol: ProtocolVersion
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"
@@ -217,14 +217,14 @@ async def redis_client(
 async def create_client(
     request,
     cluster_mode: bool,
-    credentials: Optional[RedisCredentials] = None,
+    credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = None,
     cluster_mode_pubsub: Optional[
-        ClusterClientConfiguration.PubSubSubscriptions
+        GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
     standalone_mode_pubsub: Optional[
         GlideClientConfiguration.PubSubSubscriptions
@@ -237,7 +237,7 @@ async def create_client(
         assert database_id == 0
         k = min(3, len(pytest.redis_cluster.nodes_addr))
         seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=k)
-        cluster_config = ClusterClientConfiguration(
+        cluster_config = GlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
