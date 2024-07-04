@@ -144,11 +144,9 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::BulkString => Ok(Value::BulkString(
             from_owned_redis_value::<String>(value)?.into(),
         )),
-        ExpectedReturnType::SimpleString => {
-            dbg!(value.clone());
-            Ok(Value::SimpleString(
+        ExpectedReturnType::SimpleString => Ok(Value::SimpleString(
             from_owned_redis_value::<String>(value)?,
-        ))},
+        )),
         ExpectedReturnType::JsonToggleReturnType => match value {
             Value::Array(array) => {
                 let converted_array: RedisResult<Vec<_>> = array
@@ -1091,8 +1089,6 @@ fn convert_array_to_map_by_type(
         match key {
             Value::Array(inner_array) => {
                 if inner_array.len() != 2 {
-                    dbg!(inner_array.len());
-                    //panic!();
                     return Err((
                         ErrorKind::TypeError,
                         "Array inside map must contain exactly two elements",
