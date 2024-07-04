@@ -4676,14 +4676,14 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Select, [str(index)])
 
     def sort(
-        self: TTransaction,
+        self,
         key: TEncodable,
         by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -4723,14 +4723,14 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def sort_ro(
-        self: TTransaction,
+        self,
         key: TEncodable,
         by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -4772,7 +4772,7 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
-        self: TTransaction,
+        self,
         key: TEncodable,
         destination: TEncodable,
         by_pattern: Optional[TEncodable] = None,
@@ -4780,7 +4780,7 @@ class Transaction(BaseTransaction):
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
@@ -4823,12 +4823,12 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def copy(
-        self: TTransaction,
+        self,
         source: TEncodable,
         destination: TEncodable,
         destinationDB: Optional[int] = None,
         replace: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Copies the value stored at the `source` to the `destination` key. If `destinationDB`
         is specified, the value will be copied to the database specified by `destinationDB`,
@@ -4856,9 +4856,7 @@ class Transaction(BaseTransaction):
 
         return self.append_command(RequestType.Copy, args)
 
-    def publish(
-        self: TTransaction, message: TEncodable, channel: TEncodable
-    ) -> TTransaction:
+    def publish(self, message: TEncodable, channel: TEncodable) -> "Transaction":
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
@@ -4868,7 +4866,7 @@ class Transaction(BaseTransaction):
             channel (TEncodable): Channel to publish the message on.
 
         Returns:
-            TOK: a simple `OK` response.
+            int: Number of subscriptions in that shard that received the message.
 
         """
         return self.append_command(RequestType.Publish, [channel, message])
@@ -4884,12 +4882,12 @@ class ClusterTransaction(BaseTransaction):
     """
 
     def sort(
-        self: TTransaction,
+        self,
         key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         This command is routed to primary only.
@@ -4912,12 +4910,12 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def sort_ro(
-        self: TTransaction,
+        self,
         key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -4942,13 +4940,13 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
-        self: TTransaction,
+        self,
         key: TEncodable,
         destination: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         When in cluster mode, `key` and `store` must map to the same hash slot.
@@ -4972,11 +4970,11 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def copy(
-        self: TTransaction,
+        self,
         source: TEncodable,
         destination: TEncodable,
         replace: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
         removes the `destination` key first if it already exists, otherwise performs no action.
@@ -5000,8 +4998,8 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Copy, args)
 
     def publish(
-        self: TTransaction, message: str, channel: str, sharded: bool = False
-    ) -> TTransaction:
+        self, message: str, channel: str, sharded: bool = False
+    ) -> "ClusterTransaction":
         """
         Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
