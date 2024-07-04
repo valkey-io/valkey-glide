@@ -1102,4 +1102,72 @@ public class PubSubTests {
         assertEquals(channel, callbackMessages.get(2).getChannel());
         assertTrue(callbackMessages.get(2).getPattern().isEmpty());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @MethodSource("getTwoBoolPermutations")
+    public void transaction_with_all_types_of_PubsubMessages_binary(
+            boolean standalone, boolean useCallback) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        skipTestsOnMac();
+        assumeTrue(
+                standalone, // TODO activate tests after fix
+                "Test doesn't work on cluster due to Cross Slot error, probably a bug in `redis-rs`");
+
+        String prefix = "channel";
+        GlideString pattern = gs(new byte[] {(byte) 0xC3, 0x28});
+        GlideString shardPrefix = gs(new byte[] {(byte) 0xA0, (byte) 0xA1});
+        GlideString channel = gs(new byte[] {(byte) 0xE2, 0x28, (byte) 0xA1});
+        var exactMessage =
+                new PubSubMessage(gs(new byte[] {(byte) 0xF0, 0x28, (byte) 0x8C, (byte) 0xBC}), channel);
+        var patternMessage =
+                new PubSubMessage(
+                        gs(new byte[] {(byte) 0xF0, (byte) 0x90, 0x28, (byte) 0xBC}), gs(prefix), pattern);
+        var shardedMessage =
+                new PubSubMessage(
+                        gs(new byte[] {(byte) 0xF0, (byte) 0x28, (byte) 0x8C, 0x28}), shardPrefix);
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(
+                                PubSubChannelMode.EXACT,
+                                Set.of(channel),
+                                PubSubChannelMode.PATTERN,
+                                Set.of(pattern))
+                        : Map.of(
+                                PubSubClusterChannelMode.EXACT,
+                                Set.of(channel),
+                                PubSubClusterChannelMode.PATTERN,
+                                Set.of(pattern),
+                                PubSubClusterChannelMode.SHARDED,
+                                Set.of(shardPrefix));
+
+        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var sender = createClient(standalone);
+        clients.addAll(List.of(listener, sender));
+
+        if (standalone) {
+            var transaction =
+                    new Transaction()
+                            .publish(exactMessage.getMessage(), exactMessage.getChannel())
+                            .publish(patternMessage.getMessage(), patternMessage.getChannel());
+            ((RedisClient) sender).exec(transaction).get();
+        } else {
+            var transaction =
+                    new ClusterTransaction()
+                            .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
+                            .publish(exactMessage.getMessage(), exactMessage.getChannel())
+                            .publish(patternMessage.getMessage(), patternMessage.getChannel());
+            ((RedisClusterClient) sender).exec(transaction).get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
+
+        var expected =
+                standalone
+                        ? Set.of(Pair.of(1, exactMessage), Pair.of(1, patternMessage))
+                        : Set.of(
+                                Pair.of(1, exactMessage), Pair.of(1, patternMessage), Pair.of(1, shardedMessage));
+        verifyReceivedPubsubMessages(expected, listener, useCallback);
+    }
 }

@@ -4,7 +4,6 @@ package glide.connectors.handlers;
 import static glide.api.models.GlideString.gs;
 
 import glide.api.logging.Logger;
-import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.exceptions.RedisException;
@@ -50,8 +49,9 @@ public class MessageHandler {
             throw new RedisException("Received invalid push: empty or in incorrect format.");
         }
         @SuppressWarnings("unchecked")
-        Map<GlideString, Object> push = (Map<GlideString, Object>) data;
+        Map<String, Object> push = (Map<String, Object>) data;
         PushKind pushType = Enum.valueOf(PushKind.class, push.get("kind").toString());
+        // The objects in values will actually be byte[].
         Object[] values = (Object[]) push.get("values");
 
         switch (pushType) {
