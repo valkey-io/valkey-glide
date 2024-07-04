@@ -369,6 +369,27 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
+    async def function_kill(self) -> TOK:
+        """
+        Kills a function that is currently executing.
+        This command only terminates read-only functions.
+
+        See https://valkey.io/commands/function-kill/ for more details.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_kill()
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.FunctionKill, []),
+        )
+
     async def function_stats(self) -> TFunctionStatsResponse:
         """
         Returns information about the function that's currently running and information about the
