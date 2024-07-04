@@ -107,7 +107,6 @@ public class GetExOptions {
         if (count != null) {
             optionArgs.add(String.valueOf(count));
         }
-        System.out.println(optionArgs);
         return optionArgs.toArray(new String[0]);
     }
 
