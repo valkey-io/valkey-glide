@@ -1,7 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
@@ -57,9 +60,24 @@ public final class StreamGroupOptions {
 
         if (this.entriesRead != null) {
             optionArgs.add(ENTRIES_READ_VALKEY_API);
-            optionArgs.add(entriesRead.toString());
+            optionArgs.add(Long.toString(entriesRead));
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    public GlideString[] toGlideStringArgs() {
+        List<GlideString> optionArgs = new ArrayList<>();
+
+        if (this.mkStream) {
+            optionArgs.add(gs(MAKE_STREAM_VALKEY_API));
+        }
+
+        if (this.entriesRead != null) {
+            optionArgs.add(gs(ENTRIES_READ_VALKEY_API));
+            optionArgs.add(gs(Long.toString(entriesRead)));
+        }
+
+        return optionArgs.toArray(new GlideString[0]);
     }
 }

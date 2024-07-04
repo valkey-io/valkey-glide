@@ -2435,11 +2435,29 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupCreate(
+            @NonNull GlideString key, @NonNull GlideString groupName, @NonNull GlideString id) {
+        return commandManager.submitNewCommand(
+                XGroupCreate, new GlideString[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
             @NonNull String key,
             @NonNull String groupName,
             @NonNull String id,
             @NonNull StreamGroupOptions options) {
         String[] arguments = concatenateArrays(new String[] {key, groupName, id}, options.toArgs());
+        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull GlideString key,
+            @NonNull GlideString groupName,
+            @NonNull GlideString id,
+            @NonNull StreamGroupOptions options) {
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {key, groupName, id}, options.toGlideStringArgs());
         return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
     }
 
@@ -2450,6 +2468,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> xgroupDestroy(
+            @NonNull GlideString key, @NonNull GlideString groupname) {
+        return commandManager.submitNewCommand(
+                XGroupDestroy, new GlideString[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> xgroupCreateConsumer(
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
@@ -2457,10 +2482,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> xgroupCreateConsumer(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return commandManager.submitNewCommand(
+                XGroupCreateConsumer,
+                new GlideString[] {key, group, consumer},
+                this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> xgroupDelConsumer(
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
                 XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xgroupDelConsumer(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return commandManager.submitNewCommand(
+                XGroupDelConsumer, new GlideString[] {key, group, consumer}, this::handleLongResponse);
     }
 
     @Override
@@ -2472,9 +2513,27 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupSetId(
+            @NonNull GlideString key, @NonNull GlideString groupName, @NonNull GlideString id) {
+        return commandManager.submitNewCommand(
+                XGroupSetId, new GlideString[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
             @NonNull String key, @NonNull String groupName, @NonNull String id, long entriesRead) {
         String[] arguments =
                 new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
+        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull GlideString key,
+            @NonNull GlideString groupName,
+            @NonNull GlideString id,
+            long entriesRead) {
+        GlideString[] arguments =
+                new GlideString[] {key, groupName, id, gs("ENTRIESREAD"), gs(Long.toString(entriesRead))};
         return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 
