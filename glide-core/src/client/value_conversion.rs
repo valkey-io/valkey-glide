@@ -857,13 +857,12 @@ pub(crate) fn convert_to_expected_type(
                 let Some(groups_index) = opt_groups_index else {
                     return Err((ErrorKind::TypeError, "Groups key not found").into());
                 };
-                dbg!(groups_index);
 
                 if array.get(groups_index + 1).is_none() {
                     return Err((ErrorKind::TypeError, "No groups value found.").into());
                 }
  
-                let Value::Array(mut groups) = array[groups_index + 1].clone() else {
+                let Value::Array(groups) = array[groups_index + 1].clone() else {
                     return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted an Array.").into());
                 };
 
@@ -897,7 +896,6 @@ pub(crate) fn convert_to_expected_type(
                                         converted_key == consumers_key
                                     },
                                     Err(_) => {
-                                        //error_while_converting_key = true;
                                         false
                                     }
                                 }
