@@ -293,6 +293,14 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>[]> functionList(
             @NonNull String libNamePattern, boolean withCode) {
         return commandManager.submitNewCommand(
@@ -301,6 +309,19 @@ public class RedisClient extends BaseClient
                         ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
                         : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
+            @NonNull GlideString libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder()
+                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(libNamePattern)
+                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .toArray(),
+                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
     @Override

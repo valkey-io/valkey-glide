@@ -4,6 +4,7 @@ package glide.cluster;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
@@ -1210,47 +1211,39 @@ public class CommandTests {
         }
 
         var expectedDescription =
-                new HashMap<String, String>() {
+                new HashMap<GlideString, GlideString>() {
                     {
-                        put(funcName.toString(), null);
+                        put(funcName, null);
                     }
                 };
         var expectedFlags =
-                new HashMap<String, Set<String>>() {
+                new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName.toString(), Set.of("no-writes"));
+                        put(funcName, Set.of(gs("no-writes")));
                     }
                 };
 
-        var response = clusterClient.functionList(false, route).get();
+        var response = clusterClient.functionListBinary(false, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
-            checkFunctionListResponse(
-                    flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+            checkFunctionListResponseBinary(
+                    flist, libName, expectedDescription, expectedFlags, Optional.empty());
         } else {
             for (var flist : response.getMultiValue().values()) {
-                checkFunctionListResponse(
-                        flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+                checkFunctionListResponseBinary(
+                        flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
         }
 
-        response = clusterClient.functionList(true, route).get();
+        response = clusterClient.functionListBinary(true, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
-            checkFunctionListResponse(
-                    flist,
-                    libName.toString(),
-                    expectedDescription,
-                    expectedFlags,
-                    Optional.of(code.toString()));
+            checkFunctionListResponseBinary(
+                    flist, libName, expectedDescription, expectedFlags, Optional.of(code));
         } else {
             for (var flist : response.getMultiValue().values()) {
-                checkFunctionListResponse(
-                        flist,
-                        libName.toString(),
-                        expectedDescription,
-                        expectedFlags,
-                        Optional.of(code.toString()));
+                checkFunctionListResponseBinary(
+                        flist, libName, expectedDescription, expectedFlags, Optional.of(code));
             }
         }
 
@@ -1273,18 +1266,18 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
-        expectedDescription.put(newFuncName.toString(), null);
-        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
 
-        response = clusterClient.functionList(false, route).get();
+        response = clusterClient.functionListBinary(false, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
-            checkFunctionListResponse(
-                    flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+            checkFunctionListResponseBinary(
+                    flist, libName, expectedDescription, expectedFlags, Optional.empty());
         } else {
             for (var flist : response.getMultiValue().values()) {
-                checkFunctionListResponse(
-                        flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+                checkFunctionListResponseBinary(
+                        flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
         }
 
@@ -1302,23 +1295,15 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library not found"));
 
-        response = clusterClient.functionList(true, route).get();
+        response = clusterClient.functionListBinary(true, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
-            checkFunctionListResponse(
-                    flist,
-                    libName.toString(),
-                    expectedDescription,
-                    expectedFlags,
-                    Optional.of(newCode.toString()));
+            checkFunctionListResponseBinary(
+                    flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
         } else {
             for (var flist : response.getMultiValue().values()) {
-                checkFunctionListResponse(
-                        flist,
-                        libName.toString(),
-                        expectedDescription,
-                        expectedFlags,
-                        Optional.of(newCode.toString()));
+                checkFunctionListResponseBinary(
+                        flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
             }
         }
 
@@ -1452,29 +1437,25 @@ public class CommandTests {
                 "one",
                 clusterClient.fcallReadOnly(funcName, new GlideString[] {gs("one"), gs("two")}).get());
 
-        var flist = clusterClient.functionList(false).get();
+        var flist = clusterClient.functionListBinary(false).get();
         var expectedDescription =
-                new HashMap<String, String>() {
+                new HashMap<GlideString, GlideString>() {
                     {
-                        put(funcName.toString(), null);
+                        put(funcName, null);
                     }
                 };
         var expectedFlags =
-                new HashMap<String, Set<String>>() {
+                new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName.toString(), Set.of("no-writes"));
+                        put(funcName, Set.of(gs("no-writes")));
                     }
                 };
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = clusterClient.functionList(true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(code.toString()));
+        flist = clusterClient.functionListBinary(true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
         var executionException =
@@ -1507,19 +1488,15 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library not found"));
 
-        flist = clusterClient.functionList(libName.toString(), false).get();
-        expectedDescription.put(newFuncName.toString(), null);
-        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        flist = clusterClient.functionListBinary(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = clusterClient.functionList(libName.toString(), true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(newCode.toString()));
+        flist = clusterClient.functionListBinary(libName, true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         assertEquals(
                 2L, clusterClient.fcall(newFuncName, new GlideString[] {gs("one"), gs("two")}).get());
