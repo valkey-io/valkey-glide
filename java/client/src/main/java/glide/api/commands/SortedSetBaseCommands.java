@@ -277,7 +277,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<String, Double> payload = client.zpopmax("mySortedSet", 2).get();
-     * assert payload.equals(Map.of('member3', 7.5 , 'member2', 8.0)); // Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
+     * assert payload.equals(Map.of("member3", 7.5 , "member2", 8.0)); // Indicates that "member3" with a score of 7.5 and "member2" with a score of 8.0 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zpopmin(String key, long count);
@@ -298,7 +298,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet"), 2).get();
-     * assert payload.equals(Map.of(gs('member3'), 7.5, gs('member2'), 8.0)); // Indicates that gs('member3') with a score of 7.5 and gs('member2') with a score of 8.0 have been removed from the sorted set.
+     * assert payload.equals(Map.of(gs("member3"), 7.5, gs("member2"), 8.0)); // Indicates that gs("member3") with a score of 7.5 and gs("member2") with a score of 8.0 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key, long count);
@@ -315,7 +315,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<String, Double> payload = client.zpopmin("mySortedSet").get();
-     * assert payload.equals(Map.of('member1', 5.0)); // Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
+     * assert payload.equals(Map.of("member1", 5.0)); // Indicates that "member1" with a score of 5.0 has been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zpopmin(String key);
@@ -332,7 +332,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<GlideString, Double> payload = client.zpopmin(gs("mySortedSet")).get();
-     * assert payload.equals(Map.of(gs('member1'), 5.0)); // Indicates that gs('member1') with a score of 5.0 has been removed from the sorted set.
+     * assert payload.equals(Map.of(gs("member1"), 5.0)); // Indicates that gs("member1") with a score of 5.0 has been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key);
@@ -413,7 +413,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<String, Double> payload = client.zpopmax("mySortedSet", 2).get();
-     * assert payload.equals(Map.of('member2', 8.0, 'member3', 7.5)); // Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+     * assert payload.equals(Map.of("member2", 8.0, "member3", 7.5)); // Indicates that "member2" with a score of 8.0 and "member3" with a score of 7.5 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zpopmax(String key, long count);
@@ -434,7 +434,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet"), 2).get();
-     * assert payload.equals(Map.of(gs('member2'), 8.0, gs('member3'), 7.5)); // Indicates that gs('member2') with a score of 8.0 and gs('member3') with a score of 7.5 have been removed from the sorted set.
+     * assert payload.equals(Map.of(gs("member2"), 8.0, gs("member3"), 7.5)); // Indicates that gs("member2") with a score of 8.0 and gs("member3") with a score of 7.5 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zpopmax(GlideString key, long count);
@@ -451,7 +451,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<String, Double> payload = client.zpopmax("mySortedSet").get();
-     * assert payload.equals(Map.of('member1', 10.0)); // Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+     * assert payload.equals(Map.of("member1", 10.0)); // Indicates that "member1" with a score of 10.0 has been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zpopmax(String key);
@@ -468,7 +468,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet")).get();
-     * assert payload.equals(Map.of(gs('member1'), 10.0)); // Indicates that gs('member1') with a score of 10.0 has been removed from the sorted set.
+     * assert payload.equals(Map.of(gs("member1"), 10.0)); // Indicates that gs("member1") with a score of 10.0 has been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zpopmax(GlideString key);
@@ -596,11 +596,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
      * String[] payload1 = client.zrange("mySortedSet", query1, true).get(); // Returns members with scores between 10 and 20.
-     * assert payload1.equals(new String[] {'member3', 'member2', 'member1'}); // Returns all members in descending order.
+     * assert payload1.equals(new String[] {"member3", "member2", "member1"}); // Returns all members in descending order.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * String[] payload2 = client.zrange("mySortedSet", query2, false).get();
-     * assert payload2.equals(new String[] {'member2', 'member3'}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * assert payload2.equals(new String[] {"member2", "member3"}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
      * }</pre>
      */
     CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery, boolean reverse);
@@ -626,11 +626,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByIndex query1 = new RangeByIndex(0, -1);
      * String[] payload1 = client.zrange("mySortedSet",query1).get();
-     * assert payload1.equals(new String[] {'member1', 'member2', 'member3'}); // Returns all members in ascending order.
+     * assert payload1.equals(new String[] {"member1", "member2", "member3"}); // Returns all members in ascending order.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * String[] payload2 = client.zrange("mySortedSet", query2).get();
-     * assert payload2.equals(new String[] {'member2', 'member3'}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * assert payload2.equals(new String[] {"member2", "member3"}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
      * }</pre>
      */
     CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery);
@@ -656,11 +656,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
      * Map<String, Double> payload1 = client.zrangeWithScores("mySortedSet", query1, true).get();
-     * assert payload1.equals(Map.of('member2', 15.2, 'member1', 10.5)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
+     * assert payload1.equals(Map.of("member2", 15.2, "member1", 10.5)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * Map<String, Double> payload2 = client.zrangeWithScores("mySortedSet", query2, false).get();
-     * assert payload2.equals(Map.of('member4', -2.0, 'member7', 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
+     * assert payload2.equals(Map.of("member4", -2.0, "member7", 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zrangeWithScores(
@@ -685,11 +685,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
      * Map<String, Double> payload1 = client.zrangeWithScores("mySortedSet", query1).get();
-     * assert payload1.equals(Map.of('member1', 10.5, 'member2', 15.2)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
+     * assert payload1.equals(Map.of("member1", 10.5, "member2", 15.2)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * Map<String, Double> payload2 = client.zrangeWithScores("mySortedSet", query2).get();
-     * assert payload2.equals(Map.of('member4', -2.0, 'member7', 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
+     * assert payload2.equals(Map.of("member4", -2.0, "member7", 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery);
