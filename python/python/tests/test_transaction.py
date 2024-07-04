@@ -668,6 +668,14 @@ async def transaction_test(
         alpha=True,
     )
     args.append([b"2", b"3", b"4", b"a"])
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
     transaction.sort_store(
         key17,
         key18,
