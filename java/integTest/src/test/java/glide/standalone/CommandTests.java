@@ -4,6 +4,8 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionListResponseBinary;
+import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
@@ -597,36 +599,32 @@ public class CommandTests {
                 regularClient
                         .fcall(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
-        assertEquals("one", functionResult);
+        assertEquals(gs("one"), functionResult);
         functionResult =
                 regularClient
                         .fcallReadOnly(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
-        assertEquals("one", functionResult);
+        assertEquals(gs("one"), functionResult);
 
-        var flist = regularClient.functionList(false).get();
+        var flist = regularClient.functionListBinary(false).get();
         var expectedDescription =
-                new HashMap<String, String>() {
+                new HashMap<GlideString, GlideString>() {
                     {
-                        put(funcName.toString(), null);
+                        put(funcName, null);
                     }
                 };
         var expectedFlags =
-                new HashMap<String, Set<String>>() {
+                new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName.toString(), Set.of("no-writes"));
+                        put(funcName, Set.of(gs("no-writes")));
                     }
                 };
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionList(true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(code.toString()));
+        flist = regularClient.functionListBinary(true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
         var executionException =
@@ -658,19 +656,15 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library not found"));
 
-        flist = regularClient.functionList(libName.toString(), false).get();
-        expectedDescription.put(newFuncName.toString(), null);
-        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        flist = regularClient.functionListBinary(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionList(libName.toString(), true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(newCode.toString()));
+        flist = regularClient.functionListBinary(libName, true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         functionResult =
                 regularClient
@@ -807,6 +801,78 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void functionStatsBinary_and_functionKill() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString libName = gs("functionStats_and_functionKill");
+        GlideString funcName = gs("deadlock");
+        GlideString code =
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 15, true));
+        String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        try {
+            // nothing to kill
+            var exception =
+                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+            // load the lib
+            assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+            try (var testClient =
+                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
+                // call the function without await
+                var promise = testClient.fcall(funcName);
+
+                int timeout = 5200; // ms
+                while (timeout > 0) {
+                    var stats = regularClient.functionStatsBinary().get();
+                    if (stats.get(gs("running_script")) != null) {
+                        checkFunctionStatsBinaryResponse(
+                                stats, new GlideString[] {gs("FCALL"), funcName, gs("0")}, 1, 1);
+                        break;
+                    }
+                    Thread.sleep(100);
+                    timeout -= 100;
+                }
+                if (timeout == 0) {
+                    error += "Can't find a running function.";
+                }
+
+                // redis kills a function with 5 sec delay
+                assertEquals(OK, regularClient.functionKill().get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
+
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+                exception = assertThrows(ExecutionException.class, promise::get);
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().contains("Script killed by user"));
+            }
+        } finally {
+            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+            // test to fail.
+            try {
+                regularClient.functionKill().get();
+                // should throw `notbusy` error, because the function should be killed before
+                error += "Function should be killed before.";
+            } catch (Exception ignored) {
+            }
+        }
+
+        assertEquals(OK, regularClient.functionDelete(libName).get());
+
+        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
     public void functionStats_and_functionKill_write_function() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
@@ -876,6 +942,77 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void functionStatsBinary_and_functionKill_write_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString libName = gs("functionStats_and_functionKill_write_function");
+        GlideString funcName = gs("deadlock_write_function");
+        GlideString key = libName;
+        GlideString code =
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, false));
+        String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        try {
+            // nothing to kill
+            var exception =
+                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+            // load the lib
+            assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+            try (var testClient =
+                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
+                // call the function without awai
+                var promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
+
+                int timeout = 5200; // ms
+                while (timeout > 0) {
+                    var stats = regularClient.functionStatsBinary().get();
+                    if (stats.get(gs("running_script")) != null) {
+                        checkFunctionStatsBinaryResponse(
+                                stats, new GlideString[] {gs("FCALL"), funcName, gs("1"), key}, 1, 1);
+                        break;
+                    }
+                    Thread.sleep(100);
+                    timeout -= 100;
+                }
+                if (timeout == 0) {
+                    error += "Can't find a running function.";
+                }
+
+                // can't kill a write function
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
+
+                assertEquals(gs("Timed out 6 sec"), promise.get());
+
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+            }
+        } finally {
+            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+            // test to fail.
+            try {
+                regularClient.functionKill().get();
+                // should throw `notbusy` error, because the function should be killed before
+                error += "Function should finish prior to the test end.";
+            } catch (Exception ignored) {
+            }
+        }
+
+        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
     public void functionStats() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
@@ -904,6 +1041,43 @@ public class CommandTests {
 
         response = regularClient.functionStats().get();
         checkFunctionStatsResponse(response, new String[0], 0, 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStatsBinary() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString libName = gs("functionStats");
+        GlideString funcName = libName;
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // function $funcName returns first argument
+        GlideString code =
+                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), false);
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        var response = regularClient.functionStatsBinary().get();
+        checkFunctionStatsBinaryResponse(response, new GlideString[0], 1, 1);
+
+        code =
+                generateLuaLibCodeBinary(
+                        gs(libName.toString() + "_2"),
+                        Map.of(
+                                gs(funcName.toString() + "_2"),
+                                gs("return 'OK'"),
+                                gs(funcName.toString() + "_3"),
+                                gs("return 42")),
+                        false);
+        assertEquals(gs(libName.toString() + "_2"), regularClient.functionLoad(code, true).get());
+
+        response = regularClient.functionStatsBinary().get();
+        checkFunctionStatsBinaryResponse(response, new GlideString[0], 2, 3);
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        response = regularClient.functionStatsBinary().get();
+        checkFunctionStatsBinaryResponse(response, new GlideString[0], 0, 0);
     }
 
     @Test
@@ -988,6 +1162,23 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, regularClient.flushall().get());
         assertNull(regularClient.randomKey().get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKeyBinary() {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+
+        assertEquals(OK, regularClient.set(key1, gs("a")).get());
+        assertEquals(OK, regularClient.set(key2, gs("b")).get());
+
+        GlideString randomKeyBinary = regularClient.randomKeyBinary().get();
+        assertEquals(1L, regularClient.exists(new GlideString[] {randomKeyBinary}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKeyBinary().get());
     }
 
     @Test

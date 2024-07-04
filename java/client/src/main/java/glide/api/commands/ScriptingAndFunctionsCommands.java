@@ -82,6 +82,31 @@ public interface ScriptingAndFunctionsCommands {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about all libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object>[] response = client.functionList(true).get();
+     * for (Map<String, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about queried libraries and their functions.
@@ -102,6 +127,33 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about queried libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object>[] response = client.functionList("myLib?_backup", true).get();
+     * for (Map<String, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
+            GlideString libNamePattern, boolean withCode);
 
     /**
      * Deletes all function libraries.
@@ -319,4 +371,35 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Map<String, Object>>> functionStats();
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @return A <code>Map</code> with two keys:
+     *     <ul>
+     *       <li><code>running_script</code> with information about the running script.
+     *       <li><code>engines</code> with information about available engines and their stats.
+     *     </ul>
+     *     See example for more details.
+     * @example
+     *     <pre>{@code
+     * Map<GlideString, Map<GlideString, Object>> response = client.functionStats().get();
+     * Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
+     * if (runningScriptInfo != null) {
+     *   GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
+     *   System.out.printf("Server is currently running function '%s' with command line '%s', which has been running for %d ms%n",
+     *       runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long)runningScriptInfo.get(gs("duration_ms")));
+     * }
+     * Map<GlideString, Object> enginesInfo = response.get(gs("engines"));
+     * for (GlideString engineName : enginesInfo.keySet()) {
+     *   Map<GlideString, Long> engine = (Map<GlideString, Long>) enginesInfo.get(gs(engineName));
+     *   System.out.printf("Server supports engine '%s', which has %d libraries and %d functions in total%n",
+     *       engineName, engine.get(gs("libraries_count")), engine.get(gs("functions_count")));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, Object>>> functionStatsBinary();
 }

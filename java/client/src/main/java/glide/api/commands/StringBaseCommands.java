@@ -663,6 +663,28 @@ public interface StringBaseCommands {
     CompletableFuture<String> lcs(String key1, String key2);
 
     /**
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
+     * key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
+     *     An empty <code>String</code> is returned if the keys do not exist or have no common
+     *     subsequences.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * GlideString result = client.lcs(gs("testKey1"), gs("testKey2")).get();
+     * assert result.equals(gs("acd"));
+     * }</pre>
+     */
+    CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2);
+
+    /**
      * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
@@ -681,6 +703,26 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> lcsLen(String key1, String key2);
+
+    /**
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
+     * </code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return The length of the longest common subsequence between the 2 strings.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * Long result = client.lcsLen(gs("testKey1"), gs("testKey2")).get();
+     * assert result.equals(3L);
+     * }</pre>
+     */
+    CompletableFuture<Long> lcsLen(GlideString key1, GlideString key2);
 
     /**
      * Returns the indices and length of the longest common subsequence between strings stored at
@@ -735,6 +777,49 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd123")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef123")</code> then the sample result would be
+     *     <pre>{@code
+     * new Long[][][] {
+     *      {
+     *          {4L, 6L},
+     *          {5L, 7L}
+     *      },
+     *      {
+     *          {1L, 3L},
+     *          {0L, 2L}
+     *      }
+     *  }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("123")</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
+     *     gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
      * @param minMatchLen The minimum length of matches to include in the result.
      * @return A <code>Map</code> containing the indices of the longest common subsequence between the
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
@@ -768,6 +853,51 @@ public interface StringBaseCommands {
      *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
      */
     CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2, long minMatchLen);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @param minMatchLen The minimum length of matches to include in the result.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd123")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef123")</code> then the sample result would be
+     *     <pre>{@code
+     * new Long[][][] {
+     *      {
+     *          {4L, 6L},
+     *          {5L, 7L}
+     *      },
+     *      {
+     *          {1L, 3L},
+     *          {0L, 2L}
+     *      }
+     *  }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("123")</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
+     *     gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdx(
+            GlideString key1, GlideString key2, long minMatchLen);
 
     /**
      * Returns the indices and length of the longest common subsequence between strings stored at
@@ -824,6 +954,52 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd1234")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef1234")</code> then the sample result would be
+     *     <pre>{@code
+     * new Object[] {
+     *      new Object[] {
+     *          new Long[] {4L, 7L},
+     *          new Long[] {5L, 8L},
+     *          4L},
+     *      new Object[] {
+     *          new Long[] {1L, 3L},
+     *          new Long[] {0L, 2L},
+     *          3L}
+     *      }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("1234")</code> in <code>
+     *     key1
+     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
+     *     length of the substring match which is <code>4</code>. And the second substring match is
+     *     <code>gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
+     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
      * @param minMatchLen The minimum length of matches to include in the result.
      * @return A <code>Map</code> containing the indices of the longest common subsequence between the
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
@@ -860,4 +1036,52 @@ public interface StringBaseCommands {
      */
     CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
             String key1, String key2, long minMatchLen);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @param minMatchLen The minimum length of matches to include in the result.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd1234")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef1234")</code> then the sample result would be
+     *     <pre>{@code
+     * new Object[] {
+     *      new Object[] {
+     *          new Long[] {4L, 7L},
+     *          new Long[] {5L, 8L},
+     *          4L},
+     *      new Object[] {
+     *          new Long[] {1L, 3L},
+     *          new Long[] {0L, 2L},
+     *          3L}
+     *      }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("1234")</code> in <code>
+     *     key1
+     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
+     *     length of the substring match which is <code>4</code>. And the second substring match is
+     *     <code>gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
+     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
+            GlideString key1, GlideString key2, long minMatchLen);
 }
