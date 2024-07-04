@@ -74,7 +74,7 @@ from glide.config import (
     PeriodicChecksStatus,
     ProtocolVersion,
     ReadFrom,
-    RedisCredentials,
+    ServerCredentials,
 )
 from glide.constants import OK
 from glide.exceptions import (
@@ -82,7 +82,7 @@ from glide.exceptions import (
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    RedisError,
+    GlideError,
     RequestError,
     TimeoutError,
 )
@@ -113,7 +113,7 @@ __all__ = [
     "ClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",
-    "RedisCredentials",
+    "ServerCredentials",
     "NodeAddress",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
@@ -196,7 +196,7 @@ __all__ = [
     "ConfigurationError",
     "ConnectionError",
     "ExecAbortError",
-    "RedisError",
+    "GlideError",
     "RequestError",
     "TimeoutError",
 ]
