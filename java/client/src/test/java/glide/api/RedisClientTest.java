@@ -7765,7 +7765,9 @@ public class RedisClientTest {
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
-        String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18", start, Long.toString(count)});
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, groupName, consumer, "18", start, Long.toString(count)});
         Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -7773,11 +7775,11 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[]> response =
-            service.xautoclaim(key, groupName, consumer, minIdleTime, start, count);
+                service.xautoclaim(key, groupName, consumer, minIdleTime, start, count);
         Object[] payload = response.get();
 
         // verify
@@ -7800,7 +7802,8 @@ public class RedisClientTest {
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
-        String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18", start, "JUSTID"});
+        String[] arguments =
+                concatenateArrays(new String[] {key, groupName, consumer, "18", start, "JUSTID"});
         Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -7808,11 +7811,11 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[]> response =
-            service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start);
+                service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start);
         Object[] payload = response.get();
 
         // verify
@@ -7836,7 +7839,9 @@ public class RedisClientTest {
 
         String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
 
-        String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18", start, Long.toString(1234), "JUSTID"});
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, groupName, consumer, "18", start, Long.toString(1234), "JUSTID"});
         Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -7844,11 +7849,11 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[]> response =
-            service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start, count);
+                service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start, count);
         Object[] payload = response.get();
 
         // verify

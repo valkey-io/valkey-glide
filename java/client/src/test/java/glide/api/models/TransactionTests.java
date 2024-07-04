@@ -193,6 +193,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -963,6 +964,18 @@ public class TransactionTests {
 
         transaction.xinfoConsumers("key", "groupName");
         results.add(Pair.of(XInfoConsumers, buildArgs("key", "groupName")));
+
+        transaction.xautoclaim("key", "group", "consumer", 99L, "0-0");
+        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0")));
+
+        transaction.xautoclaim("key", "group", "consumer", 99L, "0-0", 1234L);
+        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "1234")));
+
+        transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0");
+        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "JUSTID")));
+
+        transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0", 1234L);
+        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "1234", "JUSTID")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
