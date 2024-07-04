@@ -67,8 +67,8 @@ from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
     BackoffStrategy,
     BaseClientConfiguration,
-    ClusterClientConfiguration,
     GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
@@ -110,7 +110,7 @@ __all__ = [
     # Config
     "BaseClientConfiguration",
     "GlideClientConfiguration",
-    "ClusterClientConfiguration",
+    "GlideClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",
     "ServerCredentials",
