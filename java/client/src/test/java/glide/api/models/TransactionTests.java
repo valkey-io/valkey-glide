@@ -200,6 +200,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -955,6 +957,12 @@ public class TransactionTests {
                                 "5",
                                 FORCE_REDIS_API,
                                 JUST_ID_REDIS_API)));
+
+        transaction.xinfoGroups("key");
+        results.add(Pair.of(XInfoGroups, buildArgs("key")));
+
+        transaction.xinfoConsumers("key", "groupName");
+        results.add(Pair.of(XInfoConsumers, buildArgs("key", "groupName")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
