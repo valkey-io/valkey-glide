@@ -9782,7 +9782,7 @@ public class SharedCommandTests {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         GlideString key3 = gs("{key}-3" + UUID.randomUUID());
-        GlideString nonStringKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
 
         // keys does not exist or is empty
         assertEquals(gs(""), client.lcs(key1, key2).get());
@@ -9797,9 +9797,9 @@ public class SharedCommandTests {
         assertEquals(gs("bcd"), client.lcs(key1, key2).get());
 
         // non set keys are used
-        client.sadd(nonStringKey, new GlideString[] {gs("setmember")}).get();
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+                assertThrows(ExecutionException.class, () -> client.lcs(notExistingKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -9842,7 +9842,7 @@ public class SharedCommandTests {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         GlideString key3 = gs("{key}-3" + UUID.randomUUID());
-        GlideString nonStringKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
 
         // keys does not exist or is empty
         assertEquals(0, client.lcsLen(key1, key2).get());
@@ -9857,9 +9857,9 @@ public class SharedCommandTests {
         assertEquals(3, client.lcsLen(key1, key2).get());
 
         // non set keys are used
-        client.sadd(nonStringKey, new GlideString[] {gs("setmember")}).get();
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+                assertThrows(ExecutionException.class, () -> client.lcs(notExistingKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -10217,7 +10217,7 @@ public class SharedCommandTests {
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
-        GlideString nonStringKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
 
         // keys does not exist or is empty
         Map<String, Object> result = client.lcsIdx(key1, key2).get();
@@ -10270,24 +10270,25 @@ public class SharedCommandTests {
         assertEquals(8L, result.get("len"));
 
         // non-string keys are used
-        client.sadd(nonStringKey, new GlideString[] {gs("setmember")}).get();
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.lcsIdx(nonStringKey, key1).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-
-        executionException =
-                assertThrows(ExecutionException.class, () -> client.lcsIdx(nonStringKey, key1, 10L).get());
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(notExistingKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.lcsIdxWithMatchLen(nonStringKey, key1).get());
+                        ExecutionException.class, () -> client.lcsIdx(notExistingKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdxWithMatchLen(notExistingKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.lcsIdxWithMatchLen(nonStringKey, key1, 10L).get());
+                        () -> client.lcsIdxWithMatchLen(notExistingKey, key1, 10L).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
