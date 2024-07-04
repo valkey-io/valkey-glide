@@ -772,69 +772,15 @@ pub(crate) fn convert_to_expected_type(
         8# "entries" => (empty array)
         9# "groups" => (empty array)
 
-        Without `FULL` keyword, command returns "first-entry" and "last-entry" instead of "entries" in the same format.
-
-        RESP2:
-
-        1) "length"
-        2) (integer) 2
-        3) "radix-tree-keys"
-        4) (integer) 1
-        5) "radix-tree-nodes"
-        6) (integer) 2
-        7) "last-generated-id"
-        8) "1719710688676-0"
-        9) "max-deleted-entry-id"
-        10) "0-0"
-        11) "entries-added"
-        12) (integer) 2
-        13) "recorded-first-entry-id"
-        14) "1719710679916-0"
-        15) "groups"
-        16) (integer) 1
-        17) "first-entry"
-        18) 1) "1719710679916-0"
-            2) 1) "foo"
-               2) "bar"
-               3) "foo"
-               4) "bar2"
-               5) "some"
-               6) "value"
-        19) "last-entry"
-        20) 1) "1719710688676-0"
-            2) 1) "foo"
-               2) "bar2"
-
-        RESP3 on an empty stream:
-
-        1# "length" => (integer) 0
-        2# "radix-tree-keys" => (integer) 0
-        3# "radix-tree-nodes" => (integer) 1
-        4# "last-generated-id" => "0-1"
-        5# "max-deleted-entry-id" => "0-1"
-        6# "entries-added" => (integer) 1
-        7# "recorded-first-entry-id" => "0-0"
-        8# "groups" => (integer) 0
-        9# "first-entry" => (nil)
-        10# "last-entry" => (nil)
-
-        So we convert:
-        - Arrays to maps, accroding to RESP2 -> RESP3 conversion done by the server:
-          - Top level array - unflat an `obj[]` (`[k, v, k, v, ...]`) to a `Map<str, obj>`
-          - "groups" value - `obj[][]` -> `Map<str, obj>[]` - unflat every nested array the same manner as above
-          - "consumers" value - `obj[][]` -> `Map<str, obj>[]` - same as above
-        - Additionally we convert some map's values:
-          - "entries", "first-entry" and "last-entry" value - to a `Map<str, str[][]>` (similar to `XREAD`)
-              no nested maps due to duplicating keys - see example
-        Using `XInfoStreamFullReturnType` recursively for maps' value type.
+        We want to convert the RESP2 format to RESP3, so we need to:
+        - convert any consumer in the consumer array to a map, if there are any consumers
+        - convert any group in the group array to a map, if there are any groups
+        - convert the root of the response into a map
         */
         ExpectedReturnType::XInfoStreamFullReturnType => match value {
             Value::Map(_) => Ok(value),  // Response is already in RESP3 format - no conversion needed
             Value::Array(mut array) => {
-                // Response is in RESP2 format. We need to:
-                // - convert any consumer in the consumer array to a map, if there are any consumers
-                // - convert any group in the group array to a map, if there are any groups
-                // - convert the root of the response into a map
+                // Response is in RESP2 format. We need to convert to RESP3 format.
                 let groups_key = Value::SimpleString("groups".into());
                 let opt_groups_index = array
                     .iter()
@@ -1473,7 +1419,7 @@ mod tests {
             groups_resp3_response.clone()
         );
 
-        // RESP3 responses are already in the correct format and should not be converted.
+        // RESP3 responses are already in the correct format and should not change format.
         assert_eq!(
             convert_to_expected_type(
                 groups_resp3_response.clone(),
@@ -1503,7 +1449,7 @@ mod tests {
             resp3_empty_groups.clone()
         );
 
-        // RESP3 responses are already in the correct format and should not be converted.
+        // RESP3 responses are already in the correct format and should not change format.
         assert_eq!(
             convert_to_expected_type(
                 resp3_empty_groups.clone(),

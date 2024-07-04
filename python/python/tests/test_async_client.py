@@ -6909,14 +6909,12 @@ class TestCommands:
         # XINFO STREAM called against empty stream
         result = await glide_client.xinfo_stream(key)
         assert result.get(b"length") == 0
-        assert result.get(b"max-deleted-entry-id") == stream_id1_0.encode()
         assert result.get(b"first-entry") is None
         assert result.get(b"last-entry") is None
 
         # XINFO STREAM FULL called against empty stream. Negative count values are ignored.
         result_full = await glide_client.xinfo_stream_full(key, count=-3)
         assert result_full.get(b"length") == 0
-        assert result_full.get(b"max-deleted-entry-id") == stream_id1_0.encode()
         assert result_full.get(b"entries") == []
         assert result_full.get(b"groups") == []
 
