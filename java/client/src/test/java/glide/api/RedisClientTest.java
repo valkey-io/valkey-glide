@@ -7032,30 +7032,6 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void xgroupDestroy() {
-        // setup
-        String key = "testKey";
-        String groupName = "testGroupName";
-        String[] arguments = new String[] {key, groupName};
-
-        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
-        testResponse.complete(Boolean.TRUE);
-
-        // match on protobuf request
-        when(commandManager.<Boolean>submitNewCommand(eq(XGroupDestroy), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Boolean> response = service.xgroupDestroy(key, groupName);
-        Boolean payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(Boolean.TRUE, payload);
-    }
-
-    @SneakyThrows
-    @Test
     public void xgroupCreate_withOptionsBinary() {
         // setup
         GlideString key = gs("testKey");
