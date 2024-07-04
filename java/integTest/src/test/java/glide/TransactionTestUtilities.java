@@ -861,6 +861,7 @@ public class TransactionTestUtilities {
                         new String[] {"0-4"},
                         StreamClaimOptions.builder().force().build())
                 .xpending(streamKey1, groupName1);
+
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
@@ -896,59 +897,6 @@ public class TransactionTestUtilities {
                     .xgroupSetId(streamKey2, groupName3, "1-0", 1);
         }
 
-        Object[] result = {
-            "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
-            "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
-            "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
-            3L, // xlen(streamKey1)
-            Map.of(
-                    streamKey1,
-                    Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));
-            Map.of(
-                    streamKey1,
-                    Map.of(
-                            "0-3",
-                            new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"), options);
-            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
-            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
-            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1")
-            Map.of(
-                    "0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
-            1L, // xtrim(streamKey1, new MinId(true, "0-2"))
-            OK, // xgroupCreate(streamKey1, groupName1, "0-0")
-            new Map[] {}, // .xinfoConsumers(streamKey1, groupName1)
-            OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
-            true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
-            OK, // xgroupSetId(streamKey1, groupName1, "0-2")
-            Map.of(
-                    streamKey1,
-                    Map.of(
-                            "0-3",
-                            new String[][] {
-                                {"field3", "value3"}
-                            })), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1);
-            Map.of(
-                    streamKey1,
-                    Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
-            Map.of(), // xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
-            Map.of(
-                    "0-3",
-                    new String[][] {{"field3", "value3"}}), // xclaim(streamKey1, ..., {"0-3"}, options)
-            new String[] {"0-3"}, // xclaimJustId(streamKey1, ..., new String[] {"0-3"})
-            new String[0], // xclaimJustId(streamKey1, ..., new String[] {"0-4"}, options)
-            new Object[] {
-                1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
-            }, // xpending(streamKey1, groupName1)
-            1L, // xack(streamKey1, groupName1, new String[] {"0-3"})
-            new Object[] {}, // xpending(streamKey1, groupName1, MIN, MAX, 1L)
-            0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
-            true, // xgroupDestroy(streamKey1, groupName1)
-            true, // xgroupDestroy(streamKey1, groupName2)
-            1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"})
-            "1-0", // xadd(streamKey3, Map.of("f0", "v0"), id("1-0"))
-            OK, // xgroupCreate(streamKey3, groupName3, "0")
-            new Map[] {}, // xinfoGroups(streamKey3)
-        };
         var result =
                 new Object[] {
                     "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
@@ -974,6 +922,7 @@ public class TransactionTestUtilities {
                             new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
                     1L, // xtrim(streamKey1, new MinId(true, "0-2"))
                     OK, // xgroupCreate(streamKey1, groupName1, "0-0")
+                    new Map[] {}, // .xinfoConsumers(streamKey1, groupName1)
                     OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
                     true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
                     OK, // xgroupSetId(streamKey1, groupName1, "0-2")
@@ -994,32 +943,29 @@ public class TransactionTestUtilities {
                     new String[] {"0-3"}, // xclaimJustId(streamKey1, ..., new String[] {"0-3"})
                     new String[0], // xclaimJustId(streamKey1, ..., new String[] {"0-4"}, options)
                     new Object[] {
-                        1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
-                    } // xpending(streamKey1, groupName1)
+                        1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}} // xpending(streamKey1, groupName1)
+                    }
                 };
-
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             result =
                     concatenateArrays(
+                        result,
                             new Object[] {
-                                "0-1", Map.of("0-2", new String[][] {{"foo", "bar"}})
-                            }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
-                            new Object[] {
-                                "0-1", "0-2"
+                                Map.of("0-1", Map.of("0-3", new String[][] {{"field3", "value3"}})),
+                                "0-1", "0-3"
                             } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
                             );
-        } else if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        } else if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             result =
                     concatenateArrays(
+                            result,
                             new Object[] {
-                                "0-1", Map.of("0-2", new String[][] {{"foo", "bar"}, new String[] {}})
-                            }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
-                            new Object[] {
-                                "0-1", "0-2", new String[] {}
+                                "0-0", Map.of("0-3", new String[][] {{"field3", "value3"}, new String[] {}})
+                            , // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
+                                "0-1", "0-3", new String[] {}
                             } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
                             );
         }
-
         result =
                 concatenateArrays(
                         result,
@@ -1029,7 +975,10 @@ public class TransactionTestUtilities {
                             0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
                             true, // xgroupDestroy(streamKey1, groupName1)
                             true, // xgroupDestroy(streamKey1, groupName2)
-                            1L // .xdel(streamKey1, new String[] {"0-1", "0-5"});
+                            1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"})
+                            "1-0", // xadd(streamKey3, Map.of("f0", "v0"), id("1-0"))
+                            OK, // xgroupCreate(streamKey3, groupName3, "0")
+                            new Map[] {} // xinfoGroups(streamKey3)
                         });
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
