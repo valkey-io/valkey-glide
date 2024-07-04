@@ -1105,17 +1105,22 @@ public class PubSubTests {
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
-    @Disabled(
-            "This test is for demonstrating behavior when there's an exception from a user callback and"
-                    + " will always fail.")
     public void pubsub_test_callback_exception(boolean standalone) {
         final GlideString channel = gs(UUID.randomUUID().toString());
-        final GlideString message = gs("message");
+        final GlideString message1 = gs("message1");
+        final GlideString message2 = gs("message2");
+        final GlideString errorMsg = gs("errorMsg");
+        final GlideString message3 = gs("message3");
 
         ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    throw new RuntimeException("Test exception.");
+                    new Exception().printStackTrace();
+                    if (pubSubMessage.getMessage().equals(errorMsg)) {
+                        throw new RuntimeException("Test callback error message");
+                    }
+                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    receivedMessages.add(pubSubMessage);
                 };
 
         Map<? extends ChannelMode, Set<GlideString>> subscriptions =
@@ -1130,22 +1135,30 @@ public class PubSubTests {
                         Optional.ofNullable(callback),
                         Optional.of(callbackMessages));
         var sender =
-                createClientWithSubscriptions(
-                        standalone,
-                        subscriptions,
-                        Optional.ofNullable(callback),
-                        Optional.of(callbackMessages));
+                createClient(standalone);
 
         try {
-            assertEquals(OK, sender.publish(message, channel).get());
+            assertEquals(OK, sender.publish(message1, channel).get());
+            assertEquals(OK, sender.publish(message2, channel).get());
+        //    assertEquals(OK, sender.publish(errorMsg, channel).get());
+            assertEquals(OK, sender.publish(message3, channel).get());
 
             // Allow the message to propagate.
             Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            assertEquals(1, callbackMessages.size());
-            assertEquals(message, callbackMessages.get(0).getMessage());
+            assertEquals(3, callbackMessages.size());
+            assertEquals(message1, callbackMessages.get(0).getMessage());
             assertEquals(channel, callbackMessages.get(0).getChannel());
-            assertNull(callbackMessages.get(0).getPattern());
+            assertTrue(callbackMessages.get(0).getPattern().isEmpty());
+
+            assertEquals(message2, callbackMessages.get(1).getMessage());
+            assertEquals(channel, callbackMessages.get(1).getChannel());
+            assertTrue(callbackMessages.get(1).getPattern().isEmpty());
+
+            // Ensure we can receive message 3 which is after the message that triggers a throw.
+            assertEquals(message3, callbackMessages.get(2).getMessage());
+            assertEquals(channel, callbackMessages.get(2).getChannel());
+            assertTrue(callbackMessages.get(2).getPattern().isEmpty());
         } finally {
             if (!standalone) {
                 // Since all tests run on the same cluster, when closing the client, garbage collector can
