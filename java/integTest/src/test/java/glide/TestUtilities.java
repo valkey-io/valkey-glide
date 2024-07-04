@@ -15,6 +15,7 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,6 +200,42 @@ public class TestUtilities {
         var expected =
                 Map.of("LUA", Map.of("libraries_count", libCount, "functions_count", functionCount));
         assertEquals(expected, response.get("engines"));
+    }
+
+    /**
+     * Validate whether `FUNCTION STATS` response contains required info.
+     *
+     * @param response The response from server.
+     * @param runningFunction Command line of running function expected. Empty, if nothing expected.
+     * @param libCount Expected libraries count.
+     * @param functionCount Expected functions count.
+     */
+    public static void checkFunctionStatsBinaryResponse(
+            Map<GlideString, Map<GlideString, Object>> response,
+            GlideString[] runningFunction,
+            long libCount,
+            long functionCount) {
+        Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
+        if (runningScriptInfo == null && runningFunction.length != 0) {
+            fail("No running function info");
+        }
+        if (runningScriptInfo != null && runningFunction.length == 0) {
+            GlideString[] command = (GlideString[]) runningScriptInfo.get(gs("command"));
+            fail("Unexpected running function info: " + String.join(" ", Arrays.toString(command)));
+        }
+
+        if (runningScriptInfo != null) {
+            GlideString[] command = (GlideString[]) runningScriptInfo.get(gs("command"));
+            assertArrayEquals(runningFunction, command);
+            // command line format is:
+            // fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+            assertEquals(runningFunction[1], runningScriptInfo.get(gs("name")));
+        }
+        var expected =
+                Map.of(
+                        gs("LUA"),
+                        Map.of(gs("libraries_count"), libCount, gs("functions_count"), functionCount));
+        assertEquals(expected, response.get(gs("engines")));
     }
 
     /** Generate a String of LUA library code. */
