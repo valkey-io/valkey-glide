@@ -779,9 +779,10 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    public <ArgType> CompletableFuture<String> mset(@NonNull Map<ArgType, ArgType> keyValueMap) {
+        checkTypeOrThrow(keyValueMap);
+        GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSet,args,this:handleStringResponse);
     }
 
     @Override
@@ -3383,10 +3384,10 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
-    @Override
-    public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+    public <ArgType> CompletableFuture<Boolean> msetnx(@NonNull Map<ArgType, ArgType> keyValueMap) {
+        checkTypeOrThrow(keyValueMap);
+        GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSetNX,args,this:handleBooleanResponse);
     }
 
     @Override
