@@ -204,7 +204,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture()
-async def redis_client(
+async def glide_client(
     request, cluster_mode: bool, protocol: ProtocolVersion
 ) -> AsyncGenerator[TGlideClient, None]:
     "Get async socket client for tests"

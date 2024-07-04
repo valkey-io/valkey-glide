@@ -107,12 +107,12 @@ from tests.utils.utils import (
 class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_register_client_name_and_version(self, redis_client: TGlideClient):
+    async def test_register_client_name_and_version(self, glide_client: TGlideClient):
         min_version = "7.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-        info = await redis_client.custom_command(["CLIENT", "INFO"])
+        info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert isinstance(info, bytes)
         info_str = info.decode()
         assert "lib-name=GlidePy" in info_str
@@ -121,7 +121,7 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**25  # 33mb
@@ -129,23 +129,23 @@ class TestGlideClients:
         value = "0" * length
         assert len(key) == length
         assert len(value) == length
-        await redis_client.set(key, value)
-        assert await redis_client.get(key) == value.encode()
+        await glide_client.set(key, value)
+        assert await glide_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_send_and_receive_non_ascii_unicode(self, redis_client: TGlideClient):
+    async def test_send_and_receive_non_ascii_unicode(self, glide_client: TGlideClient):
         key = "foo"
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
-        await redis_client.set(key, value)
-        assert await redis_client.get(key) == value.encode()
+        await glide_client.set(key, value)
+        assert await glide_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_client_handle_concurrent_workload_without_dropping_or_changing_values(
-        self, redis_client: TGlideClient, value_size
+        self, glide_client: TGlideClient, value_size
     ):
         num_of_concurrent_tasks = 100
         running_tasks = set()
@@ -154,8 +154,8 @@ class TestGlideClients:
             range_end = 1 if value_size > 100 else 100
             for _ in range(range_end):
                 value = get_random_string(value_size)
-                assert await redis_client.set(str(i), value) == OK
-                assert await redis_client.get(str(i)) == value.encode()
+                assert await glide_client.set(str(i), value) == OK
+                assert await glide_client.get(str(i)) == value.encode()
 
         for i in range(num_of_concurrent_tasks):
             task = asyncio.create_task(exec_command(i))
@@ -166,13 +166,13 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_connect_with_auth_requirepass(
-        self, redis_client: TGlideClient, request
+        self, glide_client: TGlideClient, request
     ):
-        is_cluster = isinstance(redis_client, GlideClusterClient)
+        is_cluster = isinstance(glide_client, GlideClusterClient)
         password = "TEST_AUTH"
         credentials = RedisCredentials(password)
         try:
-            await redis_client.custom_command(
+            await glide_client.custom_command(
                 ["CONFIG", "SET", "requirepass", password]
             )
 
@@ -181,14 +181,14 @@ class TestGlideClients:
                 await create_client(
                     request,
                     is_cluster,
-                    addresses=redis_client.config.addresses,
+                    addresses=glide_client.config.addresses,
                 )
 
             auth_client = await create_client(
                 request,
                 is_cluster,
                 credentials,
-                addresses=redis_client.config.addresses,
+                addresses=glide_client.config.addresses,
             )
             key = get_random_string(10)
             assert await auth_client.set(key, key) == OK
@@ -199,21 +199,21 @@ class TestGlideClients:
                 request,
                 is_cluster,
                 credentials,
-                addresses=redis_client.config.addresses,
+                addresses=glide_client.config.addresses,
             )
             await auth_client.custom_command(["CONFIG", "SET", "requirepass", ""])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_connect_with_auth_acl(
-        self, redis_client: Union[GlideClient, GlideClusterClient], request
+        self, glide_client: Union[GlideClient, GlideClusterClient], request
     ):
-        is_cluster = isinstance(redis_client, GlideClusterClient)
+        is_cluster = isinstance(glide_client, GlideClusterClient)
         username = "testuser"
         password = "TEST_AUTH"
         try:
             assert (
-                await redis_client.custom_command(
+                await glide_client.custom_command(
                     [
                         "ACL",
                         "SETUSER",
@@ -231,14 +231,14 @@ class TestGlideClients:
                 == OK
             )
             key = get_random_string(10)
-            assert await redis_client.set(key, key) == OK
+            assert await glide_client.set(key, key) == OK
             credentials = RedisCredentials(password, username)
 
             testuser_client = await create_client(
                 request,
                 is_cluster,
                 credentials,
-                addresses=redis_client.config.addresses,
+                addresses=glide_client.config.addresses,
             )
             assert await testuser_client.get(key) == key.encode()
             with pytest.raises(RequestError) as e:
@@ -247,34 +247,34 @@ class TestGlideClients:
             assert "NOPERM" in str(e)
         finally:
             # Delete this user
-            await redis_client.custom_command(["ACL", "DELUSER", username])
+            await glide_client.custom_command(["ACL", "DELUSER", username])
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_select_standalone_database_id(self, request, cluster_mode):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, database_id=4
         )
-        client_info = await redis_client.custom_command(["CLIENT", "INFO"])
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"db=4" in client_info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_client_name(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request,
             cluster_mode=cluster_mode,
             client_name="TEST_CLIENT_NAME",
             protocol=protocol,
         )
-        client_info = await redis_client.custom_command(["CLIENT", "INFO"])
+        client_info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert b"name=TEST_CLIENT_NAME" in client_info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_closed_client_raises_error(self, redis_client: TGlideClient):
-        await redis_client.close()
+    async def test_closed_client_raises_error(self, glide_client: TGlideClient):
+        await glide_client.close()
         with pytest.raises(ClosingError) as e:
-            await redis_client.set("foo", "bar")
+            await glide_client.set("foo", "bar")
         assert "the client is closed" in str(e)
 
 
@@ -283,75 +283,75 @@ class TestCommands:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_socket_set_get(self, redis_client: TGlideClient):
+    async def test_socket_set_get(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value.encode()
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
-    async def test_use_resp3_protocol(self, redis_client: TGlideClient):
-        result = cast(Dict[bytes, bytes], await redis_client.custom_command(["HELLO"]))
+    async def test_use_resp3_protocol(self, glide_client: TGlideClient):
+        result = cast(Dict[bytes, bytes], await glide_client.custom_command(["HELLO"]))
 
         assert int(result[b"proto"]) == 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
-    async def test_allow_opt_in_to_resp2_protocol(self, redis_client: TGlideClient):
-        result = cast(Dict[bytes, bytes], await redis_client.custom_command(["HELLO"]))
+    async def test_allow_opt_in_to_resp2_protocol(self, glide_client: TGlideClient):
+        result = cast(Dict[bytes, bytes], await glide_client.custom_command(["HELLO"]))
 
         assert int(result[b"proto"]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_conditional_set(self, redis_client: TGlideClient):
+    async def test_conditional_set(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
-        res = await redis_client.set(
+        res = await glide_client.set(
             key, value, conditional_set=ConditionalChange.ONLY_IF_EXISTS
         )
         assert res is None
-        res = await redis_client.set(
+        res = await glide_client.set(
             key, value, conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
         )
         assert res == OK
-        assert await redis_client.get(key) == value.encode()
-        res = await redis_client.set(
+        assert await glide_client.get(key) == value.encode()
+        res = await glide_client.set(
             key, "foobar", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
         )
         assert res is None
-        assert await redis_client.get(key) == value.encode()
+        assert await glide_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_set_return_old_value(self, redis_client: TGlideClient):
+    async def test_set_return_old_value(self, glide_client: TGlideClient):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         key = get_random_string(10)
         value = get_random_string(10)
-        res = await redis_client.set(key, value)
+        res = await glide_client.set(key, value)
         assert res == OK
-        assert await redis_client.get(key) == value.encode()
+        assert await glide_client.get(key) == value.encode()
         new_value = get_random_string(10)
-        res = await redis_client.set(key, new_value, return_old_value=True)
+        res = await glide_client.set(key, new_value, return_old_value=True)
         assert res == value.encode()
-        assert await redis_client.get(key) == new_value.encode()
+        assert await glide_client.get(key) == new_value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_custom_command_single_arg(self, redis_client: TGlideClient):
+    async def test_custom_command_single_arg(self, glide_client: TGlideClient):
         # Test single arg command
-        res = await redis_client.custom_command(["PING"])
+        res = await glide_client.custom_command(["PING"])
         assert res == b"PONG"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_custom_command_multi_arg(self, redis_client: TGlideClient):
+    async def test_custom_command_multi_arg(self, glide_client: TGlideClient):
         # Test multi args command
-        client_list = await redis_client.custom_command(
+        client_list = await glide_client.custom_command(
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
         assert isinstance(client_list, (bytes, list))
@@ -363,10 +363,10 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_custom_command_lower_and_upper_case(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         # Test multi args command
-        client_list = await redis_client.custom_command(
+        client_list = await glide_client.custom_command(
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
         assert isinstance(client_list, (bytes, list))
@@ -377,36 +377,36 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_request_error_raises_exception(self, redis_client: TGlideClient):
+    async def test_request_error_raises_exception(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
-        await redis_client.set(key, value)
+        await glide_client.set(key, value)
         with pytest.raises(RequestError) as e:
-            await redis_client.custom_command(["HSET", key, "1", "bar"])
+            await glide_client.custom_command(["HSET", key, "1", "bar"])
         assert "WRONGTYPE" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_info_server_replication(self, redis_client: TGlideClient):
-        info_res = get_first_result(await redis_client.info([InfoSection.SERVER]))
+    async def test_info_server_replication(self, glide_client: TGlideClient):
+        info_res = get_first_result(await glide_client.info([InfoSection.SERVER]))
         info = info_res.decode()
         assert "# Server" in info
         cluster_mode = parse_info_response(info_res)["redis_mode"]
-        expected_cluster_mode = isinstance(redis_client, GlideClusterClient)
+        expected_cluster_mode = isinstance(glide_client, GlideClusterClient)
         assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
         info = get_first_result(
-            await redis_client.info([InfoSection.REPLICATION])
+            await glide_client.info([InfoSection.REPLICATION])
         ).decode()
         assert "# Replication" in info
         assert "# Errorstats" not in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_info_default(self, redis_client: TGlideClient):
-        cluster_mode = isinstance(redis_client, GlideClusterClient)
-        info_result = await redis_client.info()
+    async def test_info_default(self, glide_client: TGlideClient):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        info_result = await glide_client.info()
         if cluster_mode:
-            cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+            cluster_nodes = await glide_client.custom_command(["CLUSTER", "NODES"])
             assert isinstance(cluster_nodes, (bytes, list))
             cluster_nodes = get_first_result(cluster_nodes)
             expected_num_of_results = cluster_nodes.count(b"master")
@@ -416,233 +416,233 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_select(self, redis_client: GlideClient):
-        assert await redis_client.select(0) == OK
+    async def test_select(self, glide_client: GlideClient):
+        assert await glide_client.select(0) == OK
         key = get_random_string(10)
         value = get_random_string(10)
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value.encode()
-        assert await redis_client.select(1) == OK
-        assert await redis_client.get(key) is None
-        assert await redis_client.select(0) == OK
-        assert await redis_client.get(key) == value.encode()
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.get(key) == value.encode()
+        assert await glide_client.select(1) == OK
+        assert await glide_client.get(key) is None
+        assert await glide_client.select(0) == OK
+        assert await glide_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_move(self, redis_client: GlideClient):
+    async def test_move(self, glide_client: GlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
 
-        assert await redis_client.select(0) == OK
-        assert await redis_client.move(key, 1) is False
+        assert await glide_client.select(0) == OK
+        assert await glide_client.move(key, 1) is False
 
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value.encode()
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.get(key) == value.encode()
 
-        assert await redis_client.move(key, 1) is True
-        assert await redis_client.get(key) is None
-        assert await redis_client.select(1) == OK
-        assert await redis_client.get(key) == value.encode()
+        assert await glide_client.move(key, 1) is True
+        assert await glide_client.get(key) is None
+        assert await glide_client.select(1) == OK
+        assert await glide_client.get(key) == value.encode()
 
         with pytest.raises(RequestError) as e:
-            await redis_client.move(key, -1)
+            await glide_client.move(key, -1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_delete(self, redis_client: TGlideClient):
+    async def test_delete(self, glide_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
         value = get_random_string(10)
         value_encoded = value.encode()
-        [await redis_client.set(key, value) for key in keys]
-        assert await redis_client.get(keys[0]) == value_encoded
-        assert await redis_client.get(keys[1]) == value_encoded
-        assert await redis_client.get(keys[2]) == value_encoded
+        [await glide_client.set(key, value) for key in keys]
+        assert await glide_client.get(keys[0]) == value_encoded
+        assert await glide_client.get(keys[1]) == value_encoded
+        assert await glide_client.get(keys[2]) == value_encoded
         delete_keys = keys + [get_random_string(10)]
-        assert await redis_client.delete(delete_keys) == 3
-        assert await redis_client.delete(keys) == 0
+        assert await glide_client.delete(delete_keys) == 3
+        assert await glide_client.delete(keys) == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getdel(self, redis_client: TGlideClient):
+    async def test_getdel(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
         non_existing_key = get_random_string(10)
         list_key = get_random_string(10)
-        assert await redis_client.set(key, value) == "OK"
+        assert await glide_client.set(key, value) == "OK"
 
         # Retrieve and delete existing key
-        assert await redis_client.getdel(key) == value.encode()
-        assert await redis_client.get(key) is None
+        assert await glide_client.getdel(key) == value.encode()
+        assert await glide_client.get(key) is None
 
         # Try to get and delete a non-existing key
-        assert await redis_client.getdel(non_existing_key) is None
+        assert await glide_client.getdel(non_existing_key) is None
 
-        assert await redis_client.lpush(list_key, [value]) == 1
+        assert await glide_client.lpush(list_key, [value]) == 1
         with pytest.raises(RequestError) as e:
-            await redis_client.getdel(list_key)
+            await glide_client.getdel(list_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getrange(self, redis_client: TGlideClient):
+    async def test_getrange(self, glide_client: TGlideClient):
         key = get_random_string(16)
         value = get_random_string(10)
         value_encoded = value.encode()
         non_string_key = get_random_string(10)
 
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.getrange(key, 0, 3) == value_encoded[:4]
-        assert await redis_client.getrange(key, -3, -1) == value_encoded[-3:]
-        assert await redis_client.getrange(key, 0, -1) == value_encoded
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.getrange(key, 0, 3) == value_encoded[:4]
+        assert await glide_client.getrange(key, -3, -1) == value_encoded[-3:]
+        assert await glide_client.getrange(key, 0, -1) == value_encoded
 
         # out of range
-        assert await redis_client.getrange(key, 10, 100) == value_encoded[10:]
-        assert await redis_client.getrange(key, -200, -3) == value_encoded[-200:-2]
-        assert await redis_client.getrange(key, 100, 200) == b""
+        assert await glide_client.getrange(key, 10, 100) == value_encoded[10:]
+        assert await glide_client.getrange(key, -200, -3) == value_encoded[-200:-2]
+        assert await glide_client.getrange(key, 100, 200) == b""
 
         # incorrect range
-        assert await redis_client.getrange(key, -1, -3) == b""
+        assert await glide_client.getrange(key, -1, -3) == b""
 
         # a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
-        if await check_if_server_version_lt(redis_client, "8.0.0"):
-            assert await redis_client.getrange(key, -200, -100) == value[0].encode()
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
+            assert await glide_client.getrange(key, -200, -100) == value[0].encode()
         else:
-            assert await redis_client.getrange(key, -200, -100) == b""
+            assert await glide_client.getrange(key, -200, -100) == b""
 
-        if await check_if_server_version_lt(redis_client, "8.0.0"):
-            assert await redis_client.getrange(non_string_key, 0, -1) == b""
+        if await check_if_server_version_lt(glide_client, "8.0.0"):
+            assert await glide_client.getrange(non_string_key, 0, -1) == b""
 
         # non-string key
-        assert await redis_client.lpush(non_string_key, ["_"]) == 1
+        assert await glide_client.lpush(non_string_key, ["_"]) == 1
         with pytest.raises(RequestError):
-            await redis_client.getrange(non_string_key, 0, -1)
+            await glide_client.getrange(non_string_key, 0, -1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_config_reset_stat(self, redis_client: TGlideClient):
+    async def test_config_reset_stat(self, glide_client: TGlideClient):
         # we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
         # after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
-        await redis_client.set("foo", "bar")
-        info_stats = str(await redis_client.info([InfoSection.COMMAND_STATS]))
+        await glide_client.set("foo", "bar")
+        info_stats = str(await glide_client.info([InfoSection.COMMAND_STATS]))
 
         assert "cmdstat_set" in info_stats
 
-        assert await redis_client.config_resetstat() == OK
-        info_stats = str(await redis_client.info([InfoSection.COMMAND_STATS]))
+        assert await glide_client.config_resetstat() == OK
+        info_stats = str(await glide_client.info([InfoSection.COMMAND_STATS]))
 
         # 1 stands for the second info command
         assert "cmdstat_set" not in info_stats
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_config_rewrite(self, redis_client: TGlideClient):
+    async def test_config_rewrite(self, glide_client: TGlideClient):
         info_server = parse_info_response(
-            get_first_result(await redis_client.info([InfoSection.SERVER]))
+            get_first_result(await glide_client.info([InfoSection.SERVER]))
         )
         if len(info_server["config_file"]) > 0:
-            assert await redis_client.config_rewrite() == OK
+            assert await glide_client.config_rewrite() == OK
         else:
             # We expect Redis to return an error since the test cluster doesn't use redis.conf file
             with pytest.raises(RequestError) as e:
-                await redis_client.config_rewrite()
+                await glide_client.config_rewrite()
             assert "The server is running without a config file" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_client_id(self, redis_client: TGlideClient):
-        client_id = await redis_client.client_id()
+    async def test_client_id(self, glide_client: TGlideClient):
+        client_id = await glide_client.client_id()
         assert type(client_id) is int
         assert client_id > 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incr_commands_existing_key(self, redis_client: TGlideClient):
+    async def test_incr_commands_existing_key(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "10") == OK
-        assert await redis_client.incr(key) == 11
-        assert await redis_client.get(key) == b"11"
-        assert await redis_client.incrby(key, 4) == 15
-        assert await redis_client.get(key) == b"15"
-        assert await redis_client.incrbyfloat(key, 5.5) == 20.5
-        assert await redis_client.get(key) == b"20.5"
+        assert await glide_client.set(key, "10") == OK
+        assert await glide_client.incr(key) == 11
+        assert await glide_client.get(key) == b"11"
+        assert await glide_client.incrby(key, 4) == 15
+        assert await glide_client.get(key) == b"15"
+        assert await glide_client.incrbyfloat(key, 5.5) == 20.5
+        assert await glide_client.get(key) == b"20.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incr_commands_non_existing_key(self, redis_client: TGlideClient):
+    async def test_incr_commands_non_existing_key(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
         key3 = get_random_string(10)
 
-        assert await redis_client.get(key) is None
-        assert await redis_client.incr(key) == 1
-        assert await redis_client.get(key) == b"1"
+        assert await glide_client.get(key) is None
+        assert await glide_client.incr(key) == 1
+        assert await glide_client.get(key) == b"1"
 
-        assert await redis_client.get(key2) is None
-        assert await redis_client.incrby(key2, 3) == 3
-        assert await redis_client.get(key2) == b"3"
+        assert await glide_client.get(key2) is None
+        assert await glide_client.incrby(key2, 3) == 3
+        assert await glide_client.get(key2) == b"3"
 
-        assert await redis_client.get(key3) is None
-        assert await redis_client.incrbyfloat(key3, 0.5) == 0.5
-        assert await redis_client.get(key3) == b"0.5"
+        assert await glide_client.get(key3) is None
+        assert await glide_client.incrbyfloat(key3, 0.5) == 0.5
+        assert await glide_client.get(key3) == b"0.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incr_commands_with_str_value(self, redis_client: TGlideClient):
+    async def test_incr_commands_with_str_value(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.incr(key)
+            await glide_client.incr(key)
 
         assert "value is not an integer" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.incrby(key, 3)
+            await glide_client.incrby(key, 3)
 
         assert "value is not an integer" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.incrbyfloat(key, 3.5)
+            await glide_client.incrbyfloat(key, 3.5)
         assert "value is not a valid float" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_client_getname(self, redis_client: TGlideClient):
-        assert await redis_client.client_getname() is None
+    async def test_client_getname(self, glide_client: TGlideClient):
+        assert await glide_client.client_getname() is None
         assert (
-            await redis_client.custom_command(["CLIENT", "SETNAME", "GlideConnection"])
+            await glide_client.custom_command(["CLIENT", "SETNAME", "GlideConnection"])
             == OK
         )
-        assert await redis_client.client_getname() == b"GlideConnection"
+        assert await glide_client.client_getname() == b"GlideConnection"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_mset_mget(self, redis_client: TGlideClient):
+    async def test_mset_mget(self, glide_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
         non_existing_key = get_random_string(10)
         key_value_pairs = {key: value for key, value in zip(keys, keys)}
 
-        assert await redis_client.mset(key_value_pairs) == OK
+        assert await glide_client.mset(key_value_pairs) == OK
 
         # Add the non-existing key
         keys.append(non_existing_key)
-        mget_res = await redis_client.mget(keys)
+        mget_res = await glide_client.mget(keys)
         keys[-1] = None
         assert mget_res == [key.encode() if key is not None else key for key in keys]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_touch(self, redis_client: TGlideClient):
+    async def test_touch(self, glide_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10)]
         key_value_pairs = {key: value for key, value in zip(keys, keys)}
 
-        assert await redis_client.mset(key_value_pairs) == OK
-        assert await redis_client.touch(keys) == 2
+        assert await glide_client.mset(key_value_pairs) == OK
+        assert await glide_client.touch(keys) == 2
 
         # 2 existing keys, one non-existing
-        assert await redis_client.touch([*keys, get_random_string(3)]) == 2
+        assert await glide_client.touch([*keys, get_random_string(3)]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_msetnx(self, redis_client: TGlideClient):
+    async def test_msetnx(self, glide_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
         key3 = f"{{key}}-3{get_random_string(5)}"
@@ -655,32 +655,32 @@ class TestCommands:
             key3: value,
         }
 
-        assert await redis_client.msetnx(key_value_map1) is True
-        mget_res = await redis_client.mget([key1, key2, non_existing])
+        assert await glide_client.msetnx(key_value_map1) is True
+        mget_res = await glide_client.mget([key1, key2, non_existing])
         assert mget_res == [value_encoded, value_encoded, None]
 
-        assert await redis_client.msetnx(key_value_map2) is False
-        assert await redis_client.get(key3) is None
-        assert await redis_client.get(key2) == value_encoded
+        assert await glide_client.msetnx(key_value_map2) is False
+        assert await glide_client.get(key3) is None
+        assert await glide_client.get(key2) == value_encoded
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_ping(self, redis_client: TGlideClient):
-        assert await redis_client.ping() == b"PONG"
-        assert await redis_client.ping("HELLO") == b"HELLO"
+    async def test_ping(self, glide_client: TGlideClient):
+        assert await glide_client.ping() == b"PONG"
+        assert await glide_client.ping("HELLO") == b"HELLO"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_config_get_set(self, redis_client: TGlideClient):
-        previous_timeout = await redis_client.config_get(["timeout"])
-        assert await redis_client.config_set({"timeout": "1000"}) == OK
-        assert await redis_client.config_get(["timeout"]) == {b"timeout": b"1000"}
+    async def test_config_get_set(self, glide_client: TGlideClient):
+        previous_timeout = await glide_client.config_get(["timeout"])
+        assert await glide_client.config_set({"timeout": "1000"}) == OK
+        assert await glide_client.config_get(["timeout"]) == {b"timeout": b"1000"}
         # revert changes to previous timeout
         previous_timeout_decoded = convert_bytes_to_string_object(previous_timeout)
         assert isinstance(previous_timeout_decoded, dict)
         assert isinstance(previous_timeout_decoded["timeout"], str)
         assert (
-            await redis_client.config_set(
+            await glide_client.config_set(
                 {"timeout": previous_timeout_decoded["timeout"]}
             )
             == OK
@@ -688,317 +688,317 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_decr_decrby_existing_key(self, redis_client: TGlideClient):
+    async def test_decr_decrby_existing_key(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "10") == OK
-        assert await redis_client.decr(key) == 9
-        assert await redis_client.get(key) == b"9"
-        assert await redis_client.decrby(key, 4) == 5
-        assert await redis_client.get(key) == b"5"
+        assert await glide_client.set(key, "10") == OK
+        assert await glide_client.decr(key) == 9
+        assert await glide_client.get(key) == b"9"
+        assert await glide_client.decrby(key, 4) == 5
+        assert await glide_client.get(key) == b"5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_decr_decrby_non_existing_key(self, redis_client: TGlideClient):
+    async def test_decr_decrby_non_existing_key(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
 
-        assert await redis_client.get(key) is None
-        assert await redis_client.decr(key) == -1
-        assert await redis_client.get(key) == b"-1"
+        assert await glide_client.get(key) is None
+        assert await glide_client.decr(key) == -1
+        assert await glide_client.get(key) == b"-1"
 
-        assert await redis_client.get(key2) is None
-        assert await redis_client.decrby(key2, 3) == -3
-        assert await redis_client.get(key2) == b"-3"
+        assert await glide_client.get(key2) is None
+        assert await glide_client.decrby(key2, 3) == -3
+        assert await glide_client.get(key2) == b"-3"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_decr_with_str_value(self, redis_client: TGlideClient):
+    async def test_decr_with_str_value(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.decr(key)
+            await glide_client.decr(key)
 
         assert "value is not an integer" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.decrby(key, 3)
+            await glide_client.decrby(key, 3)
 
         assert "value is not an integer" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_setrange(self, redis_client: TGlideClient):
+    async def test_setrange(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
         # test new key and existing key
-        assert await redis_client.setrange(key1, 0, "Hello World") == 11
-        assert await redis_client.setrange(key1, 6, "GLIDE") == 11
+        assert await glide_client.setrange(key1, 0, "Hello World") == 11
+        assert await glide_client.setrange(key1, 6, "GLIDE") == 11
 
         # offset > len
-        assert await redis_client.setrange(key1, 15, "GLIDE") == 20
+        assert await glide_client.setrange(key1, 15, "GLIDE") == 20
 
         # negative offset
         with pytest.raises(RequestError):
-            assert await redis_client.setrange(key1, -1, "GLIDE")
+            assert await glide_client.setrange(key1, -1, "GLIDE")
 
         # non-string key throws RequestError
-        assert await redis_client.lpush(key2, ["_"]) == 1
+        assert await glide_client.lpush(key2, ["_"]) == 1
         with pytest.raises(RequestError):
-            assert await redis_client.setrange(key2, 0, "_")
+            assert await glide_client.setrange(key2, 0, "_")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hset_hget_hgetall(self, redis_client: TGlideClient):
+    async def test_hset_hget_hgetall(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hget(key, field) == b"value"
-        assert await redis_client.hget(key, field2) == b"value2"
-        assert await redis_client.hget(key, "non_existing_field") is None
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hget(key, field) == b"value"
+        assert await glide_client.hget(key, field2) == b"value2"
+        assert await glide_client.hget(key, "non_existing_field") is None
 
-        hgetall_map = await redis_client.hgetall(key)
+        hgetall_map = await glide_client.hgetall(key)
         expected_map = {
             field.encode(): b"value",
             field2.encode(): b"value2",
         }
         assert compare_maps(hgetall_map, expected_map) is True
-        assert await redis_client.hgetall("non_existing_field") == {}
+        assert await glide_client.hgetall("non_existing_field") == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hdel(self, redis_client: TGlideClient):
+    async def test_hdel(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field3 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2", field3: "value3"}
 
-        assert await redis_client.hset(key, field_value_map) == 3
-        assert await redis_client.hdel(key, [field, field2]) == 2
-        assert await redis_client.hdel(key, ["nonExistingField"]) == 0
-        assert await redis_client.hdel("nonExistingKey", [field3]) == 0
+        assert await glide_client.hset(key, field_value_map) == 3
+        assert await glide_client.hdel(key, [field, field2]) == 2
+        assert await glide_client.hdel(key, ["nonExistingField"]) == 0
+        assert await glide_client.hdel("nonExistingKey", [field3]) == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hsetnx(self, redis_client: TGlideClient):
+    async def test_hsetnx(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
 
-        assert await redis_client.hsetnx(key, field, "value") == True
-        assert await redis_client.hsetnx(key, field, "new value") == False
-        assert await redis_client.hget(key, field) == b"value"
+        assert await glide_client.hsetnx(key, field, "value") == True
+        assert await glide_client.hsetnx(key, field, "new value") == False
+        assert await glide_client.hget(key, field) == b"value"
         key = get_random_string(5)
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hsetnx(key, field, "value")
+            await glide_client.hsetnx(key, field, "value")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hmget(self, redis_client: TGlideClient):
+    async def test_hmget(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hmget(key, [field, "nonExistingField", field2]) == [
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hmget(key, [field, "nonExistingField", field2]) == [
             b"value",
             None,
             b"value2",
         ]
-        assert await redis_client.hmget("nonExistingKey", [field, field2]) == [
+        assert await glide_client.hmget("nonExistingKey", [field, field2]) == [
             None,
             None,
         ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hset_without_data(self, redis_client: TGlideClient):
+    async def test_hset_without_data(self, glide_client: TGlideClient):
         with pytest.raises(RequestError) as e:
-            await redis_client.hset("key", {})
+            await glide_client.hset("key", {})
 
         assert "wrong number of arguments" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hincrby_hincrbyfloat(self, redis_client: TGlideClient):
+    async def test_hincrby_hincrbyfloat(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field_value_map = {field: "10"}
 
-        assert await redis_client.hset(key, field_value_map) == 1
-        assert await redis_client.hincrby(key, field, 1) == 11
-        assert await redis_client.hincrby(key, field, 4) == 15
-        assert await redis_client.hincrbyfloat(key, field, 1.5) == 16.5
+        assert await glide_client.hset(key, field_value_map) == 1
+        assert await glide_client.hincrby(key, field, 1) == 11
+        assert await glide_client.hincrby(key, field, 4) == 15
+        assert await glide_client.hincrbyfloat(key, field, 1.5) == 16.5
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hincrby_non_existing_key_field(self, redis_client: TGlideClient):
+    async def test_hincrby_non_existing_key_field(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
         field = get_random_string(5)
         field_value_map = {field: "10"}
 
-        assert await redis_client.hincrby("nonExistingKey", field, 1) == 1
-        assert await redis_client.hset(key, field_value_map) == 1
-        assert await redis_client.hincrby(key, "nonExistingField", 2) == 2
-        assert await redis_client.hset(key2, field_value_map) == 1
-        assert await redis_client.hincrbyfloat(key2, "nonExistingField", -0.5) == -0.5
+        assert await glide_client.hincrby("nonExistingKey", field, 1) == 1
+        assert await glide_client.hset(key, field_value_map) == 1
+        assert await glide_client.hincrby(key, "nonExistingField", 2) == 2
+        assert await glide_client.hset(key2, field_value_map) == 1
+        assert await glide_client.hincrbyfloat(key2, "nonExistingField", -0.5) == -0.5
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hincrby_invalid_value(self, redis_client: TGlideClient):
+    async def test_hincrby_invalid_value(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field_value_map = {field: "value"}
 
-        assert await redis_client.hset(key, field_value_map) == 1
+        assert await glide_client.hset(key, field_value_map) == 1
 
         with pytest.raises(RequestError) as e:
-            await redis_client.hincrby(key, field, 2)
+            await glide_client.hincrby(key, field, 2)
         assert "hash value is not an integer" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.hincrbyfloat(key, field, 1.5)
+            await glide_client.hincrbyfloat(key, field, 1.5)
         assert "hash value is not a float" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hexist(self, redis_client: TGlideClient):
+    async def test_hexist(self, glide_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hexists(key, field)
-        assert not await redis_client.hexists(key, "nonExistingField")
-        assert not await redis_client.hexists("nonExistingKey", field2)
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hexists(key, field)
+        assert not await glide_client.hexists(key, "nonExistingField")
+        assert not await glide_client.hexists("nonExistingKey", field2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hlen(self, redis_client: TGlideClient):
+    async def test_hlen(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hlen(key) == 2
-        assert await redis_client.hdel(key, [field]) == 1
-        assert await redis_client.hlen(key) == 1
-        assert await redis_client.hlen("non_existing_hash") == 0
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hlen(key) == 2
+        assert await glide_client.hdel(key, [field]) == 1
+        assert await glide_client.hlen(key) == 1
+        assert await glide_client.hlen("non_existing_hash") == 0
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hlen(key2)
+            await glide_client.hlen(key2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hvals(self, redis_client: TGlideClient):
+    async def test_hvals(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hvals(key) == [b"value", b"value2"]
-        assert await redis_client.hdel(key, [field]) == 1
-        assert await redis_client.hvals(key) == [b"value2"]
-        assert await redis_client.hvals("non_existing_key") == []
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hvals(key) == [b"value", b"value2"]
+        assert await glide_client.hdel(key, [field]) == 1
+        assert await glide_client.hvals(key) == [b"value2"]
+        assert await glide_client.hvals("non_existing_key") == []
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hvals(key2)
+            await glide_client.hvals(key2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hkeys(self, redis_client: TGlideClient):
+    async def test_hkeys(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hkeys(key) == [
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hkeys(key) == [
             field.encode(),
             field2.encode(),
         ]
-        assert await redis_client.hdel(key, [field]) == 1
-        assert await redis_client.hkeys(key) == [field2.encode()]
-        assert await redis_client.hkeys("non_existing_key") == []
+        assert await glide_client.hdel(key, [field]) == 1
+        assert await glide_client.hkeys(key) == [field2.encode()]
+        assert await glide_client.hkeys("non_existing_key") == []
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hkeys(key2)
+            await glide_client.hkeys(key2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield(self, redis_client: TGlideClient):
+    async def test_hrandfield(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
-        assert await redis_client.hrandfield(key) in [
+        assert await glide_client.hset(key, field_value_map) == 2
+        assert await glide_client.hrandfield(key) in [
             field.encode(),
             field2.encode(),
         ]
-        assert await redis_client.hrandfield("non_existing_key") is None
+        assert await glide_client.hrandfield("non_existing_key") is None
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hrandfield(key2)
+            await glide_client.hrandfield(key2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield_count(self, redis_client: TGlideClient):
+    async def test_hrandfield_count(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
+        assert await glide_client.hset(key, field_value_map) == 2
         # Unique values are expected as count is positive
-        rand_fields = await redis_client.hrandfield_count(key, 4)
+        rand_fields = await glide_client.hrandfield_count(key, 4)
         assert len(rand_fields) == 2
         assert set(rand_fields) == {field.encode(), field2.encode()}
 
         # Duplicate values are expected as count is negative
-        rand_fields = await redis_client.hrandfield_count(key, -4)
+        rand_fields = await glide_client.hrandfield_count(key, -4)
         assert len(rand_fields) == 4
         for rand_field in rand_fields:
             assert rand_field in [field.encode(), field2.encode()]
 
-        assert await redis_client.hrandfield_count(key, 0) == []
-        assert await redis_client.hrandfield_count("non_existing_key", 4) == []
+        assert await glide_client.hrandfield_count(key, 0) == []
+        assert await glide_client.hrandfield_count("non_existing_key", 4) == []
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hrandfield_count(key2, 5)
+            await glide_client.hrandfield_count(key2, 5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield_withvalues(self, redis_client: TGlideClient):
+    async def test_hrandfield_withvalues(self, glide_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
         field2 = get_random_string(5)
         field_value_map = {field: "value", field2: "value2"}
 
-        assert await redis_client.hset(key, field_value_map) == 2
+        assert await glide_client.hset(key, field_value_map) == 2
         # Unique values are expected as count is positive
-        rand_fields_with_values = await redis_client.hrandfield_withvalues(key, 4)
+        rand_fields_with_values = await glide_client.hrandfield_withvalues(key, 4)
         assert len(rand_fields_with_values) == 2
         for field_with_value in rand_fields_with_values:
             assert field_with_value in [
@@ -1007,7 +1007,7 @@ class TestCommands:
             ]
 
         # Duplicate values are expected as count is negative
-        rand_fields_with_values = await redis_client.hrandfield_withvalues(key, -4)
+        rand_fields_with_values = await glide_client.hrandfield_withvalues(key, -4)
         assert len(rand_fields_with_values) == 4
         for field_with_value in rand_fields_with_values:
             assert field_with_value in [
@@ -1015,111 +1015,111 @@ class TestCommands:
                 [field2.encode(), b"value2"],
             ]
 
-        assert await redis_client.hrandfield_withvalues(key, 0) == []
-        assert await redis_client.hrandfield_withvalues("non_existing_key", 4) == []
+        assert await glide_client.hrandfield_withvalues(key, 0) == []
+        assert await glide_client.hrandfield_withvalues("non_existing_key", 4) == []
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.hrandfield_withvalues(key2, 5)
+            await glide_client.hrandfield_withvalues(key2, 5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hstrlen(self, redis_client: TGlideClient):
+    async def test_hstrlen(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
-        assert await redis_client.hstrlen(key, "field") == 0
-        assert await redis_client.hset(key, {"field": "value"}) == 1
-        assert await redis_client.hstrlen(key, "field") == 5
+        assert await glide_client.hstrlen(key, "field") == 0
+        assert await glide_client.hset(key, {"field": "value"}) == 1
+        assert await glide_client.hstrlen(key, "field") == 5
 
-        assert await redis_client.hstrlen(key, "field2") == 0
+        assert await glide_client.hstrlen(key, "field2") == 0
 
-        await redis_client.set(key, "value")
+        await glide_client.set(key, "value")
         with pytest.raises(RequestError):
-            await redis_client.hstrlen(key, "field")
+            await glide_client.hstrlen(key, "field")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lpush_lpop_lrange(self, redis_client: TGlideClient):
+    async def test_lpush_lpop_lrange(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
-        assert await redis_client.lpush(key, value_list) == 4
-        assert await redis_client.lpop(key) == cast(str, value_list[-1]).encode()
-        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lpush(key, value_list) == 4
+        assert await glide_client.lpop(key) == cast(str, value_list[-1]).encode()
+        assert await glide_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
             value_list[-2::-1]
         )
-        assert await redis_client.lpop_count(key, 2) == convert_string_to_bytes_object(
+        assert await glide_client.lpop_count(key, 2) == convert_string_to_bytes_object(
             value_list[-2:0:-1]
         )
-        assert await redis_client.lrange("non_existing_key", 0, -1) == []
-        assert await redis_client.lpop("non_existing_key") is None
+        assert await glide_client.lrange("non_existing_key", 0, -1) == []
+        assert await glide_client.lpop("non_existing_key") is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange_wrong_type_raise_error(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
 
         with pytest.raises(RequestError) as e:
-            await redis_client.lpush(key, ["bar"])
+            await glide_client.lpush(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.lpop(key)
+            await glide_client.lpop(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.lrange(key, 0, -1)
+            await glide_client.lrange(key, 0, -1)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lpushx(self, redis_client: TGlideClient):
+    async def test_lpushx(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
         # new key
-        assert await redis_client.lpushx(key1, ["1"]) == 0
-        assert await redis_client.lrange(key1, 0, -1) == []
+        assert await glide_client.lpushx(key1, ["1"]) == 0
+        assert await glide_client.lrange(key1, 0, -1) == []
         # existing key
-        assert await redis_client.lpush(key1, ["0"]) == 1
-        assert await redis_client.lpushx(key1, ["1", "2", "3"]) == 4
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lpush(key1, ["0"]) == 1
+        assert await glide_client.lpushx(key1, ["1", "2", "3"]) == 4
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["3", "2", "1", "0"]
         )
         # key exists, but not a list
-        assert await redis_client.set(key2, "bar") == OK
+        assert await glide_client.set(key2, "bar") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.lpushx(key2, ["_"])
+            await glide_client.lpushx(key2, ["_"])
         # incorrect arguments
         with pytest.raises(RequestError):
-            await redis_client.lpushx(key1, [])
+            await glide_client.lpushx(key1, [])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_blpop(self, redis_client: TGlideClient):
+    async def test_blpop(self, glide_client: TGlideClient):
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         value1 = "value1"
         value2 = "value2"
         value_list: List[TEncodable] = [value1, value2]
 
-        assert await redis_client.lpush(key1, value_list) == 2
-        assert await redis_client.blpop(
+        assert await glide_client.lpush(key1, value_list) == 2
+        assert await glide_client.blpop(
             [key1, key2], 0.5
         ) == convert_string_to_bytes_object([key1, value2])
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
-        assert await redis_client.blpop(["non_existent_key"], 0.5) is None
+        assert await glide_client.blpop(["non_existent_key"], 0.5) is None
 
         # key exists, but not a list
-        assert await redis_client.set("foo", "bar")
+        assert await glide_client.set("foo", "bar")
         with pytest.raises(RequestError):
-            await redis_client.blpop(["foo"], 0.001)
+            await glide_client.blpop(["foo"], 0.001)
 
         async def endless_blpop_call():
-            await redis_client.blpop(["non_existent_key"], 0)
+            await glide_client.blpop(["non_existent_key"], 0)
 
         # blpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
@@ -1128,9 +1128,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lmpop(self, redis_client: TGlideClient):
+    async def test_lmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
@@ -1138,38 +1138,38 @@ class TestCommands:
         key3 = f"{{test}}-3-f{get_random_string(10)}"
 
         # Initialize the lists
-        assert await redis_client.lpush(key1, ["3", "2", "1"]) == 3
-        assert await redis_client.lpush(key2, ["6", "5", "4"]) == 3
+        assert await glide_client.lpush(key1, ["3", "2", "1"]) == 3
+        assert await glide_client.lpush(key2, ["6", "5", "4"]) == 3
 
         # Pop from LEFT
-        result = await redis_client.lmpop([key1, key2], ListDirection.LEFT, 2)
+        result = await glide_client.lmpop([key1, key2], ListDirection.LEFT, 2)
         expected_result = {key1: ["1", "2"]}
         assert compare_maps(result, expected_result) is True
 
         # Pop from RIGHT
-        result = await redis_client.lmpop([key2, key1], ListDirection.RIGHT, 2)
+        result = await glide_client.lmpop([key2, key1], ListDirection.RIGHT, 2)
         expected_result = {key2: ["6", "5"]}
         assert compare_maps(result, expected_result) is True
 
         # Pop without count (default is 1)
-        result = await redis_client.lmpop([key1, key2], ListDirection.LEFT)
+        result = await glide_client.lmpop([key1, key2], ListDirection.LEFT)
         expected_result = {key1: ["3"]}
         assert compare_maps(result, expected_result) is True
 
         # Non-existing key
-        result = await redis_client.lmpop([key3], ListDirection.LEFT, 1)
+        result = await glide_client.lmpop([key3], ListDirection.LEFT, 1)
         assert result is None
 
         # Non-list key
-        assert await redis_client.set(key3, "value") == OK
+        assert await glide_client.set(key3, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.lmpop([key3], ListDirection.LEFT, 1)
+            await glide_client.lmpop([key3], ListDirection.LEFT, 1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_blmpop(self, redis_client: TGlideClient):
+    async def test_blmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
@@ -1178,127 +1178,127 @@ class TestCommands:
         key4 = f"{{test}}-4-f{get_random_string(10)}"
 
         # Initialize the lists
-        assert await redis_client.lpush(key1, ["3", "2", "1"]) == 3
-        assert await redis_client.lpush(key2, ["6", "5", "4"]) == 3
+        assert await glide_client.lpush(key1, ["3", "2", "1"]) == 3
+        assert await glide_client.lpush(key2, ["6", "5", "4"]) == 3
 
         # Pop from LEFT with blocking
-        result = await redis_client.blmpop([key1, key2], ListDirection.LEFT, 0.1, 2)
+        result = await glide_client.blmpop([key1, key2], ListDirection.LEFT, 0.1, 2)
         expected_result = {key1: ["1", "2"]}
         assert compare_maps(result, expected_result) is True
 
         # Pop from RIGHT with blocking
-        result = await redis_client.blmpop([key2, key1], ListDirection.RIGHT, 0.1, 2)
+        result = await glide_client.blmpop([key2, key1], ListDirection.RIGHT, 0.1, 2)
         expected_result = {key2: ["6", "5"]}
         assert compare_maps(result, expected_result) is True
 
         # Pop without count (default is 1)
-        result = await redis_client.blmpop([key1, key2], ListDirection.LEFT, 0.1)
+        result = await glide_client.blmpop([key1, key2], ListDirection.LEFT, 0.1)
         expected_result = {key1: ["3"]}
         assert compare_maps(result, expected_result) is True
 
         # Non-existing key with blocking
-        result = await redis_client.blmpop([key3], ListDirection.LEFT, 0.1, 1)
+        result = await glide_client.blmpop([key3], ListDirection.LEFT, 0.1, 1)
         assert result is None
 
         # Non-list key with blocking
-        assert await redis_client.set(key4, "value") == OK
+        assert await glide_client.set(key4, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
+            await glide_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
 
         # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
         async def endless_blmpop_call():
-            await redis_client.blmpop([key3], ListDirection.LEFT, 0, 1)
+            await glide_client.blmpop([key3], ListDirection.LEFT, 0, 1)
 
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(endless_blmpop_call(), timeout=3)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lindex(self, redis_client: TGlideClient):
+    async def test_lindex(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value_list = [get_random_string(5), get_random_string(5)]
-        assert await redis_client.lpush(key, value_list) == 2
-        assert await redis_client.lindex(key, 0) == value_list[1].encode()
-        assert await redis_client.lindex(key, 1) == value_list[0].encode()
-        assert await redis_client.lindex(key, 3) is None
-        assert await redis_client.lindex("non_existing_key", 0) is None
+        assert await glide_client.lpush(key, value_list) == 2
+        assert await glide_client.lindex(key, 0) == value_list[1].encode()
+        assert await glide_client.lindex(key, 1) == value_list[0].encode()
+        assert await glide_client.lindex(key, 3) is None
+        assert await glide_client.lindex("non_existing_key", 0) is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rpush_rpop(self, redis_client: TGlideClient):
+    async def test_rpush_rpop(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
-        assert await redis_client.rpush(key, value_list) == 4
-        assert await redis_client.rpop(key) == cast(str, value_list[-1]).encode()
+        assert await glide_client.rpush(key, value_list) == 4
+        assert await glide_client.rpop(key) == cast(str, value_list[-1]).encode()
 
-        assert await redis_client.rpop_count(key, 2) == convert_string_to_bytes_object(
+        assert await glide_client.rpop_count(key, 2) == convert_string_to_bytes_object(
             value_list[-2:0:-1]
         )
-        assert await redis_client.rpop("non_existing_key") is None
+        assert await glide_client.rpop("non_existing_key") is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rpush_rpop_wrong_type_raise_error(self, redis_client: TGlideClient):
+    async def test_rpush_rpop_wrong_type_raise_error(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
 
         with pytest.raises(RequestError) as e:
-            await redis_client.rpush(key, ["bar"])
+            await glide_client.rpush(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.rpop(key)
+            await glide_client.rpop(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rpushx(self, redis_client: TGlideClient):
+    async def test_rpushx(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
         # new key
-        assert await redis_client.rpushx(key1, ["1"]) == 0
-        assert await redis_client.lrange(key1, 0, -1) == []
+        assert await glide_client.rpushx(key1, ["1"]) == 0
+        assert await glide_client.lrange(key1, 0, -1) == []
         # existing key
-        assert await redis_client.rpush(key1, ["0"]) == 1
-        assert await redis_client.rpushx(key1, ["1", "2", "3"]) == 4
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.rpush(key1, ["0"]) == 1
+        assert await glide_client.rpushx(key1, ["1", "2", "3"]) == 4
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["0", "1", "2", "3"]
         )
         # key existing, but it is not a list
-        assert await redis_client.set(key2, "bar") == OK
+        assert await glide_client.set(key2, "bar") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.rpushx(key2, ["_"])
+            await glide_client.rpushx(key2, ["_"])
         # incorrect arguments
         with pytest.raises(RequestError):
-            await redis_client.rpushx(key2, [])
+            await glide_client.rpushx(key2, [])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_brpop(self, redis_client: TGlideClient):
+    async def test_brpop(self, glide_client: TGlideClient):
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         value1 = "value1"
         value2 = "value2"
         value_list: List[TEncodable] = [value1, value2]
 
-        assert await redis_client.lpush(key1, value_list) == 2
+        assert await glide_client.lpush(key1, value_list) == 2
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
-        assert await redis_client.brpop(
+        assert await glide_client.brpop(
             [key1, key2], 0.5
         ) == convert_string_to_bytes_object([key1, value1])
 
-        assert await redis_client.brpop(["non_existent_key"], 0.5) is None
+        assert await glide_client.brpop(["non_existent_key"], 0.5) is None
 
         # key exists, but not a list
-        assert await redis_client.set("foo", "bar")
+        assert await glide_client.set("foo", "bar")
         with pytest.raises(RequestError):
-            await redis_client.brpop(["foo"], 0.001)
+            await glide_client.brpop(["foo"], 0.001)
 
         async def endless_brpop_call():
-            await redis_client.brpop(["non_existent_key"], 0)
+            await glide_client.brpop(["non_existent_key"], 0)
 
         # brpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
@@ -1307,14 +1307,14 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_linsert(self, redis_client: TGlideClient):
+    async def test_linsert(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
-        assert await redis_client.lpush(key1, ["4", "3", "2", "1"]) == 4
-        assert await redis_client.linsert(key1, InsertPosition.BEFORE, "2", "1.5") == 5
-        assert await redis_client.linsert(key1, InsertPosition.AFTER, "3", "3.5") == 6
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lpush(key1, ["4", "3", "2", "1"]) == 4
+        assert await glide_client.linsert(key1, InsertPosition.BEFORE, "2", "1.5") == 5
+        assert await glide_client.linsert(key1, InsertPosition.AFTER, "3", "3.5") == 6
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             [
                 "1",
                 "1.5",
@@ -1326,83 +1326,83 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.linsert(
+            await glide_client.linsert(
                 "non_existing_key", InsertPosition.BEFORE, "pivot", "elem"
             )
             == 0
         )
-        assert await redis_client.linsert(key1, InsertPosition.AFTER, "5", "6") == -1
+        assert await glide_client.linsert(key1, InsertPosition.AFTER, "5", "6") == -1
 
         # key exists, but it is not a list
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.linsert(key2, InsertPosition.AFTER, "p", "e")
+            await glide_client.linsert(key2, InsertPosition.AFTER, "p", "e")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lmove(self, redis_client: TGlideClient):
+    async def test_lmove(self, glide_client: TGlideClient):
         key1 = "{SameSlot}" + get_random_string(10)
         key2 = "{SameSlot}" + get_random_string(10)
 
         # Initialize the lists
-        assert await redis_client.lpush(key1, ["2", "1"]) == 2
-        assert await redis_client.lpush(key2, ["4", "3"]) == 2
+        assert await glide_client.lpush(key1, ["2", "1"]) == 2
+        assert await glide_client.lpush(key2, ["4", "3"]) == 2
 
         # Move from LEFT to LEFT
         assert (
-            await redis_client.lmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT)
+            await glide_client.lmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT)
             == b"1"
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["2"]
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3", "4"]
         )
 
         # Move from LEFT to RIGHT
         assert (
-            await redis_client.lmove(
+            await glide_client.lmove(
                 key1, key2, ListDirection.LEFT, ListDirection.RIGHT
             )
             == b"2"
         )
-        assert await redis_client.lrange(key1, 0, -1) == []
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == []
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3", "4", "2"]
         )
 
         # Move from RIGHT to LEFT - non-existing destination key
         assert (
-            await redis_client.lmove(
+            await glide_client.lmove(
                 key2, key1, ListDirection.RIGHT, ListDirection.LEFT
             )
             == b"2"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3", "4"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["2"]
         )
 
         # Move from RIGHT to RIGHT
         assert (
-            await redis_client.lmove(
+            await glide_client.lmove(
                 key2, key1, ListDirection.RIGHT, ListDirection.RIGHT
             )
             == b"4"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["2", "4"]
         )
 
         # Non-existing source key
         assert (
-            await redis_client.lmove(
+            await glide_client.lmove(
                 "{SameSlot}non_existing_key",
                 key1,
                 ListDirection.LEFT,
@@ -1413,81 +1413,81 @@ class TestCommands:
 
         # Non-list source key
         key3 = get_random_string(10)
-        assert await redis_client.set(key3, "value") == OK
+        assert await glide_client.set(key3, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.lmove(key3, key1, ListDirection.LEFT, ListDirection.LEFT)
+            await glide_client.lmove(key3, key1, ListDirection.LEFT, ListDirection.LEFT)
 
         # Non-list destination key
         with pytest.raises(RequestError):
-            await redis_client.lmove(key1, key3, ListDirection.LEFT, ListDirection.LEFT)
+            await glide_client.lmove(key1, key3, ListDirection.LEFT, ListDirection.LEFT)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_blmove(self, redis_client: TGlideClient):
+    async def test_blmove(self, glide_client: TGlideClient):
         key1 = "{SameSlot}" + get_random_string(10)
         key2 = "{SameSlot}" + get_random_string(10)
 
         # Initialize the lists
-        assert await redis_client.lpush(key1, ["2", "1"]) == 2
-        assert await redis_client.lpush(key2, ["4", "3"]) == 2
+        assert await glide_client.lpush(key1, ["2", "1"]) == 2
+        assert await glide_client.lpush(key2, ["4", "3"]) == 2
 
         # Move from LEFT to LEFT with blocking
         assert (
-            await redis_client.blmove(
+            await glide_client.blmove(
                 key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
             == b"1"
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["2"]
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3", "4"]
         )
 
         # Move from LEFT to RIGHT with blocking
         assert (
-            await redis_client.blmove(
+            await glide_client.blmove(
                 key1, key2, ListDirection.LEFT, ListDirection.RIGHT, 0.1
             )
             == b"2"
         )
-        assert await redis_client.lrange(key1, 0, -1) == []
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == []
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3", "4", "2"]
         )
 
         # Move from RIGHT to LEFT non-existing destination with blocking
         assert (
-            await redis_client.blmove(
+            await glide_client.blmove(
                 key2, key1, ListDirection.RIGHT, ListDirection.LEFT, 0.1
             )
             == b"2"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3", "4"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["2"]
         )
 
         # Move from RIGHT to RIGHT with blocking
         assert (
-            await redis_client.blmove(
+            await glide_client.blmove(
                 key2, key1, ListDirection.RIGHT, ListDirection.RIGHT, 0.1
             )
             == b"4"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key2, 0, -1) == convert_string_to_bytes_object(
             ["1", "3"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key1, 0, -1) == convert_string_to_bytes_object(
             ["2", "4"]
         )
 
         # Non-existing source key with blocking
         assert (
-            await redis_client.blmove(
+            await glide_client.blmove(
                 "{SameSlot}non_existing_key",
                 key1,
                 ListDirection.LEFT,
@@ -1499,22 +1499,22 @@ class TestCommands:
 
         # Non-list source key with blocking
         key3 = get_random_string(10)
-        assert await redis_client.set(key3, "value") == OK
+        assert await glide_client.set(key3, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.blmove(
+            await glide_client.blmove(
                 key3, key1, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
 
         # Non-list destination key with blocking
         with pytest.raises(RequestError):
-            await redis_client.blmove(
+            await glide_client.blmove(
                 key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
 
         # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
         async def endless_blmove_call():
-            await redis_client.blmove(
+            await glide_client.blmove(
                 "{SameSlot}non_existing_key",
                 key2,
                 ListDirection.LEFT,
@@ -1527,204 +1527,204 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lset(self, redis_client: TGlideClient):
+    async def test_lset(self, glide_client: TGlideClient):
         key = get_random_string(10)
         element = get_random_string(5)
         values = [get_random_string(5) for _ in range(4)]
 
         # key does not exist
         with pytest.raises(RequestError):
-            await redis_client.lset("non_existing_key", 0, element)
+            await glide_client.lset("non_existing_key", 0, element)
 
         # pushing elements to list
-        await redis_client.lpush(key, values) == 4
+        await glide_client.lpush(key, values) == 4
 
         # index out of range
         with pytest.raises(RequestError):
-            await redis_client.lset(key, 10, element)
+            await glide_client.lset(key, 10, element)
 
         # assert lset result
-        assert await redis_client.lset(key, 0, element) == OK
+        assert await glide_client.lset(key, 0, element) == OK
 
         values = [element] + values[:-1][::-1]
-        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
             values
         )
 
         # assert lset with a negative index for the last element in the list
-        assert await redis_client.lset(key, -1, element) == OK
+        assert await glide_client.lset(key, -1, element) == OK
 
         values[-1] = element
-        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
             values
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sadd_srem_smembers_scard(self, redis_client: TGlideClient):
+    async def test_sadd_srem_smembers_scard(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value_list: List[TEncodable] = ["member1", "member2", "member3", "member4"]
 
-        assert await redis_client.sadd(key, value_list) == 4
-        assert await redis_client.srem(key, ["member4", "nonExistingMember"]) == 1
+        assert await glide_client.sadd(key, value_list) == 4
+        assert await glide_client.srem(key, ["member4", "nonExistingMember"]) == 1
 
-        assert set(await redis_client.smembers(key)) == set(
+        assert set(await glide_client.smembers(key)) == set(
             cast(list, convert_string_to_bytes_object(value_list[:3]))
         )
 
-        assert await redis_client.srem(key, ["member1"]) == 1
-        assert await redis_client.scard(key) == 2
+        assert await glide_client.srem(key, ["member1"]) == 1
+        assert await glide_client.scard(key) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard_non_existing_key(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         non_existing_key = get_random_string(10)
-        assert await redis_client.srem(non_existing_key, ["member"]) == 0
-        assert await redis_client.scard(non_existing_key) == 0
-        assert await redis_client.smembers(non_existing_key) == set()
+        assert await glide_client.srem(non_existing_key, ["member"]) == 0
+        assert await glide_client.scard(non_existing_key) == 0
+        assert await glide_client.smembers(non_existing_key) == set()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard_wrong_type_raise_error(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
 
         with pytest.raises(RequestError) as e:
-            await redis_client.sadd(key, ["bar"])
+            await glide_client.sadd(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.srem(key, ["bar"])
+            await glide_client.srem(key, ["bar"])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.scard(key)
+            await glide_client.scard(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.smembers(key)
+            await glide_client.smembers(key)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sismember(self, redis_client: TGlideClient):
+    async def test_sismember(self, glide_client: TGlideClient):
         key = get_random_string(10)
         member = get_random_string(5)
-        assert await redis_client.sadd(key, [member]) == 1
-        assert await redis_client.sismember(key, member)
-        assert not await redis_client.sismember(key, get_random_string(5))
-        assert not await redis_client.sismember("non_existing_key", member)
+        assert await glide_client.sadd(key, [member]) == 1
+        assert await glide_client.sismember(key, member)
+        assert not await glide_client.sismember(key, get_random_string(5))
+        assert not await glide_client.sismember("non_existing_key", member)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_spop(self, redis_client: TGlideClient):
+    async def test_spop(self, glide_client: TGlideClient):
         key = get_random_string(10)
         member = get_random_string(5)
-        assert await redis_client.sadd(key, [member]) == 1
-        assert await redis_client.spop(key) == member.encode()
+        assert await glide_client.sadd(key, [member]) == 1
+        assert await glide_client.spop(key) == member.encode()
 
         member2 = get_random_string(5)
         member3 = get_random_string(5)
-        assert await redis_client.sadd(key, [member, member2, member3]) == 3
-        assert await redis_client.spop_count(key, 4) == convert_string_to_bytes_object(
+        assert await glide_client.sadd(key, [member, member2, member3]) == 3
+        assert await glide_client.spop_count(key, 4) == convert_string_to_bytes_object(
             {member, member2, member3}
         )
 
-        assert await redis_client.scard(key) == 0
+        assert await glide_client.scard(key) == 0
 
-        assert await redis_client.spop("non_existing_key") == None
-        assert await redis_client.spop_count("non_existing_key", 3) == set()
+        assert await glide_client.spop("non_existing_key") == None
+        assert await glide_client.spop_count("non_existing_key", 3) == set()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_smove(self, redis_client: TGlideClient):
+    async def test_smove(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        assert await redis_client.sadd(key1, ["1", "2", "3"]) == 3
-        assert await redis_client.sadd(key2, ["2", "3"]) == 2
+        assert await glide_client.sadd(key1, ["1", "2", "3"]) == 3
+        assert await glide_client.sadd(key2, ["2", "3"]) == 2
 
         # move an element
-        assert await redis_client.smove(key1, key2, "1") is True
-        assert await redis_client.smembers(key1) == convert_string_to_bytes_object(
+        assert await glide_client.smove(key1, key2, "1") is True
+        assert await glide_client.smembers(key1) == convert_string_to_bytes_object(
             {"2", "3"}
         )
-        assert await redis_client.smembers(key2) == convert_string_to_bytes_object(
+        assert await glide_client.smembers(key2) == convert_string_to_bytes_object(
             {"1", "2", "3"}
         )
 
         # moved element already exists in the destination set
-        assert await redis_client.smove(key2, key1, "2") is True
-        assert await redis_client.smembers(key1) == convert_string_to_bytes_object(
+        assert await glide_client.smove(key2, key1, "2") is True
+        assert await glide_client.smembers(key1) == convert_string_to_bytes_object(
             {"2", "3"}
         )
-        assert await redis_client.smembers(key2) == convert_string_to_bytes_object(
+        assert await glide_client.smembers(key2) == convert_string_to_bytes_object(
             {"1", "3"}
         )
 
         # attempt to move from a non-existing key
-        assert await redis_client.smove(non_existing_key, key1, "4") is False
-        assert await redis_client.smembers(key1) == convert_string_to_bytes_object(
+        assert await glide_client.smove(non_existing_key, key1, "4") is False
+        assert await glide_client.smembers(key1) == convert_string_to_bytes_object(
             {"2", "3"}
         )
 
         # move to a new set
-        assert await redis_client.smove(key1, key3, "2")
-        assert await redis_client.smembers(key1) == {b"3"}
-        assert await redis_client.smembers(key3) == {b"2"}
+        assert await glide_client.smove(key1, key3, "2")
+        assert await glide_client.smembers(key1) == {b"3"}
+        assert await glide_client.smembers(key3) == {b"2"}
 
         # attempt to move a missing element
-        assert await redis_client.smove(key1, key3, "42") is False
-        assert await redis_client.smembers(key1) == {b"3"}
-        assert await redis_client.smembers(key3) == {b"2"}
+        assert await glide_client.smove(key1, key3, "42") is False
+        assert await glide_client.smembers(key1) == {b"3"}
+        assert await glide_client.smembers(key3) == {b"2"}
 
         # move missing element to missing key
-        assert await redis_client.smove(key1, non_existing_key, "42") is False
-        assert await redis_client.smembers(key1) == {b"3"}
-        assert await redis_client.type(non_existing_key) == b"none"
+        assert await glide_client.smove(key1, non_existing_key, "42") is False
+        assert await glide_client.smembers(key1) == {b"3"}
+        assert await glide_client.type(non_existing_key) == b"none"
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.smove(string_key, key1, "_")
+            await glide_client.smove(string_key, key1, "_")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sunion(self, redis_client: TGlideClient):
+    async def test_sunion(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
         member1_list: List[TEncodable] = ["a", "b", "c"]
         member2_list: List[TEncodable] = ["b", "c", "d", "e"]
 
-        assert await redis_client.sadd(key1, member1_list) == 3
-        assert await redis_client.sadd(key2, member2_list) == 4
-        assert await redis_client.sunion([key1, key2]) == {b"a", b"b", b"c", b"d", b"e"}
+        assert await glide_client.sadd(key1, member1_list) == 3
+        assert await glide_client.sadd(key2, member2_list) == 4
+        assert await glide_client.sunion([key1, key2]) == {b"a", b"b", b"c", b"d", b"e"}
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.sunion([])
+            await glide_client.sunion([])
 
         # non-existing key returns the set of existing keys
-        assert await redis_client.sunion(
+        assert await glide_client.sunion(
             [key1, non_existing_key]
         ) == convert_string_to_bytes_object(set(cast(List[str], member1_list)))
 
         # non-set key
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.sunion([key2])
+            await glide_client.sunion([key2])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sunionstore(self, redis_client: TGlideClient):
+    async def test_sunionstore(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -1732,40 +1732,40 @@ class TestCommands:
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
-        assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
-        assert await redis_client.sadd(key3, ["e", "f", "g"]) == 3
+        assert await glide_client.sadd(key1, ["a", "b", "c"]) == 3
+        assert await glide_client.sadd(key2, ["c", "d", "e"]) == 3
+        assert await glide_client.sadd(key3, ["e", "f", "g"]) == 3
 
         # store union in new key
-        assert await redis_client.sunionstore(key4, [key1, key2]) == 5
-        assert await redis_client.smembers(key4) == convert_string_to_bytes_object(
+        assert await glide_client.sunionstore(key4, [key1, key2]) == 5
+        assert await glide_client.smembers(key4) == convert_string_to_bytes_object(
             {"a", "b", "c", "d", "e"}
         )
 
         # overwrite existing set
-        assert await redis_client.sunionstore(key1, [key4, key2]) == 5
-        assert await redis_client.smembers(key1) == convert_string_to_bytes_object(
+        assert await glide_client.sunionstore(key1, [key4, key2]) == 5
+        assert await glide_client.smembers(key1) == convert_string_to_bytes_object(
             {"a", "b", "c", "d", "e"}
         )
 
         # overwrite one of the source keys
-        assert await redis_client.sunionstore(key2, [key4, key2]) == 5
-        assert await redis_client.smembers(key1) == convert_string_to_bytes_object(
+        assert await glide_client.sunionstore(key2, [key4, key2]) == 5
+        assert await glide_client.smembers(key1) == convert_string_to_bytes_object(
             {"a", "b", "c", "d", "e"}
         )
 
         # union with a non existing key
-        assert await redis_client.sunionstore(key2, [non_existing_key]) == 0
-        assert await redis_client.smembers(key2) == set()
+        assert await glide_client.sunionstore(key2, [non_existing_key]) == 0
+        assert await glide_client.smembers(key2) == set()
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.sunionstore(key4, [string_key, key1])
+            await glide_client.sunionstore(key4, [string_key, key1])
 
         # overwrite destination when destination is not a set
-        assert await redis_client.sunionstore(string_key, [key1, key3]) == 7
-        assert await redis_client.smembers(
+        assert await glide_client.sunionstore(string_key, [key1, key3]) == 7
+        assert await glide_client.smembers(
             string_key
         ) == convert_string_to_bytes_object(
             {
@@ -1781,7 +1781,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sinter(self, redis_client: TGlideClient):
+    async def test_sinter(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
@@ -1789,26 +1789,26 @@ class TestCommands:
         member2_list: List[TEncodable] = ["c", "d", "e"]
 
         # positive test case
-        assert await redis_client.sadd(key1, member1_list) == 3
-        assert await redis_client.sadd(key2, member2_list) == 3
-        assert await redis_client.sinter([key1, key2]) == {b"c"}
+        assert await glide_client.sadd(key1, member1_list) == 3
+        assert await glide_client.sadd(key2, member2_list) == 3
+        assert await glide_client.sinter([key1, key2]) == {b"c"}
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.sinter([])
+            await glide_client.sinter([])
 
         # non-existing key returns empty set
-        assert await redis_client.sinter([key1, non_existing_key]) == set()
+        assert await glide_client.sinter([key1, non_existing_key]) == set()
 
         # non-set key
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.sinter([key2])
+            await glide_client.sinter([key2])
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sinterstore(self, redis_client: TGlideClient):
+    async def test_sinterstore(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         key3 = f"{{testKey}}:{get_random_string(10)}"
@@ -1817,43 +1817,43 @@ class TestCommands:
         member1_list: List[TEncodable] = ["a", "b", "c"]
         member2_list: List[TEncodable] = ["c", "d", "e"]
 
-        assert await redis_client.sadd(key1, member1_list) == 3
-        assert await redis_client.sadd(key2, member2_list) == 3
+        assert await glide_client.sadd(key1, member1_list) == 3
+        assert await glide_client.sadd(key2, member2_list) == 3
 
         # store in new key
-        assert await redis_client.sinterstore(key3, [key1, key2]) == 1
-        assert await redis_client.smembers(key3) == {b"c"}
+        assert await glide_client.sinterstore(key3, [key1, key2]) == 1
+        assert await glide_client.smembers(key3) == {b"c"}
 
         # overwrite existing set, which is also a source set
-        assert await redis_client.sinterstore(key2, [key2, key3]) == 1
-        assert await redis_client.smembers(key2) == {b"c"}
+        assert await glide_client.sinterstore(key2, [key2, key3]) == 1
+        assert await glide_client.smembers(key2) == {b"c"}
 
         # source set is the same as the existing set
-        assert await redis_client.sinterstore(key2, [key2]) == 1
-        assert await redis_client.smembers(key2) == {b"c"}
+        assert await glide_client.sinterstore(key2, [key2]) == 1
+        assert await glide_client.smembers(key2) == {b"c"}
 
         # intersection with non-existing key
-        assert await redis_client.sinterstore(key1, [key2, non_existing_key]) == 0
-        assert await redis_client.smembers(key1) == set()
+        assert await glide_client.sinterstore(key1, [key2, non_existing_key]) == 0
+        assert await glide_client.smembers(key1) == set()
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.sinterstore(key3, [])
+            await glide_client.sinterstore(key3, [])
 
         # non-set key
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.sinterstore(key3, [string_key])
+            await glide_client.sinterstore(key3, [string_key])
 
         # overwrite non-set key
-        assert await redis_client.sinterstore(string_key, [key2]) == 1
-        assert await redis_client.smembers(string_key) == {b"c"}
+        assert await glide_client.sinterstore(string_key, [key2]) == 1
+        assert await glide_client.smembers(string_key) == {b"c"}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sintercard(self, redis_client: TGlideClient):
+    async def test_sintercard(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{testKey}}:{get_random_string(10)}"
@@ -1865,168 +1865,168 @@ class TestCommands:
         member2_list: List[TEncodable] = ["b", "c", "d", "e"]
         member3_list: List[TEncodable] = ["b", "c", "f", "g"]
 
-        assert await redis_client.sadd(key1, member1_list) == 3
-        assert await redis_client.sadd(key2, member2_list) == 4
-        assert await redis_client.sadd(key3, member3_list) == 4
+        assert await glide_client.sadd(key1, member1_list) == 3
+        assert await glide_client.sadd(key2, member2_list) == 4
+        assert await glide_client.sadd(key3, member3_list) == 4
 
         # Basic intersection
         assert (
-            await redis_client.sintercard([key1, key2]) == 2
+            await glide_client.sintercard([key1, key2]) == 2
         )  # Intersection of key1 and key2 is {"b", "c"}
 
         # Intersection with non-existing key
         assert (
-            await redis_client.sintercard([key1, non_existing_key]) == 0
+            await glide_client.sintercard([key1, non_existing_key]) == 0
         )  # No common elements
 
         # Intersection with a single key
-        assert await redis_client.sintercard([key1]) == 3  # All elements in key1
+        assert await glide_client.sintercard([key1]) == 3  # All elements in key1
 
         # Intersection with limit
         assert (
-            await redis_client.sintercard([key1, key2, key3], limit=1) == 1
+            await glide_client.sintercard([key1, key2, key3], limit=1) == 1
         )  # Stops early at limit
 
         # Invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.sintercard([])
+            await glide_client.sintercard([])
 
         # Non-set key
-        assert await redis_client.set(string_key, "value") == "OK"
+        assert await glide_client.set(string_key, "value") == "OK"
         with pytest.raises(RequestError):
-            await redis_client.sintercard([string_key])
+            await glide_client.sintercard([string_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sdiff(self, redis_client: TGlideClient):
+    async def test_sdiff(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
-        assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
+        assert await glide_client.sadd(key1, ["a", "b", "c"]) == 3
+        assert await glide_client.sadd(key2, ["c", "d", "e"]) == 3
 
-        assert await redis_client.sdiff([key1, key2]) == convert_string_to_bytes_object(
+        assert await glide_client.sdiff([key1, key2]) == convert_string_to_bytes_object(
             {"a", "b"}
         )
-        assert await redis_client.sdiff([key2, key1]) == convert_string_to_bytes_object(
+        assert await glide_client.sdiff([key2, key1]) == convert_string_to_bytes_object(
             {"d", "e"}
         )
 
-        assert await redis_client.sdiff(
+        assert await glide_client.sdiff(
             [key1, non_existing_key]
         ) == convert_string_to_bytes_object({"a", "b", "c"})
-        assert await redis_client.sdiff([non_existing_key, key1]) == set()
+        assert await glide_client.sdiff([non_existing_key, key1]) == set()
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.sdiff([])
+            await glide_client.sdiff([])
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.sdiff([string_key])
+            await glide_client.sdiff([string_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sdiffstore(self, redis_client: TGlideClient):
+    async def test_sdiffstore(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
-        assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
+        assert await glide_client.sadd(key1, ["a", "b", "c"]) == 3
+        assert await glide_client.sadd(key2, ["c", "d", "e"]) == 3
 
         # Store diff in new key
-        assert await redis_client.sdiffstore(key3, [key1, key2]) == 2
-        assert await redis_client.smembers(key3) == convert_string_to_bytes_object(
+        assert await glide_client.sdiffstore(key3, [key1, key2]) == 2
+        assert await glide_client.smembers(key3) == convert_string_to_bytes_object(
             {"a", "b"}
         )
 
         # Overwrite existing set
-        assert await redis_client.sdiffstore(key3, [key2, key1]) == 2
-        assert await redis_client.smembers(key3) == convert_string_to_bytes_object(
+        assert await glide_client.sdiffstore(key3, [key2, key1]) == 2
+        assert await glide_client.smembers(key3) == convert_string_to_bytes_object(
             {"d", "e"}
         )
 
         # Overwrite one of the source sets
-        assert await redis_client.sdiffstore(key3, [key2, key3]) == 1
-        assert await redis_client.smembers(key3) == {b"c"}
+        assert await glide_client.sdiffstore(key3, [key2, key3]) == 1
+        assert await glide_client.smembers(key3) == {b"c"}
 
         # Diff between non-empty set and empty set
-        assert await redis_client.sdiffstore(key3, [key1, non_existing_key]) == 3
-        assert await redis_client.smembers(key3) == convert_string_to_bytes_object(
+        assert await glide_client.sdiffstore(key3, [key1, non_existing_key]) == 3
+        assert await glide_client.smembers(key3) == convert_string_to_bytes_object(
             {"a", "b", "c"}
         )
 
         # Diff between empty set and non-empty set
-        assert await redis_client.sdiffstore(key3, [non_existing_key, key1]) == 0
-        assert await redis_client.smembers(key3) == set()
+        assert await glide_client.sdiffstore(key3, [non_existing_key, key1]) == 0
+        assert await glide_client.smembers(key3) == set()
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.sdiffstore(key3, [])
+            await glide_client.sdiffstore(key3, [])
 
         # source key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.sdiffstore(key3, [string_key])
+            await glide_client.sdiffstore(key3, [string_key])
 
         # Overwrite a key holding a non-set value
-        assert await redis_client.sdiffstore(string_key, [key1, key2]) == 2
-        assert await redis_client.smembers(
+        assert await glide_client.sdiffstore(string_key, [key1, key2]) == 2
+        assert await glide_client.smembers(
             string_key
         ) == convert_string_to_bytes_object({"a", "b"})
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_smismember(self, redis_client: TGlideClient):
+    async def test_smismember(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
 
-        assert await redis_client.sadd(key1, ["one", "two"]) == 2
-        assert await redis_client.smismember(key1, ["two", "three"]) == [True, False]
+        assert await glide_client.sadd(key1, ["one", "two"]) == 2
+        assert await glide_client.smismember(key1, ["two", "three"]) == [True, False]
 
-        assert await redis_client.smismember(non_existing_key, ["two"]) == [False]
+        assert await glide_client.smismember(non_existing_key, ["two"]) == [False]
 
         # invalid argument - member list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.smismember(key1, [])
+            await glide_client.smismember(key1, [])
 
         # source key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.smismember(string_key, ["two"])
+            await glide_client.smismember(string_key, ["two"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_ltrim(self, redis_client: TGlideClient):
+    async def test_ltrim(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
-        assert await redis_client.lpush(key, value_list) == 4
-        assert await redis_client.ltrim(key, 0, 1) == OK
-        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lpush(key, value_list) == 4
+        assert await glide_client.ltrim(key, 0, 1) == OK
+        assert await glide_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
             ["value1", "value2"]
         )
 
-        assert await redis_client.ltrim(key, 4, 2) == OK
-        assert await redis_client.lrange(key, 0, -1) == []
+        assert await glide_client.ltrim(key, 4, 2) == OK
+        assert await glide_client.lrange(key, 0, -1) == []
 
-        assert await redis_client.ltrim("non_existing_key", 0, 1) == OK
+        assert await glide_client.ltrim("non_existing_key", 0, 1) == OK
 
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.ltrim(key, 0, 1)
+            await glide_client.ltrim(key, 0, 1)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lrem(self, redis_client: TGlideClient):
+    async def test_lrem(self, glide_client: TGlideClient):
         key = get_random_string(10)
         value_list: List[TEncodable] = [
             "value1",
@@ -2036,71 +2036,71 @@ class TestCommands:
             "value2",
         ]
 
-        assert await redis_client.lpush(key, value_list) == 5
+        assert await glide_client.lpush(key, value_list) == 5
 
-        assert await redis_client.lrem(key, 2, "value1") == 2
-        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrem(key, 2, "value1") == 2
+        assert await glide_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
             ["value2", "value2", "value1"]
         )
 
-        assert await redis_client.lrem(key, -1, "value2") == 1
-        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
+        assert await glide_client.lrem(key, -1, "value2") == 1
+        assert await glide_client.lrange(key, 0, -1) == convert_string_to_bytes_object(
             ["value2", "value1"]
         )
 
-        assert await redis_client.lrem(key, 0, "value2") == 1
-        assert await redis_client.lrange(key, 0, -1) == [b"value1"]
+        assert await glide_client.lrem(key, 0, "value2") == 1
+        assert await glide_client.lrange(key, 0, -1) == [b"value1"]
 
-        assert await redis_client.lrem("non_existing_key", 2, "value") == 0
+        assert await glide_client.lrem("non_existing_key", 2, "value") == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_llen(self, redis_client: TGlideClient):
+    async def test_llen(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
-        assert await redis_client.lpush(key1, value_list) == 4
-        assert await redis_client.llen(key1) == 4
+        assert await glide_client.lpush(key1, value_list) == 4
+        assert await glide_client.llen(key1) == 4
 
-        assert await redis_client.llen("non_existing_key") == 0
+        assert await glide_client.llen("non_existing_key") == 0
 
-        assert await redis_client.set(key2, "foo") == OK
+        assert await glide_client.set(key2, "foo") == OK
         with pytest.raises(RequestError) as e:
-            await redis_client.llen(key2)
+            await glide_client.llen(key2)
         assert "Operation against a key holding the wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_strlen(self, redis_client: TGlideClient):
+    async def test_strlen(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
-        assert await redis_client.set(key1, "foo") == OK
-        assert await redis_client.strlen(key1) == 3
-        assert await redis_client.strlen("non_existing_key") == 0
+        assert await glide_client.set(key1, "foo") == OK
+        assert await glide_client.strlen(key1) == 3
+        assert await glide_client.strlen("non_existing_key") == 0
 
-        assert await redis_client.lpush(key2, value_list) == 4
+        assert await glide_client.lpush(key2, value_list) == 4
         with pytest.raises(RequestError):
-            assert await redis_client.strlen(key2)
+            assert await glide_client.strlen(key2)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rename(self, redis_client: TGlideClient):
+    async def test_rename(self, glide_client: TGlideClient):
         key1 = "{" + get_random_string(10) + "}"
-        assert await redis_client.set(key1, "foo") == OK
-        assert await redis_client.rename(key1, key1 + "_rename") == OK
-        assert await redis_client.exists([key1 + "_rename"]) == 1
+        assert await glide_client.set(key1, "foo") == OK
+        assert await glide_client.rename(key1, key1 + "_rename") == OK
+        assert await glide_client.exists([key1 + "_rename"]) == 1
 
         with pytest.raises(RequestError):
-            assert await redis_client.rename(
+            assert await glide_client.rename(
                 "{same_slot}" + "non_existing_key", "{same_slot}" + "_rename"
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_renamenx(self, redis_client: TGlideClient):
+    async def test_renamenx(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -2108,204 +2108,204 @@ class TestCommands:
 
         # Verify that attempting to rename a non-existing key throws an error
         with pytest.raises(RequestError):
-            assert await redis_client.renamenx(non_existing_key, key1)
+            assert await glide_client.renamenx(non_existing_key, key1)
 
         # Test RENAMENX with string values
-        assert await redis_client.set(key1, "key1") == OK
-        assert await redis_client.set(key3, "key3") == OK
+        assert await glide_client.set(key1, "key1") == OK
+        assert await glide_client.set(key3, "key3") == OK
         # Test that RENAMENX can rename key1 to key2 (where key2 does not yet exist)
-        assert await redis_client.renamenx(key1, key2) is True
+        assert await glide_client.renamenx(key1, key2) is True
         # Verify that key2 now holds the value that was in key1
-        assert await redis_client.get(key2) == b"key1"
+        assert await glide_client.get(key2) == b"key1"
         # Verify that RENAMENX doesn't rename key2 to key3, since key3 already exists
-        assert await redis_client.renamenx(key2, key3) is False
+        assert await glide_client.renamenx(key2, key3) is False
         # Verify that key3 remains unchanged
-        assert await redis_client.get(key3) == b"key3"
+        assert await glide_client.get(key3) == b"key3"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_exists(self, redis_client: TGlideClient):
+    async def test_exists(self, glide_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10)]
 
-        assert await redis_client.set(keys[0], "value") == OK
-        assert await redis_client.exists(keys) == 1
+        assert await glide_client.set(keys[0], "value") == OK
+        assert await glide_client.exists(keys) == 1
 
-        assert await redis_client.set(keys[1], "value") == OK
-        assert await redis_client.exists(keys) == 2
+        assert await glide_client.set(keys[1], "value") == OK
+        assert await glide_client.exists(keys) == 2
         keys.append("non_existing_key")
-        assert await redis_client.exists(keys) == 2
+        assert await glide_client.exists(keys) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_unlink(self, redis_client: TGlideClient):
+    async def test_unlink(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         key3 = get_random_string(10)
 
-        assert await redis_client.set(key1, "value") == OK
-        assert await redis_client.set(key2, "value") == OK
-        assert await redis_client.set(key3, "value") == OK
-        assert await redis_client.unlink([key1, key2, "non_existing_key", key3]) == 3
+        assert await glide_client.set(key1, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
+        assert await glide_client.set(key3, "value") == OK
+        assert await glide_client.unlink([key1, key2, "non_existing_key", key3]) == 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expire_pexpire_ttl_expiretime_pexpiretime_with_positive_timeout(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.ttl(key) == -1
+        assert await glide_client.set(key, "foo") == OK
+        assert await glide_client.ttl(key) == -1
 
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -1
-            assert await redis_client.pexpiretime(key) == -1
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -1
+            assert await glide_client.pexpiretime(key) == -1
 
-        assert await redis_client.expire(key, 10) == 1
-        assert await redis_client.ttl(key) in range(11)
+        assert await glide_client.expire(key, 10) == 1
+        assert await glide_client.ttl(key) in range(11)
 
         # set command clears the timeout.
-        assert await redis_client.set(key, "bar") == OK
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.pexpire(key, 10000)
+        assert await glide_client.set(key, "bar") == OK
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.pexpire(key, 10000)
         else:
-            assert await redis_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
-        assert await redis_client.ttl(key) in range(11)
+            assert await glide_client.pexpire(key, 10000, ExpireOptions.HasNoExpiry)
+        assert await glide_client.ttl(key) in range(11)
 
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expire(key, 15)
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expire(key, 15)
         else:
-            assert await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
-            assert await redis_client.expiretime(key) > int(time.time())
-            assert await redis_client.pexpiretime(key) > (int(time.time()) * 1000)
-        assert await redis_client.ttl(key) in range(16)
+            assert await glide_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
+            assert await glide_client.expiretime(key) > int(time.time())
+            assert await glide_client.pexpiretime(key) > (int(time.time()) * 1000)
+        assert await glide_client.ttl(key) in range(16)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expireat_pexpireat_ttl_with_positive_timeout(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         current_time = int(time.time())
 
-        assert await redis_client.expireat(key, current_time + 10) == 1
-        assert await redis_client.ttl(key) in range(11)
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expireat(key, current_time + 50) == 1
+        assert await glide_client.expireat(key, current_time + 10) == 1
+        assert await glide_client.ttl(key) in range(11)
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expireat(key, current_time + 50) == 1
         else:
             assert (
-                await redis_client.expireat(
+                await glide_client.expireat(
                     key, current_time + 50, ExpireOptions.NewExpiryGreaterThanCurrent
                 )
                 == 1
             )
-        assert await redis_client.ttl(key) in range(51)
+        assert await glide_client.ttl(key) in range(51)
 
         # set command clears the timeout.
-        assert await redis_client.set(key, "bar") == OK
+        assert await glide_client.set(key, "bar") == OK
         current_time_ms = int(time.time() * 1000)
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert not await redis_client.pexpireat(
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert not await glide_client.pexpireat(
                 key, current_time_ms + 50000, ExpireOptions.HasExistingExpiry
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expire_pexpire_expireat_pexpireat_expiretime_pexpiretime_past_or_negative_timeout(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
-        assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.ttl(key) == -1
+        assert await glide_client.set(key, "foo") == OK
+        assert await glide_client.ttl(key) == -1
 
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -1
-            assert await redis_client.pexpiretime(key) == -1
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -1
+            assert await glide_client.pexpiretime(key) == -1
 
-        assert await redis_client.expire(key, -10) is True
-        assert await redis_client.ttl(key) == -2
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -2
-            assert await redis_client.pexpiretime(key) == -2
+        assert await glide_client.expire(key, -10) is True
+        assert await glide_client.ttl(key) == -2
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -2
+            assert await glide_client.pexpiretime(key) == -2
 
-        assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.pexpire(key, -10000)
-        assert await redis_client.ttl(key) == -2
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -2
-            assert await redis_client.pexpiretime(key) == -2
+        assert await glide_client.set(key, "foo") == OK
+        assert await glide_client.pexpire(key, -10000)
+        assert await glide_client.ttl(key) == -2
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -2
+            assert await glide_client.pexpiretime(key) == -2
 
-        assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.expireat(key, int(time.time()) - 50) == 1
-        assert await redis_client.ttl(key) == -2
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -2
-            assert await redis_client.pexpiretime(key) == -2
+        assert await glide_client.set(key, "foo") == OK
+        assert await glide_client.expireat(key, int(time.time()) - 50) == 1
+        assert await glide_client.ttl(key) == -2
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -2
+            assert await glide_client.pexpiretime(key) == -2
 
-        assert await redis_client.set(key, "foo") == OK
-        assert await redis_client.pexpireat(key, int(time.time() * 1000) - 50000)
-        assert await redis_client.ttl(key) == -2
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -2
-            assert await redis_client.pexpiretime(key) == -2
+        assert await glide_client.set(key, "foo") == OK
+        assert await glide_client.pexpireat(key, int(time.time() * 1000) - 50000)
+        assert await glide_client.ttl(key) == -2
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -2
+            assert await glide_client.pexpiretime(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expire_pexpire_expireAt_pexpireAt_ttl_expiretime_pexpiretime_non_existing_key(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
 
-        assert await redis_client.expire(key, 10) == 0
-        assert not await redis_client.pexpire(key, 10000)
-        assert await redis_client.expireat(key, int(time.time()) + 50) == 0
-        assert not await redis_client.pexpireat(key, int(time.time() * 1000) + 50000)
-        assert await redis_client.ttl(key) == -2
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.expiretime(key) == -2
-            assert await redis_client.pexpiretime(key) == -2
+        assert await glide_client.expire(key, 10) == 0
+        assert not await glide_client.pexpire(key, 10000)
+        assert await glide_client.expireat(key, int(time.time()) + 50) == 0
+        assert not await glide_client.pexpireat(key, int(time.time() * 1000) + 50000)
+        assert await glide_client.ttl(key) == -2
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.expiretime(key) == -2
+            assert await glide_client.pexpiretime(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pttl(self, redis_client: TGlideClient):
+    async def test_pttl(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.pttl(key) == -2
+        assert await glide_client.pttl(key) == -2
         current_time = int(time.time())
 
-        assert await redis_client.set(key, "value") == OK
-        assert await redis_client.pttl(key) == -1
+        assert await glide_client.set(key, "value") == OK
+        assert await glide_client.pttl(key) == -1
 
-        assert await redis_client.expire(key, 10)
-        assert 0 < await redis_client.pttl(key) <= 10000
+        assert await glide_client.expire(key, 10)
+        assert 0 < await glide_client.pttl(key) <= 10000
 
-        assert await redis_client.expireat(key, current_time + 20)
-        assert 0 < await redis_client.pttl(key) <= 20000
+        assert await glide_client.expireat(key, current_time + 20)
+        assert 0 < await glide_client.pttl(key) <= 20000
 
-        assert await redis_client.pexpireat(key, current_time * 1000 + 30000)
-        assert 0 < await redis_client.pttl(key) <= 30000
+        assert await glide_client.pexpireat(key, current_time * 1000 + 30000)
+        assert 0 < await glide_client.pttl(key) <= 30000
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_persist(self, redis_client: TGlideClient):
+    async def test_persist(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "value") == OK
-        assert not await redis_client.persist(key)
+        assert await glide_client.set(key, "value") == OK
+        assert not await glide_client.persist(key)
 
-        assert await redis_client.expire(key, 10)
-        assert await redis_client.persist(key)
+        assert await glide_client.expire(key, 10)
+        assert await glide_client.persist(key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geoadd(self, redis_client: TGlideClient):
+    async def test_geoadd(self, glide_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
         members_coordinates: Dict[str | bytes, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 2
+        assert await glide_client.geoadd(key, members_coordinates) == 2
         members_coordinates["Catania"].latitude = 39
         assert (
-            await redis_client.geoadd(
+            await glide_client.geoadd(
                 key,
                 members_coordinates,
                 existing_options=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
@@ -2313,7 +2313,7 @@ class TestCommands:
             == 0
         )
         assert (
-            await redis_client.geoadd(
+            await glide_client.geoadd(
                 key,
                 members_coordinates,
                 existing_options=ConditionalChange.ONLY_IF_EXISTS,
@@ -2323,7 +2323,7 @@ class TestCommands:
         members_coordinates["Catania"].latitude = 40
         members_coordinates.update({"Tel-Aviv": GeospatialData(32.0853, 34.7818)})
         assert (
-            await redis_client.geoadd(
+            await glide_client.geoadd(
                 key,
                 members_coordinates,
                 changed=True,
@@ -2331,33 +2331,33 @@ class TestCommands:
             == 2
         )
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.geoadd(key2, members_coordinates)
+            await glide_client.geoadd(key2, members_coordinates)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geoadd_invalid_args(self, redis_client: TGlideClient):
+    async def test_geoadd_invalid_args(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
         with pytest.raises(RequestError):
-            await redis_client.geoadd(key, {})
+            await glide_client.geoadd(key, {})
 
         with pytest.raises(RequestError):
-            await redis_client.geoadd(key, {"Place": GeospatialData(-181, 0)})
+            await glide_client.geoadd(key, {"Place": GeospatialData(-181, 0)})
 
         with pytest.raises(RequestError):
-            await redis_client.geoadd(key, {"Place": GeospatialData(181, 0)})
+            await glide_client.geoadd(key, {"Place": GeospatialData(181, 0)})
 
         with pytest.raises(RequestError):
-            await redis_client.geoadd(key, {"Place": GeospatialData(0, 86)})
+            await glide_client.geoadd(key, {"Place": GeospatialData(0, 86)})
 
         with pytest.raises(RequestError):
-            await redis_client.geoadd(key, {"Place": GeospatialData(0, -86)})
+            await glide_client.geoadd(key, {"Place": GeospatialData(0, -86)})
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearch_by_box(self, redis_client: TGlideClient):
+    async def test_geosearch_by_box(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members = ["Catania", "Palermo", "edge2", "edge1"]
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
@@ -2384,17 +2384,17 @@ class TestCommands:
                 [279.7405, 3479273021651468, [12.75848776102066, 38.78813451624225]],
             ],
         ]
-        assert await redis_client.geoadd(key, members_coordinates) == 4
+        assert await glide_client.geoadd(key, members_coordinates) == 4
 
         # Test search by box, unit: kilometers, from a geospatial data
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             GeospatialData(15, 37),
             GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
             OrderBy.ASC,
         ) == convert_string_to_bytes_object(members)
 
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             GeospatialData(15, 37),
             GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
@@ -2404,7 +2404,7 @@ class TestCommands:
             with_hash=True,
         ) == convert_string_to_bytes_object(result[::-1])
 
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             GeospatialData(15, 37),
             GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
@@ -2416,7 +2416,7 @@ class TestCommands:
 
         # Test search by box, unit: meters, from a member, with distance
         meters = 400 * 1000
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             "Catania",
             GeoSearchByBox(meters, meters, GeoUnit.METERS),
@@ -2428,7 +2428,7 @@ class TestCommands:
 
         # Test search by box, unit: feet, from a member, with limited count to 2, with hash
         feet = 400 * 3280.8399
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             "Palermo",
             GeoSearchByBox(feet, feet, GeoUnit.FEET),
@@ -2439,7 +2439,7 @@ class TestCommands:
 
         # Test search by box, unit: miles, from a geospatial data, with limited ANY count to 1
         assert (
-            await redis_client.geosearch(
+            await glide_client.geosearch(
                 key,
                 GeospatialData(15, 37),
                 GeoSearchByBox(250, 250, GeoUnit.MILES),
@@ -2450,7 +2450,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearch_by_radius(self, redis_client: TGlideClient):
+    async def test_geosearch_by_radius(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2469,11 +2469,11 @@ class TestCommands:
             ],
         ]
         members = ["Catania", "Palermo", "edge2", "edge1"]
-        assert await redis_client.geoadd(key, members_coordinates) == 4
+        assert await glide_client.geoadd(key, members_coordinates) == 4
 
         # Test search by radius, units: feet, from a member
         feet = 200 * 3280.8399
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             "Catania",
             GeoSearchByRadius(feet, GeoUnit.FEET),
@@ -2482,7 +2482,7 @@ class TestCommands:
 
         # Test search by radius, units: meters, from a member
         meters = 200 * 1000
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             "Catania",
             GeoSearchByRadius(meters, GeoUnit.METERS),
@@ -2490,7 +2490,7 @@ class TestCommands:
         ) == convert_string_to_bytes_object(members[:2][::-1])
 
         # Test search by radius, unit: miles, from a geospatial data
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             GeospatialData(15, 37),
             GeoSearchByRadius(175, GeoUnit.MILES),
@@ -2498,7 +2498,7 @@ class TestCommands:
         ) == convert_string_to_bytes_object(members[::-1])
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             GeospatialData(15, 37),
             GeoSearchByRadius(200, GeoUnit.KILOMETERS),
@@ -2511,7 +2511,7 @@ class TestCommands:
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
         assert (
-            await redis_client.geosearch(
+            await glide_client.geosearch(
                 key,
                 GeospatialData(15, 37),
                 GeoSearchByRadius(200, GeoUnit.KILOMETERS),
@@ -2525,7 +2525,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearch_no_result(self, redis_client: TGlideClient):
+    async def test_geosearch_no_result(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2533,11 +2533,11 @@ class TestCommands:
             "edge1": GeospatialData(12.758489, 38.788135),
             "edge2": GeospatialData(17.241510, 38.788135),
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 4
+        assert await glide_client.geoadd(key, members_coordinates) == 4
 
         # No membes within the aea
         assert (
-            await redis_client.geosearch(
+            await glide_client.geosearch(
                 key,
                 GeospatialData(15, 37),
                 GeoSearchByBox(50, 50, GeoUnit.METERS),
@@ -2547,7 +2547,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.geosearch(
+            await glide_client.geosearch(
                 key,
                 GeospatialData(15, 37),
                 GeoSearchByRadius(10, GeoUnit.METERS),
@@ -2557,13 +2557,13 @@ class TestCommands:
         )
 
         # No members in the area (apart from the member we seach fom itself)
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             "Catania",
             GeoSearchByBox(10, 10, GeoUnit.KILOMETERS),
         ) == [b"Catania"]
 
-        assert await redis_client.geosearch(
+        assert await glide_client.geosearch(
             key,
             "Catania",
             GeoSearchByRadius(10, GeoUnit.METERS),
@@ -2571,15 +2571,15 @@ class TestCommands:
 
         # Search from non exiting memeber
         with pytest.raises(RequestError):
-            await redis_client.geosearch(
+            await glide_client.geosearch(
                 key,
                 "non_existing_member",
                 GeoSearchByBox(10, 10, GeoUnit.MILES),
             )
 
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.geosearch(
+            await glide_client.geosearch(
                 key,
                 "Catania",
                 GeoSearchByBox(10, 10, GeoUnit.MILES),
@@ -2587,7 +2587,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearchstore_by_box(self, redis_client: TGlideClient):
+    async def test_geosearchstore_by_box(self, glide_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
@@ -2602,11 +2602,11 @@ class TestCommands:
             b"edge2": [279.7403417843143, 3481342659049484.0],
             b"edge1": [279.7404521356343, 3479273021651468.0],
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 4
+        assert await glide_client.geoadd(key, members_coordinates) == 4
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2615,7 +2615,7 @@ class TestCommands:
         ) == 4  # Number of elements stored
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         expected_map = {member: value[1] for member, value in result.items()}
@@ -2624,7 +2624,7 @@ class TestCommands:
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with distance
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2634,7 +2634,7 @@ class TestCommands:
         ) == 4  # Number of elements stored
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         expected_map = {member: value[0] for member, value in result.items()}
@@ -2643,7 +2643,7 @@ class TestCommands:
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with count
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2653,7 +2653,7 @@ class TestCommands:
         ) == 1  # Number of elements stored
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_map, {b"Catania": 3479447370796909.0}) is True
@@ -2661,7 +2661,7 @@ class TestCommands:
         # Test storing results of a box search, unit: meters, from a member, with distance
         meters = 400 * 1000
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Catania",
@@ -2671,7 +2671,7 @@ class TestCommands:
         ) == 3  # Number of elements stored
 
         # Verify the stored results with distances
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         expected_distances = {
@@ -2684,7 +2684,7 @@ class TestCommands:
         # Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
         feet = 400 * 3280.8399
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Palermo",
@@ -2695,7 +2695,7 @@ class TestCommands:
         )
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         for member in zrange_map:
@@ -2703,7 +2703,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearchstore_by_radius(self, redis_client: TGlideClient):
+    async def test_geosearchstore_by_radius(self, glide_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
@@ -2716,12 +2716,12 @@ class TestCommands:
             b"Catania": [56.4412578701582, 3479447370796909.0],
             b"Palermo": [190.44242984775784, 3479099956230698.0],
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 4
+        assert await glide_client.geoadd(key, members_coordinates) == 4
 
         # Test storing results of a radius search, unit: feet, from a member
         feet = 200 * 3280.8399
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Catania",
@@ -2731,7 +2731,7 @@ class TestCommands:
         )
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         expected_map = {member: value[1] for member, value in result.items()}
@@ -2741,7 +2741,7 @@ class TestCommands:
         # Test search by radius, units: meters, from a member
         meters = 200 * 1000
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Catania",
@@ -2752,7 +2752,7 @@ class TestCommands:
         )
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         expected_distances = {
@@ -2763,7 +2763,7 @@ class TestCommands:
 
         # Test search by radius, unit: miles, from a geospatial data
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2775,7 +2775,7 @@ class TestCommands:
         # Test storing results of a radius search, unit: kilometers, from a geospatial data, with limited count to 2
         kilometers = 200
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2787,7 +2787,7 @@ class TestCommands:
         )
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
         expected_map = {member: value[0] for member, value in result.items()}
@@ -2796,7 +2796,7 @@ class TestCommands:
 
         # Test storing results of a radius search, unit: kilometers, from a geospatial data, with limited ANY count to 1
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2807,7 +2807,7 @@ class TestCommands:
         )
 
         # Verify the stored results
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
 
@@ -2816,7 +2816,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearchstore_no_result(self, redis_client: TGlideClient):
+    async def test_geosearchstore_no_result(self, glide_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
@@ -2825,11 +2825,11 @@ class TestCommands:
             "edge1": GeospatialData(12.758489, 38.788135),
             "edge2": GeospatialData(17.241510, 38.788135),
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 4
+        assert await glide_client.geoadd(key, members_coordinates) == 4
 
         # No members within the area
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2839,7 +2839,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 GeospatialData(15, 37),
@@ -2850,7 +2850,7 @@ class TestCommands:
 
         # No members in the area (apart from the member we search from itself)
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Catania",
@@ -2860,7 +2860,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Catania",
@@ -2871,16 +2871,16 @@ class TestCommands:
 
         # Search from non-existing member
         with pytest.raises(RequestError):
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "non_existing_member",
                 GeoSearchByBox(10, 10, GeoUnit.MILES),
             )
 
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.geosearchstore(
+            await glide_client.geosearchstore(
                 destination_key,
                 key,
                 "Catania",
@@ -2889,14 +2889,14 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geohash(self, redis_client: TGlideClient):
+    async def test_geohash(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 2
-        assert await redis_client.geohash(
+        assert await glide_client.geoadd(key, members_coordinates) == 2
+        assert await glide_client.geohash(
             key, ["Palermo", "Catania", "Place"]
         ) == convert_string_to_bytes_object(
             [
@@ -2907,7 +2907,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.geohash(
+            await glide_client.geohash(
                 "non_existing_key", ["Palermo", "Catania", "Place"]
             )
             == [None] * 3
@@ -2916,52 +2916,52 @@ class TestCommands:
         # Neccessary to check since we are enforcing the user to pass a list of members while redis don't
         # But when running the command with key only (and no members) the returned value will always be an empty list
         # So in case of any changes, this test will fail and inform us that we should allow not passing any members.
-        assert await redis_client.geohash(key, []) == []
+        assert await glide_client.geohash(key, []) == []
 
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.geohash(key, ["Palermo", "Catania"])
+            await glide_client.geohash(key, ["Palermo", "Catania"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geodist(self, redis_client: TGlideClient):
+    async def test_geodist(self, glide_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 2
+        assert await glide_client.geoadd(key, members_coordinates) == 2
 
-        assert await redis_client.geodist(key, "Palermo", "Catania") == 166274.1516
+        assert await glide_client.geodist(key, "Palermo", "Catania") == 166274.1516
         assert (
-            await redis_client.geodist(key, "Palermo", "Catania", GeoUnit.KILOMETERS)
+            await glide_client.geodist(key, "Palermo", "Catania", GeoUnit.KILOMETERS)
             == 166.2742
         )
-        assert await redis_client.geodist(key, "Palermo", "Palermo", GeoUnit.MILES) == 0
+        assert await glide_client.geodist(key, "Palermo", "Palermo", GeoUnit.MILES) == 0
         assert (
-            await redis_client.geodist(
+            await glide_client.geodist(
                 key, "Palermo", "non-existing-member", GeoUnit.FEET
             )
             == None
         )
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.geodist(key2, "Palmero", "Catania")
+            await glide_client.geodist(key2, "Palmero", "Catania")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geopos(self, redis_client: TGlideClient):
+    async def test_geopos(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
-        assert await redis_client.geoadd(key, members_coordinates) == 2
+        assert await glide_client.geoadd(key, members_coordinates) == 2
 
         # The comparison allows for a small tolerance level due to potential precision errors in floating-point calculations
         # No worries, Python can handle it, therefore, this shouldn't fail
-        positions = await redis_client.geopos(key, ["Palermo", "Catania", "Place"])
+        positions = await glide_client.geopos(key, ["Palermo", "Catania", "Place"])
         expected_positions = [
             [13.36138933897018433, 38.11555639549629859],
             [15.08726745843887329, 37.50266842333162032],
@@ -2978,7 +2978,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.geopos(
+            await glide_client.geopos(
                 "non_existing_key", ["Palermo", "Catania", "Place"]
             )
             == [None] * 3
@@ -2987,27 +2987,27 @@ class TestCommands:
         # Neccessary to check since we are enforcing the user to pass a list of members while redis don't
         # But when running the command with key only (and no members) the returned value will always be an empty list
         # So in case of any changes, this test will fail and inform us that we should allow not passing any members.
-        assert await redis_client.geohash(key, []) == []
+        assert await glide_client.geohash(key, []) == []
 
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.geopos(key, ["Palermo", "Catania"])
+            await glide_client.geopos(key, ["Palermo", "Catania"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zadd_zaddincr(self, redis_client: TGlideClient):
+    async def test_zadd_zaddincr(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
-        assert await redis_client.zadd_incr(key, member="one", increment=2) == 3.0
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd_incr(key, member="one", increment=2) == 3.0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zadd_nx_xx(self, redis_client: TGlideClient):
+    async def test_zadd_nx_xx(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert (
-            await redis_client.zadd(
+            await glide_client.zadd(
                 key,
                 members_scores=members_scores,
                 existing_options=ConditionalChange.ONLY_IF_EXISTS,
@@ -3015,7 +3015,7 @@ class TestCommands:
             == 0
         )
         assert (
-            await redis_client.zadd(
+            await glide_client.zadd(
                 key,
                 members_scores=members_scores,
                 existing_options=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
@@ -3024,7 +3024,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.zadd_incr(
+            await glide_client.zadd_incr(
                 key,
                 member="one",
                 increment=5.0,
@@ -3034,7 +3034,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.zadd_incr(
+            await glide_client.zadd_incr(
                 key,
                 member="one",
                 increment=5.0,
@@ -3045,13 +3045,13 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zadd_gt_lt(self, redis_client: TGlideClient):
+    async def test_zadd_gt_lt(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Dict[TEncodable, float] = {"one": -3, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
         members_scores["one"] = 10
         assert (
-            await redis_client.zadd(
+            await glide_client.zadd(
                 key,
                 members_scores=members_scores,
                 update_condition=UpdateOptions.GREATER_THAN,
@@ -3061,7 +3061,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.zadd(
+            await glide_client.zadd(
                 key,
                 members_scores=members_scores,
                 update_condition=UpdateOptions.LESS_THAN,
@@ -3071,7 +3071,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.zadd_incr(
+            await glide_client.zadd_incr(
                 key,
                 member="one",
                 increment=-3.0,
@@ -3081,7 +3081,7 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.zadd_incr(
+            await glide_client.zadd_incr(
                 key,
                 member="one",
                 increment=-3.0,
@@ -3092,7 +3092,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zincrby(self, redis_client: TGlideClient):
+    async def test_zincrby(self, glide_client: TGlideClient):
         key, member, member2 = (
             get_random_string(10),
             get_random_string(5),
@@ -3100,110 +3100,110 @@ class TestCommands:
         )
 
         # key does not exist
-        assert await redis_client.zincrby(key, 2.5, member) == 2.5
-        assert await redis_client.zscore(key, member) == 2.5
+        assert await glide_client.zincrby(key, 2.5, member) == 2.5
+        assert await glide_client.zscore(key, member) == 2.5
 
         # key exists, but value doesn't
-        assert await redis_client.zincrby(key, -3.3, member2) == -3.3
-        assert await redis_client.zscore(key, member2) == -3.3
+        assert await glide_client.zincrby(key, -3.3, member2) == -3.3
+        assert await glide_client.zscore(key, member2) == -3.3
 
         # updating existing value in existing key
-        assert await redis_client.zincrby(key, 1.0, member) == 3.5
-        assert await redis_client.zscore(key, member) == 3.5
+        assert await glide_client.zincrby(key, 1.0, member) == 3.5
+        assert await glide_client.zscore(key, member) == 3.5
 
         # Key exists, but it is not a sorted set
-        assert await redis_client.set(key, "_") == OK
+        assert await glide_client.set(key, "_") == OK
         with pytest.raises(RequestError):
-            await redis_client.zincrby(key, 0.5, "_")
+            await glide_client.zincrby(key, 0.5, "_")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrem(self, redis_client: TGlideClient):
+    async def test_zrem(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await redis_client.zrem(key, ["one"]) == 1
-        assert await redis_client.zrem(key, ["one", "two", "three"]) == 2
+        assert await glide_client.zrem(key, ["one"]) == 1
+        assert await glide_client.zrem(key, ["one", "two", "three"]) == 2
 
-        assert await redis_client.zrem("non_existing_set", ["member"]) == 0
+        assert await glide_client.zrem("non_existing_set", ["member"]) == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zremrangebyscore(self, redis_client: TGlideClient):
+    async def test_zremrangebyscore(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores) == 3
+        assert await glide_client.zadd(key, members_scores) == 3
 
         assert (
-            await redis_client.zremrangebyscore(
+            await glide_client.zremrangebyscore(
                 key, ScoreBoundary(1, False), ScoreBoundary(2)
             )
             == 1
         )
         assert (
-            await redis_client.zremrangebyscore(key, ScoreBoundary(1), InfBound.NEG_INF)
+            await glide_client.zremrangebyscore(key, ScoreBoundary(1), InfBound.NEG_INF)
             == 0
         )
         assert (
-            await redis_client.zremrangebyscore(
+            await glide_client.zremrangebyscore(
                 "non_existing_set", InfBound.NEG_INF, InfBound.POS_INF
             )
             == 0
         )
 
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zremrangebyscore(key, InfBound.NEG_INF, InfBound.POS_INF)
+            await glide_client.zremrangebyscore(key, InfBound.NEG_INF, InfBound.POS_INF)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zremrangebylex(self, redis_client: TGlideClient):
+    async def test_zremrangebylex(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         range = RangeByIndex(0, -1)
         members_scores: Mapping[TEncodable, float] = {"a": 1, "b": 2, "c": 3, "d": 4}
-        assert await redis_client.zadd(key1, members_scores) == 4
+        assert await glide_client.zadd(key1, members_scores) == 4
 
         assert (
-            await redis_client.zremrangebylex(
+            await glide_client.zremrangebylex(
                 key1, LexBoundary("a", False), LexBoundary("c")
             )
             == 2
         )
-        zremrangebylex_res = await redis_client.zrange_withscores(key1, range)
+        zremrangebylex_res = await glide_client.zrange_withscores(key1, range)
         assert compare_maps(zremrangebylex_res, {"a": 1.0, "d": 4.0}) is True
 
         assert (
-            await redis_client.zremrangebylex(key1, LexBoundary("d"), InfBound.POS_INF)
+            await glide_client.zremrangebylex(key1, LexBoundary("d"), InfBound.POS_INF)
             == 1
         )
-        assert await redis_client.zrange_withscores(key1, range) == {b"a": 1.0}
+        assert await glide_client.zrange_withscores(key1, range) == {b"a": 1.0}
 
         # min_lex > max_lex
         assert (
-            await redis_client.zremrangebylex(key1, LexBoundary("a"), InfBound.NEG_INF)
+            await glide_client.zremrangebylex(key1, LexBoundary("a"), InfBound.NEG_INF)
             == 0
         )
-        assert await redis_client.zrange_withscores(key1, range) == {b"a": 1.0}
+        assert await glide_client.zrange_withscores(key1, range) == {b"a": 1.0}
 
         assert (
-            await redis_client.zremrangebylex(
+            await glide_client.zremrangebylex(
                 "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
             )
             == 0
         )
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zremrangebylex(
+            await glide_client.zremrangebylex(
                 key2, LexBoundary("a", False), LexBoundary("c")
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zremrangebyrank(self, redis_client: TGlideClient):
+    async def test_zremrangebyrank(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         range = RangeByIndex(0, -1)
@@ -3214,41 +3214,41 @@ class TestCommands:
             "d": 4,
             "e": 5,
         }
-        assert await redis_client.zadd(key1, members_scores) == 5
+        assert await glide_client.zadd(key1, members_scores) == 5
 
         # Test start exceeding end
-        assert await redis_client.zremrangebyrank(key1, 2, 1) == 0
+        assert await glide_client.zremrangebyrank(key1, 2, 1) == 0
 
         # Test removing elements by rank
-        assert await redis_client.zremrangebyrank(key1, 0, 2) == 3
-        zremrangebyrank_res = await redis_client.zrange_withscores(key1, range)
+        assert await glide_client.zremrangebyrank(key1, 0, 2) == 3
+        zremrangebyrank_res = await glide_client.zrange_withscores(key1, range)
         assert compare_maps(zremrangebyrank_res, {"d": 4.0, "e": 5.0}) is True
 
         # Test removing elements beyond the existing range
-        assert await redis_client.zremrangebyrank(key1, 0, 10) == 2
-        assert await redis_client.zrange_withscores(key1, range) == {}
+        assert await glide_client.zremrangebyrank(key1, 0, 10) == 2
+        assert await glide_client.zrange_withscores(key1, range) == {}
 
         # Test with non-existing key
-        assert await redis_client.zremrangebyrank("non_existing_key", 0, 1) == 0
+        assert await glide_client.zremrangebyrank("non_existing_key", 0, 1) == 0
 
         # Key exists, but it is not a sorted set
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zremrangebyrank(key2, 0, 1)
+            await glide_client.zremrangebyrank(key2, 0, 1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zlexcount(self, redis_client: TGlideClient):
+    async def test_zlexcount(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
 
-        assert await redis_client.zadd(key1, members_scores) == 3
+        assert await glide_client.zadd(key1, members_scores) == 3
         assert (
-            await redis_client.zlexcount(key1, InfBound.NEG_INF, InfBound.POS_INF) == 3
+            await glide_client.zlexcount(key1, InfBound.NEG_INF, InfBound.POS_INF) == 3
         )
         assert (
-            await redis_client.zlexcount(
+            await glide_client.zlexcount(
                 key1,
                 LexBoundary("a", is_inclusive=False),
                 LexBoundary("c", is_inclusive=True),
@@ -3256,52 +3256,52 @@ class TestCommands:
             == 2
         )
         assert (
-            await redis_client.zlexcount(
+            await glide_client.zlexcount(
                 key1, InfBound.NEG_INF, LexBoundary("c", is_inclusive=True)
             )
             == 3
         )
         # Incorrect range; start > end
         assert (
-            await redis_client.zlexcount(
+            await glide_client.zlexcount(
                 key1, InfBound.POS_INF, LexBoundary("c", is_inclusive=True)
             )
             == 0
         )
         assert (
-            await redis_client.zlexcount(
+            await glide_client.zlexcount(
                 "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
             )
             == 0
         )
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zlexcount(key2, InfBound.NEG_INF, InfBound.POS_INF)
+            await glide_client.zlexcount(key2, InfBound.NEG_INF, InfBound.POS_INF)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zcard(self, redis_client: TGlideClient):
+    async def test_zcard(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
-        assert await redis_client.zcard(key) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zcard(key) == 3
 
-        assert await redis_client.zrem(key, ["one"]) == 1
-        assert await redis_client.zcard(key) == 2
-        assert await redis_client.zcard("non_existing_key") == 0
+        assert await glide_client.zrem(key, ["one"]) == 1
+        assert await glide_client.zcard(key) == 2
+        assert await glide_client.zcard("non_existing_key") == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zcount(self, redis_client: TGlideClient):
+    async def test_zcount(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await redis_client.zcount(key, InfBound.NEG_INF, InfBound.POS_INF) == 3
+        assert await glide_client.zcount(key, InfBound.NEG_INF, InfBound.POS_INF) == 3
         assert (
-            await redis_client.zcount(
+            await glide_client.zcount(
                 key,
                 ScoreBoundary(1, is_inclusive=False),
                 ScoreBoundary(3, is_inclusive=False),
@@ -3309,7 +3309,7 @@ class TestCommands:
             == 1
         )
         assert (
-            await redis_client.zcount(
+            await glide_client.zcount(
                 key,
                 ScoreBoundary(1, is_inclusive=False),
                 ScoreBoundary(3, is_inclusive=True),
@@ -3317,19 +3317,19 @@ class TestCommands:
             == 2
         )
         assert (
-            await redis_client.zcount(
+            await glide_client.zcount(
                 key, InfBound.NEG_INF, ScoreBoundary(3, is_inclusive=True)
             )
             == 3
         )
         assert (
-            await redis_client.zcount(
+            await glide_client.zcount(
                 key, InfBound.POS_INF, ScoreBoundary(3, is_inclusive=True)
             )
             == 0
         )
         assert (
-            await redis_client.zcount(
+            await glide_client.zcount(
                 "non_existing_key", InfBound.NEG_INF, InfBound.POS_INF
             )
             == 0
@@ -3337,42 +3337,42 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zscore(self, redis_client: TGlideClient):
+    async def test_zscore(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
-        assert await redis_client.zscore(key, "one") == 1.0
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zscore(key, "one") == 1.0
 
-        assert await redis_client.zscore(key, "non_existing_member") is None
+        assert await glide_client.zscore(key, "non_existing_member") is None
         assert (
-            await redis_client.zscore("non_existing_key", "non_existing_member") is None
+            await glide_client.zscore("non_existing_key", "non_existing_member") is None
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zmscore(self, redis_client: TGlideClient):
+    async def test_zmscore(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
 
-        assert await redis_client.zadd(key1, members_scores=members_scores) == 3
-        assert await redis_client.zmscore(key1, ["one", "two", "three"]) == [
+        assert await glide_client.zadd(key1, members_scores=members_scores) == 3
+        assert await glide_client.zmscore(key1, ["one", "two", "three"]) == [
             1.0,
             2.0,
             3.0,
         ]
-        assert await redis_client.zmscore(
+        assert await glide_client.zmscore(
             key1, ["one", "non_existing_member", "non_existing_member", "three"]
         ) == [1.0, None, None, 3.0]
-        assert await redis_client.zmscore("non_existing_key", ["one"]) == [None]
+        assert await glide_client.zmscore("non_existing_key", ["one"]) == [None]
 
-        assert await redis_client.set(key2, "value") == OK
+        assert await glide_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zmscore(key2, ["one"])
+            await glide_client.zmscore(key2, ["one"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zinter_commands(self, redis_client: TGlideClient):
+    async def test_zinter_commands(self, glide_client: TGlideClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -3384,17 +3384,17 @@ class TestCommands:
             "three": 3.5,
         }
 
-        assert await redis_client.zadd(key1, members_scores1) == 2
-        assert await redis_client.zadd(key2, members_scores2) == 3
+        assert await glide_client.zadd(key1, members_scores1) == 2
+        assert await glide_client.zadd(key2, members_scores2) == 3
 
         # zinter tests
-        zinter_map = await redis_client.zinter([key1, key2])
+        zinter_map = await glide_client.zinter([key1, key2])
         expected_zinter_map = [b"one", b"two"]
         assert zinter_map == expected_zinter_map
 
         # zinterstore tests
-        assert await redis_client.zinterstore(key3, [key1, key2]) == 2
-        zinterstore_map = await redis_client.zrange_withscores(key3, range)
+        assert await glide_client.zinterstore(key3, [key1, key2]) == 2
+        zinterstore_map = await glide_client.zrange_withscores(key3, range)
         expected_zinter_map_withscores = {
             b"one": 2.5,
             b"two": 4.5,
@@ -3402,51 +3402,51 @@ class TestCommands:
         assert compare_maps(zinterstore_map, expected_zinter_map_withscores) is True
 
         # zinter_withscores tests
-        zinter_withscores_map = await redis_client.zinter_withscores([key1, key2])
+        zinter_withscores_map = await glide_client.zinter_withscores([key1, key2])
         assert (
             compare_maps(zinter_withscores_map, expected_zinter_map_withscores) is True
         )
 
         # MAX aggregation tests
         assert (
-            await redis_client.zinterstore(key3, [key1, key2], AggregationType.MAX) == 2
+            await glide_client.zinterstore(key3, [key1, key2], AggregationType.MAX) == 2
         )
-        zinterstore_map_max = await redis_client.zrange_withscores(key3, range)
+        zinterstore_map_max = await glide_client.zrange_withscores(key3, range)
         expected_zinter_map_max = {
             b"one": 1.5,
             b"two": 2.5,
         }
         assert compare_maps(zinterstore_map_max, expected_zinter_map_max) is True
 
-        zinter_withscores_map_max = await redis_client.zinter_withscores(
+        zinter_withscores_map_max = await glide_client.zinter_withscores(
             [key1, key2], AggregationType.MAX
         )
         assert compare_maps(zinter_withscores_map_max, expected_zinter_map_max) is True
 
         # MIN aggregation tests
         assert (
-            await redis_client.zinterstore(key3, [key1, key2], AggregationType.MIN) == 2
+            await glide_client.zinterstore(key3, [key1, key2], AggregationType.MIN) == 2
         )
-        zinterstore_map_min = await redis_client.zrange_withscores(key3, range)
+        zinterstore_map_min = await glide_client.zrange_withscores(key3, range)
         expected_zinter_map_min = {
             b"one": 1.0,
             b"two": 2.0,
         }
         assert compare_maps(zinterstore_map_min, expected_zinter_map_min) is True
 
-        zinter_withscores_map_min = await redis_client.zinter_withscores(
+        zinter_withscores_map_min = await glide_client.zinter_withscores(
             [key1, key2], AggregationType.MIN
         )
         assert compare_maps(zinter_withscores_map_min, expected_zinter_map_min) is True
 
         # SUM aggregation tests
         assert (
-            await redis_client.zinterstore(key3, [key1, key2], AggregationType.SUM) == 2
+            await glide_client.zinterstore(key3, [key1, key2], AggregationType.SUM) == 2
         )
-        zinterstore_map_sum = await redis_client.zrange_withscores(key3, range)
+        zinterstore_map_sum = await glide_client.zrange_withscores(key3, range)
         assert compare_maps(zinterstore_map_sum, expected_zinter_map_withscores) is True
 
-        zinter_withscores_map_sum = await redis_client.zinter_withscores(
+        zinter_withscores_map_sum = await glide_client.zinter_withscores(
             [key1, key2], AggregationType.SUM
         )
         assert (
@@ -3456,12 +3456,12 @@ class TestCommands:
 
         # Multiplying scores during aggregation tests
         assert (
-            await redis_client.zinterstore(
+            await glide_client.zinterstore(
                 key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
             )
             == 2
         )
-        zinterstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
+        zinterstore_map_multiplied = await glide_client.zrange_withscores(key3, range)
         expected_zinter_map_multiplied = {
             b"one": 5.0,
             b"two": 9.0,
@@ -3471,7 +3471,7 @@ class TestCommands:
             is True
         )
 
-        zinter_withscores_map_multiplied = await redis_client.zinter_withscores(
+        zinter_withscores_map_multiplied = await glide_client.zinter_withscores(
             [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
         )
         assert (
@@ -3483,32 +3483,32 @@ class TestCommands:
 
         # Non-existing key test
         assert (
-            await redis_client.zinterstore(key3, [key1, "{testKey}-non_existing_key"])
+            await glide_client.zinterstore(key3, [key1, "{testKey}-non_existing_key"])
             == 0
         )
-        zinter_withscores_non_existing = await redis_client.zinter_withscores(
+        zinter_withscores_non_existing = await glide_client.zinter_withscores(
             [key1, "{testKey}-non_existing_key"]
         )
         assert zinter_withscores_non_existing == {}
 
         # Empty list check
         with pytest.raises(RequestError) as e:
-            await redis_client.zinterstore(
+            await glide_client.zinterstore(
                 "{xyz}", cast(List[TEncodable], cast(List[TEncodable], []))
             )
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.zinter([])
+            await glide_client.zinter([])
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.zinter_withscores(cast(List[TEncodable], []))
+            await glide_client.zinter_withscores(cast(List[TEncodable], []))
         assert "at least 1 input key is needed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zunion_commands(self, redis_client: TGlideClient):
+    async def test_zunion_commands(self, glide_client: TGlideClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -3520,17 +3520,17 @@ class TestCommands:
             "three": 3.5,
         }
 
-        assert await redis_client.zadd(key1, members_scores1) == 2
-        assert await redis_client.zadd(key2, members_scores2) == 3
+        assert await glide_client.zadd(key1, members_scores1) == 2
+        assert await glide_client.zadd(key2, members_scores2) == 3
 
         # zunion tests
-        zunion_map = await redis_client.zunion([key1, key2])
+        zunion_map = await glide_client.zunion([key1, key2])
         expected_zunion_map = [b"one", b"three", b"two"]
         assert zunion_map == expected_zunion_map
 
         # zunionstore tests
-        assert await redis_client.zunionstore(key3, [key1, key2]) == 3
-        zunionstore_map = await redis_client.zrange_withscores(key3, range)
+        assert await glide_client.zunionstore(key3, [key1, key2]) == 3
+        zunionstore_map = await glide_client.zrange_withscores(key3, range)
         expected_zunion_map_withscores = {
             b"one": 2.5,
             b"three": 3.5,
@@ -3539,16 +3539,16 @@ class TestCommands:
         assert compare_maps(zunionstore_map, expected_zunion_map_withscores) is True
 
         # zunion_withscores tests
-        zunion_withscores_map = await redis_client.zunion_withscores([key1, key2])
+        zunion_withscores_map = await glide_client.zunion_withscores([key1, key2])
         assert (
             compare_maps(zunion_withscores_map, expected_zunion_map_withscores) is True
         )
 
         # MAX aggregation tests
         assert (
-            await redis_client.zunionstore(key3, [key1, key2], AggregationType.MAX) == 3
+            await glide_client.zunionstore(key3, [key1, key2], AggregationType.MAX) == 3
         )
-        zunionstore_map_max = await redis_client.zrange_withscores(key3, range)
+        zunionstore_map_max = await glide_client.zrange_withscores(key3, range)
         expected_zunion_map_max = {
             b"one": 1.5,
             b"two": 2.5,
@@ -3556,16 +3556,16 @@ class TestCommands:
         }
         assert compare_maps(zunionstore_map_max, expected_zunion_map_max) is True
 
-        zunion_withscores_map_max = await redis_client.zunion_withscores(
+        zunion_withscores_map_max = await glide_client.zunion_withscores(
             [key1, key2], AggregationType.MAX
         )
         assert compare_maps(zunion_withscores_map_max, expected_zunion_map_max) is True
 
         # MIN aggregation tests
         assert (
-            await redis_client.zunionstore(key3, [key1, key2], AggregationType.MIN) == 3
+            await glide_client.zunionstore(key3, [key1, key2], AggregationType.MIN) == 3
         )
-        zunionstore_map_min = await redis_client.zrange_withscores(key3, range)
+        zunionstore_map_min = await glide_client.zrange_withscores(key3, range)
         expected_zunion_map_min = {
             b"one": 1.0,
             b"two": 2.0,
@@ -3573,19 +3573,19 @@ class TestCommands:
         }
         assert compare_maps(zunionstore_map_min, expected_zunion_map_min) is True
 
-        zunion_withscores_map_min = await redis_client.zunion_withscores(
+        zunion_withscores_map_min = await glide_client.zunion_withscores(
             [key1, key2], AggregationType.MIN
         )
         assert compare_maps(zunion_withscores_map_min, expected_zunion_map_min) is True
 
         # SUM aggregation tests
         assert (
-            await redis_client.zunionstore(key3, [key1, key2], AggregationType.SUM) == 3
+            await glide_client.zunionstore(key3, [key1, key2], AggregationType.SUM) == 3
         )
-        zunionstore_map_sum = await redis_client.zrange_withscores(key3, range)
+        zunionstore_map_sum = await glide_client.zrange_withscores(key3, range)
         assert compare_maps(zunionstore_map_sum, expected_zunion_map_withscores) is True
 
-        zunion_withscores_map_sum = await redis_client.zunion_withscores(
+        zunion_withscores_map_sum = await glide_client.zunion_withscores(
             [key1, key2], AggregationType.SUM
         )
         assert (
@@ -3595,12 +3595,12 @@ class TestCommands:
 
         # Multiplying scores during aggregation tests
         assert (
-            await redis_client.zunionstore(
+            await glide_client.zunionstore(
                 key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
             )
             == 3
         )
-        zunionstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
+        zunionstore_map_multiplied = await glide_client.zrange_withscores(key3, range)
         expected_zunion_map_multiplied = {
             b"one": 5.0,
             b"three": 7.0,
@@ -3611,7 +3611,7 @@ class TestCommands:
             is True
         )
 
-        zunion_withscores_map_multiplied = await redis_client.zunion_withscores(
+        zunion_withscores_map_multiplied = await glide_client.zunion_withscores(
             [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
         )
         assert (
@@ -3623,10 +3623,10 @@ class TestCommands:
 
         # Non-existing key test
         assert (
-            await redis_client.zunionstore(key3, [key1, "{testKey}-non_existing_key"])
+            await glide_client.zunionstore(key3, [key1, "{testKey}-non_existing_key"])
             == 2
         )
-        zunionstore_map_nonexistingkey = await redis_client.zrange_withscores(
+        zunionstore_map_nonexistingkey = await glide_client.zrange_withscores(
             key3, range
         )
         expected_zunion_map_nonexistingkey = {
@@ -3640,7 +3640,7 @@ class TestCommands:
             is True
         )
 
-        zunion_withscores_non_existing = await redis_client.zunion_withscores(
+        zunion_withscores_non_existing = await glide_client.zunion_withscores(
             [key1, "{testKey}-non_existing_key"]
         )
         assert (
@@ -3652,49 +3652,49 @@ class TestCommands:
 
         # Empty list check
         with pytest.raises(RequestError) as e:
-            await redis_client.zunionstore("{xyz}", cast(List[TEncodable], []))
+            await glide_client.zunionstore("{xyz}", cast(List[TEncodable], []))
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.zunion([])
+            await glide_client.zunion([])
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.zunion_withscores(cast(List[TEncodable], []))
+            await glide_client.zunion_withscores(cast(List[TEncodable], []))
         assert "at least 1 input key is needed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zpopmin(self, redis_client: TGlideClient):
+    async def test_zpopmin(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
-        assert await redis_client.zpopmin(key) == {b"a": 1.0}
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zpopmin(key) == {b"a": 1.0}
 
-        zpopmin_map = await redis_client.zpopmin(key, 3)
+        zpopmin_map = await glide_client.zpopmin(key, 3)
         expected_map = {b"b": 2.0, b"c": 3.0}
         assert compare_maps(zpopmin_map, expected_map) is True
 
-        assert await redis_client.zpopmin(key) == {}
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.zpopmin(key) == {}
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zpopmin(key)
+            await glide_client.zpopmin(key)
 
-        assert await redis_client.zpopmin("non_exisitng_key") == {}
+        assert await glide_client.zpopmin("non_exisitng_key") == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bzpopmin(self, redis_client: TGlideClient):
+    async def test_bzpopmin(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
 
-        assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
-        assert await redis_client.zadd(key2, {"c": 2.0}) == 1
-        assert await redis_client.bzpopmin(
+        assert await glide_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
+        assert await glide_client.zadd(key2, {"c": 2.0}) == 1
+        assert await glide_client.bzpopmin(
             [key1, key2], 0.5
         ) == convert_string_to_bytes_object([key1, "a", 1.0])
-        assert await redis_client.bzpopmin(
+        assert await glide_client.bzpopmin(
             [non_existing_key, key2], 0.5
         ) == convert_string_to_bytes_object(
             [
@@ -3703,19 +3703,19 @@ class TestCommands:
                 2.0,
             ]
         )
-        assert await redis_client.bzpopmin(["non_existing_key"], 0.5) is None
+        assert await glide_client.bzpopmin(["non_existing_key"], 0.5) is None
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.bzpopmin([], 0.5)
+            await glide_client.bzpopmin([], 0.5)
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set("foo", "value") == OK
+        assert await glide_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.bzpopmin(["foo"], 0.5)
+            await glide_client.bzpopmin(["foo"], 0.5)
 
         async def endless_bzpopmin_call():
-            await redis_client.bzpopmin(["non_existent_key"], 0)
+            await glide_client.bzpopmin(["non_existent_key"], 0)
 
         # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
@@ -3724,36 +3724,36 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zpopmax(self, redis_client: TGlideClient):
+    async def test_zpopmax(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
-        assert await redis_client.zadd(key, members_scores) == 3
-        assert await redis_client.zpopmax(key) == {b"c": 3.0}
+        assert await glide_client.zadd(key, members_scores) == 3
+        assert await glide_client.zpopmax(key) == {b"c": 3.0}
 
-        zpopmax_map = await redis_client.zpopmax(key, 3)
+        zpopmax_map = await glide_client.zpopmax(key, 3)
         expected_map = {"b": 2.0, "a": 1.0}
         assert compare_maps(zpopmax_map, expected_map) is True
 
-        assert await redis_client.zpopmax(key) == {}
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.zpopmax(key) == {}
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zpopmax(key)
+            await glide_client.zpopmax(key)
 
-        assert await redis_client.zpopmax("non_exisitng_key") == {}
+        assert await glide_client.zpopmax("non_exisitng_key") == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bzpopmax(self, redis_client: TGlideClient):
+    async def test_bzpopmax(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
 
-        assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
-        assert await redis_client.zadd(key2, {"c": 2.0}) == 1
-        assert await redis_client.bzpopmax(
+        assert await glide_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
+        assert await glide_client.zadd(key2, {"c": 2.0}) == 1
+        assert await glide_client.bzpopmax(
             [key1, key2], 0.5
         ) == convert_string_to_bytes_object([key1, "b", 1.5])
-        assert await redis_client.bzpopmax(
+        assert await glide_client.bzpopmax(
             [non_existing_key, key2], 0.5
         ) == convert_string_to_bytes_object(
             [
@@ -3762,19 +3762,19 @@ class TestCommands:
                 2.0,
             ]
         )
-        assert await redis_client.bzpopmax(["non_existing_key"], 0.5) is None
+        assert await glide_client.bzpopmax(["non_existing_key"], 0.5) is None
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.bzpopmax([], 0.5)
+            await glide_client.bzpopmax([], 0.5)
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set("foo", "value") == OK
+        assert await glide_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.bzpopmax(["foo"], 0.5)
+            await glide_client.bzpopmax(["foo"], 0.5)
 
         async def endless_bzpopmax_call():
-            await redis_client.bzpopmax(["non_existent_key"], 0)
+            await glide_client.bzpopmax(["non_existent_key"], 0)
 
         # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
@@ -3783,57 +3783,57 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_by_index(self, redis_client: TGlideClient):
+    async def test_zrange_by_index(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await redis_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
+        assert await glide_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
             b"one",
             b"two",
         ]
 
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             key, RangeByIndex(start=0, stop=-1)
         )
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
-        assert await redis_client.zrange(
+        assert await glide_client.zrange(
             key, RangeByIndex(start=0, stop=1), reverse=True
         ) == [
             b"three",
             b"two",
         ]
 
-        assert await redis_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
+        assert await glide_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
         assert (
-            await redis_client.zrange_withscores(key, RangeByIndex(start=3, stop=1))
+            await glide_client.zrange_withscores(key, RangeByIndex(start=3, stop=1))
             == {}
         )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_byscore(self, redis_client: TGlideClient):
+    async def test_zrange_byscore(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await redis_client.zrange(
+        assert await glide_client.zrange(
             key,
             RangeByScore(
                 start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
             ),
         ) == [b"one", b"two"]
 
-        zrange_map = await redis_client.zrange_withscores(
+        zrange_map = await glide_client.zrange_withscores(
             key,
             RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
         )
         expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
-        assert await redis_client.zrange(
+        assert await glide_client.zrange(
             key,
             RangeByScore(
                 start=ScoreBoundary(3, is_inclusive=False), stop=InfBound.NEG_INF
@@ -3842,7 +3842,7 @@ class TestCommands:
         ) == [b"two", b"one"]
 
         assert (
-            await redis_client.zrange(
+            await glide_client.zrange(
                 key,
                 RangeByScore(
                     start=InfBound.NEG_INF,
@@ -3853,7 +3853,7 @@ class TestCommands:
         ) == [b"two", b"three"]
 
         assert (
-            await redis_client.zrange(
+            await glide_client.zrange(
                 key,
                 RangeByScore(
                     start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
@@ -3864,7 +3864,7 @@ class TestCommands:
         )  # stop is greater than start with reverse set to True
 
         assert (
-            await redis_client.zrange(
+            await glide_client.zrange(
                 key,
                 RangeByScore(
                     start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
@@ -3874,7 +3874,7 @@ class TestCommands:
         )  # start is greater than stop
 
         assert (
-            await redis_client.zrange_withscores(
+            await glide_client.zrange_withscores(
                 key,
                 RangeByScore(
                     start=InfBound.POS_INF, stop=ScoreBoundary(3, is_inclusive=False)
@@ -3884,7 +3884,7 @@ class TestCommands:
         )  # start is greater than stop
 
         assert (
-            await redis_client.zrange_withscores(
+            await glide_client.zrange_withscores(
                 key,
                 RangeByScore(
                     start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
@@ -3896,12 +3896,12 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_bylex(self, redis_client: TGlideClient):
+    async def test_zrange_bylex(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"a": 1, "b": 2, "c": 3}
-        assert await redis_client.zadd(key, members_scores=members_scores) == 3
+        assert await glide_client.zadd(key, members_scores=members_scores) == 3
 
-        assert await redis_client.zrange(
+        assert await glide_client.zrange(
             key,
             RangeByLex(
                 start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
@@ -3909,7 +3909,7 @@ class TestCommands:
         ) == [b"a", b"b"]
 
         assert (
-            await redis_client.zrange(
+            await glide_client.zrange(
                 key,
                 RangeByLex(
                     start=InfBound.NEG_INF,
@@ -3919,7 +3919,7 @@ class TestCommands:
             )
         ) == [b"b", b"c"]
 
-        assert await redis_client.zrange(
+        assert await glide_client.zrange(
             key,
             RangeByLex(
                 start=LexBoundary("c", is_inclusive=False), stop=InfBound.NEG_INF
@@ -3928,7 +3928,7 @@ class TestCommands:
         ) == [b"b", b"a"]
 
         assert (
-            await redis_client.zrange(
+            await glide_client.zrange(
                 key,
                 RangeByLex(
                     start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
@@ -3939,7 +3939,7 @@ class TestCommands:
         )  # stop is greater than start with reverse set to True
 
         assert (
-            await redis_client.zrange(
+            await glide_client.zrange(
                 key,
                 RangeByLex(
                     start=InfBound.POS_INF, stop=LexBoundary("c", is_inclusive=False)
@@ -3950,30 +3950,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_different_types_of_keys(self, redis_client: TGlideClient):
+    async def test_zrange_different_types_of_keys(self, glide_client: TGlideClient):
         key = get_random_string(10)
 
         assert (
-            await redis_client.zrange("non_existing_key", RangeByIndex(start=0, stop=1))
+            await glide_client.zrange("non_existing_key", RangeByIndex(start=0, stop=1))
             == []
         )
 
         assert (
-            await redis_client.zrange_withscores(
+            await glide_client.zrange_withscores(
                 "non_existing_key", RangeByIndex(start=0, stop=-1)
             )
         ) == {}
 
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrange(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange(key, RangeByIndex(start=0, stop=1))
 
         with pytest.raises(RequestError):
-            await redis_client.zrange_withscores(key, RangeByIndex(start=0, stop=1))
+            await glide_client.zrange_withscores(key, RangeByIndex(start=0, stop=1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrangestore_by_index(self, redis_client: TGlideClient):
+    async def test_zrangestore_by_index(self, glide_client: TGlideClient):
         destination = f"{{testKey}}:{get_random_string(10)}"
         source = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:{get_random_string(10)}"
@@ -3984,58 +3984,58 @@ class TestCommands:
             "two": 2.0,
             "three": 3.0,
         }
-        assert await redis_client.zadd(source, member_scores) == 3
+        assert await glide_client.zadd(source, member_scores) == 3
 
         # full range
         assert (
-            await redis_client.zrangestore(destination, source, RangeByIndex(0, -1))
+            await glide_client.zrangestore(destination, source, RangeByIndex(0, -1))
             == 3
         )
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0, "three": 3.0}) is True
 
         # range from rank 0 to 1, from highest to lowest score
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination, source, RangeByIndex(0, 1), True
             )
             == 2
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
         # incorrect range, as start > stop
         assert (
-            await redis_client.zrangestore(destination, source, RangeByIndex(3, 1)) == 0
+            await glide_client.zrangestore(destination, source, RangeByIndex(3, 1)) == 0
         )
         assert (
-            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+            await glide_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
         )
 
         # non-existing source
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination, non_existing_key, RangeByIndex(0, -1)
             )
             == 0
         )
         assert (
-            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+            await glide_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
         )
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrangestore(destination, string_key, RangeByIndex(0, -1))
+            await glide_client.zrangestore(destination, string_key, RangeByIndex(0, -1))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrangestore_by_score(self, redis_client: TGlideClient):
+    async def test_zrangestore_by_score(self, glide_client: TGlideClient):
         destination = f"{{testKey}}:{get_random_string(10)}"
         source = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:{get_random_string(10)}"
@@ -4046,11 +4046,11 @@ class TestCommands:
             "two": 2.0,
             "three": 3.0,
         }
-        assert await redis_client.zadd(source, member_scores) == 3
+        assert await glide_client.zadd(source, member_scores) == 3
 
         # range from negative infinity to 3 (exclusive)
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, False)),
@@ -4058,40 +4058,40 @@ class TestCommands:
             == 2
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
         # range from 1 (inclusive) to positive infinity
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination, source, RangeByScore(ScoreBoundary(1), InfBound.POS_INF)
             )
             == 3
         )
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0, "three": 3.0}) is True
 
         # range from negative to positive infinity, limited to ranks 1 to 2
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByScore(InfBound.NEG_INF, InfBound.POS_INF, Limit(1, 2)),
             )
             == 2
         )
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"two": 2.0, "three": 3.0}) is True
 
         # range from positive to negative infinity reversed, limited to ranks 1 to 2
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByScore(InfBound.POS_INF, InfBound.NEG_INF, Limit(1, 2)),
@@ -4100,14 +4100,14 @@ class TestCommands:
             == 2
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0}) is True
 
         # incorrect range as start > stop
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByScore(ScoreBoundary(3, False), InfBound.NEG_INF),
@@ -4115,12 +4115,12 @@ class TestCommands:
             == 0
         )
         assert (
-            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+            await glide_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
         )
 
         # non-existing source
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 non_existing_key,
                 RangeByScore(InfBound.NEG_INF, ScoreBoundary(3, False)),
@@ -4128,13 +4128,13 @@ class TestCommands:
             == 0
         )
         assert (
-            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+            await glide_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
         )
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 string_key,
                 RangeByScore(ScoreBoundary(0), ScoreBoundary(3)),
@@ -4142,18 +4142,18 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrangestore_by_lex(self, redis_client: TGlideClient):
+    async def test_zrangestore_by_lex(self, glide_client: TGlideClient):
         destination = f"{{testKey}}:{get_random_string(10)}"
         source = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
         member_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
-        assert await redis_client.zadd(source, member_scores) == 3
+        assert await glide_client.zadd(source, member_scores) == 3
 
         # range from negative infinity to "c" (exclusive)
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByLex(InfBound.NEG_INF, LexBoundary("c", False)),
@@ -4161,27 +4161,27 @@ class TestCommands:
             == 2
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
         # range from "a" (inclusive) to positive infinity
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination, source, RangeByLex(LexBoundary("a"), InfBound.POS_INF)
             )
             == 3
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0, "c": 3.0}) is True
 
         # range from negative to positive infinity, limited to ranks 1 to 2
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByLex(InfBound.NEG_INF, InfBound.POS_INF, Limit(1, 2)),
@@ -4189,14 +4189,14 @@ class TestCommands:
             == 2
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"b": 2.0, "c": 3.0}) is True
 
         # range from positive to negative infinity reversed, limited to ranks 1 to 2
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByLex(InfBound.POS_INF, InfBound.NEG_INF, Limit(1, 2)),
@@ -4205,14 +4205,14 @@ class TestCommands:
             == 2
         )
 
-        zrange_res = await redis_client.zrange_withscores(
+        zrange_res = await glide_client.zrange_withscores(
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"a": 1.0, "b": 2.0}) is True
 
         # incorrect range as start > stop
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 source,
                 RangeByLex(LexBoundary("c", False), InfBound.NEG_INF),
@@ -4220,12 +4220,12 @@ class TestCommands:
             == 0
         )
         assert (
-            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+            await glide_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
         )
 
         # non-existing source
         assert (
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination,
                 non_existing_key,
                 RangeByLex(InfBound.NEG_INF, InfBound.POS_INF),
@@ -4233,40 +4233,40 @@ class TestCommands:
             == 0
         )
         assert (
-            await redis_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
+            await glide_client.zrange_withscores(destination, RangeByIndex(0, -1)) == {}
         )
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrangestore(
+            await glide_client.zrangestore(
                 destination, string_key, RangeByLex(InfBound.NEG_INF, InfBound.POS_INF)
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrank(self, redis_client: TGlideClient):
+    async def test_zrank(self, glide_client: TGlideClient):
         key = get_random_string(10)
         members_scores: Mapping[TEncodable, float] = {"one": 1.5, "two": 2, "three": 3}
-        assert await redis_client.zadd(key, members_scores) == 3
-        assert await redis_client.zrank(key, "one") == 0
-        if not await check_if_server_version_lt(redis_client, "7.2.0"):
-            assert await redis_client.zrank_withscore(key, "one") == [0, 1.5]
-            assert await redis_client.zrank_withscore(key, "non_existing_field") is None
+        assert await glide_client.zadd(key, members_scores) == 3
+        assert await glide_client.zrank(key, "one") == 0
+        if not await check_if_server_version_lt(glide_client, "7.2.0"):
+            assert await glide_client.zrank_withscore(key, "one") == [0, 1.5]
+            assert await glide_client.zrank_withscore(key, "non_existing_field") is None
             assert (
-                await redis_client.zrank_withscore("non_existing_key", "field") is None
+                await glide_client.zrank_withscore("non_existing_key", "field") is None
             )
 
-        assert await redis_client.zrank(key, "non_existing_field") is None
-        assert await redis_client.zrank("non_existing_key", "field") is None
+        assert await glide_client.zrank(key, "non_existing_field") is None
+        assert await glide_client.zrank("non_existing_key", "field") is None
 
-        assert await redis_client.set(key, "value") == OK
+        assert await glide_client.set(key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrank(key, "one")
+            await glide_client.zrank(key, "one")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrevrank(self, redis_client: TGlideClient):
+    async def test_zrevrank(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -4276,36 +4276,36 @@ class TestCommands:
             "three": 3.0,
         }
 
-        assert await redis_client.zadd(key, member_scores) == 3
-        assert await redis_client.zrevrank(key, "three") == 0
-        assert await redis_client.zrevrank(key, "non_existing_member") is None
+        assert await glide_client.zadd(key, member_scores) == 3
+        assert await glide_client.zrevrank(key, "three") == 0
+        assert await glide_client.zrevrank(key, "non_existing_member") is None
         assert (
-            await redis_client.zrevrank(non_existing_key, "non_existing_member") is None
+            await glide_client.zrevrank(non_existing_key, "non_existing_member") is None
         )
 
-        if not await check_if_server_version_lt(redis_client, "7.2.0"):
-            assert await redis_client.zrevrank_withscore(key, "one") == [2, 1.0]
+        if not await check_if_server_version_lt(glide_client, "7.2.0"):
+            assert await glide_client.zrevrank_withscore(key, "one") == [2, 1.0]
             assert (
-                await redis_client.zrevrank_withscore(key, "non_existing_member")
+                await glide_client.zrevrank_withscore(key, "non_existing_member")
                 is None
             )
             assert (
-                await redis_client.zrevrank_withscore(
+                await glide_client.zrevrank_withscore(
                     non_existing_key, "non_existing_member"
                 )
                 is None
             )
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrevrank(string_key, "member")
+            await glide_client.zrevrank(string_key, "member")
         with pytest.raises(RequestError):
-            await redis_client.zrevrank_withscore(string_key, "member")
+            await glide_client.zrevrank_withscore(string_key, "member")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zdiff(self, redis_client: TGlideClient):
+    async def test_zdiff(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -4325,46 +4325,46 @@ class TestCommands:
             "four": 4.0,
         }
 
-        assert await redis_client.zadd(key1, member_scores1) == 3
-        assert await redis_client.zadd(key2, member_scores2) == 1
-        assert await redis_client.zadd(key3, member_scores3) == 4
+        assert await glide_client.zadd(key1, member_scores1) == 3
+        assert await glide_client.zadd(key2, member_scores2) == 1
+        assert await glide_client.zadd(key3, member_scores3) == 4
 
-        assert await redis_client.zdiff([key1, key2]) == [b"one", b"three"]
-        assert await redis_client.zdiff([key1, key3]) == []
-        assert await redis_client.zdiff([non_existing_key, key3]) == []
+        assert await glide_client.zdiff([key1, key2]) == [b"one", b"three"]
+        assert await glide_client.zdiff([key1, key3]) == []
+        assert await glide_client.zdiff([non_existing_key, key3]) == []
 
-        zdiff_map = await redis_client.zdiff_withscores([key1, key2])
+        zdiff_map = await glide_client.zdiff_withscores([key1, key2])
         expected_map = {
             b"one": 1.0,
             b"three": 3.0,
         }
         assert compare_maps(zdiff_map, expected_map) is True
         assert (
-            compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True  # type: ignore
+            compare_maps(await glide_client.zdiff_withscores([key1, key3]), {}) is True  # type: ignore
         )
-        non_exist_res = await redis_client.zdiff_withscores([non_existing_key, key3])
+        non_exist_res = await glide_client.zdiff_withscores([non_existing_key, key3])
         assert non_exist_res == {}
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.zdiff([])
+            await glide_client.zdiff([])
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.zdiff_withscores([])
+            await glide_client.zdiff_withscores([])
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.zdiff([string_key, key2])
+            await glide_client.zdiff([string_key, key2])
 
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.zdiff_withscores([string_key, key2])
+            await glide_client.zdiff_withscores([string_key, key2])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zdiffstore(self, redis_client: TGlideClient):
+    async def test_zdiffstore(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -4385,36 +4385,36 @@ class TestCommands:
             "four": 4.0,
         }
 
-        assert await redis_client.zadd(key1, member_scores1) == 3
-        assert await redis_client.zadd(key2, member_scores2) == 1
-        assert await redis_client.zadd(key3, member_scores3) == 4
+        assert await glide_client.zadd(key1, member_scores1) == 3
+        assert await glide_client.zadd(key2, member_scores2) == 1
+        assert await glide_client.zadd(key3, member_scores3) == 4
 
-        assert await redis_client.zdiffstore(key4, [key1, key2]) == 2
+        assert await glide_client.zdiffstore(key4, [key1, key2]) == 2
 
-        zrange_res = await redis_client.zrange_withscores(key4, RangeByIndex(0, -1))
+        zrange_res = await glide_client.zrange_withscores(key4, RangeByIndex(0, -1))
         assert compare_maps(zrange_res, {"one": 1.0, "three": 3.0}) is True
 
-        assert await redis_client.zdiffstore(key4, [key3, key2, key1]) == 1
-        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
+        assert await glide_client.zdiffstore(key4, [key3, key2, key1]) == 1
+        assert await glide_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
             b"four": 4.0
         }
 
-        assert await redis_client.zdiffstore(key4, [key1, key3]) == 0
-        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {}
+        assert await glide_client.zdiffstore(key4, [key1, key3]) == 0
+        assert await glide_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {}
 
-        assert await redis_client.zdiffstore(key4, [non_existing_key, key1]) == 0
-        assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {}
+        assert await glide_client.zdiffstore(key4, [non_existing_key, key1]) == 0
+        assert await glide_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {}
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zdiffstore(key4, [string_key, key1])
+            await glide_client.zdiffstore(key4, [string_key, key1])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bzmpop(self, redis_client: TGlideClient):
+    async def test_bzmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
@@ -4423,64 +4423,64 @@ class TestCommands:
         string_key = f"{{test}}-3-f{get_random_string(10)}"
 
         assert (
-            await redis_client.zadd(
+            await glide_client.zadd(
                 key1, cast(Mapping[TEncodable, float], {"a1": 1, "b1": 2})
             )
             == 2
         )
         assert (
-            await redis_client.zadd(
+            await glide_client.zadd(
                 key2, cast(Mapping[TEncodable, float], {"a2": 0.1, "b2": 0.2})
             )
             == 2
         )
 
-        assert await redis_client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1) == [
+        assert await glide_client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1) == [
             key1.encode(),
             {b"b1": 2},
         ]
-        assert await redis_client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10) == [
+        assert await glide_client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10) == [
             key2.encode(),
             {b"b2": 0.2, b"a2": 0.1},
         ]
 
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
         assert (
-            await redis_client.bzmpop([non_existing_key], ScoreFilter.MIN, 0.5) is None
+            await glide_client.bzmpop([non_existing_key], ScoreFilter.MIN, 0.5) is None
         )
         assert (
-            await redis_client.bzmpop([non_existing_key], ScoreFilter.MIN, 0.55, 1)
+            await glide_client.bzmpop([non_existing_key], ScoreFilter.MIN, 0.55, 1)
             is None
         )
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.bzmpop([string_key], ScoreFilter.MAX, 0.1)
+            await glide_client.bzmpop([string_key], ScoreFilter.MAX, 0.1)
         with pytest.raises(RequestError):
-            await redis_client.bzmpop([string_key], ScoreFilter.MAX, 0.1, 1)
+            await glide_client.bzmpop([string_key], ScoreFilter.MAX, 0.1, 1)
 
         # incorrect argument: key list should not be empty
         with pytest.raises(RequestError):
-            assert await redis_client.bzmpop([], ScoreFilter.MAX, 0.1, 1)
+            assert await glide_client.bzmpop([], ScoreFilter.MAX, 0.1, 1)
 
         # incorrect argument: count should be greater than 0
         with pytest.raises(RequestError):
-            assert await redis_client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0)
+            assert await glide_client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0)
 
         # check that order of entries in the response is preserved
         entries: Dict[TEncodable, float] = {}
         for i in range(0, 10):
             entries.update({f"a{i}": float(i)})
 
-        assert await redis_client.zadd(key2, entries) == 10
-        result = await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
+        assert await glide_client.zadd(key2, entries) == 10
+        result = await glide_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
         assert result is not None
         result_map = cast(Mapping[bytes, float], result[1])
         assert compare_maps(entries, result_map) is True  # type: ignore
 
         async def endless_bzmpop_call():
-            await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
+            await glide_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
 
         # bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
@@ -4489,62 +4489,62 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrandmember(self, redis_client: TGlideClient):
+    async def test_zrandmember(self, glide_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         scores: Mapping[TEncodable, float] = {"one": 1, "two": 2}
-        assert await redis_client.zadd(key, scores) == 2
+        assert await glide_client.zadd(key, scores) == 2
 
-        member = await redis_client.zrandmember(key)
+        member = await glide_client.zrandmember(key)
         # TODO: remove when functions API is fixed
         assert isinstance(member, bytes)
         assert member.decode() in scores
-        assert await redis_client.zrandmember("non_existing_key") is None
+        assert await glide_client.zrandmember("non_existing_key") is None
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrandmember(string_key)
+            await glide_client.zrandmember(string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrandmember_count(self, redis_client: TGlideClient):
+    async def test_zrandmember_count(self, glide_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         scores: Mapping[TEncodable, float] = {"one": 1, "two": 2}
-        assert await redis_client.zadd(key, scores) == 2
+        assert await glide_client.zadd(key, scores) == 2
 
         # unique values are expected as count is positive
-        members = await redis_client.zrandmember_count(key, 4)
+        members = await glide_client.zrandmember_count(key, 4)
         assert len(members) == 2
         assert set(members) == {b"one", b"two"}
 
         # duplicate values are expected as count is negative
-        members = await redis_client.zrandmember_count(key, -4)
+        members = await glide_client.zrandmember_count(key, -4)
         assert len(members) == 4
         for member in members:
             # TODO: remove when functions API is fixed
             assert isinstance(member, bytes)
             assert member.decode() in scores
 
-        assert await redis_client.zrandmember_count(key, 0) == []
-        assert await redis_client.zrandmember_count("non_existing_key", 0) == []
+        assert await glide_client.zrandmember_count(key, 0) == []
+        assert await glide_client.zrandmember_count("non_existing_key", 0) == []
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrandmember_count(string_key, 5)
+            await glide_client.zrandmember_count(string_key, 5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrandmember_withscores(self, redis_client: TGlideClient):
+    async def test_zrandmember_withscores(self, glide_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         scores: Mapping[TEncodable, float] = {"one": 1, "two": 2}
-        assert await redis_client.zadd(key, scores) == 2
+        assert await glide_client.zadd(key, scores) == 2
 
         # unique values are expected as count is positive
-        elements = await redis_client.zrandmember_withscores(key, 4)
+        elements = await glide_client.zrandmember_withscores(key, 4)
         assert len(elements) == 2
 
         for member, score in elements:
@@ -4553,26 +4553,26 @@ class TestCommands:
             assert scores[(member).decode()] == score
 
         # duplicate values are expected as count is negative
-        elements = await redis_client.zrandmember_withscores(key, -4)
+        elements = await glide_client.zrandmember_withscores(key, -4)
         assert len(elements) == 4
         for member, score in elements:
             # TODO: remove when functions API is fixed
             assert isinstance(member, bytes)
             assert scores[(member).decode()] == score
 
-        assert await redis_client.zrandmember_withscores(key, 0) == []
-        assert await redis_client.zrandmember_withscores("non_existing_key", 0) == []
+        assert await glide_client.zrandmember_withscores(key, 0) == []
+        assert await glide_client.zrandmember_withscores("non_existing_key", 0) == []
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zrandmember_withscores(string_key, 5)
+            await glide_client.zrandmember_withscores(string_key, 5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zintercard(self, redis_client: TGlideClient):
+    async def test_zintercard(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
@@ -4591,30 +4591,30 @@ class TestCommands:
             "four": 4.0,
         }
 
-        assert await redis_client.zadd(key1, member_scores1) == 3
-        assert await redis_client.zadd(key2, member_scores2) == 3
+        assert await glide_client.zadd(key1, member_scores1) == 3
+        assert await glide_client.zadd(key2, member_scores2) == 3
 
-        assert await redis_client.zintercard([key1, key2]) == 2
-        assert await redis_client.zintercard([key1, non_existing_key]) == 0
+        assert await glide_client.zintercard([key1, key2]) == 2
+        assert await glide_client.zintercard([key1, non_existing_key]) == 0
 
-        assert await redis_client.zintercard([key1, key2], 0) == 2
-        assert await redis_client.zintercard([key1, key2], 1) == 1
-        assert await redis_client.zintercard([key1, key2], 3) == 2
+        assert await glide_client.zintercard([key1, key2], 0) == 2
+        assert await glide_client.zintercard([key1, key2], 1) == 1
+        assert await glide_client.zintercard([key1, key2], 3) == 2
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.zintercard([])
+            await glide_client.zintercard([])
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zintercard([string_key])
+            await glide_client.zintercard([string_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zmpop(self, redis_client: TGlideClient):
+    async def test_zmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
@@ -4622,81 +4622,81 @@ class TestCommands:
         non_existing_key = f"{{test}}-non_existing_key"
         string_key = f"{{test}}-3-f{get_random_string(10)}"
 
-        assert await redis_client.zadd(key1, {"a1": 1, "b1": 2}) == 2
-        assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
+        assert await glide_client.zadd(key1, {"a1": 1, "b1": 2}) == 2
+        assert await glide_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
 
-        assert await redis_client.zmpop([key1, key2], ScoreFilter.MAX) == [
+        assert await glide_client.zmpop([key1, key2], ScoreFilter.MAX) == [
             key1.encode(),
             {b"b1": 2},
         ]
-        assert await redis_client.zmpop([key2, key1], ScoreFilter.MAX, 10) == [
+        assert await glide_client.zmpop([key2, key1], ScoreFilter.MAX, 10) == [
             key2.encode(),
             {b"b2": 0.2, b"a2": 0.1},
         ]
 
-        assert await redis_client.zmpop([non_existing_key], ScoreFilter.MIN) is None
-        assert await redis_client.zmpop([non_existing_key], ScoreFilter.MIN, 1) is None
+        assert await glide_client.zmpop([non_existing_key], ScoreFilter.MIN) is None
+        assert await glide_client.zmpop([non_existing_key], ScoreFilter.MIN, 1) is None
 
         # key exists, but it is not a sorted set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.zmpop([string_key], ScoreFilter.MAX)
+            await glide_client.zmpop([string_key], ScoreFilter.MAX)
         with pytest.raises(RequestError):
-            await redis_client.zmpop([string_key], ScoreFilter.MAX, 1)
+            await glide_client.zmpop([string_key], ScoreFilter.MAX, 1)
 
         # incorrect argument: key list should not be empty
         with pytest.raises(RequestError):
-            assert await redis_client.zmpop([], ScoreFilter.MAX, 1)
+            assert await glide_client.zmpop([], ScoreFilter.MAX, 1)
 
         # incorrect argument: count should be greater than 0
         with pytest.raises(RequestError):
-            assert await redis_client.zmpop([key1], ScoreFilter.MAX, 0)
+            assert await glide_client.zmpop([key1], ScoreFilter.MAX, 0)
 
         # check that order of entries in the response is preserved
         entries: Dict[TEncodable, float] = {}
         for i in range(0, 10):
             entries[f"a{i}"] = float(i)
 
-        assert await redis_client.zadd(key2, entries) == 10
-        result = await redis_client.zmpop([key2], ScoreFilter.MIN, 10)
+        assert await glide_client.zadd(key2, entries) == 10
+        result = await glide_client.zmpop([key2], ScoreFilter.MIN, 10)
         assert result is not None
         result_map = cast(Mapping[bytes, float], result[1])
         assert compare_maps(entries, result_map) is True  # type: ignore
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_type(self, redis_client: TGlideClient):
+    async def test_type(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.set(key, "value") == OK
-        assert (await redis_client.type(key)).lower() == b"string"
-        assert await redis_client.delete([key]) == 1
+        assert await glide_client.set(key, "value") == OK
+        assert (await glide_client.type(key)).lower() == b"string"
+        assert await glide_client.delete([key]) == 1
 
-        assert await redis_client.lpush(key, ["value"]) == 1
-        assert (await redis_client.type(key)).lower() == b"list"
-        assert await redis_client.delete([key]) == 1
+        assert await glide_client.lpush(key, ["value"]) == 1
+        assert (await glide_client.type(key)).lower() == b"list"
+        assert await glide_client.delete([key]) == 1
 
-        assert await redis_client.sadd(key, ["value"]) == 1
-        assert (await redis_client.type(key)).lower() == b"set"
-        assert await redis_client.delete([key]) == 1
+        assert await glide_client.sadd(key, ["value"]) == 1
+        assert (await glide_client.type(key)).lower() == b"set"
+        assert await glide_client.delete([key]) == 1
 
-        assert await redis_client.zadd(key, {"member": 1.0}) == 1
-        assert (await redis_client.type(key)).lower() == b"zset"
-        assert await redis_client.delete([key]) == 1
+        assert await glide_client.zadd(key, {"member": 1.0}) == 1
+        assert (await glide_client.type(key)).lower() == b"zset"
+        assert await glide_client.delete([key]) == 1
 
-        assert await redis_client.hset(key, {"field": "value"}) == 1
-        assert (await redis_client.type(key)).lower() == b"hash"
-        assert await redis_client.delete([key]) == 1
+        assert await glide_client.hset(key, {"field": "value"}) == 1
+        assert (await glide_client.type(key)).lower() == b"hash"
+        assert await glide_client.delete([key]) == 1
 
-        await redis_client.xadd(key, [("field", "value")])
-        assert await redis_client.type(key) == b"stream"
-        assert await redis_client.delete([key]) == 1
+        await glide_client.xadd(key, [("field", "value")])
+        assert await glide_client.type(key) == b"stream"
+        assert await glide_client.delete([key]) == 1
 
-        assert (await redis_client.type(key)).lower() == b"none"
+        assert (await glide_client.type(key)).lower() == b"none"
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_with_get_or_by_args(
-        self, redis_client: GlideClient
+        self, glide_client: GlideClient
     ):
         key = "{SameSlotKey}" + get_random_string(10)
         store = "{SameSlotKey}" + get_random_string(10)
@@ -4709,16 +4709,16 @@ class TestCommands:
         )
 
         # Prepare some data
-        assert await redis_client.hset(user_key1, {"name": "Alice", "age": "30"}) == 2
-        assert await redis_client.hset(user_key2, {"name": "Bob", "age": "25"}) == 2
-        assert await redis_client.hset(user_key3, {"name": "Charlie", "age": "35"}) == 2
-        assert await redis_client.hset(user_key4, {"name": "Dave", "age": "20"}) == 2
-        assert await redis_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
-        assert await redis_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
+        assert await glide_client.hset(user_key1, {"name": "Alice", "age": "30"}) == 2
+        assert await glide_client.hset(user_key2, {"name": "Bob", "age": "25"}) == 2
+        assert await glide_client.hset(user_key3, {"name": "Charlie", "age": "35"}) == 2
+        assert await glide_client.hset(user_key4, {"name": "Dave", "age": "20"}) == 2
+        assert await glide_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
+        assert await glide_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
 
         # Test sort with all arguments
-        assert await redis_client.lpush(key, ["3", "1", "2"]) == 3
-        result = await redis_client.sort(
+        assert await glide_client.lpush(key, ["3", "1", "2"]) == 3
+        result = await glide_client.sort(
             key,
             limit=Limit(0, 2),
             get_patterns=["user:*->name"],
@@ -4728,7 +4728,7 @@ class TestCommands:
         assert result == [b"Alice", b"Bob"]
 
         # Test sort_store with all arguments
-        sort_store_result = await redis_client.sort_store(
+        sort_store_result = await glide_client.sort_store(
             key,
             store,
             limit=Limit(0, 2),
@@ -4737,11 +4737,11 @@ class TestCommands:
             alpha=True,
         )
         assert sort_store_result == 2
-        sorted_list = await redis_client.lrange(store, 0, -1)
+        sorted_list = await glide_client.lrange(store, 0, -1)
         assert sorted_list == [b"Alice", b"Bob"]
 
         # Test sort with `by` argument
-        result = await redis_client.sort(
+        result = await glide_client.sort(
             "user_ids",
             by_pattern="user:*->age",
             get_patterns=["user:*->name"],
@@ -4752,8 +4752,8 @@ class TestCommands:
         )
 
         # Test sort with `by` argument with missing keys to sort by
-        assert await redis_client.lpush("user_ids", ["a"]) == 6
-        result = await redis_client.sort(
+        assert await glide_client.lpush("user_ids", ["a"]) == 6
+        result = await glide_client.sort(
             "user_ids",
             by_pattern="user:*->age",
             get_patterns=["user:*->name"],
@@ -4764,7 +4764,7 @@ class TestCommands:
         )
 
         # Test sort with `by` argument with missing keys to sort by
-        result = await redis_client.sort(
+        result = await glide_client.sort(
             "user_ids",
             by_pattern="user:*->name",
             get_patterns=["user:*->age"],
@@ -4775,7 +4775,7 @@ class TestCommands:
         )
 
         # Test Limit with count 0
-        result = await redis_client.sort(
+        result = await glide_client.sort(
             "user_ids",
             limit=Limit(0, 0),
             alpha=True,
@@ -4785,97 +4785,97 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_without_get_or_by_args(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = "{SameSlotKey}" + get_random_string(10)
         store = "{SameSlotKey}" + get_random_string(10)
 
         # Test sort with non-existing key
-        result = await redis_client.sort("non_existing_key")
+        result = await glide_client.sort("non_existing_key")
         assert result == []
 
         # Test sort_store with non-existing key
-        sort_store_result = await redis_client.sort_store(
+        sort_store_result = await glide_client.sort_store(
             "{SameSlotKey}:non_existing_key", store
         )
         assert sort_store_result == 0
 
         # Test each argument separately
-        assert await redis_client.lpush(key, ["5", "2", "4", "1", "3"]) == 5
+        assert await glide_client.lpush(key, ["5", "2", "4", "1", "3"]) == 5
 
         # Test w/o flags
-        result = await redis_client.sort(key)
+        result = await glide_client.sort(key)
         assert result == [b"1", b"2", b"3", b"4", b"5"]
 
         # limit argument
-        result = await redis_client.sort(key, limit=Limit(1, 3))
+        result = await glide_client.sort(key, limit=Limit(1, 3))
         assert result == [b"2", b"3", b"4"]
 
         # order argument
-        result = await redis_client.sort(key, order=OrderBy.DESC)
+        result = await glide_client.sort(key, order=OrderBy.DESC)
         assert result == [b"5", b"4", b"3", b"2", b"1"]
 
-        assert await redis_client.lpush(key, ["a"]) == 6
+        assert await glide_client.lpush(key, ["a"]) == 6
 
         with pytest.raises(RequestError) as e:
-            await redis_client.sort(key)
+            await glide_client.sort(key)
         assert "can't be converted into double" in str(e).lower()
 
         # alpha argument
-        result = await redis_client.sort(key, alpha=True)
+        result = await glide_client.sort(key, alpha=True)
         assert result == [b"1", b"2", b"3", b"4", b"5", b"a"]
 
         # Combining multiple arguments
-        result = await redis_client.sort(
+        result = await glide_client.sort(
             key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
         assert result == [b"5", b"4", b"3"]
 
         # Test sort_store with combined arguments
-        sort_store_result = await redis_client.sort_store(
+        sort_store_result = await glide_client.sort_store(
             key, store, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
         assert sort_store_result == 3
-        sorted_list = await redis_client.lrange(store, 0, -1)
+        sorted_list = await glide_client.lrange(store, 0, -1)
         assert sorted_list == [b"5", b"4", b"3"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_echo(self, redis_client: TGlideClient):
+    async def test_echo(self, glide_client: TGlideClient):
         message = get_random_string(5)
-        assert await redis_client.echo(message) == message.encode()
-        if isinstance(redis_client, GlideClusterClient):
-            echo_dict = await redis_client.echo(message, AllNodes())
+        assert await glide_client.echo(message) == message.encode()
+        if isinstance(glide_client, GlideClusterClient):
+            echo_dict = await glide_client.echo(message, AllNodes())
             assert isinstance(echo_dict, dict)
             for value in echo_dict.values():
                 assert value == message.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_dbsize(self, redis_client: TGlideClient):
-        assert await redis_client.custom_command(["FLUSHALL"]) == OK
+    async def test_dbsize(self, glide_client: TGlideClient):
+        assert await glide_client.custom_command(["FLUSHALL"]) == OK
 
-        assert await redis_client.dbsize() == 0
+        assert await glide_client.dbsize() == 0
         key_value_pairs = [(get_random_string(10), "foo") for _ in range(10)]
 
         for key, value in key_value_pairs:
-            assert await redis_client.set(key, value) == OK
-        assert await redis_client.dbsize() == 10
+            assert await glide_client.set(key, value) == OK
+        assert await glide_client.dbsize() == 10
 
-        if isinstance(redis_client, GlideClusterClient):
-            assert await redis_client.custom_command(["FLUSHALL"]) == OK
+        if isinstance(glide_client, GlideClusterClient):
+            assert await glide_client.custom_command(["FLUSHALL"]) == OK
             key = get_random_string(5)
-            assert await redis_client.set(key, value) == OK
-            assert await redis_client.dbsize(SlotKeyRoute(SlotType.PRIMARY, key)) == 1
+            assert await glide_client.set(key, value) == OK
+            assert await glide_client.dbsize(SlotKeyRoute(SlotType.PRIMARY, key)) == 1
         else:
-            assert await redis_client.select(1) == OK
-            assert await redis_client.dbsize() == 0
+            assert await glide_client.select(1) == OK
+            assert await glide_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_time(self, redis_client: TGlideClient):
+    async def test_time(self, glide_client: TGlideClient):
         current_time = int(time.time()) - 1
-        result = await redis_client.time()
+        result = await glide_client.time()
         assert len(result) == 2
         assert isinstance(result, list)
         assert int(result[0]) > current_time
@@ -4883,45 +4883,45 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lastsave(self, redis_client: TGlideClient):
+    async def test_lastsave(self, glide_client: TGlideClient):
         yesterday = date.today() - timedelta(1)
         yesterday_unix_time = time.mktime(yesterday.timetuple())
 
-        result = await redis_client.lastsave()
+        result = await glide_client.lastsave()
         assert isinstance(result, int)
         assert result > yesterday_unix_time
 
-        if isinstance(redis_client, GlideClusterClient):
+        if isinstance(glide_client, GlideClusterClient):
             # test with single-node route
-            result = await redis_client.lastsave(RandomNode())
+            result = await glide_client.lastsave(RandomNode())
             assert isinstance(result, int)
             assert result > yesterday_unix_time
 
             # test with multi-node route
-            result = await redis_client.lastsave(AllNodes())
+            result = await glide_client.lastsave(AllNodes())
             assert isinstance(result, dict)
             for lastsave_time in result.values():
                 assert lastsave_time > yesterday_unix_time
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_append(self, redis_client: TGlideClient):
+    async def test_append(self, glide_client: TGlideClient):
         key, value = get_random_string(10), get_random_string(5)
-        assert await redis_client.append(key, value) == 5
+        assert await glide_client.append(key, value) == 5
 
-        assert await redis_client.append(key, value) == 10
-        assert await redis_client.get(key) == (value * 2).encode()
+        assert await glide_client.append(key, value) == 10
+        assert await glide_client.get(key) == (value * 2).encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xadd_xtrim_xlen(self, redis_client: TGlideClient):
+    async def test_xadd_xtrim_xlen(self, glide_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
         field, field2 = get_random_string(10), get_random_string(10)
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key,
                 [(field, "foo"), (field2, "bar")],
                 StreamAddOptions(make_stream=False),
@@ -4930,19 +4930,19 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1")
             )
             == b"0-1"
         )
 
         assert (
-            await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
+            await glide_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
         ) is not None
-        assert await redis_client.xlen(key) == 2
+        assert await glide_client.xlen(key) == 2
 
         # This will trim the first entry.
-        id = await redis_client.xadd(
+        id = await glide_client.xadd(
             key,
             [(field, "foo3"), (field2, "bar3")],
             StreamAddOptions(trim=TrimByMaxLen(exact=True, threshold=2)),
@@ -4951,45 +4951,45 @@ class TestCommands:
         assert id is not None
         # TODO: remove when functions API is fixed
         assert isinstance(id, bytes)
-        assert await redis_client.xlen(key) == 2
+        assert await glide_client.xlen(key) == 2
 
         # This will trim the 2nd entry.
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
                 StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
             )
             is not None
         )
-        assert await redis_client.xlen(key) == 2
+        assert await glide_client.xlen(key) == 2
 
-        assert await redis_client.xtrim(key, TrimByMaxLen(threshold=1, exact=True)) == 1
-        assert await redis_client.xlen(key) == 1
+        assert await glide_client.xtrim(key, TrimByMaxLen(threshold=1, exact=True)) == 1
+        assert await glide_client.xlen(key) == 1
 
-        assert await redis_client.xtrim(key, TrimByMaxLen(threshold=0, exact=True)) == 1
+        assert await glide_client.xtrim(key, TrimByMaxLen(threshold=0, exact=True)) == 1
         # Unlike other Redis collection types, stream keys still exist even after removing all entries
-        assert await redis_client.exists([key]) == 1
-        assert await redis_client.xlen(key) == 0
+        assert await glide_client.exists([key]) == 1
+        assert await glide_client.xlen(key) == 0
 
         assert (
-            await redis_client.xtrim(
+            await glide_client.xtrim(
                 non_existing_key, TrimByMaxLen(threshold=1, exact=True)
             )
             == 0
         )
-        assert await redis_client.xlen(non_existing_key) == 0
+        assert await glide_client.xlen(non_existing_key) == 0
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo")
+        assert await glide_client.set(string_key, "foo")
         with pytest.raises(RequestError):
-            await redis_client.xtrim(string_key, TrimByMaxLen(threshold=1, exact=True))
+            await glide_client.xtrim(string_key, TrimByMaxLen(threshold=1, exact=True))
         with pytest.raises(RequestError):
-            await redis_client.xlen(string_key)
+            await glide_client.xlen(string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xdel(self, redis_client: TGlideClient):
+    async def test_xdel(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -4998,35 +4998,35 @@ class TestCommands:
         stream_id3 = "0-3"
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id1)
             )
             == stream_id1.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id2)
             )
             == stream_id2.encode()
         )
-        assert await redis_client.xlen(key1) == 2
+        assert await glide_client.xlen(key1) == 2
 
         # deletes one stream id, and ignores anything invalid
-        assert await redis_client.xdel(key1, [stream_id1, stream_id3]) == 1
-        assert await redis_client.xdel(non_existing_key, [stream_id3]) == 0
+        assert await glide_client.xdel(key1, [stream_id1, stream_id3]) == 1
+        assert await glide_client.xdel(non_existing_key, [stream_id3]) == 0
 
         # invalid argument - id list should not be empty
         with pytest.raises(RequestError):
-            await redis_client.xdel(key1, [])
+            await glide_client.xdel(key1, [])
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xdel(string_key, [stream_id3])
+            await glide_client.xdel(string_key, [stream_id3])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xrange_and_xrevrange(self, redis_client: TGlideClient):
+    async def test_xrange_and_xrevrange(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -5035,90 +5035,90 @@ class TestCommands:
         stream_id3 = "0-3"
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1", "v1")], StreamAddOptions(id=stream_id1)
             )
             == stream_id1.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f2", "v2")], StreamAddOptions(id=stream_id2)
             )
             == stream_id2.encode()
         )
-        assert await redis_client.xlen(key) == 2
+        assert await glide_client.xlen(key) == 2
 
         # get everything from the stream
-        result = await redis_client.xrange(key, MinId(), MaxId())
+        result = await glide_client.xrange(key, MinId(), MaxId())
         assert convert_bytes_to_string_object(result) == {
             stream_id1: [["f1", "v1"]],
             stream_id2: [["f2", "v2"]],
         }
-        result = await redis_client.xrevrange(key, MaxId(), MinId())
+        result = await glide_client.xrevrange(key, MaxId(), MinId())
         assert convert_bytes_to_string_object(result) == {
             stream_id2: [["f2", "v2"]],
             stream_id1: [["f1", "v1"]],
         }
 
         # returns empty mapping if + before -
-        assert await redis_client.xrange(key, MaxId(), MinId()) == {}
+        assert await glide_client.xrange(key, MaxId(), MinId()) == {}
         # rev search returns empty mapping if - before +
-        assert await redis_client.xrevrange(key, MinId(), MaxId()) == {}
+        assert await glide_client.xrevrange(key, MinId(), MaxId()) == {}
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f3", "v3")], StreamAddOptions(id=stream_id3)
             )
             == stream_id3.encode()
         )
 
         # get the newest entry
-        result = await redis_client.xrange(
+        result = await glide_client.xrange(
             key, ExclusiveIdBound(stream_id2), ExclusiveIdBound.from_timestamp(5), 1
         )
         assert convert_bytes_to_string_object(result) == {stream_id3: [["f3", "v3"]]}
-        result = await redis_client.xrevrange(
+        result = await glide_client.xrevrange(
             key, ExclusiveIdBound.from_timestamp(5), ExclusiveIdBound(stream_id2), 1
         )
         assert convert_bytes_to_string_object(result) == {stream_id3: [["f3", "v3"]]}
 
         # xrange/xrevrange against an emptied stream
-        assert await redis_client.xdel(key, [stream_id1, stream_id2, stream_id3]) == 3
-        assert await redis_client.xrange(key, MinId(), MaxId(), 10) == {}
-        assert await redis_client.xrevrange(key, MaxId(), MinId(), 10) == {}
+        assert await glide_client.xdel(key, [stream_id1, stream_id2, stream_id3]) == 3
+        assert await glide_client.xrange(key, MinId(), MaxId(), 10) == {}
+        assert await glide_client.xrevrange(key, MaxId(), MinId(), 10) == {}
 
-        assert await redis_client.xrange(non_existing_key, MinId(), MaxId()) == {}
-        assert await redis_client.xrevrange(non_existing_key, MaxId(), MinId()) == {}
+        assert await glide_client.xrange(non_existing_key, MinId(), MaxId()) == {}
+        assert await glide_client.xrevrange(non_existing_key, MaxId(), MinId()) == {}
 
         # count value < 1 returns None
-        assert await redis_client.xrange(key, MinId(), MaxId(), 0) is None
-        assert await redis_client.xrange(key, MinId(), MaxId(), -1) is None
-        assert await redis_client.xrevrange(key, MaxId(), MinId(), 0) is None
-        assert await redis_client.xrevrange(key, MaxId(), MinId(), -1) is None
+        assert await glide_client.xrange(key, MinId(), MaxId(), 0) is None
+        assert await glide_client.xrange(key, MinId(), MaxId(), -1) is None
+        assert await glide_client.xrevrange(key, MaxId(), MinId(), 0) is None
+        assert await glide_client.xrevrange(key, MaxId(), MinId(), -1) is None
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo")
+        assert await glide_client.set(string_key, "foo")
         with pytest.raises(RequestError):
-            await redis_client.xrange(string_key, MinId(), MaxId())
+            await glide_client.xrange(string_key, MinId(), MaxId())
         with pytest.raises(RequestError):
-            await redis_client.xrevrange(string_key, MaxId(), MinId())
+            await glide_client.xrevrange(string_key, MaxId(), MinId())
 
         # invalid start bound
         with pytest.raises(RequestError):
-            await redis_client.xrange(key, IdBound("not_a_stream_id"), MaxId())
+            await glide_client.xrange(key, IdBound("not_a_stream_id"), MaxId())
         with pytest.raises(RequestError):
-            await redis_client.xrevrange(key, MaxId(), IdBound("not_a_stream_id"))
+            await glide_client.xrevrange(key, MaxId(), IdBound("not_a_stream_id"))
 
         # invalid end bound
         with pytest.raises(RequestError):
-            await redis_client.xrange(key, MinId(), IdBound("not_a_stream_id"))
+            await glide_client.xrange(key, MinId(), IdBound("not_a_stream_id"))
         with pytest.raises(RequestError):
-            await redis_client.xrevrange(key, IdBound("not_a_stream_id"), MinId())
+            await glide_client.xrevrange(key, IdBound("not_a_stream_id"), MinId())
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xread(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -5133,13 +5133,13 @@ class TestCommands:
 
         # setup first entries in streams key1 and key2
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f1_1", "v1_1")], StreamAddOptions(id=stream_id1_1)
             )
             == stream_id1_1.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key2, [("f2_1", "v2_1")], StreamAddOptions(id=stream_id2_1)
             )
             == stream_id2_1.encode()
@@ -5147,13 +5147,13 @@ class TestCommands:
 
         # setup second entries in streams key1 and key2
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f1_2", "v1_2")], StreamAddOptions(id=stream_id1_2)
             )
             == stream_id1_2.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key2, [("f2_2", "v2_2")], StreamAddOptions(id=stream_id2_2)
             )
             == stream_id2_2.encode()
@@ -5161,19 +5161,19 @@ class TestCommands:
 
         # setup third entries in streams key1 and key2
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f1_3", "v1_3")], StreamAddOptions(id=stream_id1_3)
             )
             == stream_id1_3.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key2, [("f2_3", "v2_3")], StreamAddOptions(id=stream_id2_3)
             )
             == stream_id2_3.encode()
         )
 
-        assert await redis_client.xread({key1: stream_id1_1, key2: stream_id2_1}) == {
+        assert await glide_client.xread({key1: stream_id1_1, key2: stream_id2_1}) == {
             key1.encode(): {
                 stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
                 stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
@@ -5184,25 +5184,25 @@ class TestCommands:
             },
         }
 
-        assert await redis_client.xread({non_existing_key: stream_id1_1}) is None
-        assert await redis_client.xread({key1: non_existing_id}) is None
+        assert await glide_client.xread({non_existing_key: stream_id1_1}) is None
+        assert await glide_client.xread({key1: non_existing_id}) is None
 
         # passing an empty read options argument has no effect
-        assert await redis_client.xread({key1: stream_id1_1}, StreamReadOptions()) == {
+        assert await glide_client.xread({key1: stream_id1_1}, StreamReadOptions()) == {
             key1.encode(): {
                 stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
                 stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
             },
         }
 
-        assert await redis_client.xread(
+        assert await glide_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1)
         ) == {
             key1.encode(): {
                 stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
             },
         }
-        assert await redis_client.xread(
+        assert await glide_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1, block_ms=1000)
         ) == {
             key1.encode(): {
@@ -5213,7 +5213,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xread_edge_cases_and_failures(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         string_key = f"{{testKey}}:2-{get_random_string(10)}"
@@ -5222,13 +5222,13 @@ class TestCommands:
         stream_id2 = "1-2"
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f1", "v1")], StreamAddOptions(id=stream_id1)
             )
             == stream_id1.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key1, [("f2", "v2")], StreamAddOptions(id=stream_id2)
             )
             == stream_id2.encode()
@@ -5254,7 +5254,7 @@ class TestCommands:
             await asyncio.wait_for(endless_xread_call(), timeout=3)
 
         # if count is non-positive, it is ignored
-        assert await redis_client.xread(
+        assert await glide_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=0)
         ) == {
             key1.encode(): {
@@ -5262,7 +5262,7 @@ class TestCommands:
                 stream_id2.encode(): [[b"f2", b"v2"]],
             },
         }
-        assert await redis_client.xread(
+        assert await glide_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=-1)
         ) == {
             key1.encode(): {
@@ -5273,27 +5273,27 @@ class TestCommands:
 
         # invalid stream ID
         with pytest.raises(RequestError):
-            await redis_client.xread({key1: "invalid_stream_id"})
+            await glide_client.xread({key1: "invalid_stream_id"})
 
         # invalid argument - block cannot be negative
         with pytest.raises(RequestError):
-            await redis_client.xread({key1: stream_id1}, StreamReadOptions(block_ms=-1))
+            await glide_client.xread({key1: stream_id1}, StreamReadOptions(block_ms=-1))
 
         # invalid argument - keys_and_ids must not be empty
         with pytest.raises(RequestError):
-            await redis_client.xread({})
+            await glide_client.xread({})
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo")
+        assert await glide_client.set(string_key, "foo")
         with pytest.raises(RequestError):
-            await redis_client.xread({string_key: stream_id1, key1: stream_id1})
+            await glide_client.xread({string_key: stream_id1, key1: stream_id1})
         with pytest.raises(RequestError):
-            await redis_client.xread({key1: stream_id1, string_key: stream_id1})
+            await glide_client.xread({key1: stream_id1, string_key: stream_id1})
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_create_xgroup_destroy(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -5304,11 +5304,11 @@ class TestCommands:
 
         # trying to create a consumer group for a non-existing stream without the "MKSTREAM" arg results in error
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create(non_existing_key, group_name1, stream_id)
+            await glide_client.xgroup_create(non_existing_key, group_name1, stream_id)
 
         # calling with the "MKSTREAM" arg should create the new stream automatically
         assert (
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 key, group_name1, stream_id, StreamGroupOptions(make_stream=True)
             )
             == OK
@@ -5316,26 +5316,26 @@ class TestCommands:
 
         # invalid arg - group names must be unique, but group_name1 already exists
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create(key, group_name1, stream_id)
+            await glide_client.xgroup_create(key, group_name1, stream_id)
 
         # invalid stream ID format
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 key, group_name2, "invalid_stream_id_format"
             )
 
-        assert await redis_client.xgroup_destroy(key, group_name1) is True
+        assert await glide_client.xgroup_destroy(key, group_name1) is True
         # calling xgroup_destroy again returns False because the group was already destroyed above
-        assert await redis_client.xgroup_destroy(key, group_name1) is False
+        assert await glide_client.xgroup_destroy(key, group_name1) is False
 
         # attempting to destroy a group for a non-existing key should raise an error
         with pytest.raises(RequestError):
-            await redis_client.xgroup_destroy(non_existing_key, group_name1)
+            await glide_client.xgroup_destroy(non_existing_key, group_name1)
 
         # "ENTRIESREAD" option was added in Redis 7.0.0
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             with pytest.raises(RequestError):
-                await redis_client.xgroup_create(
+                await glide_client.xgroup_create(
                     key,
                     group_name1,
                     stream_id,
@@ -5343,7 +5343,7 @@ class TestCommands:
                 )
         else:
             assert (
-                await redis_client.xgroup_create(
+                await glide_client.xgroup_create(
                     key,
                     group_name1,
                     stream_id,
@@ -5353,18 +5353,18 @@ class TestCommands:
             )
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 string_key, group_name1, stream_id, StreamGroupOptions(make_stream=True)
             )
         with pytest.raises(RequestError):
-            await redis_client.xgroup_destroy(string_key, group_name1)
+            await glide_client.xgroup_destroy(string_key, group_name1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_create_consumer_xreadgroup_xgroup_del_consumer(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5379,35 +5379,35 @@ class TestCommands:
 
         # create group and consumer for the group
         assert (
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
             )
             == OK
         )
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer_name)
+            await glide_client.xgroup_create_consumer(key, group_name, consumer_name)
             is True
         )
 
         # attempting to create/delete a consumer for a group that does not exist results in a NOGROUP request error
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create_consumer(
+            await glide_client.xgroup_create_consumer(
                 key, "non_existing_group", consumer_name
             )
         with pytest.raises(RequestError):
-            await redis_client.xgroup_del_consumer(
+            await glide_client.xgroup_del_consumer(
                 key, "non_existing_group", consumer_name
             )
 
         # attempt to create consumer for group again
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer_name)
+            await glide_client.xgroup_create_consumer(key, group_name, consumer_name)
             is False
         )
 
         # attempting to delete a consumer that has not been created yet returns 0
         assert (
-            await redis_client.xgroup_del_consumer(
+            await glide_client.xgroup_del_consumer(
                 key, group_name, "non_existing_consumer"
             )
             == 0
@@ -5415,20 +5415,20 @@ class TestCommands:
 
         # add two stream entries
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
             == stream_id1_1.encode()
         )
 
         # read the entire stream for the consumer and mark messages as pending
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xreadgroup(
             {key: ">"},
             group_name,
             consumer_name,
@@ -5441,10 +5441,10 @@ class TestCommands:
         }
 
         # delete one of the stream entries
-        assert await redis_client.xdel(key, [stream_id1_0]) == 1
+        assert await glide_client.xdel(key, [stream_id1_0]) == 1
 
         # now xreadgroup yields one empty stream entry and one non-empty stream entry
-        assert await redis_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
+        assert await glide_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
             key.encode(): {
                 stream_id1_0.encode(): None,
                 stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
@@ -5452,7 +5452,7 @@ class TestCommands:
         }
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
             )
             == stream_id1_2.encode()
@@ -5460,11 +5460,11 @@ class TestCommands:
 
         # delete the consumer group and expect 2 pending messages
         assert (
-            await redis_client.xgroup_del_consumer(key, group_name, consumer_name) == 2
+            await glide_client.xgroup_del_consumer(key, group_name, consumer_name) == 2
         )
 
         # consume the last message with the previously deleted consumer (create the consumer anew)
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xreadgroup(
             {key: ">"},
             group_name,
             consumer_name,
@@ -5473,25 +5473,25 @@ class TestCommands:
 
         # delete the consumer group and expect the pending message
         assert (
-            await redis_client.xgroup_del_consumer(key, group_name, consumer_name) == 1
+            await glide_client.xgroup_del_consumer(key, group_name, consumer_name) == 1
         )
 
         # test NOACK option
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
             )
             == stream_id1_3.encode()
         )
         # since NOACK is passed, stream entry will be consumed without being added to the pending entries
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xreadgroup(
             {key: ">"},
             group_name,
             consumer_name,
             StreamReadGroupOptions(no_ack=True, count=5, block_ms=1000),
         ) == {key.encode(): {stream_id1_3.encode(): [[b"f1_3", b"v1_3"]]}}
         assert (
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {key: ">"},
                 group_name,
                 consumer_name,
@@ -5499,7 +5499,7 @@ class TestCommands:
             )
             is None
         )
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xreadgroup(
             {key: "0"},
             group_name,
             consumer_name,
@@ -5508,29 +5508,29 @@ class TestCommands:
 
         # attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create_consumer(
+            await glide_client.xgroup_create_consumer(
                 non_existing_key, group_name, consumer_name
             )
         with pytest.raises(RequestError):
-            await redis_client.xgroup_del_consumer(
+            await glide_client.xgroup_del_consumer(
                 non_existing_key, group_name, consumer_name
             )
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xgroup_create_consumer(
+            await glide_client.xgroup_create_consumer(
                 string_key, group_name, consumer_name
             )
         with pytest.raises(RequestError):
-            await redis_client.xgroup_del_consumer(
+            await glide_client.xgroup_del_consumer(
                 string_key, group_name, consumer_name
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xreadgroup_edge_cases_and_failures(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5543,42 +5543,42 @@ class TestCommands:
 
         # attempting to execute against a non-existing key results in an error
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {non_existing_key: stream_id0}, group_name, consumer_name
             )
 
         # create group and consumer for group
-        assert await redis_client.xgroup_create(
+        assert await glide_client.xgroup_create(
             key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
         )
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer_name)
+            await glide_client.xgroup_create_consumer(key, group_name, consumer_name)
             is True
         )
 
         # read from empty stream
         assert (
-            await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
+            await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
         )
-        assert await redis_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
+        assert await glide_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
             key.encode(): {}
         }
 
         # setup first entry
         assert (
-            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
+            await glide_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
             == stream_id1_1.encode()
         )
 
         # if count is non-positive, it is ignored
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xreadgroup(
             {key: ">"}, group_name, consumer_name, StreamReadGroupOptions(count=0)
         ) == {
             key.encode(): {
                 stream_id1_1.encode(): [[b"f1", b"v1"]],
             },
         }
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xreadgroup(
             {key: stream_id1_0},
             group_name,
             consumer_name,
@@ -5591,13 +5591,13 @@ class TestCommands:
 
         # invalid stream ID
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {key: "invalid_stream_id"}, group_name, consumer_name
             )
 
         # invalid argument - block cannot be negative
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {key: stream_id0},
                 group_name,
                 consumer_name,
@@ -5606,24 +5606,24 @@ class TestCommands:
 
         # invalid argument - keys_and_ids must not be empty
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup({}, group_name, consumer_name)
+            await glide_client.xreadgroup({}, group_name, consumer_name)
 
         # first key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {string_key: stream_id1_1, key: stream_id1_1}, group_name, consumer_name
             )
 
         # second key exists, but it is not a stream
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {key: stream_id1_1, string_key: stream_id1_1}, group_name, consumer_name
             )
 
         # attempting to execute command with a non-existing group results in an error
         with pytest.raises(RequestError):
-            await redis_client.xreadgroup(
+            await glide_client.xreadgroup(
                 {key: stream_id1_1}, "non_existing_group", consumer_name
             )
 
@@ -5695,7 +5695,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xack(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5709,15 +5709,15 @@ class TestCommands:
 
         # setup: add 2 entries to the stream, create consumer group, read to mark them as pending
         assert (
-            await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
+            await glide_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
+            await glide_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
             == stream_id1_1.encode()
         )
-        assert await redis_client.xgroup_create(key, group_name, stream_id0) == OK
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+        assert await glide_client.xgroup_create(key, group_name, stream_id0) == OK
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
             key.encode(): {
                 stream_id1_0.encode(): [[b"f0", b"v0"]],
                 stream_id1_1.encode(): [[b"f1", b"v1"]],
@@ -5726,52 +5726,52 @@ class TestCommands:
 
         # add one more entry
         assert (
-            await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
+            await glide_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
             == stream_id1_2.encode()
         )
 
         # acknowledge the first 2 entries
         assert (
-            await redis_client.xack(key, group_name, [stream_id1_0, stream_id1_1]) == 2
+            await glide_client.xack(key, group_name, [stream_id1_0, stream_id1_1]) == 2
         )
         # attempting to acknowledge the first 2 entries again returns 0 since they were already acknowledged
         assert (
-            await redis_client.xack(key, group_name, [stream_id1_0, stream_id1_1]) == 0
+            await glide_client.xack(key, group_name, [stream_id1_0, stream_id1_1]) == 0
         )
         # read the last, unacknowledged entry
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
             key.encode(): {stream_id1_2.encode(): [[b"f2", b"v2"]]}
         }
         # deleting the consumer returns 1 since the last entry still hasn't been acknowledged
         assert (
-            await redis_client.xgroup_del_consumer(key, group_name, consumer_name) == 1
+            await glide_client.xgroup_del_consumer(key, group_name, consumer_name) == 1
         )
 
         # attempting to acknowledge a non-existing key returns 0
         assert (
-            await redis_client.xack(non_existing_key, group_name, [stream_id1_0]) == 0
+            await glide_client.xack(non_existing_key, group_name, [stream_id1_0]) == 0
         )
         # attempting to acknowledge a non-existing group returns 0
-        assert await redis_client.xack(key, "non_existing_group", [stream_id1_0]) == 0
+        assert await glide_client.xack(key, "non_existing_group", [stream_id1_0]) == 0
         # attempting to acknowledge a non-existing ID returns 0
-        assert await redis_client.xack(key, group_name, ["99-99"]) == 0
+        assert await glide_client.xack(key, group_name, ["99-99"]) == 0
 
         # invalid arg - ID list must not be empty
         with pytest.raises(RequestError):
-            await redis_client.xack(key, group_name, [])
+            await glide_client.xack(key, group_name, [])
 
         # invalid arg - invalid stream ID format
         with pytest.raises(RequestError):
-            await redis_client.xack(key, group_name, ["invalid_ID_format"])
+            await glide_client.xack(key, group_name, ["invalid_ID_format"])
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xack(string_key, group_name, [stream_id1_0])
+            await glide_client.xack(string_key, group_name, [stream_id1_0])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xpending_xclaim(self, redis_client: TGlideClient):
+    async def test_xpending_xclaim(self, glide_client: TGlideClient):
         key = get_random_string(10)
         group_name = get_random_string(10)
         consumer1 = get_random_string(10)
@@ -5786,36 +5786,36 @@ class TestCommands:
 
         # create group and consumer for group
         assert (
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
             )
             == OK
         )
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer1)
+            await glide_client.xgroup_create_consumer(key, group_name, consumer1)
             is True
         )
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer2)
+            await glide_client.xgroup_create_consumer(key, group_name, consumer2)
             is True
         )
 
         # add two stream entries for consumer1
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
             == stream_id1_1.encode()
         )
 
         # read the entire stream with consumer1 and mark messages as pending
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer1) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer1) == {
             key.encode(): {
                 stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
                 stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
@@ -5824,26 +5824,26 @@ class TestCommands:
 
         # add three stream entries for consumer2
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
             )
             == stream_id1_2.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
             )
             == stream_id1_3.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_4", "v1_4")], StreamAddOptions(stream_id1_4)
             )
             == stream_id1_4.encode()
         )
 
         # read the entire stream with consumer2 and mark messages as pending
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer2) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer2) == {
             key.encode(): {
                 stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
                 stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
@@ -5852,7 +5852,7 @@ class TestCommands:
         }
 
         # inner array order is non-deterministic, so we have to assert against it separately from the other info
-        result = await redis_client.xpending(key, group_name)
+        result = await glide_client.xpending(key, group_name)
         consumer_results = cast(List, result[3])
         assert [consumer1.encode(), b"2"] in consumer_results
         assert [consumer2.encode(), b"3"] in consumer_results
@@ -5862,7 +5862,7 @@ class TestCommands:
 
         # to ensure an idle_time > 0
         time.sleep(2)
-        range_result = await redis_client.xpending_range(
+        range_result = await glide_client.xpending_range(
             key, group_name, MinId(), MaxId(), 10
         )
         # the inner lists of the result have format [stream_entry_id, consumer, idle_time, times_delivered]
@@ -5893,7 +5893,7 @@ class TestCommands:
         assert range_result[4] == [stream_id1_4.encode(), consumer2.encode(), 1]
 
         # use xclaim to claim stream 2 and 4 for consumer 1
-        assert await redis_client.xclaim(
+        assert await glide_client.xclaim(
             key, group_name, consumer1, 0, [stream_id1_2, stream_id1_4]
         ) == {
             stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
@@ -5902,26 +5902,26 @@ class TestCommands:
 
         # claiming non exists id
         assert (
-            await redis_client.xclaim(
+            await glide_client.xclaim(
                 key, group_name, consumer1, 0, ["1526569498055-0"]
             )
             == {}
         )
 
-        assert await redis_client.xclaim_just_id(
+        assert await glide_client.xclaim_just_id(
             key, group_name, consumer1, 0, [stream_id1_2, stream_id1_4]
         ) == [stream_id1_2.encode(), stream_id1_4.encode()]
 
         # add one more stream
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_5", "v1_5")], StreamAddOptions(stream_id1_5)
             )
             == stream_id1_5.encode()
         )
 
         # using force, we can xclaim the message without reading it
-        claim_force_result = await redis_client.xclaim(
+        claim_force_result = await glide_client.xclaim(
             key,
             group_name,
             consumer2,
@@ -5931,7 +5931,7 @@ class TestCommands:
         )
         assert claim_force_result == {stream_id1_5.encode(): [[b"f1_5", b"v1_5"]]}
 
-        force_pending_result = await redis_client.xpending_range(
+        force_pending_result = await glide_client.xpending_range(
             key, group_name, IdBound(stream_id1_5), IdBound(stream_id1_5), 1
         )
         assert force_pending_result[0][0] == stream_id1_5.encode()
@@ -5940,7 +5940,7 @@ class TestCommands:
 
         # acknowledge streams 1-1, 1-2, 1-3, 1-5 and remove them from the xpending results
         assert (
-            await redis_client.xack(
+            await glide_client.xack(
                 key,
                 group_name,
                 [stream_id1_1, stream_id1_2, stream_id1_3, stream_id1_5],
@@ -5948,14 +5948,14 @@ class TestCommands:
             == 4
         )
 
-        range_result = await redis_client.xpending_range(
+        range_result = await glide_client.xpending_range(
             key, group_name, IdBound(stream_id1_4), MaxId(), 10
         )
         assert len(range_result) == 1
         assert range_result[0][0] == stream_id1_4.encode()
         assert range_result[0][1] == consumer1.encode()
 
-        range_result = await redis_client.xpending_range(
+        range_result = await glide_client.xpending_range(
             key, group_name, MinId(), IdBound(stream_id1_3), 10
         )
         assert len(range_result) == 1
@@ -5963,14 +5963,14 @@ class TestCommands:
         assert range_result[0][1] == consumer1.encode()
 
         # passing an empty StreamPendingOptions object should have no effect
-        range_result = await redis_client.xpending_range(
+        range_result = await glide_client.xpending_range(
             key, group_name, MinId(), IdBound(stream_id1_3), 10, StreamPendingOptions()
         )
         assert len(range_result) == 1
         assert range_result[0][0] == stream_id1_0.encode()
         assert range_result[0][1] == consumer1.encode()
 
-        range_result = await redis_client.xpending_range(
+        range_result = await glide_client.xpending_range(
             key,
             group_name,
             MinId(),
@@ -5983,7 +5983,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xpending_edge_cases_and_failures(self, redis_client: TGlideClient):
+    async def test_xpending_edge_cases_and_failures(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -5995,38 +5995,38 @@ class TestCommands:
 
         # create group and consumer for the group
         assert (
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
             )
             == OK
         )
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer) is True
+            await glide_client.xgroup_create_consumer(key, group_name, consumer) is True
         )
 
         # add two stream entries for consumer
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
             == stream_id1_1.encode()
         )
 
         # no pending messages yet...
-        assert await redis_client.xpending(key, group_name) == [0, None, None, None]
+        assert await glide_client.xpending(key, group_name) == [0, None, None, None]
         assert (
-            await redis_client.xpending_range(key, group_name, MinId(), MaxId(), 10)
+            await glide_client.xpending_range(key, group_name, MinId(), MaxId(), 10)
             == []
         )
 
         # read the entire stream with consumer and mark messages as pending
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
             key.encode(): {
                 stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
                 stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
@@ -6034,24 +6034,24 @@ class TestCommands:
         }
 
         # sanity check - expect some results
-        assert await redis_client.xpending(key, group_name) == [
+        assert await glide_client.xpending(key, group_name) == [
             2,
             stream_id1_0.encode(),
             stream_id1_1.encode(),
             [[consumer.encode(), b"2"]],
         ]
-        result = await redis_client.xpending_range(
+        result = await glide_client.xpending_range(
             key, group_name, MinId(), MaxId(), 10
         )
         assert len(result[0]) > 0
 
         # returns empty if + before -
         assert (
-            await redis_client.xpending_range(key, group_name, MaxId(), MinId(), 10)
+            await glide_client.xpending_range(key, group_name, MaxId(), MinId(), 10)
             == []
         )
         assert (
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 key,
                 group_name,
                 MaxId(),
@@ -6064,7 +6064,7 @@ class TestCommands:
 
         # min idle time of 100 seconds shouldn't produce any results
         assert (
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 key,
                 group_name,
                 MinId(),
@@ -6077,7 +6077,7 @@ class TestCommands:
 
         # non-existing consumer: no results
         assert (
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 key,
                 group_name,
                 MinId(),
@@ -6090,26 +6090,26 @@ class TestCommands:
 
         # xpending when range bound is not a valid ID raises a RequestError
         with pytest.raises(RequestError):
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 key, group_name, IdBound("invalid_stream_id_format"), MaxId(), 10
             )
         with pytest.raises(RequestError):
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 key, group_name, MinId(), IdBound("invalid_stream_id_format"), 10
             )
 
         # non-positive count returns no results
         assert (
-            await redis_client.xpending_range(key, group_name, MinId(), MaxId(), -10)
+            await glide_client.xpending_range(key, group_name, MinId(), MaxId(), -10)
             == []
         )
         assert (
-            await redis_client.xpending_range(key, group_name, MinId(), MaxId(), 0)
+            await glide_client.xpending_range(key, group_name, MinId(), MaxId(), 0)
             == []
         )
 
         # non-positive min-idle-time values are allowed
-        result = await redis_client.xpending_range(
+        result = await glide_client.xpending_range(
             key,
             group_name,
             MinId(),
@@ -6118,7 +6118,7 @@ class TestCommands:
             StreamPendingOptions(min_idle_time_ms=-100),
         )
         assert len(result[0]) > 0
-        result = await redis_client.xpending_range(
+        result = await glide_client.xpending_range(
             key,
             group_name,
             MinId(),
@@ -6130,32 +6130,32 @@ class TestCommands:
 
         # non-existing group name raises a RequestError (NOGROUP)
         with pytest.raises(RequestError):
-            await redis_client.xpending(key, "non_existing_group")
+            await glide_client.xpending(key, "non_existing_group")
         with pytest.raises(RequestError):
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 key, "non_existing_group", MinId(), MaxId(), 10
             )
 
         # non-existing key raises a RequestError
         with pytest.raises(RequestError):
-            await redis_client.xpending(non_existing_key, group_name)
+            await glide_client.xpending(non_existing_key, group_name)
         with pytest.raises(RequestError):
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 non_existing_key, group_name, MinId(), MaxId(), 10
             )
 
         # key exists but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xpending(string_key, group_name)
+            await glide_client.xpending(string_key, group_name)
         with pytest.raises(RequestError):
-            await redis_client.xpending_range(
+            await glide_client.xpending_range(
                 string_key, group_name, MinId(), MaxId(), 10
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xclaim_edge_cases_and_failures(self, redis_client: TGlideClient):
+    async def test_xclaim_edge_cases_and_failures(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -6167,34 +6167,34 @@ class TestCommands:
 
         # create group and consumer for the group
         assert (
-            await redis_client.xgroup_create(
+            await glide_client.xgroup_create(
                 key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
             )
             == OK
         )
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name, consumer) is True
+            await glide_client.xgroup_create_consumer(key, group_name, consumer) is True
         )
 
         # Add stream entry and mark as pending:
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
         )
 
         # read the entire stream with consumer and mark messages as pending
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
             key.encode(): {stream_id1_0.encode(): [[b"f1_0", b"v1_0"]]}
         }
 
         # claim with invalid stream entry IDs
         with pytest.raises(RequestError):
-            await redis_client.xclaim_just_id(key, group_name, consumer, 1, ["invalid"])
+            await glide_client.xclaim_just_id(key, group_name, consumer, 1, ["invalid"])
 
         # claim with empty stream entry IDs returns no results
-        empty_claim = await redis_client.xclaim_just_id(
+        empty_claim = await glide_client.xclaim_just_id(
             key, group_name, consumer, 1, []
         )
         assert len(empty_claim) == 0
@@ -6203,13 +6203,13 @@ class TestCommands:
 
         # non-existent key throws a RequestError (NOGROUP)
         with pytest.raises(RequestError) as e:
-            await redis_client.xclaim(
+            await glide_client.xclaim(
                 non_existing_key, group_name, consumer, 1, [stream_id1_0]
             )
         assert "NOGROUP" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.xclaim(
+            await glide_client.xclaim(
                 non_existing_key,
                 group_name,
                 consumer,
@@ -6220,13 +6220,13 @@ class TestCommands:
         assert "NOGROUP" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.xclaim_just_id(
+            await glide_client.xclaim_just_id(
                 non_existing_key, group_name, consumer, 1, [stream_id1_0]
             )
         assert "NOGROUP" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.xclaim_just_id(
+            await glide_client.xclaim_just_id(
                 non_existing_key,
                 group_name,
                 consumer,
@@ -6237,32 +6237,32 @@ class TestCommands:
         assert "NOGROUP" in str(e)
 
         # key exists but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xclaim(
+            await glide_client.xclaim(
                 string_key, group_name, consumer, 1, [stream_id1_0]
             )
         with pytest.raises(RequestError):
-            await redis_client.xclaim(
+            await glide_client.xclaim(
                 string_key, group_name, consumer, 1, [stream_id1_0], claim_options
             )
         with pytest.raises(RequestError):
-            await redis_client.xclaim_just_id(
+            await glide_client.xclaim_just_id(
                 string_key, group_name, consumer, 1, [stream_id1_0]
             )
         with pytest.raises(RequestError):
-            await redis_client.xclaim_just_id(
+            await glide_client.xclaim_just_id(
                 string_key, group_name, consumer, 1, [stream_id1_0], claim_options
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xautoclaim(self, redis_client: TGlideClient, protocol):
+    async def test_xautoclaim(self, glide_client: TGlideClient, protocol):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             version7_or_above = False
         else:
             version7_or_above = True
@@ -6278,31 +6278,31 @@ class TestCommands:
 
         # setup: add stream entries, create consumer group, add entries to Pending Entries List for group
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
             == stream_id1_1.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
             )
             == stream_id1_2.encode()
         )
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
             )
             == stream_id1_3.encode()
         )
-        assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+        assert await glide_client.xgroup_create(key, group_name, stream_id0_0) == OK
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
             key.encode(): {
                 stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]],
                 stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
@@ -6312,7 +6312,7 @@ class TestCommands:
         }
 
         # autoclaim the first entry only
-        result = await redis_client.xautoclaim(
+        result = await glide_client.xautoclaim(
             key, group_name, consumer, 0, stream_id0_0, count=1
         )
         assert result[0] == stream_id1_1.encode()
@@ -6323,10 +6323,10 @@ class TestCommands:
             assert result[2] == []
 
         # delete entry 1-2
-        assert await redis_client.xdel(key, [stream_id1_2])
+        assert await glide_client.xdel(key, [stream_id1_2])
 
         # autoclaim the rest of the entries
-        result = await redis_client.xautoclaim(
+        result = await glide_client.xautoclaim(
             key, group_name, consumer, 0, stream_id1_1
         )
         assert (
@@ -6340,7 +6340,7 @@ class TestCommands:
             assert result[2] == [stream_id1_2.encode()]
 
         # autoclaim with JUSTID: result at index 1 does not contain fields/values of the claimed entries, only IDs
-        just_id_result = await redis_client.xautoclaim_just_id(
+        just_id_result = await glide_client.xautoclaim_just_id(
             key, group_name, consumer, 0, stream_id0_0
         )
         assert just_id_result[0] == stream_id0_0.encode()
@@ -6364,13 +6364,13 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xautoclaim_edge_cases_and_failures(
-        self, redis_client: TGlideClient, protocol
+        self, glide_client: TGlideClient, protocol
     ):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             version7_or_above = False
         else:
             version7_or_above = True
@@ -6385,36 +6385,36 @@ class TestCommands:
 
         # setup: add entry, create consumer group, add entry to Pending Entries List for group
         assert (
-            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_0))
+            await glide_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_0))
             == stream_id1_0.encode()
         )
-        assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+        assert await glide_client.xgroup_create(key, group_name, stream_id0_0) == OK
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer) == {
             key.encode(): {stream_id1_0.encode(): [[b"f1", b"v1"]]}
         }
 
         # passing a non-existing key is not allowed and will raise an error
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim(
+            await glide_client.xautoclaim(
                 non_existing_key, group_name, consumer, 0, stream_id0_0
             )
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim_just_id(
+            await glide_client.xautoclaim_just_id(
                 non_existing_key, group_name, consumer, 0, stream_id0_0
             )
 
         # passing a non-existing group is not allowed and will raise an error
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim(
+            await glide_client.xautoclaim(
                 key, "non_existing_group", consumer, 0, stream_id0_0
             )
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim_just_id(
+            await glide_client.xautoclaim_just_id(
                 key, "non_existing_group", consumer, 0, stream_id0_0
             )
 
         # non-existing consumers are created automatically
-        result = await redis_client.xautoclaim(
+        result = await glide_client.xautoclaim(
             key, group_name, "non_existing_consumer", 0, stream_id0_0
         )
         assert result[0] == stream_id0_0.encode()
@@ -6424,7 +6424,7 @@ class TestCommands:
         if version7_or_above:
             assert result[2] == []
 
-        just_id_result = await redis_client.xautoclaim_just_id(
+        just_id_result = await glide_client.xautoclaim_just_id(
             key, group_name, "non_existing_consumer", 0, stream_id0_0
         )
         assert just_id_result[0] == stream_id0_0.encode()
@@ -6433,7 +6433,7 @@ class TestCommands:
             assert just_id_result[2] == []
 
         # negative min_idle_time_ms values are allowed
-        result = await redis_client.xautoclaim(
+        result = await glide_client.xautoclaim(
             key, group_name, consumer, -1, stream_id0_0
         )
         assert result[0] == stream_id0_0.encode()
@@ -6441,7 +6441,7 @@ class TestCommands:
         if version7_or_above:
             assert result[2] == []
 
-        just_id_result = await redis_client.xautoclaim_just_id(
+        just_id_result = await glide_client.xautoclaim_just_id(
             key, group_name, consumer, -1, stream_id0_0
         )
         assert just_id_result[0] == stream_id0_0.encode()
@@ -6450,22 +6450,22 @@ class TestCommands:
             assert just_id_result[2] == []
 
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim(
+            await glide_client.xautoclaim(
                 key, group_name, consumer, 0, "invalid_stream_id"
             )
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim_just_id(
+            await glide_client.xautoclaim_just_id(
                 key, group_name, consumer, 0, "invalid_stream_id"
             )
 
         # no stream entries to claim above the given start value
-        result = await redis_client.xautoclaim(key, group_name, consumer, 0, "99-99")
+        result = await glide_client.xautoclaim(key, group_name, consumer, 0, "99-99")
         assert result[0] == stream_id0_0.encode()
         assert result[1] == {}
         if version7_or_above:
             assert result[2] == []
 
-        just_id_result = await redis_client.xautoclaim_just_id(
+        just_id_result = await glide_client.xautoclaim_just_id(
             key, group_name, consumer, 0, "99-99"
         )
         assert just_id_result[0] == stream_id0_0.encode()
@@ -6475,29 +6475,29 @@ class TestCommands:
 
         # invalid arg - count must be positive
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim(
+            await glide_client.xautoclaim(
                 key, group_name, consumer, 0, stream_id0_0, count=0
             )
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim_just_id(
+            await glide_client.xautoclaim_just_id(
                 key, group_name, consumer, 0, stream_id0_0, count=0
             )
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim(
+            await glide_client.xautoclaim(
                 string_key, group_name, consumer, 0, stream_id0_0
             )
         with pytest.raises(RequestError):
-            await redis_client.xautoclaim_just_id(
+            await glide_client.xautoclaim_just_id(
                 string_key, group_name, consumer, 0, stream_id0_0
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xinfo_groups_xinfo_consumers(
-        self, redis_client: TGlideClient, protocol
+        self, glide_client: TGlideClient, protocol
     ):
         key = get_random_string(10)
         group_name1 = get_random_string(10)
@@ -6512,33 +6512,33 @@ class TestCommands:
 
         # setup: add 3 entries to stream, create consumer group and consumer1, read 1 entry from stream with consumer1
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(key, [("f3", "v3")], StreamAddOptions(stream_id1_1))
+            await glide_client.xadd(key, [("f3", "v3")], StreamAddOptions(stream_id1_1))
             == stream_id1_1.encode()
         )
         assert (
-            await redis_client.xadd(key, [("f4", "v4")], StreamAddOptions(stream_id1_2))
+            await glide_client.xadd(key, [("f4", "v4")], StreamAddOptions(stream_id1_2))
             == stream_id1_2.encode()
         )
-        assert await redis_client.xgroup_create(key, group_name1, stream_id0_0) == OK
-        assert await redis_client.xreadgroup(
+        assert await glide_client.xgroup_create(key, group_name1, stream_id0_0) == OK
+        assert await glide_client.xreadgroup(
             {key: ">"}, group_name1, consumer1, StreamReadGroupOptions(count=1)
         ) == {key.encode(): {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}}
 
         # sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
         time.sleep(2)
-        consumers_result = await redis_client.xinfo_consumers(key, group_name1)
+        consumers_result = await glide_client.xinfo_consumers(key, group_name1)
         assert len(consumers_result) == 1
         consumer1_info = consumers_result[0]
         assert consumer1_info.get(b"name") == consumer1.encode()
         assert consumer1_info.get(b"pending") == 1
         assert cast(int, consumer1_info.get(b"idle")) > 0
-        if not await check_if_server_version_lt(redis_client, "7.2.0"):
+        if not await check_if_server_version_lt(glide_client, "7.2.0"):
             assert (
                 cast(int, consumer1_info.get(b"inactive"))
                 > 0  # "inactive" was added in Redis 7.2.0
@@ -6546,10 +6546,10 @@ class TestCommands:
 
         # create consumer2 and read the rest of the entries with it
         assert (
-            await redis_client.xgroup_create_consumer(key, group_name1, consumer2)
+            await glide_client.xgroup_create_consumer(key, group_name1, consumer2)
             is True
         )
-        assert await redis_client.xreadgroup({key: ">"}, group_name1, consumer2) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name1, consumer2) == {
             key.encode(): {
                 stream_id1_1.encode(): [[b"f3", b"v3"]],
                 stream_id1_2.encode(): [[b"f4", b"v4"]],
@@ -6558,25 +6558,25 @@ class TestCommands:
 
         # verify that xinfo_consumers contains info for 2 consumers now
         # test with byte string args
-        consumers_result = await redis_client.xinfo_consumers(
+        consumers_result = await glide_client.xinfo_consumers(
             key.encode(), group_name1.encode()
         )
         assert len(consumers_result) == 2
 
         # add one more entry
         assert (
-            await redis_client.xadd(key, [("f5", "v5")], StreamAddOptions(stream_id1_3))
+            await glide_client.xadd(key, [("f5", "v5")], StreamAddOptions(stream_id1_3))
             == stream_id1_3.encode()
         )
 
-        groups = await redis_client.xinfo_groups(key)
+        groups = await glide_client.xinfo_groups(key)
         assert len(groups) == 1
         group1_info = groups[0]
         assert group1_info.get(b"name") == group_name1.encode()
         assert group1_info.get(b"consumers") == 2
         assert group1_info.get(b"pending") == 3
         assert group1_info.get(b"last-delivered-id") == stream_id1_2.encode()
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
             assert (
                 group1_info.get(b"entries-read")
                 == 3  # we have read stream entries 1-0, 1-1, and 1-2
@@ -6587,9 +6587,9 @@ class TestCommands:
             )
 
         # verify xgroup_set_id effects the returned value from xinfo_groups
-        assert await redis_client.xgroup_set_id(key, group_name1, stream_id1_1) == OK
+        assert await glide_client.xgroup_set_id(key, group_name1, stream_id1_1) == OK
         # test with byte string arg
-        groups = await redis_client.xinfo_groups(key.encode())
+        groups = await glide_client.xinfo_groups(key.encode())
         assert len(groups) == 1
         group1_info = groups[0]
         assert group1_info.get(b"name") == group_name1.encode()
@@ -6597,7 +6597,7 @@ class TestCommands:
         assert group1_info.get(b"pending") == 3
         assert group1_info.get(b"last-delivered-id") == stream_id1_1.encode()
         # entries-read and lag were added to the result in 7.0.0
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
             assert (
                 group1_info.get(b"entries-read")
                 is None  # gets set to None when we change the last delivered ID
@@ -6607,15 +6607,15 @@ class TestCommands:
                 is None  # gets set to None when we change the last delivered ID
             )
 
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
             # verify xgroup_set_id with entries_read effects the returned value from xinfo_groups
             assert (
-                await redis_client.xgroup_set_id(
+                await glide_client.xgroup_set_id(
                     key, group_name1, stream_id1_1, entries_read=1
                 )
                 == OK
             )
-            groups = await redis_client.xinfo_groups(key)
+            groups = await glide_client.xinfo_groups(key)
             assert len(groups) == 1
             group1_info = groups[0]
             assert group1_info.get(b"name") == group_name1.encode()
@@ -6629,16 +6629,16 @@ class TestCommands:
             )
 
         # add one more consumer group
-        assert await redis_client.xgroup_create(key, group_name2, stream_id0_0) == OK
+        assert await glide_client.xgroup_create(key, group_name2, stream_id0_0) == OK
 
         # verify that xinfo_groups contains info for 2 consumer groups now
-        groups = await redis_client.xinfo_groups(key)
+        groups = await glide_client.xinfo_groups(key)
         assert len(groups) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xinfo_groups_xinfo_consumers_edge_cases_and_failures(
-        self, redis_client: TGlideClient, protocol
+        self, glide_client: TGlideClient, protocol
     ):
         key = get_random_string(10)
         string_key = get_random_string(10)
@@ -6648,12 +6648,12 @@ class TestCommands:
 
         # passing a non-existing key raises an error
         with pytest.raises(RequestError):
-            await redis_client.xinfo_groups(non_existing_key)
+            await glide_client.xinfo_groups(non_existing_key)
         with pytest.raises(RequestError):
-            await redis_client.xinfo_consumers(non_existing_key, group_name)
+            await glide_client.xinfo_consumers(non_existing_key, group_name)
 
         assert (
-            await redis_client.xadd(
+            await glide_client.xadd(
                 key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
             )
             == stream_id1_0.encode()
@@ -6661,26 +6661,26 @@ class TestCommands:
 
         # passing a non-existing group raises an error
         with pytest.raises(RequestError):
-            await redis_client.xinfo_consumers(key, "non_existing_group")
+            await glide_client.xinfo_consumers(key, "non_existing_group")
 
         # no groups exist yet
-        assert await redis_client.xinfo_groups(key) == []
+        assert await glide_client.xinfo_groups(key) == []
 
-        assert await redis_client.xgroup_create(key, group_name, stream_id1_0) == OK
+        assert await glide_client.xgroup_create(key, group_name, stream_id1_0) == OK
         # no consumers exist yet
-        assert await redis_client.xinfo_consumers(key, group_name) == []
+        assert await glide_client.xinfo_consumers(key, group_name) == []
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xinfo_groups(string_key)
+            await glide_client.xinfo_groups(string_key)
         with pytest.raises(RequestError):
-            await redis_client.xinfo_consumers(string_key, group_name)
+            await glide_client.xinfo_consumers(string_key, group_name)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_set_id(
-        self, redis_client: TGlideClient, cluster_mode, protocol, request
+        self, glide_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -6695,19 +6695,19 @@ class TestCommands:
         # setup: create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries
         # List
         assert (
-            await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
+            await glide_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
             == stream_id1_0.encode()
         )
         assert (
-            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
+            await glide_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
             == stream_id1_1.encode()
         )
         assert (
-            await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
+            await glide_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
             == stream_id1_2.encode()
         )
-        assert await redis_client.xgroup_create(key, group_name, stream_id0) == OK
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+        assert await glide_client.xgroup_create(key, group_name, stream_id0) == OK
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
             key.encode(): {
                 stream_id1_0.encode(): [[b"f0", b"v0"]],
                 stream_id1_1.encode(): [[b"f1", b"v1"]],
@@ -6716,23 +6716,23 @@ class TestCommands:
         }
         # sanity check: xreadgroup should not return more entries since they're all already in the Pending Entries List
         assert (
-            await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
+            await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
         )
 
         # reset the last delivered ID for the consumer group to "1-1"
         # ENTRIESREAD is only supported in Redis version 7.0.0 and above
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
+            assert await glide_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
         else:
             assert (
-                await redis_client.xgroup_set_id(
+                await glide_client.xgroup_set_id(
                     key, group_name, stream_id1_1, entries_read=0
                 )
                 == OK
             )
 
         # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
-        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+        assert await glide_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
             key.encode(): {
                 stream_id1_2.encode(): [[b"f2", b"v2"]],
             }
@@ -6740,151 +6740,151 @@ class TestCommands:
 
         # an error is raised if XGROUP SETID is called with a non-existing key
         with pytest.raises(RequestError):
-            await redis_client.xgroup_set_id(non_existing_key, group_name, stream_id0)
+            await glide_client.xgroup_set_id(non_existing_key, group_name, stream_id0)
 
         # an error is raised if XGROUP SETID is called with a non-existing group
         with pytest.raises(RequestError):
-            await redis_client.xgroup_set_id(key, "non_existing_group", stream_id0)
+            await glide_client.xgroup_set_id(key, "non_existing_group", stream_id0)
 
         # setting the ID to a non-existing ID is allowed
-        assert await redis_client.xgroup_set_id(key, group_name, "99-99") == OK
+        assert await glide_client.xgroup_set_id(key, group_name, "99-99") == OK
 
         # key exists, but it is not a stream
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
-            await redis_client.xgroup_set_id(string_key, group_name, stream_id0)
+            await glide_client.xgroup_set_id(string_key, group_name, stream_id0)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pfadd(self, redis_client: TGlideClient):
+    async def test_pfadd(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        assert await redis_client.pfadd(key, []) == 1
-        assert await redis_client.pfadd(key, ["one", "two"]) == 1
-        assert await redis_client.pfadd(key, ["two"]) == 0
-        assert await redis_client.pfadd(key, []) == 0
+        assert await glide_client.pfadd(key, []) == 1
+        assert await glide_client.pfadd(key, ["one", "two"]) == 1
+        assert await glide_client.pfadd(key, ["two"]) == 0
+        assert await glide_client.pfadd(key, []) == 0
 
-        assert await redis_client.set("foo", "value") == OK
+        assert await glide_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.pfadd("foo", [])
+            await glide_client.pfadd("foo", [])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pfcount(self, redis_client: TGlideClient):
+    async def test_pfcount(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        assert await redis_client.pfadd(key1, ["a", "b", "c"]) == 1
-        assert await redis_client.pfadd(key2, ["b", "c", "d"]) == 1
-        assert await redis_client.pfcount([key1]) == 3
-        assert await redis_client.pfcount([key2]) == 3
-        assert await redis_client.pfcount([key1, key2]) == 4
-        assert await redis_client.pfcount([key1, key2, non_existing_key]) == 4
+        assert await glide_client.pfadd(key1, ["a", "b", "c"]) == 1
+        assert await glide_client.pfadd(key2, ["b", "c", "d"]) == 1
+        assert await glide_client.pfcount([key1]) == 3
+        assert await glide_client.pfcount([key2]) == 3
+        assert await glide_client.pfcount([key1, key2]) == 4
+        assert await glide_client.pfcount([key1, key2, non_existing_key]) == 4
         # empty HyperLogLog data set
-        assert await redis_client.pfadd(key3, []) == 1
-        assert await redis_client.pfcount([key3]) == 0
+        assert await glide_client.pfadd(key3, []) == 1
+        assert await glide_client.pfcount([key3]) == 0
 
         # incorrect argument - key list cannot be empty
         with pytest.raises(RequestError):
-            await redis_client.pfcount([])
+            await glide_client.pfcount([])
 
         # key exists, but it is not a HyperLogLog
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.pfcount([string_key])
+            await glide_client.pfcount([string_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pfmerge(self, redis_client: TGlideClient):
+    async def test_pfmerge(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        assert await redis_client.pfadd(key1, ["a", "b", "c"]) == 1
-        assert await redis_client.pfadd(key2, ["b", "c", "d"]) == 1
+        assert await glide_client.pfadd(key1, ["a", "b", "c"]) == 1
+        assert await glide_client.pfadd(key2, ["b", "c", "d"]) == 1
 
         # merge into new HyperLogLog data set
-        assert await redis_client.pfmerge(key3, [key1, key2]) == OK
-        assert await redis_client.pfcount([key3]) == 4
+        assert await glide_client.pfmerge(key3, [key1, key2]) == OK
+        assert await glide_client.pfcount([key3]) == 4
 
         # merge into existing HyperLogLog data set
-        assert await redis_client.pfmerge(key1, [key2]) == OK
-        assert await redis_client.pfcount([key1]) == 4
+        assert await glide_client.pfmerge(key1, [key2]) == OK
+        assert await glide_client.pfcount([key1]) == 4
 
         # non-existing source key
-        assert await redis_client.pfmerge(key2, [key1, non_existing_key]) == OK
-        assert await redis_client.pfcount([key2]) == 4
+        assert await glide_client.pfmerge(key2, [key1, non_existing_key]) == OK
+        assert await glide_client.pfcount([key2]) == 4
 
         # empty source key list
-        assert await redis_client.pfmerge(key1, []) == OK
-        assert await redis_client.pfcount([key1]) == 4
+        assert await glide_client.pfmerge(key1, []) == OK
+        assert await glide_client.pfcount([key1]) == 4
 
         # source key exists, but it is not a HyperLogLog
-        assert await redis_client.set(string_key, "foo")
+        assert await glide_client.set(string_key, "foo")
         with pytest.raises(RequestError):
-            assert await redis_client.pfmerge(key3, [string_key])
+            assert await glide_client.pfmerge(key3, [string_key])
 
         # destination key exists, but it is not a HyperLogLog
         with pytest.raises(RequestError):
-            assert await redis_client.pfmerge(string_key, [key3])
+            assert await glide_client.pfmerge(string_key, [key3])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitcount(self, redis_client: TGlideClient):
+    async def test_bitcount(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         set_key = get_random_string(10)
         non_existing_key = get_random_string(10)
         value = "foobar"
 
-        assert await redis_client.set(key1, value) == OK
-        assert await redis_client.bitcount(key1) == 26
-        assert await redis_client.bitcount(key1, OffsetOptions(1, 1)) == 6
-        assert await redis_client.bitcount(key1, OffsetOptions(0, -5)) == 10
-        assert await redis_client.bitcount(non_existing_key, OffsetOptions(5, 30)) == 0
-        assert await redis_client.bitcount(non_existing_key) == 0
+        assert await glide_client.set(key1, value) == OK
+        assert await glide_client.bitcount(key1) == 26
+        assert await glide_client.bitcount(key1, OffsetOptions(1, 1)) == 6
+        assert await glide_client.bitcount(key1, OffsetOptions(0, -5)) == 10
+        assert await glide_client.bitcount(non_existing_key, OffsetOptions(5, 30)) == 0
+        assert await glide_client.bitcount(non_existing_key) == 0
 
         # key exists, but it is not a string
-        assert await redis_client.sadd(set_key, [value]) == 1
+        assert await glide_client.sadd(set_key, [value]) == 1
         with pytest.raises(RequestError):
-            await redis_client.bitcount(set_key)
+            await glide_client.bitcount(set_key)
         with pytest.raises(RequestError):
-            await redis_client.bitcount(set_key, OffsetOptions(1, 1))
+            await glide_client.bitcount(set_key, OffsetOptions(1, 1))
 
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             # exception thrown because BIT and BYTE options were implemented after 7.0.0
             with pytest.raises(RequestError):
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     key1, OffsetOptions(2, 5, BitmapIndexType.BYTE)
                 )
             with pytest.raises(RequestError):
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     key1, OffsetOptions(2, 5, BitmapIndexType.BIT)
                 )
         else:
             assert (
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     key1, OffsetOptions(2, 5, BitmapIndexType.BYTE)
                 )
                 == 16
             )
             assert (
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     key1, OffsetOptions(5, 30, BitmapIndexType.BIT)
                 )
                 == 17
             )
             assert (
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     key1, OffsetOptions(5, -5, BitmapIndexType.BIT)
                 )
                 == 23
             )
             assert (
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     non_existing_key, OffsetOptions(5, 30, BitmapIndexType.BIT)
                 )
                 == 0
@@ -6892,56 +6892,56 @@ class TestCommands:
 
             # key exists but it is not a string
             with pytest.raises(RequestError):
-                await redis_client.bitcount(
+                await glide_client.bitcount(
                     set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_setbit(self, redis_client: TGlideClient):
+    async def test_setbit(self, glide_client: TGlideClient):
         key = get_random_string(10)
         set_key = get_random_string(10)
 
-        assert await redis_client.setbit(key, 0, 1) == 0
-        assert await redis_client.setbit(key, 0, 0) == 1
+        assert await glide_client.setbit(key, 0, 1) == 0
+        assert await glide_client.setbit(key, 0, 0) == 1
 
         # invalid argument - offset can't be negative
         with pytest.raises(RequestError):
-            assert await redis_client.setbit(key, -1, 0) == 1
+            assert await glide_client.setbit(key, -1, 0) == 1
 
         # key exists, but it is not a string
-        assert await redis_client.sadd(set_key, ["foo"]) == 1
+        assert await glide_client.sadd(set_key, ["foo"]) == 1
         with pytest.raises(RequestError):
-            await redis_client.setbit(set_key, 0, 0)
+            await glide_client.setbit(set_key, 0, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getbit(self, redis_client: TGlideClient):
+    async def test_getbit(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
         value = "foobar"
 
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.getbit(key, 1) == 1
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.getbit(key, 1) == 1
         # When offset is beyond the string length, the string is assumed to be a contiguous space with 0 bits.
-        assert await redis_client.getbit(key, 1000) == 0
+        assert await glide_client.getbit(key, 1000) == 0
         # When key does not exist it is assumed to be an empty string, so offset is always out of range and the value is
         # also assumed to be a contiguous space with 0 bits.
-        assert await redis_client.getbit(non_existing_key, 1) == 0
+        assert await glide_client.getbit(non_existing_key, 1) == 0
 
         # invalid argument - offset can't be negative
         with pytest.raises(RequestError):
-            assert await redis_client.getbit(key, -1) == 1
+            assert await glide_client.getbit(key, -1) == 1
 
         # key exists, but it is not a string
-        assert await redis_client.sadd(set_key, ["foo"]) == 1
+        assert await glide_client.sadd(set_key, ["foo"]) == 1
         with pytest.raises(RequestError):
-            await redis_client.getbit(set_key, 0)
+            await glide_client.getbit(set_key, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitpos_and_bitpos_interval(self, redis_client: TGlideClient):
+    async def test_bitpos_and_bitpos_interval(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
@@ -6949,52 +6949,52 @@ class TestCommands:
             "?f0obar"  # 00111111 01100110 00110000 01101111 01100010 01100001 01110010
         )
 
-        assert await redis_client.set(key, value) == OK
-        assert await redis_client.bitpos(key, 0) == 0
-        assert await redis_client.bitpos(key, 1) == 2
-        assert await redis_client.bitpos(key, 1, 1) == 9
-        assert await redis_client.bitpos_interval(key, 0, 3, 5) == 24
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.bitpos(key, 0) == 0
+        assert await glide_client.bitpos(key, 1) == 2
+        assert await glide_client.bitpos(key, 1, 1) == 9
+        assert await glide_client.bitpos_interval(key, 0, 3, 5) == 24
 
         # `BITPOS` returns -1 for non-existing strings
-        assert await redis_client.bitpos(non_existing_key, 1) == -1
-        assert await redis_client.bitpos_interval(non_existing_key, 1, 3, 5) == -1
+        assert await glide_client.bitpos(non_existing_key, 1) == -1
+        assert await glide_client.bitpos_interval(non_existing_key, 1, 3, 5) == -1
 
         # invalid argument - bit value must be 0 or 1
         with pytest.raises(RequestError):
-            await redis_client.bitpos(key, 2)
+            await glide_client.bitpos(key, 2)
         with pytest.raises(RequestError):
-            await redis_client.bitpos_interval(key, 2, 3, 5)
+            await glide_client.bitpos_interval(key, 2, 3, 5)
 
         # key exists, but it is not a string
-        assert await redis_client.sadd(set_key, [value]) == 1
+        assert await glide_client.sadd(set_key, [value]) == 1
         with pytest.raises(RequestError):
-            await redis_client.bitpos(set_key, 1)
+            await glide_client.bitpos(set_key, 1)
         with pytest.raises(RequestError):
-            await redis_client.bitpos_interval(set_key, 1, 1, -1)
+            await glide_client.bitpos_interval(set_key, 1, 1, -1)
 
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             # error thrown because BIT and BYTE options were implemented after 7.0.0
             with pytest.raises(RequestError):
-                await redis_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BYTE)
+                await glide_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BYTE)
             with pytest.raises(RequestError):
-                await redis_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BIT)
+                await glide_client.bitpos_interval(key, 1, 1, -1, BitmapIndexType.BIT)
         else:
             assert (
-                await redis_client.bitpos_interval(key, 0, 3, 5, BitmapIndexType.BYTE)
+                await glide_client.bitpos_interval(key, 0, 3, 5, BitmapIndexType.BYTE)
                 == 24
             )
             assert (
-                await redis_client.bitpos_interval(key, 1, 43, -2, BitmapIndexType.BIT)
+                await glide_client.bitpos_interval(key, 1, 43, -2, BitmapIndexType.BIT)
                 == 47
             )
             assert (
-                await redis_client.bitpos_interval(
+                await glide_client.bitpos_interval(
                     non_existing_key, 1, 3, 5, BitmapIndexType.BYTE
                 )
                 == -1
             )
             assert (
-                await redis_client.bitpos_interval(
+                await glide_client.bitpos_interval(
                     non_existing_key, 1, 3, 5, BitmapIndexType.BIT
                 )
                 == -1
@@ -7002,13 +7002,13 @@ class TestCommands:
 
             # key exists, but it is not a string
             with pytest.raises(RequestError):
-                await redis_client.bitpos_interval(
+                await glide_client.bitpos_interval(
                     set_key, 1, 1, -1, BitmapIndexType.BIT
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitop(self, redis_client: TGlideClient):
+    async def test_bitop(self, glide_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         keys: List[TEncodable] = [key1, key2]
@@ -7020,80 +7020,80 @@ class TestCommands:
         value1 = "foobar"
         value2 = "abcdef"
 
-        assert await redis_client.set(key1, value1) == OK
-        assert await redis_client.set(key2, value2) == OK
-        assert await redis_client.bitop(BitwiseOperation.AND, destination, keys) == 6
-        assert await redis_client.get(destination) == b"`bc`ab"
-        assert await redis_client.bitop(BitwiseOperation.OR, destination, keys) == 6
-        assert await redis_client.get(destination) == b"goofev"
+        assert await glide_client.set(key1, value1) == OK
+        assert await glide_client.set(key2, value2) == OK
+        assert await glide_client.bitop(BitwiseOperation.AND, destination, keys) == 6
+        assert await glide_client.get(destination) == b"`bc`ab"
+        assert await glide_client.bitop(BitwiseOperation.OR, destination, keys) == 6
+        assert await glide_client.get(destination) == b"goofev"
 
         # reset values for simplicity of results in XOR
-        assert await redis_client.set(key1, "a") == OK
-        assert await redis_client.set(key2, "b") == OK
-        assert await redis_client.bitop(BitwiseOperation.XOR, destination, keys) == 1
-        assert await redis_client.get(destination) == "\u0003".encode()
+        assert await glide_client.set(key1, "a") == OK
+        assert await glide_client.set(key2, "b") == OK
+        assert await glide_client.bitop(BitwiseOperation.XOR, destination, keys) == 1
+        assert await glide_client.get(destination) == "\u0003".encode()
 
         # test single source key
-        assert await redis_client.bitop(BitwiseOperation.AND, destination, [key1]) == 1
-        assert await redis_client.get(destination) == b"a"
-        assert await redis_client.bitop(BitwiseOperation.OR, destination, [key1]) == 1
-        assert await redis_client.get(destination) == b"a"
-        assert await redis_client.bitop(BitwiseOperation.XOR, destination, [key1]) == 1
-        assert await redis_client.get(destination) == b"a"
-        assert await redis_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
+        assert await glide_client.bitop(BitwiseOperation.AND, destination, [key1]) == 1
+        assert await glide_client.get(destination) == b"a"
+        assert await glide_client.bitop(BitwiseOperation.OR, destination, [key1]) == 1
+        assert await glide_client.get(destination) == b"a"
+        assert await glide_client.bitop(BitwiseOperation.XOR, destination, [key1]) == 1
+        assert await glide_client.get(destination) == b"a"
+        assert await glide_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
         # currently, attempting to get the value from destination after the above NOT incorrectly raises an error
         # TODO: update with a GET call once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
 
-        assert await redis_client.setbit(key1, 0, 1) == 0
-        assert await redis_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
-        assert await redis_client.get(destination) == "\u001e".encode()
+        assert await glide_client.setbit(key1, 0, 1) == 0
+        assert await glide_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
+        assert await glide_client.get(destination) == "\u001e".encode()
 
         # stores None when all keys hold empty strings
         assert (
-            await redis_client.bitop(
+            await glide_client.bitop(
                 BitwiseOperation.AND, destination, non_existing_keys
             )
             == 0
         )
-        assert await redis_client.get(destination) is None
+        assert await glide_client.get(destination) is None
         assert (
-            await redis_client.bitop(
+            await glide_client.bitop(
                 BitwiseOperation.OR, destination, non_existing_keys
             )
             == 0
         )
-        assert await redis_client.get(destination) is None
+        assert await glide_client.get(destination) is None
         assert (
-            await redis_client.bitop(
+            await glide_client.bitop(
                 BitwiseOperation.XOR, destination, non_existing_keys
             )
             == 0
         )
-        assert await redis_client.get(destination) is None
+        assert await glide_client.get(destination) is None
         assert (
-            await redis_client.bitop(
+            await glide_client.bitop(
                 BitwiseOperation.NOT, destination, [non_existing_key1]
             )
             == 0
         )
-        assert await redis_client.get(destination) is None
+        assert await glide_client.get(destination) is None
 
         # invalid argument - source key list cannot be empty
         with pytest.raises(RequestError):
-            await redis_client.bitop(BitwiseOperation.OR, destination, [])
+            await glide_client.bitop(BitwiseOperation.OR, destination, [])
 
         # invalid arguments - NOT cannot be passed more than 1 key
         with pytest.raises(RequestError):
-            await redis_client.bitop(BitwiseOperation.NOT, destination, [key1, key2])
+            await glide_client.bitop(BitwiseOperation.NOT, destination, [key1, key2])
 
-        assert await redis_client.sadd(set_key, [value1]) == 1
+        assert await glide_client.sadd(set_key, [value1]) == 1
         # invalid argument - source key has the wrong type
         with pytest.raises(RequestError):
-            await redis_client.bitop(BitwiseOperation.AND, destination, [set_key])
+            await glide_client.bitop(BitwiseOperation.AND, destination, [set_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitfield(self, redis_client: TGlideClient):
+    async def test_bitfield(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -7111,10 +7111,10 @@ class TestCommands:
         overflow_get = BitFieldGet(u2, offset1)
 
         # binary value: 01100110 01101111 01101111 01100010 01100001 01110010
-        assert await redis_client.set(key1, foobar) == OK
+        assert await glide_client.set(key1, foobar) == OK
 
         # SET tests
-        assert await redis_client.bitfield(
+        assert await glide_client.bitfield(
             key1,
             [
                 # binary value becomes: 0(10)00110 01101111 01101111 01100010 01100001 01110010
@@ -7137,7 +7137,7 @@ class TestCommands:
         ) == [3, -2, 19, 0, 2, 3, 18, 20]
 
         # INCRBY tests
-        assert await redis_client.bitfield(
+        assert await glide_client.bitfield(
             key1,
             [
                 # binary value becomes:
@@ -7156,7 +7156,7 @@ class TestCommands:
         ) == [3, -3, 15, 30]
 
         # OVERFLOW WRAP is used by default if no OVERFLOW is specified
-        assert await redis_client.bitfield(
+        assert await glide_client.bitfield(
             key2,
             [
                 overflow_set,
@@ -7167,7 +7167,7 @@ class TestCommands:
         ) == [0, 2, 2]
 
         # OVERFLOW affects only SET or INCRBY after OVERFLOW subcommand
-        assert await redis_client.bitfield(
+        assert await glide_client.bitfield(
             key2,
             [
                 overflow_set,
@@ -7181,49 +7181,49 @@ class TestCommands:
 
         # if the key doesn't exist, the operation is performed as though the missing value was a string with all bits
         # set to 0.
-        assert await redis_client.bitfield(
+        assert await glide_client.bitfield(
             non_existing_key, [BitFieldSet(UnsignedEncoding(2), BitOffset(3), 2)]
         ) == [0]
 
         # empty subcommands argument returns an empty list
-        assert await redis_client.bitfield(key1, []) == []
+        assert await glide_client.bitfield(key1, []) == []
 
         # invalid argument - offset must be >= 0
         with pytest.raises(RequestError):
-            await redis_client.bitfield(
+            await glide_client.bitfield(
                 key1, [BitFieldSet(UnsignedEncoding(5), BitOffset(-1), 1)]
             )
 
         # invalid argument - encoding size must be > 0
         with pytest.raises(RequestError):
-            await redis_client.bitfield(
+            await glide_client.bitfield(
                 key1, [BitFieldSet(UnsignedEncoding(0), BitOffset(1), 1)]
             )
 
         # invalid argument - unsigned encoding size must be < 64
         with pytest.raises(RequestError):
-            await redis_client.bitfield(
+            await glide_client.bitfield(
                 key1, [BitFieldSet(UnsignedEncoding(64), BitOffset(1), 1)]
             )
 
         # invalid argument - signed encoding size must be < 65
         with pytest.raises(RequestError):
-            await redis_client.bitfield(
+            await glide_client.bitfield(
                 key1, [BitFieldSet(SignedEncoding(65), BitOffset(1), 1)]
             )
 
         # key exists, but it is not a string
-        assert await redis_client.sadd(set_key, [foobar]) == 1
+        assert await glide_client.sadd(set_key, [foobar]) == 1
         with pytest.raises(RequestError):
-            await redis_client.bitfield(
+            await glide_client.bitfield(
                 set_key, [BitFieldSet(SignedEncoding(3), BitOffset(1), 2)]
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitfield_read_only(self, redis_client: TGlideClient):
+    async def test_bitfield_read_only(self, glide_client: TGlideClient):
         min_version = "6.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key = get_random_string(10)
@@ -7233,8 +7233,8 @@ class TestCommands:
         unsigned_offset_get = BitFieldGet(UnsignedEncoding(2), BitOffset(1))
 
         # binary value: 01100110 01101111 01101111 01100010 01100001 01110010
-        assert await redis_client.set(key, foobar) == OK
-        assert await redis_client.bitfield_read_only(
+        assert await glide_client.set(key, foobar) == OK
+        assert await glide_client.bitfield_read_only(
             key,
             [
                 # Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
@@ -7249,50 +7249,50 @@ class TestCommands:
         ) == [3, -2, 118, 111]
         # offset is greater than current length of string: the operation is performed like the missing part all consists
         # of bits set to 0.
-        assert await redis_client.bitfield_read_only(
+        assert await glide_client.bitfield_read_only(
             key, [BitFieldGet(UnsignedEncoding(3), BitOffset(100))]
         ) == [0]
         # similarly, if the key doesn't exist, the operation is performed as though the missing value was a string with
         # all bits set to 0.
-        assert await redis_client.bitfield_read_only(
+        assert await glide_client.bitfield_read_only(
             non_existing_key, [unsigned_offset_get]
         ) == [0]
 
         # empty subcommands argument returns an empty list
-        assert await redis_client.bitfield_read_only(key, []) == []
+        assert await glide_client.bitfield_read_only(key, []) == []
 
         # invalid argument - offset must be >= 0
         with pytest.raises(RequestError):
-            await redis_client.bitfield_read_only(
+            await glide_client.bitfield_read_only(
                 key, [BitFieldGet(UnsignedEncoding(5), BitOffset(-1))]
             )
 
         # invalid argument - encoding size must be > 0
         with pytest.raises(RequestError):
-            await redis_client.bitfield_read_only(
+            await glide_client.bitfield_read_only(
                 key, [BitFieldGet(UnsignedEncoding(0), BitOffset(1))]
             )
 
         # invalid argument - unsigned encoding size must be < 64
         with pytest.raises(RequestError):
-            await redis_client.bitfield_read_only(
+            await glide_client.bitfield_read_only(
                 key, [BitFieldGet(UnsignedEncoding(64), BitOffset(1))]
             )
 
         # invalid argument - signed encoding size must be < 65
         with pytest.raises(RequestError):
-            await redis_client.bitfield_read_only(
+            await glide_client.bitfield_read_only(
                 key, [BitFieldGet(SignedEncoding(65), BitOffset(1))]
             )
 
         # key exists, but it is not a string
-        assert await redis_client.sadd(set_key, [foobar]) == 1
+        assert await glide_client.sadd(set_key, [foobar]) == 1
         with pytest.raises(RequestError):
-            await redis_client.bitfield_read_only(set_key, [unsigned_offset_get])
+            await glide_client.bitfield_read_only(set_key, [unsigned_offset_get])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_encoding(self, redis_client: TGlideClient):
+    async def test_object_encoding(self, glide_client: TGlideClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
         hashtable_key = get_random_string(10)
@@ -7305,136 +7305,136 @@ class TestCommands:
         stream_key = get_random_string(10)
         non_existing_key = get_random_string(10)
 
-        assert await redis_client.object_encoding(non_existing_key) is None
+        assert await glide_client.object_encoding(non_existing_key) is None
 
-        assert await redis_client.set(
+        assert await glide_client.set(
             string_key, "a really loooooooooooooooooooooooooooooooooooooooong value"
         )
-        assert await redis_client.object_encoding(string_key) == "raw".encode()
+        assert await glide_client.object_encoding(string_key) == "raw".encode()
 
-        assert await redis_client.set(string_key, "2") == OK
-        assert await redis_client.object_encoding(string_key) == "int".encode()
+        assert await glide_client.set(string_key, "2") == OK
+        assert await glide_client.object_encoding(string_key) == "int".encode()
 
-        assert await redis_client.set(string_key, "value") == OK
-        assert await redis_client.object_encoding(string_key) == "embstr".encode()
+        assert await glide_client.set(string_key, "value") == OK
+        assert await glide_client.object_encoding(string_key) == "embstr".encode()
 
-        assert await redis_client.lpush(list_key, ["1"]) == 1
-        if await check_if_server_version_lt(redis_client, "7.2.0"):
-            assert await redis_client.object_encoding(list_key) == "quicklist".encode()
+        assert await glide_client.lpush(list_key, ["1"]) == 1
+        if await check_if_server_version_lt(glide_client, "7.2.0"):
+            assert await glide_client.object_encoding(list_key) == "quicklist".encode()
         else:
-            assert await redis_client.object_encoding(list_key) == "listpack".encode()
+            assert await glide_client.object_encoding(list_key) == "listpack".encode()
 
         # The default value of set-max-intset-entries is 512
         for i in range(0, 513):
-            assert await redis_client.sadd(hashtable_key, [str(i)]) == 1
-        assert await redis_client.object_encoding(hashtable_key) == "hashtable".encode()
+            assert await glide_client.sadd(hashtable_key, [str(i)]) == 1
+        assert await glide_client.object_encoding(hashtable_key) == "hashtable".encode()
 
-        assert await redis_client.sadd(intset_key, ["1"]) == 1
-        assert await redis_client.object_encoding(intset_key) == "intset".encode()
+        assert await glide_client.sadd(intset_key, ["1"]) == 1
+        assert await glide_client.object_encoding(intset_key) == "intset".encode()
 
-        assert await redis_client.sadd(set_listpack_key, ["foo"]) == 1
-        if await check_if_server_version_lt(redis_client, "7.2.0"):
+        assert await glide_client.sadd(set_listpack_key, ["foo"]) == 1
+        if await check_if_server_version_lt(glide_client, "7.2.0"):
             assert (
-                await redis_client.object_encoding(set_listpack_key)
+                await glide_client.object_encoding(set_listpack_key)
                 == "hashtable".encode()
             )
         else:
             assert (
-                await redis_client.object_encoding(set_listpack_key)
+                await glide_client.object_encoding(set_listpack_key)
                 == "listpack".encode()
             )
 
         # The default value of hash-max-listpack-entries is 512
         for i in range(0, 513):
-            assert await redis_client.hset(hash_hashtable_key, {str(i): "2"}) == 1
+            assert await glide_client.hset(hash_hashtable_key, {str(i): "2"}) == 1
         assert (
-            await redis_client.object_encoding(hash_hashtable_key)
+            await glide_client.object_encoding(hash_hashtable_key)
             == "hashtable".encode()
         )
 
-        assert await redis_client.hset(hash_listpack_key, {"1": "2"}) == 1
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        assert await glide_client.hset(hash_listpack_key, {"1": "2"}) == 1
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             assert (
-                await redis_client.object_encoding(hash_listpack_key)
+                await glide_client.object_encoding(hash_listpack_key)
                 == "ziplist".encode()
             )
         else:
             assert (
-                await redis_client.object_encoding(hash_listpack_key)
+                await glide_client.object_encoding(hash_listpack_key)
                 == "listpack".encode()
             )
 
         # The default value of zset-max-listpack-entries is 128
         for i in range(0, 129):
-            assert await redis_client.zadd(skiplist_key, {str(i): 2.0}) == 1
-        assert await redis_client.object_encoding(skiplist_key) == "skiplist".encode()
+            assert await glide_client.zadd(skiplist_key, {str(i): 2.0}) == 1
+        assert await glide_client.object_encoding(skiplist_key) == "skiplist".encode()
 
-        assert await redis_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        assert await glide_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             assert (
-                await redis_client.object_encoding(zset_listpack_key)
+                await glide_client.object_encoding(zset_listpack_key)
                 == "ziplist".encode()
             )
         else:
             assert (
-                await redis_client.object_encoding(zset_listpack_key)
+                await glide_client.object_encoding(zset_listpack_key)
                 == "listpack".encode()
             )
 
-        assert await redis_client.xadd(stream_key, [("field", "value")]) is not None
-        assert await redis_client.object_encoding(stream_key) == "stream".encode()
+        assert await glide_client.xadd(stream_key, [("field", "value")]) is not None
+        assert await glide_client.object_encoding(stream_key) == "stream".encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_freq(self, redis_client: TGlideClient):
+    async def test_object_freq(self, glide_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
-        config = await redis_client.config_get([maxmemory_policy_key])
+        config = await glide_client.config_get([maxmemory_policy_key])
         config_decoded = cast(dict, convert_bytes_to_string_object(config))
         assert config_decoded is not None
         maxmemory_policy = cast(str, config_decoded.get(maxmemory_policy_key))
 
         try:
             assert (
-                await redis_client.config_set({maxmemory_policy_key: "allkeys-lfu"})
+                await glide_client.config_set({maxmemory_policy_key: "allkeys-lfu"})
                 == OK
             )
-            assert await redis_client.object_freq(non_existing_key) is None
-            assert await redis_client.set(key, "") == OK
-            freq = await redis_client.object_freq(key)
+            assert await glide_client.object_freq(non_existing_key) is None
+            assert await glide_client.set(key, "") == OK
+            freq = await glide_client.object_freq(key)
             assert freq is not None and freq >= 0
         finally:
-            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+            await glide_client.config_set({maxmemory_policy_key: maxmemory_policy})
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_idletime(self, redis_client: TGlideClient):
+    async def test_object_idletime(self, glide_client: TGlideClient):
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
 
-        assert await redis_client.object_idletime(non_existing_key) is None
-        assert await redis_client.set(string_key, "foo") == OK
+        assert await glide_client.object_idletime(non_existing_key) is None
+        assert await glide_client.set(string_key, "foo") == OK
         time.sleep(2)
-        idletime = await redis_client.object_idletime(string_key)
+        idletime = await glide_client.object_idletime(string_key)
         assert idletime is not None and idletime > 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_refcount(self, redis_client: TGlideClient):
+    async def test_object_refcount(self, glide_client: TGlideClient):
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
 
-        assert await redis_client.object_refcount(non_existing_key) is None
-        assert await redis_client.set(string_key, "foo") == OK
-        refcount = await redis_client.object_refcount(string_key)
+        assert await glide_client.object_refcount(non_existing_key) is None
+        assert await glide_client.set(string_key, "foo") == OK
+        refcount = await glide_client.object_refcount(string_key)
         assert refcount is not None and refcount >= 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_load(self, redis_client: TGlideClient):
+    async def test_function_load(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -7442,18 +7442,18 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # verify function does not yet exist
-        assert await redis_client.function_list(lib_name) == []
+        assert await glide_client.function_list(lib_name) == []
 
-        assert await redis_client.function_load(code) == lib_name.encode()
+        assert await glide_client.function_load(code) == lib_name.encode()
 
-        assert await redis_client.fcall(func_name, arguments=["one", "two"]) == b"one"
+        assert await glide_client.fcall(func_name, arguments=["one", "two"]) == b"one"
         assert (
-            await redis_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
+            await glide_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
         )
 
         # verify with FUNCTION LIST
         check_function_list_response(
-            await redis_client.function_list(lib_name, with_code=True),
+            await glide_client.function_list(lib_name, with_code=True),
             lib_name,
             {func_name: None},
             {func_name: {b"no-writes"}},
@@ -7462,11 +7462,11 @@ class TestCommands:
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
-            await redis_client.function_load(code)
+            await glide_client.function_load(code)
         assert "Library '" + lib_name + "' already exists" in str(e)
 
         # re-load library with replace
-        assert await redis_client.function_load(code, True) == lib_name.encode()
+        assert await glide_client.function_load(code, True) == lib_name.encode()
 
         func2_name = f"myfunc2c{get_random_string(5)}"
         new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
@@ -7474,21 +7474,21 @@ class TestCommands:
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
 
-        assert await redis_client.function_load(new_code, True) == lib_name.encode()
+        assert await glide_client.function_load(new_code, True) == lib_name.encode()
 
-        assert await redis_client.fcall(func2_name, arguments=["one", "two"]) == 2
-        assert await redis_client.fcall_ro(func2_name, arguments=["one", "two"]) == 2
+        assert await glide_client.fcall(func2_name, arguments=["one", "two"]) == 2
+        assert await glide_client.fcall_ro(func2_name, arguments=["one", "two"]) == 2
 
-        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_load_cluster_with_route(
-        self, redis_client: GlideClusterClient, single_route: bool
+        self, glide_client: GlideClusterClient, single_route: bool
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -7497,7 +7497,7 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # verify function does not yet exist
-        function_list = await redis_client.function_list(lib_name, False, route)
+        function_list = await glide_client.function_list(lib_name, False, route)
         if single_route:
             assert function_list == []
         else:
@@ -7505,9 +7505,9 @@ class TestCommands:
             for functions in function_list.values():
                 assert functions == []
 
-        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+        assert await glide_client.function_load(code, False, route) == lib_name.encode()
 
-        result = await redis_client.fcall_route(
+        result = await glide_client.fcall_route(
             func_name, arguments=["one", "two"], route=route
         )
 
@@ -7518,7 +7518,7 @@ class TestCommands:
             for nodeResponse in result.values():
                 assert nodeResponse == b"one"
 
-        result = await redis_client.fcall_ro_route(
+        result = await glide_client.fcall_ro_route(
             func_name, arguments=["one", "two"], route=route
         )
 
@@ -7530,7 +7530,7 @@ class TestCommands:
                 assert nodeResponse == b"one"
 
         # verify with FUNCTION LIST
-        function_list = await redis_client.function_list(
+        function_list = await glide_client.function_list(
             lib_name, with_code=True, route=route
         )
         if single_route:
@@ -7554,11 +7554,11 @@ class TestCommands:
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
-            await redis_client.function_load(code, False, route)
+            await glide_client.function_load(code, False, route)
         assert "Library '" + lib_name + "' already exists" in str(e)
 
         # re-load library with replace
-        assert await redis_client.function_load(code, True, route) == lib_name.encode()
+        assert await glide_client.function_load(code, True, route) == lib_name.encode()
 
         func2_name = f"myfunc2c{get_random_string(5)}"
         new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
@@ -7567,10 +7567,10 @@ class TestCommands:
         )
 
         assert (
-            await redis_client.function_load(new_code, True, route) == lib_name.encode()
+            await glide_client.function_load(new_code, True, route) == lib_name.encode()
         )
 
-        result = await redis_client.fcall_route(
+        result = await glide_client.fcall_route(
             func2_name, arguments=["one", "two"], route=route
         )
 
@@ -7581,7 +7581,7 @@ class TestCommands:
             for nodeResponse in result.values():
                 assert nodeResponse == 2
 
-        result = await redis_client.fcall_ro_route(
+        result = await glide_client.fcall_ro_route(
             func2_name, arguments=["one", "two"], route=route
         )
 
@@ -7592,51 +7592,51 @@ class TestCommands:
             for nodeResponse in result.values():
                 assert nodeResponse == 2
 
-        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC, route) is OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_list(self, redis_client: TGlideClient):
+    async def test_function_list(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        original_functions_count = len(await redis_client.function_list())
+        original_functions_count = len(await glide_client.function_list())
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Assert function `lib_name` does not yet exist
-        assert await redis_client.function_list(lib_name) == []
+        assert await glide_client.function_list(lib_name) == []
 
         # load library
-        await redis_client.function_load(code)
+        await glide_client.function_load(code)
 
         check_function_list_response(
-            await redis_client.function_list(lib_name.encode()),
+            await glide_client.function_list(lib_name.encode()),
             lib_name,
             {func_name: None},
             {func_name: {b"no-writes"}},
             None,
         )
         check_function_list_response(
-            await redis_client.function_list(f"{lib_name}*"),
+            await glide_client.function_list(f"{lib_name}*"),
             lib_name,
             {func_name: None},
             {func_name: {b"no-writes"}},
             None,
         )
         check_function_list_response(
-            await redis_client.function_list(lib_name, with_code=True),
+            await glide_client.function_list(lib_name, with_code=True),
             lib_name,
             {func_name: None},
             {func_name: {b"no-writes"}},
             code,
         )
 
-        no_args_response = await redis_client.function_list()
-        wildcard_pattern_response = await redis_client.function_list(
+        no_args_response = await glide_client.function_list()
+        wildcard_pattern_response = await glide_client.function_list(
             "*".encode(), False
         )
         assert len(no_args_response) == original_functions_count + 1
@@ -7660,10 +7660,10 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_list_with_routing(
-        self, redis_client: GlideClusterClient, single_route: bool
+        self, glide_client: GlideClusterClient, single_route: bool
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
@@ -7673,7 +7673,7 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Assert function `lib_name` does not yet exist
-        result = await redis_client.function_list(lib_name, route=route)
+        result = await glide_client.function_list(lib_name, route=route)
         if single_route:
             assert result == []
         else:
@@ -7682,9 +7682,9 @@ class TestCommands:
                 assert nodeResponse == []
 
         # load library
-        await redis_client.function_load(code, route=route)
+        await glide_client.function_load(code, route=route)
 
-        result = await redis_client.function_list(lib_name, route=route)
+        result = await glide_client.function_list(lib_name, route=route)
         if single_route:
             check_function_list_response(
                 result,
@@ -7704,7 +7704,7 @@ class TestCommands:
                     None,
                 )
 
-        result = await redis_client.function_list(f"{lib_name}*", route=route)
+        result = await glide_client.function_list(f"{lib_name}*", route=route)
         if single_route:
             check_function_list_response(
                 result,
@@ -7724,7 +7724,7 @@ class TestCommands:
                     None,
                 )
 
-        result = await redis_client.function_list(lib_name, with_code=True, route=route)
+        result = await glide_client.function_list(lib_name, with_code=True, route=route)
         if single_route:
             check_function_list_response(
                 result,
@@ -7747,14 +7747,14 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_list_with_multiple_functions(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        await redis_client.function_flush()
-        assert len(await redis_client.function_list()) == 0
+        await glide_client.function_flush()
+        assert len(await glide_client.function_list()) == 0
 
         lib_name_1 = f"mylib1C{get_random_string(5)}"
         func_name_1 = f"myfunc1c{get_random_string(5)}"
@@ -7764,16 +7764,16 @@ class TestCommands:
             {func_name_1: "return args[1]", func_name_2: "return args[2]"},
             False,
         )
-        await redis_client.function_load(code_1)
+        await glide_client.function_load(code_1)
 
         lib_name_2 = f"mylib2C{get_random_string(5)}"
         func_name_3 = f"myfunc3c{get_random_string(5)}"
         code_2 = generate_lua_lib_code(
             lib_name_2, {func_name_3: "return args[3]"}, True
         )
-        await redis_client.function_load(code_2)
+        await glide_client.function_load(code_2)
 
-        no_args_response = await redis_client.function_list()
+        no_args_response = await glide_client.function_list()
 
         assert len(no_args_response) == 2
         check_function_list_response(
@@ -7793,9 +7793,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_flush(self, redis_client: TGlideClient):
+    async def test_function_flush(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             pytest.skip(f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -7803,35 +7803,35 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Load the function
-        assert await redis_client.function_load(code) == lib_name.encode()
+        assert await glide_client.function_load(code) == lib_name.encode()
 
         # verify function exists
-        assert len(await redis_client.function_list(lib_name)) == 1
+        assert len(await glide_client.function_list(lib_name)) == 1
 
         # Flush functions
-        assert await redis_client.function_flush(FlushMode.SYNC) == OK
-        assert await redis_client.function_flush(FlushMode.ASYNC) == OK
+        assert await glide_client.function_flush(FlushMode.SYNC) == OK
+        assert await glide_client.function_flush(FlushMode.ASYNC) == OK
 
         # verify function is removed
-        assert len(await redis_client.function_list(lib_name)) == 0
+        assert len(await glide_client.function_list(lib_name)) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
-        assert await redis_client.function_load(code) == lib_name.encode()
+        assert await glide_client.function_load(code) == lib_name.encode()
 
         # verify function exists
-        assert len(await redis_client.function_list(lib_name)) == 1
+        assert len(await glide_client.function_list(lib_name)) == 1
 
         # Clean up by flushing functions again
-        await redis_client.function_flush()
+        await glide_client.function_flush()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_flush_with_routing(
-        self, redis_client: GlideClusterClient, single_route: bool
+        self, glide_client: GlideClusterClient, single_route: bool
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             pytest.skip(f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -7840,10 +7840,10 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # Load the function
-        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+        assert await glide_client.function_load(code, False, route) == lib_name.encode()
 
         # verify function exists
-        result = await redis_client.function_list(lib_name, False, route)
+        result = await glide_client.function_list(lib_name, False, route)
         if single_route:
             assert len(result) == 1
         else:
@@ -7852,11 +7852,11 @@ class TestCommands:
                 assert len(nodeResponse) == 1
 
         # Flush functions
-        assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
-        assert await redis_client.function_flush(FlushMode.ASYNC, route) == OK
+        assert await glide_client.function_flush(FlushMode.SYNC, route) == OK
+        assert await glide_client.function_flush(FlushMode.ASYNC, route) == OK
 
         # verify function is removed
-        result = await redis_client.function_list(lib_name, False, route)
+        result = await glide_client.function_list(lib_name, False, route)
         if single_route:
             assert len(result) == 0
         else:
@@ -7865,10 +7865,10 @@ class TestCommands:
                 assert len(nodeResponse) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
-        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+        assert await glide_client.function_load(code, False, route) == lib_name.encode()
 
         # verify function exists
-        result = await redis_client.function_list(lib_name, False, route)
+        result = await glide_client.function_list(lib_name, False, route)
         if single_route:
             assert len(result) == 1
         else:
@@ -7877,13 +7877,13 @@ class TestCommands:
                 assert len(nodeResponse) == 1
 
         # Clean up by flushing functions again
-        assert await redis_client.function_flush(route=route) == OK
+        assert await glide_client.function_flush(route=route) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_delete(self, redis_client: TGlideClient):
+    async def test_function_delete(self, glide_client: TGlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             pytest.skip(f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -7891,30 +7891,30 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Load the function
-        assert await redis_client.function_load(code) == lib_name.encode()
+        assert await glide_client.function_load(code) == lib_name.encode()
 
         # verify function exists
-        assert len(await redis_client.function_list(lib_name)) == 1
+        assert len(await glide_client.function_list(lib_name)) == 1
 
         # Delete the function
-        assert await redis_client.function_delete(lib_name) == OK
+        assert await glide_client.function_delete(lib_name) == OK
 
         # verify function is removed
-        assert len(await redis_client.function_list(lib_name)) == 0
+        assert len(await glide_client.function_list(lib_name)) == 0
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
-            await redis_client.function_delete(lib_name)
+            await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_delete_with_routing(
-        self, redis_client: GlideClusterClient, single_route: bool
+        self, glide_client: GlideClusterClient, single_route: bool
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             pytest.skip(f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -7923,10 +7923,10 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # Load the function
-        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+        assert await glide_client.function_load(code, False, route) == lib_name.encode()
 
         # verify function exists
-        result = await redis_client.function_list(lib_name, False, route)
+        result = await glide_client.function_list(lib_name, False, route)
         if single_route:
             assert len(result) == 1
         else:
@@ -7935,10 +7935,10 @@ class TestCommands:
                 assert len(nodeResponse) == 1
 
         # Delete the function
-        assert await redis_client.function_delete(lib_name, route) == OK
+        assert await glide_client.function_delete(lib_name, route) == OK
 
         # verify function is removed
-        result = await redis_client.function_list(lib_name, False, route)
+        result = await glide_client.function_list(lib_name, False, route)
         if single_route:
             assert len(result) == 0
         else:
@@ -7948,14 +7948,14 @@ class TestCommands:
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
-            await redis_client.function_delete(lib_name)
+            await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_fcall_with_key(self, redis_client: GlideClusterClient):
+    async def test_fcall_with_key(self, glide_client: GlideClusterClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
@@ -7966,16 +7966,16 @@ class TestCommands:
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return keys[1]"}, True)
 
-        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
-        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+        assert await glide_client.function_flush(FlushMode.SYNC, route) is OK
+        assert await glide_client.function_load(code, False, route) == lib_name.encode()
 
         assert (
-            await redis_client.fcall(func_name, keys=keys, arguments=[])
+            await glide_client.fcall(func_name, keys=keys, arguments=[])
             == key1.encode()
         )
 
         assert (
-            await redis_client.fcall_ro(func_name, keys=keys, arguments=[])
+            await glide_client.fcall_ro(func_name, keys=keys, arguments=[])
             == key1.encode()
         )
 
@@ -7985,24 +7985,24 @@ class TestCommands:
         transaction.fcall_ro(func_name, keys=keys, arguments=[])
 
         # check response from a routed transaction request
-        result = await redis_client.exec(transaction, route)
+        result = await glide_client.exec(transaction, route)
         assert result is not None
         assert result[0] == key1.encode()
         assert result[1] == key1.encode()
 
         # if no route given, GLIDE should detect it automatically
-        result = await redis_client.exec(transaction)
+        result = await glide_client.exec(transaction)
         assert result is not None
         assert result[0] == key1.encode()
         assert result[1] == key1.encode()
 
-        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC, route) is OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_fcall_readonly_function(self, redis_client: GlideClusterClient):
+    async def test_fcall_readonly_function(self, glide_client: GlideClusterClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         lib_name = f"fcall_readonly_function{get_random_string(5)}"
@@ -8014,35 +8014,35 @@ class TestCommands:
         # function $funcName returns a magic number
         code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, False)
 
-        assert await redis_client.function_load(code, False) == lib_name.encode()
+        assert await glide_client.function_load(code, False) == lib_name.encode()
 
         # On a replica node should fail, because a function isn't guaranteed to be RO
         with pytest.raises(RequestError) as e:
-            assert await redis_client.fcall_route(
+            assert await glide_client.fcall_route(
                 func_name, arguments=[], route=replicaRoute
             )
         assert "You can't write against a read only replica." in str(e)
 
         with pytest.raises(RequestError) as e:
-            assert await redis_client.fcall_ro_route(
+            assert await glide_client.fcall_ro_route(
                 func_name, arguments=[], route=replicaRoute
             )
         assert "You can't write against a read only replica." in str(e)
 
         # fcall_ro also fails to run it even on primary - another error
         with pytest.raises(RequestError) as e:
-            assert await redis_client.fcall_ro_route(
+            assert await glide_client.fcall_ro_route(
                 func_name, arguments=[], route=primaryRoute
             )
         assert "Can not execute a script with write flag using *_ro command." in str(e)
 
         # create the same function, but with RO flag
         code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
-        assert await redis_client.function_load(code, True) == lib_name.encode()
+        assert await glide_client.function_load(code, True) == lib_name.encode()
 
         # fcall should succeed now
         assert (
-            await redis_client.fcall_ro_route(
+            await glide_client.fcall_ro_route(
                 func_name, arguments=[], route=replicaRoute
             )
             == 42
@@ -8050,15 +8050,15 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_dump_restore_standalone(self, redis_client: GlideClient):
+    async def test_function_dump_restore_standalone(self, glide_client: GlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
         # Dump an empty lib
-        emptyDump = await redis_client.function_dump()
+        emptyDump = await glide_client.function_dump()
         assert emptyDump is not None and len(emptyDump) > 0
 
         name1 = f"Foster{get_random_string(5)}"
@@ -8068,71 +8068,71 @@ class TestCommands:
         code = generate_lua_lib_code(
             name1, {name1: "return args[1]", name2: "return #args"}, False
         )
-        assert await redis_client.function_load(code, True) == name1.encode()
-        flist = await redis_client.function_list(with_code=True)
+        assert await glide_client.function_load(code, True) == name1.encode()
+        flist = await glide_client.function_list(with_code=True)
 
-        dump = await redis_client.function_dump()
+        dump = await glide_client.function_dump()
         assert dump is not None
 
         # restore without cleaning the lib and/or overwrite option causes an error
         with pytest.raises(RequestError) as e:
-            assert await redis_client.function_restore(dump)
+            assert await glide_client.function_restore(dump)
         assert "already exists" in str(e)
 
         # APPEND policy also fails for the same reason (name collision)
         with pytest.raises(RequestError) as e:
-            assert await redis_client.function_restore(
+            assert await glide_client.function_restore(
                 dump, FunctionRestorePolicy.APPEND
             )
         assert "already exists" in str(e)
 
         # REPLACE policy succeed
         assert (
-            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+            await glide_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
             is OK
         )
 
         # but nothing changed - all code overwritten
-        assert await redis_client.function_list(with_code=True) == flist
+        assert await glide_client.function_list(with_code=True) == flist
 
         # create lib with another name, but with the same function names
-        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC) is OK
         code = generate_lua_lib_code(
             name2, {name1: "return args[1]", name2: "return #args"}, False
         )
-        assert await redis_client.function_load(code, True) == name2.encode()
+        assert await glide_client.function_load(code, True) == name2.encode()
 
         # REPLACE policy now fails due to a name collision
         with pytest.raises(RequestError) as e:
-            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+            await glide_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
         assert "already exists" in str(e)
 
         # FLUSH policy succeeds, but deletes the second lib
         assert (
-            await redis_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
+            await glide_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
         )
-        assert await redis_client.function_list(with_code=True) == flist
+        assert await glide_client.function_list(with_code=True) == flist
 
         # call restored functions
         assert (
-            await redis_client.fcall(name1, arguments=["meow", "woem"])
+            await glide_client.fcall(name1, arguments=["meow", "woem"])
             == "meow".encode()
         )
-        assert await redis_client.fcall(name2, arguments=["meow", "woem"]) == 2
+        assert await glide_client.fcall(name2, arguments=["meow", "woem"]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_dump_restore_cluster(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
         # Dump an empty lib
-        emptyDump = await redis_client.function_dump()
+        emptyDump = await glide_client.function_dump()
         assert emptyDump is not None and len(emptyDump) > 0
 
         name1 = f"Foster{get_random_string(5)}"
@@ -8144,33 +8144,33 @@ class TestCommands:
         code = generate_lua_lib_code(
             libname1, {name1: "return args[1]", name2: "return #args"}, True
         )
-        assert await redis_client.function_load(code, True) == libname1.encode()
-        flist = await redis_client.function_list(with_code=True)
-        dump = await redis_client.function_dump(RandomNode())
+        assert await glide_client.function_load(code, True) == libname1.encode()
+        flist = await glide_client.function_list(with_code=True)
+        dump = await glide_client.function_dump(RandomNode())
         assert dump is not None and isinstance(dump, bytes)
 
         # restore without cleaning the lib and/or overwrite option causes an error
         with pytest.raises(RequestError) as e:
-            assert await redis_client.function_restore(dump)
+            assert await glide_client.function_restore(dump)
         assert "already exists" in str(e)
 
         # APPEND policy also fails for the same reason (name collision)
         with pytest.raises(RequestError) as e:
-            assert await redis_client.function_restore(
+            assert await glide_client.function_restore(
                 dump, FunctionRestorePolicy.APPEND
             )
         assert "already exists" in str(e)
 
         # REPLACE policy succeed
         assert (
-            await redis_client.function_restore(
+            await glide_client.function_restore(
                 dump, FunctionRestorePolicy.REPLACE, route=AllPrimaries()
             )
             is OK
         )
 
         # but nothing changed - all code overwritten
-        restoredFunctionList = await redis_client.function_list(with_code=True)
+        restoredFunctionList = await glide_client.function_list(with_code=True)
         assert restoredFunctionList is not None
         assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
         assert restoredFunctionList[0]["library_name".encode()] == libname1.encode()
@@ -8179,26 +8179,26 @@ class TestCommands:
         assert len(restoredFunctionList[0]["functions".encode()]) == 2
 
         # create lib with another name, but with the same function names
-        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        assert await glide_client.function_flush(FlushMode.SYNC) is OK
         code = generate_lua_lib_code(
             libname2, {name1: "return args[1]", name2: "return #args"}, True
         )
-        assert await redis_client.function_load(code, True) == libname2.encode()
-        restoredFunctionList = await redis_client.function_list(with_code=True)
+        assert await glide_client.function_load(code, True) == libname2.encode()
+        restoredFunctionList = await glide_client.function_list(with_code=True)
         assert restoredFunctionList is not None
         assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
         assert restoredFunctionList[0]["library_name".encode()] == libname2.encode()
 
         # REPLACE policy now fails due to a name collision
         with pytest.raises(RequestError) as e:
-            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+            await glide_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
         assert "already exists" in str(e)
 
         # FLUSH policy succeeds, but deletes the second lib
         assert (
-            await redis_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
+            await glide_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
         )
-        restoredFunctionList = await redis_client.function_list(with_code=True)
+        restoredFunctionList = await glide_client.function_list(with_code=True)
         assert restoredFunctionList is not None
         assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
         assert restoredFunctionList[0]["library_name".encode()] == libname1.encode()
@@ -8208,45 +8208,45 @@ class TestCommands:
 
         # call restored functions
         assert (
-            await redis_client.fcall_ro(name1, arguments=["meow", "woem"])
+            await glide_client.fcall_ro(name1, arguments=["meow", "woem"])
             == "meow".encode()
         )
-        assert await redis_client.fcall_ro(name2, arguments=["meow", "woem"]) == 2
+        assert await glide_client.fcall_ro(name2, arguments=["meow", "woem"]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_srandmember(self, redis_client: TGlideClient):
+    async def test_srandmember(self, glide_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         elements: List[TEncodable] = ["one", "two"]
-        assert await redis_client.sadd(key, elements) == 2
+        assert await glide_client.sadd(key, elements) == 2
 
-        member = await redis_client.srandmember(key)
+        member = await glide_client.srandmember(key)
         # TODO: remove when function signature is fixed
         assert isinstance(member, bytes)
         assert member.decode() in elements
-        assert await redis_client.srandmember("non_existing_key") is None
+        assert await glide_client.srandmember("non_existing_key") is None
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.srandmember(string_key)
+            await glide_client.srandmember(string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_srandmember_count(self, redis_client: TGlideClient):
+    async def test_srandmember_count(self, glide_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         elements: List[TEncodable] = ["one", "two"]
-        assert await redis_client.sadd(key, elements) == 2
+        assert await glide_client.sadd(key, elements) == 2
 
         # unique values are expected as count is positive
-        members = await redis_client.srandmember_count(key, 4)
+        members = await glide_client.srandmember_count(key, 4)
         assert len(members) == 2
         assert set(members) == {b"one", b"two"}
 
         # duplicate values are expected as count is negative
-        members = await redis_client.srandmember_count(key, -4)
+        members = await glide_client.srandmember_count(key, -4)
         assert len(members) == 4
         for member in members:
             # TODO: remove when function signature is fixed
@@ -8254,77 +8254,77 @@ class TestCommands:
             assert member.decode() in elements
 
         # empty return values for non-existing or empty keys
-        assert await redis_client.srandmember_count(key, 0) == []
-        assert await redis_client.srandmember_count("non_existing_key", 0) == []
+        assert await glide_client.srandmember_count(key, 0) == []
+        assert await glide_client.srandmember_count("non_existing_key", 0) == []
 
         # key exists, but it is not a set
-        assert await redis_client.set(string_key, "value") == OK
+        assert await glide_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
-            await redis_client.srandmember_count(string_key, 8)
+            await glide_client.srandmember_count(string_key, 8)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_flushall(self, redis_client: TGlideClient):
+    async def test_flushall(self, glide_client: TGlideClient):
         min_version = "6.2.0"
         key = f"{{key}}-1{get_random_string(5)}"
         value = get_random_string(5)
 
-        await redis_client.set(key, value)
-        assert await redis_client.dbsize() > 0
-        assert await redis_client.flushall() == OK
-        assert await redis_client.flushall(FlushMode.ASYNC) == OK
-        if not await check_if_server_version_lt(redis_client, min_version):
-            assert await redis_client.flushall(FlushMode.SYNC) == OK
-        assert await redis_client.dbsize() == 0
+        await glide_client.set(key, value)
+        assert await glide_client.dbsize() > 0
+        assert await glide_client.flushall() == OK
+        assert await glide_client.flushall(FlushMode.ASYNC) == OK
+        if not await check_if_server_version_lt(glide_client, min_version):
+            assert await glide_client.flushall(FlushMode.SYNC) == OK
+        assert await glide_client.dbsize() == 0
 
-        if isinstance(redis_client, GlideClusterClient):
-            await redis_client.set(key, value)
-            assert await redis_client.flushall(route=AllPrimaries()) == OK
-            assert await redis_client.flushall(FlushMode.ASYNC, AllPrimaries()) == OK
-            if not await check_if_server_version_lt(redis_client, min_version):
-                assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) == OK
-            assert await redis_client.dbsize() == 0
+        if isinstance(glide_client, GlideClusterClient):
+            await glide_client.set(key, value)
+            assert await glide_client.flushall(route=AllPrimaries()) == OK
+            assert await glide_client.flushall(FlushMode.ASYNC, AllPrimaries()) == OK
+            if not await check_if_server_version_lt(glide_client, min_version):
+                assert await glide_client.flushall(FlushMode.SYNC, AllPrimaries()) == OK
+            assert await glide_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_flushdb(self, redis_client: GlideClient):
+    async def test_standalone_flushdb(self, glide_client: GlideClient):
         min_version = "6.2.0"
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
         value = get_random_string(5)
 
         # fill DB 0 and check size non-empty
-        assert await redis_client.select(0) == OK
-        await redis_client.set(key1, value)
-        assert await redis_client.dbsize() > 0
+        assert await glide_client.select(0) == OK
+        await glide_client.set(key1, value)
+        assert await glide_client.dbsize() > 0
 
         # fill DB 1 and check size non-empty
-        assert await redis_client.select(1) == OK
-        await redis_client.set(key2, value)
-        assert await redis_client.dbsize() > 0
+        assert await glide_client.select(1) == OK
+        await glide_client.set(key2, value)
+        assert await glide_client.dbsize() > 0
 
         # flush DB 1 and check again
-        assert await redis_client.flushdb() == OK
-        assert await redis_client.dbsize() == 0
+        assert await glide_client.flushdb() == OK
+        assert await glide_client.dbsize() == 0
 
         # swith to DB 0, flush, and check
-        assert await redis_client.select(0) == OK
-        assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(FlushMode.ASYNC) == OK
-        assert await redis_client.dbsize() == 0
+        assert await glide_client.select(0) == OK
+        assert await glide_client.dbsize() > 0
+        assert await glide_client.flushdb(FlushMode.ASYNC) == OK
+        assert await glide_client.dbsize() == 0
 
         # verify flush SYNC
-        if not await check_if_server_version_lt(redis_client, min_version):
-            await redis_client.set(key2, value)
-            assert await redis_client.dbsize() > 0
-            assert await redis_client.flushdb(FlushMode.SYNC) == OK
-            assert await redis_client.dbsize() == 0
+        if not await check_if_server_version_lt(glide_client, min_version):
+            await glide_client.set(key2, value)
+            assert await glide_client.dbsize() > 0
+            assert await glide_client.flushdb(FlushMode.SYNC) == OK
+            assert await glide_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getex(self, redis_client: TGlideClient):
+    async def test_getex(self, glide_client: TGlideClient):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = get_random_string(10)
@@ -8332,35 +8332,35 @@ class TestCommands:
         value = get_random_string(10)
         value_encoded = value.encode()
 
-        assert await redis_client.set(key1, value) == OK
-        assert await redis_client.getex(non_existing_key) is None
-        assert await redis_client.getex(key1) == value_encoded
-        assert await redis_client.ttl(key1) == -1
+        assert await glide_client.set(key1, value) == OK
+        assert await glide_client.getex(non_existing_key) is None
+        assert await glide_client.getex(key1) == value_encoded
+        assert await glide_client.ttl(key1) == -1
 
         # setting expiration timer
         assert (
-            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 50))
+            await glide_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 50))
             == value_encoded
         )
-        assert await redis_client.ttl(key1) != -1
+        assert await glide_client.ttl(key1) != -1
 
         # setting and clearing expiration timer
-        assert await redis_client.set(key1, value) == OK
+        assert await glide_client.set(key1, value) == OK
         assert (
-            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10))
+            await glide_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10))
             == value_encoded
         )
         assert (
-            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+            await glide_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
             == value_encoded
         )
-        assert await redis_client.ttl(key1) == -1
+        assert await glide_client.ttl(key1) == -1
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_copy_no_database(self, redis_client: TGlideClient):
+    async def test_copy_no_database(self, glide_client: TGlideClient):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         source = f"{{testKey}}:1-{get_random_string(10)}"
@@ -8370,31 +8370,31 @@ class TestCommands:
         value1_encoded = value1.encode()
 
         # neither key exists
-        assert await redis_client.copy(source, destination, replace=False) is False
-        assert await redis_client.copy(source, destination) is False
+        assert await glide_client.copy(source, destination, replace=False) is False
+        assert await glide_client.copy(source, destination) is False
 
         # source exists, destination does not
-        await redis_client.set(source, value1)
-        assert await redis_client.copy(source, destination, replace=False) is True
-        assert await redis_client.get(destination) == value1_encoded
+        await glide_client.set(source, value1)
+        assert await glide_client.copy(source, destination, replace=False) is True
+        assert await glide_client.get(destination) == value1_encoded
 
         # new value for source key
-        await redis_client.set(source, value2)
+        await glide_client.set(source, value2)
 
         # both exists, no REPLACE
-        assert await redis_client.copy(source, destination) is False
-        assert await redis_client.copy(source, destination, replace=False) is False
-        assert await redis_client.get(destination) == value1_encoded
+        assert await glide_client.copy(source, destination) is False
+        assert await glide_client.copy(source, destination, replace=False) is False
+        assert await glide_client.get(destination) == value1_encoded
 
         # both exists, with REPLACE
-        assert await redis_client.copy(source, destination, replace=True) is True
-        assert await redis_client.get(destination) == value2.encode()
+        assert await glide_client.copy(source, destination, replace=True) is True
+        assert await glide_client.get(destination) == value2.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_copy_database(self, redis_client: GlideClient):
+    async def test_copy_database(self, glide_client: GlideClient):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         source = get_random_string(10)
@@ -8408,103 +8408,103 @@ class TestCommands:
         index2 = 2
 
         try:
-            assert await redis_client.select(index0) == OK
+            assert await glide_client.select(index0) == OK
 
             # neither key exists
             assert (
-                await redis_client.copy(source, destination, index1, replace=False)
+                await glide_client.copy(source, destination, index1, replace=False)
                 is False
             )
 
             # source exists, destination does not
-            await redis_client.set(source, value1)
+            await glide_client.set(source, value1)
             assert (
-                await redis_client.copy(source, destination, index1, replace=False)
+                await glide_client.copy(source, destination, index1, replace=False)
                 is True
             )
-            assert await redis_client.select(index1) == OK
-            assert await redis_client.get(destination) == value1_encoded
+            assert await glide_client.select(index1) == OK
+            assert await glide_client.get(destination) == value1_encoded
 
             # new value for source key
-            assert await redis_client.select(index0) == OK
-            await redis_client.set(source, value2)
+            assert await glide_client.select(index0) == OK
+            await glide_client.set(source, value2)
 
             # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
             assert (
-                await redis_client.copy(source, destination, index1, replace=False)
+                await glide_client.copy(source, destination, index1, replace=False)
                 is False
             )
             assert (
-                await redis_client.copy(source, destination, index2, replace=False)
+                await glide_client.copy(source, destination, index2, replace=False)
                 is True
             )
 
             # new value only gets copied to DB 2
-            assert await redis_client.select(index1) == OK
-            assert await redis_client.get(destination) == value1_encoded
-            assert await redis_client.select(index2) == OK
-            assert await redis_client.get(destination) == value2_encoded
+            assert await glide_client.select(index1) == OK
+            assert await glide_client.get(destination) == value1_encoded
+            assert await glide_client.select(index2) == OK
+            assert await glide_client.get(destination) == value2_encoded
 
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
-            assert await redis_client.select(index0) == OK
+            assert await glide_client.select(index0) == OK
             assert (
-                await redis_client.copy(source, destination, index1, replace=True)
+                await glide_client.copy(source, destination, index1, replace=True)
                 is True
             )
-            assert await redis_client.select(index1) == OK
-            assert await redis_client.get(destination) == value2_encoded
+            assert await glide_client.select(index1) == OK
+            assert await glide_client.get(destination) == value2_encoded
 
             # invalid DB index
             with pytest.raises(RequestError):
-                await redis_client.copy(source, destination, -1, replace=True)
+                await glide_client.copy(source, destination, -1, replace=True)
         finally:
-            assert await redis_client.select(0) == OK
+            assert await glide_client.select(0) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_wait(self, redis_client: TGlideClient):
+    async def test_wait(self, glide_client: TGlideClient):
         key = f"{{key}}-1{get_random_string(5)}"
         value = get_random_string(5)
         value2 = get_random_string(5)
 
-        assert await redis_client.set(key, value) == OK
-        if isinstance(redis_client, GlideClusterClient):
-            assert await redis_client.wait(1, 1000) >= 1
+        assert await glide_client.set(key, value) == OK
+        if isinstance(glide_client, GlideClusterClient):
+            assert await glide_client.wait(1, 1000) >= 1
         else:
-            assert await redis_client.wait(1, 1000) >= 0
+            assert await glide_client.wait(1, 1000) >= 0
 
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
-        assert await redis_client.set(key, value2) == OK
-        assert await redis_client.wait(100, 500) >= 0
+        assert await glide_client.set(key, value2) == OK
+        assert await glide_client.wait(100, 500) >= 0
 
         # command should fail on a negative timeout value
         with pytest.raises(RequestError):
-            await redis_client.wait(1, -1)
+            await glide_client.wait(1, -1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lolwut(self, redis_client: TGlideClient):
-        result = await redis_client.lolwut()
+    async def test_lolwut(self, glide_client: TGlideClient):
+        result = await glide_client.lolwut()
         assert b"Redis ver. " in result
-        result = await redis_client.lolwut(parameters=[])
+        result = await glide_client.lolwut(parameters=[])
         assert b"Redis ver. " in result
-        result = await redis_client.lolwut(parameters=[50, 20])
+        result = await glide_client.lolwut(parameters=[50, 20])
         assert b"Redis ver. " in result
-        result = await redis_client.lolwut(6)
+        result = await glide_client.lolwut(6)
         assert b"Redis ver. " in result
-        result = await redis_client.lolwut(5, [30, 4, 4])
+        result = await glide_client.lolwut(5, [30, 4, 4])
         assert b"Redis ver. " in result
 
-        if isinstance(redis_client, GlideClusterClient):
+        if isinstance(glide_client, GlideClusterClient):
             # test with multi-node route
-            result = await redis_client.lolwut(route=AllNodes())
+            result = await glide_client.lolwut(route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
             for node_result in result_decoded.values():
                 assert "Redis ver. " in node_result
 
-            result = await redis_client.lolwut(parameters=[10, 20], route=AllNodes())
+            result = await glide_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = cast(dict, convert_bytes_to_string_object(result))
             assert result_decoded is not None
@@ -8512,148 +8512,148 @@ class TestCommands:
                 assert "Redis ver. " in node_result
 
             # test with single-node route
-            result = await redis_client.lolwut(2, route=RandomNode())
+            result = await glide_client.lolwut(2, route=RandomNode())
             assert isinstance(result, bytes)
             assert b"Redis ver. " in result
 
-            result = await redis_client.lolwut(2, [10, 20], RandomNode())
+            result = await glide_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
             assert b"Redis ver. " in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cluster_client_random_key(self, redis_client: GlideClusterClient):
+    async def test_cluster_client_random_key(self, glide_client: GlideClusterClient):
         key = get_random_string(10)
 
         # setup: delete all keys
-        assert await redis_client.flushall(FlushMode.SYNC)
+        assert await glide_client.flushall(FlushMode.SYNC)
 
         # no keys exists, so random_key returns None
-        assert await redis_client.random_key() is None
+        assert await glide_client.random_key() is None
 
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         # `key` should be the only existing key, so random_key should return `key`
-        assert await redis_client.random_key() == key.encode()
-        assert await redis_client.random_key(AllPrimaries()) == key.encode()
+        assert await glide_client.random_key() == key.encode()
+        assert await glide_client.random_key(AllPrimaries()) == key.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_client_random_key(self, redis_client: GlideClient):
+    async def test_standalone_client_random_key(self, glide_client: GlideClient):
         key = get_random_string(10)
 
         # setup: delete all keys in DB 0 and DB 1
-        assert await redis_client.select(0) == OK
-        assert await redis_client.flushdb(FlushMode.SYNC) == OK
-        assert await redis_client.select(1) == OK
-        assert await redis_client.flushdb(FlushMode.SYNC) == OK
+        assert await glide_client.select(0) == OK
+        assert await glide_client.flushdb(FlushMode.SYNC) == OK
+        assert await glide_client.select(1) == OK
+        assert await glide_client.flushdb(FlushMode.SYNC) == OK
 
         # no keys exist so random_key returns None
-        assert await redis_client.random_key() is None
+        assert await glide_client.random_key() is None
         # set `key` in DB 1
-        assert await redis_client.set(key, "foo") == OK
+        assert await glide_client.set(key, "foo") == OK
         # `key` should be the only key in the database
-        assert await redis_client.random_key() == key.encode()
+        assert await glide_client.random_key() == key.encode()
 
         # switch back to DB 0
-        assert await redis_client.select(0) == OK
+        assert await glide_client.select(0) == OK
         # DB 0 should still have no keys, so random_key should still return None
-        assert await redis_client.random_key() is None
+        assert await glide_client.random_key() is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_dump_restore(self, redis_client: TGlideClient):
+    async def test_dump_restore(self, glide_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(10)}"
         key2 = f"{{key}}-2{get_random_string(10)}"
         key3 = f"{{key}}-3{get_random_string(10)}"
         nonExistingKey = f"{{key}}-4{get_random_string(10)}"
         value = get_random_string(5)
 
-        await redis_client.set(key1, value)
+        await glide_client.set(key1, value)
 
         # Dump an existing key
-        bytesData = await redis_client.dump(key1)
+        bytesData = await glide_client.dump(key1)
         assert bytesData is not None
 
         # Dump non-existing key
-        assert await redis_client.dump(nonExistingKey) is None
+        assert await glide_client.dump(nonExistingKey) is None
 
         # Restore to a new key and verify its value
-        assert await redis_client.restore(key2, 0, bytesData) == OK
-        newValue = await redis_client.get(key2)
+        assert await glide_client.restore(key2, 0, bytesData) == OK
+        newValue = await glide_client.get(key2)
         assert newValue == value.encode()
 
         # Restore to an existing key
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(key2, 0, bytesData)
+            await glide_client.restore(key2, 0, bytesData)
         assert "Target key name already exists" in str(e)
 
         # Restore using a value with checksum error
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(key3, 0, value.encode())
+            await glide_client.restore(key3, 0, value.encode())
         assert "payload version or checksum are wrong" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_dump_restore_options(self, redis_client: TGlideClient):
+    async def test_dump_restore_options(self, glide_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(10)}"
         key2 = f"{{key}}-2{get_random_string(10)}"
         key3 = f"{{key}}-3{get_random_string(10)}"
         value = get_random_string(5)
 
-        await redis_client.set(key1, value)
+        await glide_client.set(key1, value)
 
         # Dump an existing key
-        bytesData = await redis_client.dump(key1)
+        bytesData = await glide_client.dump(key1)
         assert bytesData is not None
 
         # Restore without option
-        assert await redis_client.restore(key2, 0, bytesData) == OK
+        assert await glide_client.restore(key2, 0, bytesData) == OK
 
         # Restore with REPLACE option
-        assert await redis_client.restore(key2, 0, bytesData, replace=True) == OK
+        assert await glide_client.restore(key2, 0, bytesData, replace=True) == OK
 
         # Restore to an existing key holding different value with REPLACE option
-        assert await redis_client.sadd(key3, ["a"]) == 1
-        assert await redis_client.restore(key3, 0, bytesData, replace=True) == OK
+        assert await glide_client.sadd(key3, ["a"]) == 1
+        assert await glide_client.restore(key3, 0, bytesData, replace=True) == OK
 
         # Restore with REPLACE, ABSTTL, and positive TTL
         assert (
-            await redis_client.restore(key2, 1000, bytesData, replace=True, absttl=True)
+            await glide_client.restore(key2, 1000, bytesData, replace=True, absttl=True)
             == OK
         )
 
         # Restore with REPLACE, ABSTTL, and negative TTL
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(key2, -10, bytesData, replace=True, absttl=True)
+            await glide_client.restore(key2, -10, bytesData, replace=True, absttl=True)
         assert "Invalid TTL value" in str(e)
 
         # Restore with REPLACE and positive idletime
         assert (
-            await redis_client.restore(key2, 0, bytesData, replace=True, idletime=10)
+            await glide_client.restore(key2, 0, bytesData, replace=True, idletime=10)
             == OK
         )
 
         # Restore with REPLACE and negative idletime
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(key2, 0, bytesData, replace=True, idletime=-10)
+            await glide_client.restore(key2, 0, bytesData, replace=True, idletime=-10)
         assert "Invalid IDLETIME value" in str(e)
 
         # Restore with REPLACE and positive frequency
         assert (
-            await redis_client.restore(key2, 0, bytesData, replace=True, frequency=10)
+            await glide_client.restore(key2, 0, bytesData, replace=True, frequency=10)
             == OK
         )
 
         # Restore with REPLACE and negative frequency
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
+            await glide_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
         assert "Invalid FREQ value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lcs(self, redis_client: GlideClient):
+    async def test_lcs(self, glide_client: GlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd"
@@ -8662,22 +8662,22 @@ class TestCommands:
         nonexistent_key = "nonexistent_key"
         expected_subsequence = "acd"
         expected_subsequence_with_nonexistent_key = ""
-        assert await redis_client.mset({key1: value1, key2: value2}) == OK
-        assert await redis_client.lcs(key1, key2) == expected_subsequence.encode()
+        assert await glide_client.mset({key1: value1, key2: value2}) == OK
+        assert await glide_client.lcs(key1, key2) == expected_subsequence.encode()
         assert (
-            await redis_client.lcs(key1, nonexistent_key)
+            await glide_client.lcs(key1, nonexistent_key)
             == expected_subsequence_with_nonexistent_key.encode()
         )
         lcs_non_string_key = "lcs_non_string_key"
-        assert await redis_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
+        assert await glide_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
         with pytest.raises(RequestError):
-            await redis_client.lcs(key1, lcs_non_string_key)
+            await glide_client.lcs(key1, lcs_non_string_key)
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lcs_len(self, redis_client: GlideClient):
+    async def test_lcs_len(self, glide_client: GlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd"
@@ -8686,22 +8686,22 @@ class TestCommands:
         nonexistent_key = "nonexistent_key"
         expected_subsequence_length = 3
         expected_subsequence_length_with_nonexistent_key = 0
-        assert await redis_client.mset({key1: value1, key2: value2}) == OK
-        assert await redis_client.lcs_len(key1, key2) == expected_subsequence_length
+        assert await glide_client.mset({key1: value1, key2: value2}) == OK
+        assert await glide_client.lcs_len(key1, key2) == expected_subsequence_length
         assert (
-            await redis_client.lcs_len(key1, nonexistent_key)
+            await glide_client.lcs_len(key1, nonexistent_key)
             == expected_subsequence_length_with_nonexistent_key
         )
         lcs_non_string_key = "lcs_non_string_key"
-        assert await redis_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
+        assert await glide_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
         with pytest.raises(RequestError):
-            await redis_client.lcs_len(key1, lcs_non_string_key)
+            await glide_client.lcs_len(key1, lcs_non_string_key)
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lcs_idx(self, redis_client: GlideClient):
+    async def test_lcs_idx(self, glide_client: GlideClient):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd1234"
@@ -8759,75 +8759,75 @@ class TestCommands:
             b"matches": [],
             b"len": 0,
         }
-        assert await redis_client.mset({key1: value1, key2: value2}) == OK
+        assert await glide_client.mset({key1: value1, key2: value2}) == OK
         assert (
-            await redis_client.lcs_idx(key1, key2)
+            await glide_client.lcs_idx(key1, key2)
             == expected_response_no_min_match_len_no_with_match_len
         )
         assert (
-            await redis_client.lcs_idx(key1, key2, min_match_len=4)
+            await glide_client.lcs_idx(key1, key2, min_match_len=4)
             == expected_response_with_min_match_len_equals_four_no_with_match_len
         )
         assert (
             # negative min_match_len should have no affect on the output
-            await redis_client.lcs_idx(key1, key2, min_match_len=-3)
+            await glide_client.lcs_idx(key1, key2, min_match_len=-3)
             == expected_response_no_min_match_len_no_with_match_len
         )
         assert (
-            await redis_client.lcs_idx(key1, key2, with_match_len=True)
+            await glide_client.lcs_idx(key1, key2, with_match_len=True)
             == expected_response_no_min_match_len_with_match_len
         )
         assert (
-            await redis_client.lcs_idx(key1, key2, min_match_len=4, with_match_len=True)
+            await glide_client.lcs_idx(key1, key2, min_match_len=4, with_match_len=True)
             == expected_response_with_min_match_len_equals_four_and_with_match_len
         )
         assert (
-            await redis_client.lcs_idx(key1, nonexistent_key)
+            await glide_client.lcs_idx(key1, nonexistent_key)
             == expected_response_with_nonexistent_key
         )
         lcs_non_string_key = "lcs_non_string_key"
-        assert await redis_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
+        assert await glide_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
         with pytest.raises(RequestError):
-            await redis_client.lcs_idx(key1, lcs_non_string_key)
+            await glide_client.lcs_idx(key1, lcs_non_string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_watch(self, redis_client: GlideClient):
+    async def test_watch(self, glide_client: GlideClient):
         # watched key didn't change outside of transaction before transaction execution, transaction will execute
-        assert await redis_client.set("key1", "original_value") == OK
-        assert await redis_client.watch(["key1"]) == OK
+        assert await glide_client.set("key1", "original_value") == OK
+        assert await glide_client.watch(["key1"]) == OK
         transaction = Transaction()
         transaction.set("key1", "transaction_value")
         transaction.get("key1")
-        assert await redis_client.exec(transaction) is not None
+        assert await glide_client.exec(transaction) is not None
 
         # watched key changed outside of transaction before transaction execution, transaction will not execute
-        assert await redis_client.set("key1", "original_value") == OK
-        assert await redis_client.watch(["key1"]) == OK
+        assert await glide_client.set("key1", "original_value") == OK
+        assert await glide_client.watch(["key1"]) == OK
         transaction = Transaction()
         transaction.set("key1", "transaction_value")
-        assert await redis_client.set("key1", "standalone_value") == OK
+        assert await glide_client.set("key1", "standalone_value") == OK
         transaction.get("key1")
-        assert await redis_client.exec(transaction) is None
+        assert await glide_client.exec(transaction) is None
 
         # empty list not supported
         with pytest.raises(RequestError):
-            await redis_client.watch([])
+            await glide_client.watch([])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_unwatch(self, redis_client: GlideClient):
+    async def test_unwatch(self, glide_client: GlideClient):
 
         # watched key unwatched before transaction execution even if changed
         # outside of transaction, transaction will still execute
-        assert await redis_client.set("key1", "original_value") == OK
-        assert await redis_client.watch(["key1"]) == OK
+        assert await glide_client.set("key1", "original_value") == OK
+        assert await glide_client.watch(["key1"]) == OK
         transaction = Transaction()
         transaction.set("key1", "transaction_value")
-        assert await redis_client.set("key1", "standalone_value") == OK
+        assert await glide_client.set("key1", "standalone_value") == OK
         transaction.get("key1")
-        assert await redis_client.unwatch() == OK
-        result = await redis_client.exec(transaction)
+        assert await glide_client.unwatch() == OK
+        result = await glide_client.exec(transaction)
         assert result is not None
         assert isinstance(result, list)
         assert len(result) == 2
@@ -8835,18 +8835,18 @@ class TestCommands:
         assert result[1] == b"transaction_value"
 
         # UNWATCH returns OK when there no watched keys
-        assert await redis_client.unwatch() == OK
+        assert await glide_client.unwatch() == OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_unwatch_with_route(self, redis_client: GlideClusterClient):
-        assert await redis_client.unwatch(RandomNode()) == OK
+    async def test_unwatch_with_route(self, glide_client: GlideClusterClient):
+        assert await glide_client.unwatch(RandomNode()) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lpos(self, redis_client: TGlideClient):
+    async def test_lpos(self, glide_client: TGlideClient):
         min_version = "6.0.6"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         key = f"{{key}}-1{get_random_string(5)}"
@@ -8854,123 +8854,123 @@ class TestCommands:
         mylist: List[TEncodable] = ["a", "a", "b", "c", "a", "b"]
 
         # basic case
-        await redis_client.rpush(key, mylist)
-        assert await redis_client.lpos(key, "b") == 2
+        await glide_client.rpush(key, mylist)
+        assert await glide_client.lpos(key, "b") == 2
 
         # reverse traversal
-        assert await redis_client.lpos(key, "b", -2) == 2
+        assert await glide_client.lpos(key, "b", -2) == 2
 
         # unlimited comparisons
-        assert await redis_client.lpos(key, "a", 1, None, 0) == 0
+        assert await glide_client.lpos(key, "a", 1, None, 0) == 0
 
         # limited comparisons
-        assert await redis_client.lpos(key, "c", 1, None, 2) is None
+        assert await glide_client.lpos(key, "c", 1, None, 2) is None
 
         # element does not exist
-        assert await redis_client.lpos(key, "non_existing") is None
+        assert await glide_client.lpos(key, "non_existing") is None
 
         # with count
-        assert await redis_client.lpos(key, "a", 1, 0, 0) == [0, 1, 4]
+        assert await glide_client.lpos(key, "a", 1, 0, 0) == [0, 1, 4]
 
         # with count and rank
-        assert await redis_client.lpos(key, "a", -2, 0, 0) == [1, 0]
+        assert await glide_client.lpos(key, "a", -2, 0, 0) == [1, 0]
 
         # key does not exist
-        assert await redis_client.lpos("non_existing", "non_existing") is None
+        assert await glide_client.lpos("non_existing", "non_existing") is None
 
         # invalid rank value
         with pytest.raises(RequestError):
-            await redis_client.lpos(key, "a", 0)
+            await glide_client.lpos(key, "a", 0)
 
         # invalid count
         with pytest.raises(RequestError):
-            await redis_client.lpos(non_list_key, "a", None, -1)
+            await glide_client.lpos(non_list_key, "a", None, -1)
 
         # invalid max_len
         with pytest.raises(RequestError):
-            await redis_client.lpos(non_list_key, "a", None, None, -1)
+            await glide_client.lpos(non_list_key, "a", None, None, -1)
 
         # wrong data type
-        await redis_client.set(non_list_key, "non_list_value")
+        await glide_client.set(non_list_key, "non_list_value")
         with pytest.raises(RequestError):
-            await redis_client.lpos(non_list_key, "a")
+            await glide_client.lpos(non_list_key, "a")
 
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_multi_key_command_returns_cross_slot_error(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
         promises: List[Any] = [
-            redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
-            redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
-            redis_client.rename("abc", "zxy"),
-            redis_client.zdiffstore("abc", ["zxy", "lkn"]),
-            redis_client.zdiff(["abc", "zxy", "lkn"]),
-            redis_client.zdiff_withscores(["abc", "zxy", "lkn"]),
-            redis_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
-            redis_client.zinterstore(
+            glide_client.blpop(["abc", "zxy", "lkn"], 0.1),
+            glide_client.brpop(["abc", "zxy", "lkn"], 0.1),
+            glide_client.rename("abc", "zxy"),
+            glide_client.zdiffstore("abc", ["zxy", "lkn"]),
+            glide_client.zdiff(["abc", "zxy", "lkn"]),
+            glide_client.zdiff_withscores(["abc", "zxy", "lkn"]),
+            glide_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
+            glide_client.zinterstore(
                 "{xyz}", cast(Union[List[Union[TEncodable]]], ["{abc}", "{def}"])
             ),
-            redis_client.zunionstore(
+            glide_client.zunionstore(
                 "{xyz}", cast(Union[List[Union[TEncodable]]], ["{abc}", "{def}"])
             ),
-            redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
-            redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
-            redis_client.smove("abc", "def", "_"),
-            redis_client.sunionstore("abc", ["zxy", "lkn"]),
-            redis_client.sinter(["abc", "zxy", "lkn"]),
-            redis_client.sinterstore("abc", ["zxy", "lkn"]),
-            redis_client.sdiff(["abc", "zxy", "lkn"]),
-            redis_client.sdiffstore("abc", ["def", "ghi"]),
-            redis_client.renamenx("abc", "def"),
-            redis_client.pfcount(["def", "ghi"]),
-            redis_client.pfmerge("abc", ["def", "ghi"]),
-            redis_client.zinter(["def", "ghi"]),
-            redis_client.zinter_withscores(
+            glide_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
+            glide_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
+            glide_client.smove("abc", "def", "_"),
+            glide_client.sunionstore("abc", ["zxy", "lkn"]),
+            glide_client.sinter(["abc", "zxy", "lkn"]),
+            glide_client.sinterstore("abc", ["zxy", "lkn"]),
+            glide_client.sdiff(["abc", "zxy", "lkn"]),
+            glide_client.sdiffstore("abc", ["def", "ghi"]),
+            glide_client.renamenx("abc", "def"),
+            glide_client.pfcount(["def", "ghi"]),
+            glide_client.pfmerge("abc", ["def", "ghi"]),
+            glide_client.zinter(["def", "ghi"]),
+            glide_client.zinter_withscores(
                 cast(Union[List[TEncodable]], ["def", "ghi"])
             ),
-            redis_client.zunion(["def", "ghi"]),
-            redis_client.zunion_withscores(cast(List[TEncodable], ["def", "ghi"])),
-            redis_client.sort_store("abc", "zxy"),
-            redis_client.lmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT),
-            redis_client.blmove(
+            glide_client.zunion(["def", "ghi"]),
+            glide_client.zunion_withscores(cast(List[TEncodable], ["def", "ghi"])),
+            glide_client.sort_store("abc", "zxy"),
+            glide_client.lmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT),
+            glide_client.blmove(
                 "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
             ),
-            redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
-            redis_client.sunion(["def", "ghi"]),
-            redis_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
-            redis_client.xread({"abc": "0-0", "zxy": "0-0"}),
+            glide_client.msetnx({"abc": "abc", "zxy": "zyx"}),
+            glide_client.sunion(["def", "ghi"]),
+            glide_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
+            glide_client.xread({"abc": "0-0", "zxy": "0-0"}),
         ]
 
-        if not await check_if_server_version_lt(redis_client, "6.2.0"):
+        if not await check_if_server_version_lt(glide_client, "6.2.0"):
             promises.extend(
                 [
-                    redis_client.geosearchstore(
+                    glide_client.geosearchstore(
                         "abc",
                         "zxy",
                         GeospatialData(15, 37),
                         GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
                     ),
-                    redis_client.copy("abc", "zxy", replace=True),
+                    glide_client.copy("abc", "zxy", replace=True),
                 ]
             )
 
-        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
             promises.extend(
                 [
-                    redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
-                    redis_client.zintercard(["abc", "def"]),
-                    redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
-                    redis_client.sintercard(["def", "ghi"]),
-                    redis_client.lmpop(["def", "ghi"], ListDirection.LEFT),
-                    redis_client.blmpop(["def", "ghi"], ListDirection.LEFT, 1),
-                    redis_client.lcs("abc", "def"),
-                    redis_client.lcs_len("abc", "def"),
-                    redis_client.lcs_idx("abc", "def"),
-                    redis_client.fcall("func", ["abc", "zxy", "lkn"], []),
-                    redis_client.fcall_ro("func", ["abc", "zxy", "lkn"], []),
+                    glide_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
+                    glide_client.zintercard(["abc", "def"]),
+                    glide_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
+                    glide_client.sintercard(["def", "ghi"]),
+                    glide_client.lmpop(["def", "ghi"], ListDirection.LEFT),
+                    glide_client.blmpop(["def", "ghi"], ListDirection.LEFT, 1),
+                    glide_client.lcs("abc", "def"),
+                    glide_client.lcs_len("abc", "def"),
+                    glide_client.lcs_idx("abc", "def"),
+                    glide_client.fcall("func", ["abc", "zxy", "lkn"], []),
+                    glide_client.fcall_ro("func", ["abc", "zxy", "lkn"], []),
                 ]
             )
 
@@ -8985,15 +8985,15 @@ class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_multi_key_command_routed_to_multiple_nodes(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
-        await redis_client.exists(["abc", "zxy", "lkn"])
-        await redis_client.unlink(["abc", "zxy", "lkn"])
-        await redis_client.delete(["abc", "zxy", "lkn"])
-        await redis_client.mget(["abc", "zxy", "lkn"])
-        await redis_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
-        await redis_client.touch(["abc", "zxy", "lkn"])
-        await redis_client.watch(["abc", "zxy", "lkn"])
+        await glide_client.exists(["abc", "zxy", "lkn"])
+        await glide_client.unlink(["abc", "zxy", "lkn"])
+        await glide_client.delete(["abc", "zxy", "lkn"])
+        await glide_client.mget(["abc", "zxy", "lkn"])
+        await glide_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
+        await glide_client.touch(["abc", "zxy", "lkn"])
+        await glide_client.watch(["abc", "zxy", "lkn"])
 
 
 class TestCommandsUnitTests:
@@ -9092,10 +9092,10 @@ class TestCommandsUnitTests:
 class TestClusterRoutes:
     async def cluster_route_custom_command_multi_nodes(
         self,
-        redis_client: GlideClusterClient,
+        glide_client: GlideClusterClient,
         route: Route,
     ):
-        cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+        cluster_nodes = await glide_client.custom_command(["CLUSTER", "NODES"])
         assert isinstance(cluster_nodes, bytes)
         cluster_nodes = cluster_nodes.decode()
         assert isinstance(cluster_nodes, (str, list))
@@ -9112,7 +9112,7 @@ class TestClusterRoutes:
             cluster_nodes.count("slave") if isinstance(route, AllNodes) else 0
         )
 
-        all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
+        all_results = await glide_client.custom_command(["INFO", "REPLICATION"], route)
         assert isinstance(all_results, dict)
         assert len(all_results) == expected_num_of_results
         primary_count = 0
@@ -9131,25 +9131,25 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_all_nodes(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
-        await self.cluster_route_custom_command_multi_nodes(redis_client, AllNodes())
+        await self.cluster_route_custom_command_multi_nodes(glide_client, AllNodes())
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_all_primaries(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
         await self.cluster_route_custom_command_multi_nodes(
-            redis_client, AllPrimaries()
+            glide_client, AllPrimaries()
         )
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_random_node(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
-        info_res = await redis_client.custom_command(
+        info_res = await glide_client.custom_command(
             ["INFO", "REPLICATION"], RandomNode()
         )
         assert isinstance(info_res, bytes)
@@ -9158,11 +9158,11 @@ class TestClusterRoutes:
         assert "role:master" in info_res or "role:slave" in info_res
 
     async def cluster_route_custom_command_slot_route(
-        self, redis_client: GlideClusterClient, is_slot_key: bool
+        self, glide_client: GlideClusterClient, is_slot_key: bool
     ):
         route_class = SlotKeyRoute if is_slot_key else SlotIdRoute
         route_second_arg = "foo" if is_slot_key else 4000
-        primary_res = await redis_client.custom_command(
+        primary_res = await glide_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)
         )
         assert isinstance(primary_res, bytes)
@@ -9175,7 +9175,7 @@ class TestClusterRoutes:
             if "myself" in node_line:
                 expected_primary_node_id = node_line.split(" ")[0]
 
-        replica_res = await redis_client.custom_command(
+        replica_res = await glide_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)
         )
         assert isinstance(replica_res, bytes)
@@ -9191,27 +9191,27 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_slot_key_route(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
-        await self.cluster_route_custom_command_slot_route(redis_client, True)
+        await self.cluster_route_custom_command_slot_route(glide_client, True)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_slot_id_route(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
-        await self.cluster_route_custom_command_slot_route(redis_client, False)
+        await self.cluster_route_custom_command_slot_route(glide_client, False)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_info_random_route(self, redis_client: GlideClusterClient):
-        info = await redis_client.info([InfoSection.SERVER], RandomNode())
+    async def test_info_random_route(self, glide_client: GlideClusterClient):
+        info = await glide_client.info([InfoSection.SERVER], RandomNode())
         assert b"# Server" in info
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_by_address_reaches_correct_node(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
         # returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
         def clean_result(value: TResult):
@@ -9223,7 +9223,7 @@ class TestClusterRoutes:
                 f"Couldn't find 'myself' in the cluster nodes output: {value}"
             )
 
-        cluster_nodes = await redis_client.custom_command(
+        cluster_nodes = await glide_client.custom_command(
             ["cluster", "nodes"], RandomNode()
         )
         assert isinstance(cluster_nodes, bytes)
@@ -9232,7 +9232,7 @@ class TestClusterRoutes:
         assert isinstance(cluster_nodes, str)
         host = cluster_nodes.split(" ")[1].split("@")[0]
 
-        second_result = await redis_client.custom_command(
+        second_result = await glide_client.custom_command(
             ["cluster", "nodes"], ByAddressRoute(host)
         )
         assert isinstance(second_result, bytes)
@@ -9243,7 +9243,7 @@ class TestClusterRoutes:
         host, port = host.split(":")
         port_as_int = int(port)
 
-        third_result = await redis_client.custom_command(
+        third_result = await glide_client.custom_command(
             ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
         )
         assert isinstance(third_result, bytes)
@@ -9254,37 +9254,37 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_fail_routing_by_address_if_no_port_is_provided(
-        self, redis_client: GlideClusterClient
+        self, glide_client: GlideClusterClient
     ):
         with pytest.raises(RequestError):
-            await redis_client.info(route=ByAddressRoute("foo"))
+            await glide_client.info(route=ByAddressRoute("foo"))
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cluster_flushdb(self, redis_client: GlideClusterClient):
+    async def test_cluster_flushdb(self, glide_client: GlideClusterClient):
         min_version = "6.2.0"
         key = f"{{key}}-1{get_random_string(5)}"
         value = get_random_string(5)
 
-        await redis_client.set(key, value)
-        assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(route=AllPrimaries()) == OK
-        assert await redis_client.dbsize() == 0
+        await glide_client.set(key, value)
+        assert await glide_client.dbsize() > 0
+        assert await glide_client.flushdb(route=AllPrimaries()) == OK
+        assert await glide_client.dbsize() == 0
 
-        await redis_client.set(key, value)
-        assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(FlushMode.ASYNC, AllPrimaries()) == OK
-        assert await redis_client.dbsize() == 0
+        await glide_client.set(key, value)
+        assert await glide_client.dbsize() > 0
+        assert await glide_client.flushdb(FlushMode.ASYNC, AllPrimaries()) == OK
+        assert await glide_client.dbsize() == 0
 
-        if not await check_if_server_version_lt(redis_client, min_version):
-            await redis_client.set(key, value)
-            assert await redis_client.dbsize() > 0
-            assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) == OK
-            assert await redis_client.dbsize() == 0
+        if not await check_if_server_version_lt(glide_client, min_version):
+            await glide_client.set(key, value)
+            assert await glide_client.dbsize() > 0
+            assert await glide_client.flushdb(FlushMode.SYNC, AllPrimaries()) == OK
+            assert await glide_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sscan(self, redis_client: GlideClusterClient):
+    async def test_sscan(self, glide_client: GlideClusterClient):
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
         initial_cursor = "0"
@@ -9297,36 +9297,36 @@ class TestClusterRoutes:
         char_members: List[TEncodable] = ["a", "b", "c", "d", "e"]
 
         # Empty set
-        result = await redis_client.sscan(key1, initial_cursor)
+        result = await glide_client.sscan(key1, initial_cursor)
         assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await redis_client.sscan(key1, "-1")
+        result = await glide_client.sscan(key1, "-1")
         assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Result contains the whole set
-        assert await redis_client.sadd(key1, char_members) == len(char_members)
-        result = await redis_client.sscan(key1, initial_cursor)
+        assert await glide_client.sadd(key1, char_members) == len(char_members)
+        result = await glide_client.sscan(key1, initial_cursor)
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result[result_collection_index]) == len(char_members)
         assert set(result[result_collection_index]).issubset(
             cast(list, convert_string_to_bytes_object(char_members))
         )
 
-        result = await redis_client.sscan(key1, initial_cursor, match="a")
+        result = await glide_client.sscan(key1, initial_cursor, match="a")
         assert result[result_cursor_index] == initial_cursor.encode()
         assert set(result[result_collection_index]).issubset(set([b"a"]))
 
         # Result contains a subset of the key
-        assert await redis_client.sadd(key1, num_members) == len(num_members)
+        assert await glide_client.sadd(key1, num_members) == len(num_members)
         result_cursor = "0"
         result_values = set()  # type: set[bytes]
         result = cast(
             list,
             convert_bytes_to_string_object(
-                await redis_client.sscan(key1, result_cursor)
+                await glide_client.sscan(key1, result_cursor)
             ),
         )
         result_cursor = str(result[result_cursor_index])
@@ -9337,7 +9337,7 @@ class TestClusterRoutes:
             next_result = cast(
                 list,
                 convert_bytes_to_string_object(
-                    await redis_client.sscan(key1, result_cursor)
+                    await glide_client.sscan(key1, result_cursor)
                 ),
             )
             next_result_cursor = str(next_result[result_cursor_index])
@@ -9353,35 +9353,35 @@ class TestClusterRoutes:
         assert set(char_members).issubset(result_values)
 
         # Test match pattern
-        result = await redis_client.sscan(key1, initial_cursor, match="*")
+        result = await glide_client.sscan(key1, initial_cursor, match="*")
         assert result[result_cursor_index] != "0"
         assert len(result[result_collection_index]) >= default_count
 
         # Test count
-        result = await redis_client.sscan(key1, initial_cursor, count=20)
+        result = await glide_client.sscan(key1, initial_cursor, count=20)
         assert result[result_cursor_index] != "0"
         assert len(result[result_collection_index]) >= 20
 
         # Test count with match returns a non-empty list
-        result = await redis_client.sscan(key1, initial_cursor, match="1*", count=20)
+        result = await glide_client.sscan(key1, initial_cursor, match="1*", count=20)
         assert result[result_cursor_index] != "0"
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
         # Non-set key
-        assert await redis_client.set(key2, "test") == OK
+        assert await glide_client.set(key2, "test") == OK
         with pytest.raises(RequestError):
-            await redis_client.sscan(key2, initial_cursor)
+            await glide_client.sscan(key2, initial_cursor)
         with pytest.raises(RequestError):
-            await redis_client.sscan(key2, initial_cursor, match="test", count=20)
+            await glide_client.sscan(key2, initial_cursor, match="test", count=20)
 
         # Negative count
         with pytest.raises(RequestError):
-            await redis_client.sscan(key2, initial_cursor, count=-1)
+            await glide_client.sscan(key2, initial_cursor, count=-1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zscan(self, redis_client: GlideClusterClient):
+    async def test_zscan(self, glide_client: GlideClusterClient):
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
         initial_cursor = "0"
@@ -9407,18 +9407,18 @@ class TestClusterRoutes:
         }
 
         # Empty set
-        result = await redis_client.zscan(key1, initial_cursor)
+        result = await glide_client.zscan(key1, initial_cursor)
         assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await redis_client.zscan(key1, "-1")
+        result = await glide_client.zscan(key1, "-1")
         assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Result contains the whole set
-        assert await redis_client.zadd(key1, char_map) == len(char_map)
-        result = await redis_client.zscan(key1, initial_cursor)
+        assert await glide_client.zadd(key1, char_map) == len(char_map)
+        result = await glide_client.zscan(key1, initial_cursor)
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
@@ -9426,18 +9426,18 @@ class TestClusterRoutes:
             list, convert_string_to_bytes_object(char_map_with_str_scores)
         )
 
-        result = await redis_client.zscan(key1, initial_cursor, match="a")
+        result = await glide_client.zscan(key1, initial_cursor, match="a")
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert convert_list_to_dict(result_collection) == {b"a": b"0"}
 
         # Result contains a subset of the key
-        assert await redis_client.zadd(key1, num_map) == len(num_map)
+        assert await glide_client.zadd(key1, num_map) == len(num_map)
         full_result_map = {}
         result = result = cast(
             list,
             convert_bytes_to_string_object(
-                await redis_client.zscan(key1, initial_cursor)
+                await glide_client.zscan(key1, initial_cursor)
             ),
         )
         result_cursor = str(result[result_cursor_index])
@@ -9451,7 +9451,7 @@ class TestClusterRoutes:
             next_result = cast(
                 list,
                 convert_bytes_to_string_object(
-                    await redis_client.zscan(key1, result_cursor)
+                    await glide_client.zscan(key1, result_cursor)
                 ),
             )
             next_result_cursor = next_result[result_cursor_index]
@@ -9469,35 +9469,35 @@ class TestClusterRoutes:
         assert num_map_with_str_scores == full_result_map
 
         # Test match pattern
-        result = await redis_client.zscan(key1, initial_cursor, match="*")
+        result = await glide_client.zscan(key1, initial_cursor, match="*")
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= default_count
 
         # Test count
-        result = await redis_client.zscan(key1, initial_cursor, count=20)
+        result = await glide_client.zscan(key1, initial_cursor, count=20)
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 20
 
         # Test count with match returns a non-empty list
-        result = await redis_client.zscan(key1, initial_cursor, match="1*", count=20)
+        result = await glide_client.zscan(key1, initial_cursor, match="1*", count=20)
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
         # Non-set key
-        assert await redis_client.set(key2, "test") == OK
+        assert await glide_client.set(key2, "test") == OK
         with pytest.raises(RequestError):
-            await redis_client.zscan(key2, initial_cursor)
+            await glide_client.zscan(key2, initial_cursor)
         with pytest.raises(RequestError):
-            await redis_client.zscan(key2, initial_cursor, match="test", count=20)
+            await glide_client.zscan(key2, initial_cursor, match="test", count=20)
 
         # Negative count
         with pytest.raises(RequestError):
-            await redis_client.zscan(key2, initial_cursor, count=-1)
+            await glide_client.zscan(key2, initial_cursor, count=-1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hscan(self, redis_client: GlideClusterClient):
+    async def test_hscan(self, glide_client: GlideClusterClient):
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
         initial_cursor = "0"
@@ -9520,18 +9520,18 @@ class TestClusterRoutes:
         }
 
         # Empty set
-        result = await redis_client.hscan(key1, initial_cursor)
+        result = await glide_client.hscan(key1, initial_cursor)
         assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await redis_client.hscan(key1, "-1")
+        result = await glide_client.hscan(key1, "-1")
         assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Result contains the whole set
-        assert await redis_client.hset(key1, char_map) == len(char_map)
-        result = await redis_client.hscan(key1, initial_cursor)
+        assert await glide_client.hset(key1, char_map) == len(char_map)
+        result = await glide_client.hscan(key1, initial_cursor)
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
@@ -9539,18 +9539,18 @@ class TestClusterRoutes:
             dict, convert_string_to_bytes_object(char_map)  # type: ignore
         )
 
-        result = await redis_client.hscan(key1, initial_cursor, match="field a")
+        result = await glide_client.hscan(key1, initial_cursor, match="field a")
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert convert_list_to_dict(result_collection) == {b"field a": b"value a"}
 
         # Result contains a subset of the key
-        assert await redis_client.hset(key1, num_map) == len(num_map)
+        assert await glide_client.hset(key1, num_map) == len(num_map)
         full_result_map = {}
         result = result = cast(
             list,
             convert_bytes_to_string_object(
-                await redis_client.hscan(key1, initial_cursor)
+                await glide_client.hscan(key1, initial_cursor)
             ),
         )
         result_cursor = str(result[result_cursor_index])
@@ -9564,7 +9564,7 @@ class TestClusterRoutes:
             next_result = cast(
                 list,
                 convert_bytes_to_string_object(
-                    await redis_client.hscan(key1, result_cursor)
+                    await glide_client.hscan(key1, result_cursor)
                 ),
             )
             next_result_cursor = next_result[result_cursor_index]
@@ -9582,31 +9582,31 @@ class TestClusterRoutes:
         assert num_map == full_result_map
 
         # Test match pattern
-        result = await redis_client.hscan(key1, initial_cursor, match="*")
+        result = await glide_client.hscan(key1, initial_cursor, match="*")
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= default_count
 
         # Test count
-        result = await redis_client.hscan(key1, initial_cursor, count=20)
+        result = await glide_client.hscan(key1, initial_cursor, count=20)
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 20
 
         # Test count with match returns a non-empty list
-        result = await redis_client.hscan(key1, initial_cursor, match="1*", count=20)
+        result = await glide_client.hscan(key1, initial_cursor, match="1*", count=20)
         assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
         # Non-hash key
-        assert await redis_client.set(key2, "test") == OK
+        assert await glide_client.set(key2, "test") == OK
         with pytest.raises(RequestError):
-            await redis_client.hscan(key2, initial_cursor)
+            await glide_client.hscan(key2, initial_cursor)
         with pytest.raises(RequestError):
-            await redis_client.hscan(key2, initial_cursor, match="test", count=20)
+            await glide_client.hscan(key2, initial_cursor, match="test", count=20)
 
         # Negative count
         with pytest.raises(RequestError):
-            await redis_client.hscan(key2, initial_cursor, count=-1)
+            await glide_client.hscan(key2, initial_cursor, count=-1)
 
 
 @pytest.mark.asyncio
@@ -9614,57 +9614,57 @@ class TestScripts:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script(self, redis_client: TGlideClient):
+    async def test_script(self, glide_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         script = Script("return 'Hello'")
-        assert await redis_client.invoke_script(script) == "Hello".encode()
+        assert await glide_client.invoke_script(script) == "Hello".encode()
 
         script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
         assert (
-            await redis_client.invoke_script(script, keys=[key1], args=["value1"])
+            await glide_client.invoke_script(script, keys=[key1], args=["value1"])
             == "OK"
         )
         # Reuse the same script with different parameters.
         assert (
-            await redis_client.invoke_script(script, keys=[key2], args=["value2"])
+            await glide_client.invoke_script(script, keys=[key2], args=["value2"])
             == "OK"
         )
         script = Script("return redis.call('GET', KEYS[1])")
         assert (
-            await redis_client.invoke_script(script, keys=[key1]) == "value1".encode()
+            await glide_client.invoke_script(script, keys=[key1]) == "value1".encode()
         )
         assert (
-            await redis_client.invoke_script(script, keys=[key2]) == "value2".encode()
+            await glide_client.invoke_script(script, keys=[key2]) == "value2".encode()
         )
 
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script_binary(self, redis_client: TGlideClient):
+    async def test_script_binary(self, glide_client: TGlideClient):
         key1 = bytes(get_random_string(10), "utf-8")
         key2 = bytes(get_random_string(10), "utf-8")
         script = Script(bytes("return 'Hello'", "utf-8"))
-        assert await redis_client.invoke_script(script) == "Hello".encode()
+        assert await glide_client.invoke_script(script) == "Hello".encode()
 
         script = Script(bytes("return redis.call('SET', KEYS[1], ARGV[1])", "utf-8"))
         assert (
-            await redis_client.invoke_script(
+            await glide_client.invoke_script(
                 script, keys=[key1], args=[bytes("value1", "utf-8")]
             )
             == "OK"
         )
         # Reuse the same script with different parameters.
         assert (
-            await redis_client.invoke_script(
+            await glide_client.invoke_script(
                 script, keys=[key2], args=[bytes("value2", "utf-8")]
             )
             == "OK"
         )
         script = Script(bytes("return redis.call('GET', KEYS[1])", "utf-8"))
         assert (
-            await redis_client.invoke_script(script, keys=[key1]) == "value1".encode()
+            await glide_client.invoke_script(script, keys=[key1]) == "value1".encode()
         )
         assert (
-            await redis_client.invoke_script(script, keys=[key2]) == "value2".encode()
+            await glide_client.invoke_script(script, keys=[key2]) == "value2".encode()
         )
