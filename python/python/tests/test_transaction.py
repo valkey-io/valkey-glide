@@ -1127,6 +1127,9 @@ class TestTransaction:
             # Verify function_restore - use result1[2] from above
             transaction2 = ClusterTransaction() if cluster_mode else Transaction()
             transaction2.function_restore(result1[2], FunctionRestorePolicy.REPLACE)
+            # For the cluster mode, PRIMARY SlotType is required to avoid the error:
+            #  "RequestError: An error was signalled by the server -
+            #   ReadOnly: You can't write against a read only replica."
             if isinstance(glide_client, GlideClusterClient):
                 result2 = await glide_client.exec(
                     transaction2, SlotIdRoute(SlotType.PRIMARY, 1)
