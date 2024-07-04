@@ -292,7 +292,8 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return Always <code>OK</code>.
-     * @param ArgType you can only pass Keys and Values of types {@link String} and {@link GlideString} Key and Value must be of same type.
+     * @param ArgType you can only pass Keys and Values of types {@link String} and {@link
+     *     GlideString} Key and Value must be of same type.
      * @example
      *     <pre>{@code
      * String result = client.mset(Map.of("key1", "value1", "key2", "value2"}).get();
@@ -310,7 +311,8 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
-     * @param ArgType you can only pass Keys and Values of types {@link String} and {@link GlideString} Key and Value must be of same type.
+     * @param ArgType you can only pass Keys and Values of types {@link String} and {@link
+     *     GlideString} Key and Value must be of same type.
      * @example
      *     <pre>{@code
      * Boolean result = client.msetnx(Map.of("key1", "value1", "key2", "value2"}).get();

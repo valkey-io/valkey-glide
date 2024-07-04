@@ -9159,6 +9159,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void msetnxBinary(BaseClient client) {
+        // keys are from different slots
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString nonExisting = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> keyValueMap1 = Map.of(key1, value, key2, value);
+        Map<GlideString, GlideString> keyValueMap2 = Map.of(key2, value, key3, value);
+
+        // all keys are empty, successfully set
+        assertTrue(client.msetnx(keyValueMap1).get());
+        assertArrayEquals(
+                new GlideString[] {value, value, null},
+                client.mget(new GlideString[] {key1, key2, nonExisting}).get());
+
+        // one of the keys is already set, nothing gets set
+        assertFalse(client.msetnx(keyValueMap2).get());
+        assertNull(client.get(key3).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lcs(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
         // setup

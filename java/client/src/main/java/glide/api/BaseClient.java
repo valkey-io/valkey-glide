@@ -18,6 +18,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
@@ -780,9 +781,14 @@ public abstract class BaseClient
 
     @Override
     public <ArgType> CompletableFuture<String> mset(@NonNull Map<ArgType, ArgType> keyValueMap) {
-        checkTypeOrThrow(keyValueMap);
+        if (!keyValueMap.isEmpty()) {
+            var key = keyValueMap.keySet().iterator().next();
+            if (!(key instanceof String) && !(key instanceof GlideString)) {
+                throw new IllegalArgumentException("Expected String or GlideString");
+            }
+        }
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet,args,this:handleStringResponse);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
     }
 
     @Override
@@ -3385,9 +3391,14 @@ public abstract class BaseClient
     }
 
     public <ArgType> CompletableFuture<Boolean> msetnx(@NonNull Map<ArgType, ArgType> keyValueMap) {
-        checkTypeOrThrow(keyValueMap);
+        if (!keyValueMap.isEmpty()) {
+            var key = keyValueMap.keySet().iterator().next();
+            if (!(key instanceof String) && !(key instanceof GlideString)) {
+                throw new IllegalArgumentException("Expected String or GlideString");
+            }
+        }
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSetNX,args,this:handleBooleanResponse);
+        return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
     }
 
     @Override
