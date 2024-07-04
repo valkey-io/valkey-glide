@@ -8240,10 +8240,10 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_kill_no_write(
-        self, request, cluster_mode, protocol, redis_client: TGlideClient
+        self, request, cluster_mode, protocol, glide_client: TGlideClient
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -8252,11 +8252,11 @@ class TestCommands:
 
         # nothing to kill
         with pytest.raises(RequestError) as e:
-            await redis_client.function_kill()
+            await glide_client.function_kill()
         assert "NotBusy" in str(e)
 
         # load the library
-        assert await redis_client.function_load(code, replace=True) == lib_name.encode()
+        assert await glide_client.function_load(code, replace=True) == lib_name.encode()
 
         # create a second client to run fcall
         test_client = await create_client(
@@ -8286,7 +8286,7 @@ class TestCommands:
             while timeout <= 5:
                 # keep trying to kill until we get an "OK"
                 try:
-                    result = await redis_client.function_kill()
+                    result = await glide_client.function_kill()
                     #  we expect to get success
                     assert result == "OK"
                     break
@@ -8303,16 +8303,16 @@ class TestCommands:
 
         # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
-            assert await redis_client.function_kill()
+            assert await glide_client.function_kill()
         assert "NotBusy" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_kill_write_is_unkillable(
-        self, request, cluster_mode, protocol, redis_client: TGlideClient
+        self, request, cluster_mode, protocol, glide_client: TGlideClient
     ):
         min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
+        if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
@@ -8320,7 +8320,7 @@ class TestCommands:
         code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
 
         # load the library on all primaries
-        assert await redis_client.function_load(code, replace=True) == lib_name.encode()
+        assert await glide_client.function_load(code, replace=True) == lib_name.encode()
 
         # create a second client to run fcall - and give it a long timeout
         test_client = await create_client(
@@ -8341,7 +8341,7 @@ class TestCommands:
             while timeout <= 5:
                 # keep trying to kill until we get a unkillable return error
                 try:
-                    await redis_client.function_kill()
+                    await glide_client.function_kill()
                 except RequestError as e:
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
