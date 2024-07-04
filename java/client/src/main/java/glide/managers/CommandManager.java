@@ -33,6 +33,7 @@ import redis_request.RedisRequestOuterClass.RedisRequest;
 import redis_request.RedisRequestOuterClass.RequestType;
 import redis_request.RedisRequestOuterClass.Routes;
 import redis_request.RedisRequestOuterClass.ScriptInvocation;
+import redis_request.RedisRequestOuterClass.ScriptInvocationPointers;
 import redis_request.RedisRequestOuterClass.SimpleRoutes;
 import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
@@ -161,7 +162,7 @@ public class CommandManager {
             List<GlideString> args,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(script, keys, args);
+        RedisRequest.Builder command = prepareScript(script, keys, args);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -285,8 +286,25 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected RedisRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
+
+        if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
+                        + args.stream().mapToLong(key -> key.getBytes().length).sum()
+                > RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
+            return RedisRequest.newBuilder()
+                    .setScriptInvocationPointers(
+                            ScriptInvocationPointers.newBuilder()
+                                    .setHash(script.getHash())
+                                    .setArgsPointer(
+                                            RedisValueResolver.createLeakedBytesVec(
+                                                    args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
+                                    .setKeysPointer(
+                                            RedisValueResolver.createLeakedBytesVec(
+                                                    keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
+                                    .build());
+        }
+
         return RedisRequest.newBuilder()
                 .setScriptInvocation(
                         ScriptInvocation.newBuilder()
