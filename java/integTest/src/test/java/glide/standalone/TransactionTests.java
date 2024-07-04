@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
@@ -29,6 +30,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
@@ -602,5 +604,59 @@ public class TransactionTests {
                     ArrayUtils.contains(keysFound, typeKeys.get(type)),
                     "Unable to find " + typeKeys.get(type) + " in a scan by match pattern");
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_dump_restore() {
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        String value = UUID.randomUUID().toString();
+
+        // Setup
+        assertEquals(OK, client.set(key1, gs(value)).get());
+
+        // Verify dump
+        Transaction transaction1 = new Transaction();
+        transaction1.withBinarySafeOutput();
+        transaction1.dump(key1);
+        Object[] result = client.exec(transaction1).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify restore
+        Transaction transaction2 = new Transaction();
+        transaction2.withBinarySafeOutput();
+        transaction2.restore(key2, 0, payload.getBytes());
+        transaction2.get(key2);
+        Object[] response = client.exec(transaction2).get();
+        assertEquals(OK, response[0]);
+        assertEquals(gs(value), response[1]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_function_dump_restore() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String libName = "mylib";
+        String funcName = "myfun";
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+
+        // Setup
+        client.functionLoad(code, true).get();
+        client.functionList(true).get();
+
+        // Verify functionDump
+        Transaction transaction1 = new Transaction();
+        transaction1.withBinarySafeOutput();
+        transaction1.functionDump();
+        Object[] result = client.exec(transaction1).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify functionRestore
+        Transaction transaction2 = new Transaction();
+        transaction2.withBinarySafeOutput();
+        transaction2.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        Object[] response = client.exec(transaction2).get();
+        assertEquals(OK, response[0]);
     }
 }

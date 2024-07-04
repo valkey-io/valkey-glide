@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -18,7 +19,9 @@ import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -336,5 +339,33 @@ public class ClusterTransactionTests {
                 };
         assertEquals(expectedResult[0], results[0]);
         assertTrue((Long) expectedResult[1] <= (Long) results[1]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_function_dump_restore() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String libName = "mylib";
+        String funcName = "myfun";
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+
+        // Setup
+        clusterClient.functionLoad(code, true).get();
+        clusterClient.functionList(true).get();
+
+        // Verify functionDump
+        ClusterTransaction transaction1 = new ClusterTransaction();
+        transaction1.withBinarySafeOutput();
+        transaction1.functionDump();
+        Object[] result = clusterClient.exec(transaction1).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify functionRestore
+        ClusterTransaction transaction2 = new ClusterTransaction();
+        transaction2.withBinarySafeOutput();
+        transaction2.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        Object[] response =
+                clusterClient.exec(transaction2, new SlotIdRoute(1, SlotType.PRIMARY)).get();
+        assertEquals(OK, response[0]);
     }
 }
