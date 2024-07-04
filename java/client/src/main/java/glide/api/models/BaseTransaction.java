@@ -49,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
@@ -59,9 +60,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
@@ -132,6 +135,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -225,6 +229,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
@@ -248,6 +253,7 @@ import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
 import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoSearchOptions;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
@@ -4833,6 +4839,70 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
+     * user.
+     *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return Command Response - The serialized value of a set. If <code>key</code> does not exist,
+     *     <code>null</code> will be returned.
+     */
+    public <ArgType> T dump(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Dump, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
+     *     with a <code>value</code>.
+     */
+    public <ArgType> T restore(@NonNull ArgType key, long ttl, @NonNull byte[] value) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value)));
+        return getThis();
+    }
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @param restoreOptions The restore options. See {@link RestoreOptions}.
+     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
+     *     with a <code>value</code>.
+     */
+    public <ArgType> T restore(
+            @NonNull ArgType key,
+            long ttl,
+            @NonNull byte[] value,
+            @NonNull RestoreOptions restoreOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions)));
+        return getThis();
+    }
+
+    /**
      * Counts the number of set bits (population counting) in a string stored at <code>key</code>.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
@@ -5193,6 +5263,49 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T functionStats() {
         protobufTransaction.addCommands(buildCommand(FunctionStats));
+        return getThis();
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries. The command will be routed to a random
+     * node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
+     * @return Command Response - The serialized payload of all loaded libraries.
+     */
+    public T functionDump() {
+        protobufTransaction.addCommands(buildCommand(FunctionDump));
+        return getThis();
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
+     * will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionRestore(@NonNull byte[] payload) {
+        protobufTransaction.addCommands(buildCommand(FunctionRestore, newArgsBuilder().add(payload)));
+        return getThis();
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
+     * will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param policy A policy for handling existing libraries.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionRestore(@NonNull byte[] payload, @NonNull FunctionRestorePolicy policy) {
+        protobufTransaction.addCommands(
+                buildCommand(FunctionRestore, newArgsBuilder().add(payload).add(policy)));
         return getThis();
     }
 
