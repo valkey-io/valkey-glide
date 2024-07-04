@@ -41,7 +41,7 @@ class StandaloneCommands(CoreCommands):
         sections: Optional[List[InfoSection]] = None,
     ) -> bytes:
         """
-        Get information and statistics about the Redis server.
+        Get information and statistics about the server.
         See https://valkey.io/commands/info/ for details.
 
         Args:
@@ -63,7 +63,7 @@ class StandaloneCommands(CoreCommands):
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
-        See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+        See https://redis.io/topics/Transactions/ for details on Transactions.
 
         Args:
             transaction (Transaction): A Transaction object containing a list of commands to be executed.
@@ -79,7 +79,7 @@ class StandaloneCommands(CoreCommands):
 
     async def select(self, index: int) -> TOK:
         """
-        Change the currently selected Redis database.
+        Change the currently selected database.
         See https://valkey.io/commands/select/ for details.
 
         Args:
@@ -92,7 +92,7 @@ class StandaloneCommands(CoreCommands):
 
     async def config_resetstat(self) -> TOK:
         """
-        Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+        Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
         See https://valkey.io/commands/config-resetstat/ for details.
 
         Returns:
@@ -124,7 +124,7 @@ class StandaloneCommands(CoreCommands):
 
     async def ping(self, message: Optional[TEncodable] = None) -> bytes:
         """
-        Ping the Redis server.
+        Ping the server.
         See https://valkey.io/commands/ping/ for more details.
 
         Args:
@@ -230,8 +230,8 @@ class StandaloneCommands(CoreCommands):
             bytes: The provided `message`.
 
         Examples:
-            >>> await client.echo("Glide-for-Redis")
-                b'Glide-for-Redis'
+            >>> await client.echo("Valkey GLIDE")
+                b'Valkey GLIDE'
         """
         return cast(bytes, await self._execute_command(RequestType.Echo, [message]))
 
@@ -239,7 +239,7 @@ class StandaloneCommands(CoreCommands):
         self, library_code: TEncodable, replace: bool = False
     ) -> bytes:
         """
-        Loads a library to Redis.
+        Loads a library to Valkey.
 
         See https://valkey.io/commands/function-load/ for more details.
 
@@ -256,7 +256,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.function_load(code, True)
                 b"mylib"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             bytes,
@@ -292,10 +292,10 @@ class StandaloneCommands(CoreCommands):
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
-                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+                    b"library_code": b"#!lua name=mylib \n sever.register_function('myfunc', function(keys, args) return args[1] end)"
                 }]
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = []
         if library_name_pattern is not None:
@@ -326,7 +326,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.function_flush(FlushMode.SYNC)
                 "OK"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
@@ -352,7 +352,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.function_delete("my_lib")
                 "OK"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
@@ -378,7 +378,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(bytes, await self._execute_command(RequestType.FunctionDump, []))
 
@@ -406,7 +406,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH)
                 "OK" # The serialized dump response was used to restore the libraries with the specified policy.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [payload]
         if policy is not None:
@@ -768,7 +768,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.get("destination")
                 b"sheep"
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [source, destination]
         if destinationDB is not None:
@@ -786,7 +786,7 @@ class StandaloneCommands(CoreCommands):
         parameters: Optional[List[int]] = None,
     ) -> bytes:
         """
-        Displays a piece of generative computer art and the Redis version.
+        Displays a piece of generative computer art and the Valkey version.
 
         See https://valkey.io/commands/lolwut for more details.
 
@@ -797,13 +797,13 @@ class StandaloneCommands(CoreCommands):
                 For version `6`, those are number of columns and number of lines.
 
         Returns:
-            bytes: A piece of generative computer art along with the current Redis version.
+            bytes: A piece of generative computer art along with the current Valkey version.
 
         Examples:
             >>> await client.lolwut(6, [40, 20]);
-                b"Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Valkey version
             >>> await client.lolwut(5, [30, 5, 5]);
-                b"Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Valkey version
         """
         args: List[TEncodable] = []
         if version is not None:
