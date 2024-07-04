@@ -4737,7 +4737,7 @@ class TestCommands:
             result_ro = await redis_client.sort_ro(
                 key,
                 limit=Limit(0, 2),
-                get_patterns=["user:*->name"],
+                get_patterns=[b"user:*->name"],
                 order=OrderBy.ASC,
                 alpha=True,
             )
@@ -4767,8 +4767,8 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(
-                "user_ids",
-                by_pattern="user:*->age",
+                b"user_ids",
+                by_pattern=b"user:*->age",
                 get_patterns=["user:*->name"],
                 alpha=True,
             )
@@ -4789,7 +4789,7 @@ class TestCommands:
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(
                 "user_ids",
-                by_pattern="user:*->age",
+                by_pattern=b"user:*->age",
                 get_patterns=["user:*->name"],
                 alpha=True,
             )
@@ -4809,8 +4809,8 @@ class TestCommands:
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(
                 "user_ids",
-                by_pattern="user:*->name",
-                get_patterns=["user:*->age"],
+                by_pattern=b"user:*->name",
+                get_patterns=[b"user:*->age"],
                 alpha=True,
             )
             assert result_ro == [None, b"30", b"25", b"35", b"20", b"40"]
@@ -4850,7 +4850,7 @@ class TestCommands:
         assert result == []
 
         if not skip_sort_ro_test:
-            result_ro = await redis_client.sort_ro("non_existing_key")
+            result_ro = await redis_client.sort_ro(b"non_existing_key")
             assert result_ro == []
 
         # Test sort_store with non-existing key
