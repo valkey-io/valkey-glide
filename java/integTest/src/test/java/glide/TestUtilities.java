@@ -322,8 +322,6 @@ public class TestUtilities {
     /**
      * Create a lua lib with a RO function which runs an endless loop up to timeout sec.<br>
      * Execution takes at least 5 sec regardless of the timeout configured.<br>
-     * If <code>readOnly</code> is <code>false</code>, function sets a dummy value to the first key
-     * given.
      */
     public static String createLuaLibWithLongRunningFunction(
             String libName, String funcName, int timeout, boolean readOnly) {
