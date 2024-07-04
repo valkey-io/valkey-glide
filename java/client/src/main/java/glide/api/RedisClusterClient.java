@@ -874,10 +874,35 @@ public class RedisClusterClient extends BaseClient
         }
     }
 
+    /** Process a <code>FUNCTION STATS</code> cluster response. */
+    protected ClusterValue<Map<GlideString, Map<GlideString, Object>>>
+            handleFunctionStatsBinaryResponse(Response response, boolean isSingleValue) {
+        if (isSingleValue) {
+            return ClusterValue.ofSingleValue(
+                    handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
+        } else {
+            Map<GlideString, Map<GlideString, Map<GlideString, Object>>> data =
+                    handleBinaryStringMapResponse(response);
+            for (var nodeInfo : data.entrySet()) {
+                nodeInfo.setValue(handleFunctionStatsBinaryResponse(nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValueBinary(data);
+        }
+    }
+
     @Override
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(
                 FunctionStats, new String[0], response -> handleFunctionStatsResponse(response, false));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>
+            functionStatsBinary() {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new GlideString[0],
+                response -> handleFunctionStatsBinaryResponse(response, false));
     }
 
     @Override
@@ -888,6 +913,16 @@ public class RedisClusterClient extends BaseClient
                 new String[0],
                 route,
                 response -> handleFunctionStatsResponse(response, route instanceof SingleNodeRoute));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>
+            functionStatsBinary(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new GlideString[0],
+                route,
+                response -> handleFunctionStatsBinaryResponse(response, route instanceof SingleNodeRoute));
     }
 
     @Override

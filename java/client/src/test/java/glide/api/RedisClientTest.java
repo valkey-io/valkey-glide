@@ -9617,6 +9617,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void functionStatsBinary_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        Map<GlideString, Map<GlideString, Object>> value = Map.of(gs("1"), Map.of(gs("2"), 2));
+        CompletableFuture<Map<GlideString, Map<GlideString, Object>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, Object>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Map<GlideString, Object>>> response =
+                service.functionStatsBinary();
+        Map<GlideString, Map<GlideString, Object>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void functionDump_returns_success() {
         // setup
         byte[] value = new byte[] {42};

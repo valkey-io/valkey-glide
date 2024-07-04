@@ -2125,6 +2125,32 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void functionStatsBinary_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of(gs("1"), Map.of(gs("2"), 2)));
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> response =
+                service.functionStatsBinary();
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcallReadOnly_without_keys_and_without_args_but_with_route_returns_success() {
         // setup
         String function = "func";
@@ -2291,6 +2317,32 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> response =
                 service.functionStats(RANDOM);
         ClusterValue<Map<String, Map<String, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStatsBinary_with_route_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of(gs("1"), Map.of(gs("2"), 2)));
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> response =
+                service.functionStatsBinary(RANDOM);
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

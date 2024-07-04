@@ -319,4 +319,35 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Map<String, Object>>> functionStats();
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @return A <code>Map</code> with two keys:
+     *     <ul>
+     *       <li><code>running_script</code> with information about the running script.
+     *       <li><code>engines</code> with information about available engines and their stats.
+     *     </ul>
+     *     See example for more details.
+     * @example
+     *     <pre>{@code
+     * Map<GlideString, Map<GlideString, Object>> response = client.functionStats().get();
+     * Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
+     * if (runningScriptInfo != null) {
+     *   GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
+     *   System.out.printf("Server is currently running function '%s' with command line '%s', which has been running for %d ms%n",
+     *       runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long)runningScriptInfo.get(gs("duration_ms")));
+     * }
+     * Map<GlideString, Object> enginesInfo = response.get(gs("engines"));
+     * for (GlideString engineName : enginesInfo.keySet()) {
+     *   Map<GlideString, Long> engine = (Map<GlideString, Long>) enginesInfo.get(gs(engineName));
+     *   System.out.printf("Server supports engine '%s', which has %d libraries and %d functions in total%n",
+     *       engineName, engine.get(gs("libraries_count")), engine.get(gs("functions_count")));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, Object>>> functionStatsBinary();
 }

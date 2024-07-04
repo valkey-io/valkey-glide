@@ -663,6 +663,17 @@ public abstract class BaseClient
         return response;
     }
 
+    /** Process a <code>FUNCTION STATS</code> standalone response. */
+    protected Map<GlideString, Map<GlideString, Object>> handleFunctionStatsBinaryResponse(
+            Map<GlideString, Map<GlideString, Object>> response) {
+        Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
+        if (runningScriptInfo != null) {
+            Object[] command = (Object[]) runningScriptInfo.get(gs("command"));
+            runningScriptInfo.put(gs("command"), castArray(command, GlideString.class));
+        }
+        return response;
+    }
+
     /** Process a <code>LCS key1 key2 IDX</code> response */
     protected Map<String, Object> handleLcsIdxResponse(Map<String, Object> response)
             throws RedisException {
