@@ -1365,9 +1365,53 @@ mod tests {
     fn convert_xinfo_stream() {
         // Only a partial response is represented here for brevity - the rest of the response follows the same format.
         let groups_resp2_response = Value::Array(vec![
+            Value::BulkString("length".to_string().into_bytes()),
+            Value::Int(2),
+            Value::BulkString("entries".to_string().into_bytes()),
             Value::Array(vec![
+                Value::Array(vec![
+                    Value::BulkString("1-0".to_string().into_bytes()),
+                    Value::Array(vec![
+                        Value::BulkString("a".to_string().into_bytes()),
+                        Value::BulkString("b".to_string().into_bytes()),
+                        Value::BulkString("c".to_string().into_bytes()),
+                        Value::BulkString("d".to_string().into_bytes()),
+                    ])
+                ]),
+            ]),
+            Value::BulkString("groups".to_string().into_bytes()),
+            Value::Array(vec![
+                Value::Array(vec![
+                    Value::BulkString("consumers".to_string().into_bytes()),
+                    Value::Array(vec![
+                        Value::Array(vec![
+                            Value::BulkString("pending".to_string().into_bytes()),
+                            Value::Array(vec![
+                                Value::Array(vec![
+                                    Value::BulkString("1-0".to_string().into_bytes()),
+                                    Value::Int(1),
+                                ]),
+                            ]),
+                        ]),
+                        Value::Array(vec![
+                            Value::BulkString("pending".to_string().into_bytes()),
+                            Value::Array(vec![]),
+                        ]),
+                    ]),
+                ]),
+                Value::Array(vec![
+                    Value::BulkString("consumers".to_string().into_bytes()),
+                    Value::Array(vec![]),
+                ]),
+            ]),
+        ]);
+
+        let groups_resp3_response = Value::Map(vec![
+            (
                 Value::BulkString("length".to_string().into_bytes()),
                 Value::Int(2),
+            ),
+            (
                 Value::BulkString("entries".to_string().into_bytes()),
                 Value::Array(vec![
                     Value::Array(vec![
@@ -1380,90 +1424,42 @@ mod tests {
                         ])
                     ]),
                 ]),
+            ),
+            (
                 Value::BulkString("groups".to_string().into_bytes()),
                 Value::Array(vec![
-                    Value::Array(vec![
-                        Value::BulkString("consumers".to_string().into_bytes()),
-                        Value::Array(vec![
+                    Value::Map(vec![
+                        (
+                            Value::BulkString("consumers".to_string().into_bytes()),
                             Value::Array(vec![
-                                Value::BulkString("pending".to_string().into_bytes()),
-                                Value::Array(vec![
-                                    Value::Array(vec![
-                                        Value::BulkString("1-0".to_string().into_bytes()),
-                                        Value::Int(1),
-                                    ]),
+                                Value::Map(vec![
+                                    (
+                                        Value::BulkString("pending".to_string().into_bytes()),
+                                        Value::Array(vec![
+                                            Value::Array(vec![
+                                                Value::BulkString("1-0".to_string().into_bytes()),
+                                                Value::Int(1),
+                                            ]),
+                                        ]),
+                                    ),
+                                ]),
+                                Value::Map(vec![
+                                    (
+                                        Value::BulkString("pending".to_string().into_bytes()),
+                                        Value::Array(vec![]),
+                                    ),
                                 ]),
                             ]),
-                            Value::Array(vec![
-                                Value::BulkString("pending".to_string().into_bytes()),
-                                Value::Array(vec![]),
-                            ]),
-                        ]),
+                        ),
                     ]),
-                    Value::Array(vec![
-                        Value::BulkString("consumers".to_string().into_bytes()),
-                        Value::Array(vec![]),
+                    Value::Map(vec![
+                        (
+                            Value::BulkString("consumers".to_string().into_bytes()),
+                            Value::Array(vec![]),
+                        ),
                     ]),
                 ]),
-            ]),
-        ]);
-
-        let groups_resp3_response = Value::Array(vec![
-            Value::Map(vec![
-                (
-                    Value::BulkString("length".to_string().into_bytes()),
-                    Value::Int(2),
-                ),
-                (
-                    Value::BulkString("entries".to_string().into_bytes()),
-                    Value::Array(vec![
-                        Value::Array(vec![
-                            Value::BulkString("1-0".to_string().into_bytes()),
-                            Value::Array(vec![
-                                Value::BulkString("a".to_string().into_bytes()),
-                                Value::BulkString("b".to_string().into_bytes()),
-                                Value::BulkString("c".to_string().into_bytes()),
-                                Value::BulkString("d".to_string().into_bytes()),
-                            ])
-                        ]),
-                    ]),
-                ),
-                (
-                    Value::BulkString("groups".to_string().into_bytes()),
-                    Value::Array(vec![
-                        Value::Map(vec![
-                            (
-                                Value::BulkString("consumers".to_string().into_bytes()),
-                                Value::Array(vec![
-                                    Value::Map(vec![
-                                        (
-                                            Value::BulkString("pending".to_string().into_bytes()),
-                                            Value::Array(vec![
-                                                Value::Array(vec![
-                                                    Value::BulkString("1-0".to_string().into_bytes()),
-                                                    Value::Int(1),
-                                                ]),
-                                            ]),
-                                        ),
-                                    ]),
-                                    Value::Map(vec![
-                                        (
-                                            Value::BulkString("pending".to_string().into_bytes()),
-                                            Value::Array(vec![]),
-                                        ),
-                                    ]),
-                                ]),
-                            ),
-                        ]),
-                        Value::Map(vec![
-                            (
-                                Value::BulkString("consumers".to_string().into_bytes()),
-                                Value::Array(vec![]),
-                            ),
-                        ]),
-                    ]),
-                ),
-            ]),
+            ),
         ]);
 
         // We want the RESP2 response to be converted into RESP3 format.
