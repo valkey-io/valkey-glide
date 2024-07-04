@@ -9,3 +9,6 @@ protobuf
 
 # Must be ignored as part of Maven Central publishing process
 gradle.properties
+
+# Ignore VSCode JUnit extension directories
+bin/
