@@ -18,6 +18,7 @@ from glide.constants import (
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
+    TFunctionStatsResponse,
     TResult,
     TSingleNodeRoute,
 )
@@ -553,6 +554,48 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[TResult],
             await self._execute_command(RequestType.FCallReadOnly, args, route),
+        )
+
+    async def function_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[TFunctionStatsResponse]:
+        """
+        Returns information about the function that's currently running and information about the
+        available execution engines.
+
+        See https://valkey.io/commands/function-stats/ for more details
+
+        Args:
+            route (Optional[Route]): Specifies the routing configuration for the command. The client
+                will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TFunctionStatsResponse]: A `Mapping` with two keys:
+                - `running_script` with information about the running script.
+                - `engines` with information about available engines and their stats.
+                See example for more details.
+
+        Examples:
+            >>> await client.function_stats(RandomNode())
+                {
+                    'running_script': {
+                        'name': 'foo',
+                        'command': ['FCALL', 'foo', '0', 'hello'],
+                        'duration_ms': 7758
+                    },
+                    'engines': {
+                        'LUA': {
+                            'libraries_count': 1,
+                            'functions_count': 1,
+                        }
+                    }
+                }
+
+        Since: Redis version 7.0.0.
+        """
+        return cast(
+            TClusterResponse[TFunctionStatsResponse],
+            await self._execute_command(RequestType.FunctionStats, [], route),
         )
 
     async def function_dump(

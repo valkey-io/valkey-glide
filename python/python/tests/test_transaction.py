@@ -159,6 +159,18 @@ async def transaction_test(
         args.append(OK)
         transaction.function_flush(FlushMode.SYNC)
         args.append(OK)
+        transaction.function_stats()
+        args.append(
+            {
+                b"running_script": None,
+                b"engines": {
+                    b"LUA": {
+                        b"libraries_count": 0,
+                        b"functions_count": 0,
+                    }
+                },
+            }
+        )
 
     transaction.dbsize()
     args.append(0)
