@@ -22,6 +22,7 @@ from glide.async_commands.core import (
     ExpiryGetEx,
     ExpiryTypeGetEx,
     FlushMode,
+    FunctionRestorePolicy,
     InsertPosition,
 )
 from glide.async_commands.sorted_set import (
@@ -55,6 +56,7 @@ from glide.async_commands.transaction import (
 from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.routes import SlotIdRoute, SlotType
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -1041,3 +1043,70 @@ class TestTransaction:
         for element in results:
             assert isinstance(element, bytes)
             assert b"Redis ver. " in element
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_dump_restore(self, redis_client: TGlideClient):
+        cluster_mode = isinstance(redis_client, GlideClusterClient)
+        keyslot = get_random_string(3)
+        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+
+        # Verify Dump
+        transaction1 = ClusterTransaction() if cluster_mode else Transaction()
+        transaction1.set(key1, "value")
+        transaction1.dump(key1)
+        result1 = await redis_client.exec(transaction1)
+        assert result1 is not None
+        assert isinstance(result1, list)
+        assert result1[0] == OK
+        assert isinstance(result1[1], bytes)
+
+        # Verify Restore - use result1[1] from above
+        transaction2 = ClusterTransaction() if cluster_mode else Transaction()
+        transaction2.restore(key2, 0, result1[1])
+        transaction2.get(key2)
+        result2 = await redis_client.exec(transaction2)
+        assert result2 is not None
+        assert isinstance(result2, list)
+        assert result2[0] == OK
+        assert result2[1] == b"value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_function_dump_restore(self, redis_client: TGlideClient):
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            cluster_mode = isinstance(redis_client, GlideClusterClient)
+
+            # Setup (will not verify)
+            assert await redis_client.function_flush() == OK
+            lib_name = f"mylib_{get_random_string(10)}"
+            func_name = f"myfun_{get_random_string(10)}"
+            code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+            transaction1 = ClusterTransaction() if cluster_mode else Transaction()
+            transaction1.function_load(code, True)
+            transaction1.function_list(with_code=True)
+
+            # Verify function_dump
+            transaction1.function_dump()
+            result1 = await redis_client.exec(transaction1)
+            assert result1 is not None
+            assert isinstance(result1, list)
+            assert isinstance(result1[2], bytes)
+
+            # Verify function_restore - use result1[2] from above
+            transaction2 = ClusterTransaction() if cluster_mode else Transaction()
+            transaction2.function_restore(result1[2], FunctionRestorePolicy.REPLACE)
+            if cluster_mode:
+                result2 = await redis_client.exec(
+                    transaction2, SlotIdRoute(SlotType.PRIMARY, 1)
+                )
+            else:
+                result2 = await redis_client.exec(transaction2)
+
+            assert result2 is not None
+            assert isinstance(result2, list)
+            assert result2[0] == OK
+
+            # Test clean up
+            # await redis_client.function_flush()

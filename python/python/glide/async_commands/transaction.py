@@ -19,6 +19,7 @@ from glide.async_commands.core import (
     ExpiryGetEx,
     ExpirySet,
     FlushMode,
+    FunctionRestorePolicy,
     GeospatialData,
     GeoUnit,
     InfoSection,
@@ -2018,6 +2019,105 @@ class BaseTransaction:
         if arguments is not None:
             args.extend(arguments)
         return self.append_command(RequestType.FCallReadOnly, args)
+
+    def function_dump(self: TTransaction) -> TTransaction:
+        """
+        Returns the serialized payload of all loaded libraries.
+
+        See https://valkey.io/commands/function-dump/ for more details.
+
+        Command response:
+            bytes: The serialized payload of all loaded libraries.
+
+        Since: Redis version 7.0.0.
+        """
+        return self.append_command(RequestType.FunctionDump, [])
+
+    def function_restore(
+        self: TTransaction,
+        payload: TEncodable,
+        policy: Optional[FunctionRestorePolicy] = None,
+    ) -> TTransaction:
+        """
+        Restores libraries from the serialized payload returned by the `function_dump` command.
+
+        See https://valkey.io/commands/function-restore/ for more details.
+
+        Args:
+            payload (TEncodable): The serialized data from the `function_dump` command.
+            policy (Optional[FunctionRestorePolicy]): A policy for handling existing libraries.
+
+        Command response:
+            TOK: A simple "OK" response.
+
+        Since: Redis version 7.0.0.
+        """
+        args: List[TEncodable] = [payload]
+        if policy is not None:
+            args.append(policy.value)
+        return self.append_command(RequestType.FunctionRestore, args)
+
+    def dump(
+        self: TTransaction,
+        key: TEncodable,
+    ) -> TTransaction:
+        """
+        Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+
+        See https://valkey.io/commands/dump/ for more details.
+
+        Args:
+            key (TEncodable): The `key` to serialize.
+
+        Command response:
+            Optional[bytes]: The serialized value of the data stored at `key`. If `key` does not
+                exist, `None` will be returned.
+
+        Since: Redis version 7.0.0.
+        """
+        return self.append_command(RequestType.Dump, [key])
+
+    def restore(
+        self: TTransaction,
+        key: TEncodable,
+        ttl: int,
+        value: TEncodable,
+        replace: bool = False,
+        absttl: bool = False,
+        idletime: Optional[int] = None,
+        frequency: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Create a `key` associated with a `value` that is obtained by deserializing the provided
+        serialized `value` obtained via `dump`.
+
+        See https://valkey.io/commands/restore for more details.
+
+        Args:
+            key (TEncodable): The `key` to create.
+            ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
+            value (TEncodable) The serialized value to deserialize and assign to `key`.
+            replace (bool): Set to `True` to replace the key if it exists.
+            absttl (bool): Set to `True` to specify that `ttl` represents an absolute Unix
+                timestamp (in milliseconds).
+            idletime (Optional[int]): Set the `IDLETIME` option with object idletime to the given key.
+            frequency (Optional[int]): Set the `FREQ` option with object frequency to the given key.
+
+        Command response:
+            TOK: A simple "OK" response.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key, str(ttl), value]
+        if replace is True:
+            args.append("REPLACE")
+        if absttl is True:
+            args.append("ABSTTL")
+        if idletime is not None:
+            args.extend(["IDLETIME", str(idletime)])
+        if frequency is not None:
+            args.extend(["FREQ", str(frequency)])
+        return self.append_command(RequestType.Restore, args)
 
     def xadd(
         self: TTransaction,
