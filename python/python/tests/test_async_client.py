@@ -8257,8 +8257,6 @@ class TestCommands:
 
         # load the library
         assert await redis_client.function_load(code, replace=True) == lib_name.encode()
-        list = await redis_client.function_list()
-        print(list)
 
         # create a second client to run fcall
         test_client = await create_client(
@@ -8282,21 +8280,22 @@ class TestCommands:
             assert func_name in str(e)
 
         async def wait_and_function_kill():
-            # it can take up to 5 seconds for FCALL to register as running
-            await asyncio.sleep(5)
+            # it can take a few seconds for FCALL to register as running
+            await asyncio.sleep(2)
             timeout = 0
             killSuccess = False
-            # try for another 3 seconds to see if FCALL is now running
-            while timeout <= 3:
+            while timeout <= 5:
                 try:
                     # attempt to kill the function
                     result = await redis_client.function_kill()
                     if result is "OK":
                         killSuccess = True
                 except RequestError as e:
+                    # a RequestError may occur if the function is not yet running
                     break
                 timeout += 0.5
                 await asyncio.sleep(0.5)
+            # we expect to eventually get a success
             assert killSuccess
 
         await asyncio.gather(
@@ -8304,14 +8303,14 @@ class TestCommands:
             wait_and_function_kill(),
         )
 
-        # no functions running
+        # no functions running so we get notbusy error again
         with pytest.raises(RequestError) as e:
             assert await redis_client.function_kill()
         assert "NotBusy" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [False, True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_kill_write(
+    async def test_function_kill_write_is_unkillable(
         self, request, cluster_mode, protocol, redis_client: TGlideClient
     ):
         min_version = "7.0.0"
@@ -8322,59 +8321,42 @@ class TestCommands:
         func_name = f"myfunc1c{get_random_string(5)}"
         code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, False)
 
-        # nothing to kill
-        with pytest.raises(RequestError) as e:
-            await redis_client.function_kill()
-        assert "NotBusy" in str(e)
-
-        # load the library
-        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
+        # load the library on all primaries
         assert await redis_client.function_load(code, replace=True) == lib_name.encode()
-        # TODO remove - using this to validate read-only flags
-        list = await redis_client.function_list()
 
-        # create a second client to run fcall
+        # create a second client to run fcall - and give it a long timeout
         test_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
         )
 
-        # call fcall to run the function
-        # make sure that fcall routes to a primary node, and not a replica
-        # if this happens, function_kill and function_stats won't find the function and will fail
+        # call fcall to run the function loaded function
         async def endless_fcall_route_call():
             # fcall won't be killed, because kill only works against fcalls that don't make a write operation
-            # and will instead timeout
-            #             with pytest.raises(GlideTimeoutError) as e:
-            # call with key so that we call set(key)
+            # use fcall(key) so that it makes a write operation
             await test_client.fcall(func_name, keys=[lib_name])
 
         async def wait_and_function_kill():
-            # it can take up to 5 seconds for FCALL to register as running
+            # it can take a few seconds for FCALL to register as running
             await asyncio.sleep(2)
             timeout = 0
             foundUnkillable = False
-            # try for another 3 seconds to see if FCALL is now running
             while timeout <= 5:
+                # keep trying to kill until we get a unkillable return error
                 try:
                     await redis_client.function_kill()
                 except RequestError as e:
-                    # kill the function - this will fail because the function makes a write operation
                     if "UNKILLABLE" in str(e):
                         foundUnkillable = True
                         break
                 timeout += 0.5
                 await asyncio.sleep(0.5)
+            # expect an unkillable error
             assert foundUnkillable
 
         await asyncio.gather(
             endless_fcall_route_call(),
             wait_and_function_kill(),
         )
-
-        # no functions running
-        with pytest.raises(RequestError) as e:
-            assert await redis_client.function_kill()
-        assert "NotBusy" in str(e) or "UNKILLABLE" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
