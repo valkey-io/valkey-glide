@@ -1466,7 +1466,7 @@ mod tests {
         assert_eq!(
             convert_to_expected_type(
                 groups_resp2_response.clone(),
-                Some(ExpectedReturnType::ArrayOfMaps(&None))
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
             )
             .unwrap(),
             groups_resp3_response.clone()
@@ -1476,10 +1476,42 @@ mod tests {
         assert_eq!(
             convert_to_expected_type(
                 groups_resp3_response.clone(),
-                Some(ExpectedReturnType::ArrayOfMaps(&None))
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
             )
             .unwrap(),
             groups_resp3_response.clone()
+        );
+
+        let resp2_empty_groups = Value::Array(vec![
+            Value::BulkString("groups".to_string().into_bytes()),
+            Value::Array(vec![]),
+        ]);
+
+        let resp3_empty_groups = Value::Map(vec![
+            (
+                Value::BulkString("groups".to_string().into_bytes()),
+                Value::Array(vec![]),
+            )
+        ]);
+
+        // We want the RESP2 response to be converted into RESP3 format.
+        assert_eq!(
+            convert_to_expected_type(
+                resp2_empty_groups.clone(),
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            )
+            .unwrap(),
+            resp3_empty_groups.clone()
+        );
+
+        // RESP3 responses are already in the correct format and should not be converted.
+        assert_eq!(
+            convert_to_expected_type(
+                resp3_empty_groups.clone(),
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            )
+            .unwrap(),
+            resp3_empty_groups.clone()
         );
     }
 
