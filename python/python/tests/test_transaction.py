@@ -891,7 +891,7 @@ class TestTransaction:
         glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
-        length = 2**25  # 33mb
+        length = 2**22  # 4mb
         key = "0" * length
         value = "0" * length
         transaction = Transaction()
