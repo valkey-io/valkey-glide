@@ -1,10 +1,10 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test the GLIDE for Redis Java wrapper.
+This document describes how to set up your development environment to build and test the Valkey GLIDE Java wrapper.
 
 ### Development Overview
 
-The GLIDE for Redis Java wrapper consists of both Java and Rust code. Rust bindings for the Java Native Interface are implemented using [jni-rs](https://github.com/jni-rs/jni-rs), and the Java JAR is built using [Gradle](https://github.com/gradle/gradle). The Java and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings for the Java Native Interface are implemented using [jni-rs](https://github.com/jni-rs/jni-rs), and the Java JAR is built using [Gradle](https://github.com/gradle/gradle). The Java and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
 ### Build from source
 
