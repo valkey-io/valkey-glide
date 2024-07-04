@@ -3576,7 +3576,7 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
-        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(FCall, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
@@ -3595,7 +3595,8 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
-        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(
+                FCallReadOnly, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
