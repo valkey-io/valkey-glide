@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
@@ -605,29 +606,25 @@ public class CommandTests {
                         .get();
         assertEquals("one", functionResult);
 
-        var flist = regularClient.functionList(false).get();
+        var flist = regularClient.functionListBinary(false).get();
         var expectedDescription =
-                new HashMap<String, String>() {
+                new HashMap<GlideString, GlideString>() {
                     {
-                        put(funcName.toString(), null);
+                        put(funcName, null);
                     }
                 };
         var expectedFlags =
-                new HashMap<String, Set<String>>() {
+                new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName.toString(), Set.of("no-writes"));
+                        put(funcName, Set.of(gs("no-writes")));
                     }
                 };
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionList(true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(code.toString()));
+        flist = regularClient.functionListBinary(true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
         var executionException =
@@ -659,19 +656,15 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library not found"));
 
-        flist = regularClient.functionList(libName.toString(), false).get();
-        expectedDescription.put(newFuncName.toString(), null);
-        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        flist = regularClient.functionListBinary(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionList(libName.toString(), true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(newCode.toString()));
+        flist = regularClient.functionListBinary(libName, true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         functionResult =
                 regularClient
@@ -1169,6 +1162,23 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, regularClient.flushall().get());
         assertNull(regularClient.randomKey().get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKeyBinary() {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+
+        assertEquals(OK, regularClient.set(key1, gs("a")).get());
+        assertEquals(OK, regularClient.set(key2, gs("b")).get());
+
+        GlideString randomKeyBinary = regularClient.randomKeyBinary().get();
+        assertEquals(1L, regularClient.exists(new GlideString[] {randomKeyBinary}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKeyBinary().get());
     }
 
     @Test
