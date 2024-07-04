@@ -8277,26 +8277,24 @@ class TestCommands:
                     )
                 else:
                     await test_client.fcall_ro(func_name, arguments=[])
-            assert func_name in str(e)
+            assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
             # it can take a few seconds for FCALL to register as running
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             timeout = 0
-            killSuccess = False
             while timeout <= 5:
+                # keep trying to kill until we get an "OK"
                 try:
-                    # attempt to kill the function
                     result = await redis_client.function_kill()
-                    if result == "OK":
-                        killSuccess = True
-                except RequestError as e:
-                    # a RequestError may occur if the function is not yet running
+                    #  we expect to get success
+                    assert result == "OK"
                     break
-                timeout += 0.5
-                await asyncio.sleep(0.5)
-            # we expect to eventually get a success
-            assert killSuccess
+                except RequestError:
+                    # a RequestError may occur if the function is not yet running
+                    # sleep and try again
+                    timeout += 0.5
+                    await asyncio.sleep(0.5)\
 
         await asyncio.gather(
             endless_fcall_route_call(),
@@ -8337,7 +8335,7 @@ class TestCommands:
 
         async def wait_and_function_kill():
             # it can take a few seconds for FCALL to register as running
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             timeout = 0
             foundUnkillable = False
             while timeout <= 5:
