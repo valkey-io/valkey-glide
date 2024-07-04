@@ -139,6 +139,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -2792,6 +2793,73 @@ public abstract class BaseClient
                 XInfoConsumers,
                 new GlideString[] {key, groupName},
                 response -> castArray(handleArrayResponseBinary(response), Map.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start) {
+        String[] args =
+                concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime), start});
+        return commandManager.submitNewCommand(
+                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start,
+            long count) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {
+                            key, group, consumer, Long.toString(minIdleTime), start, Long.toString(count)
+                        });
+        return commandManager.submitNewCommand(
+                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime), start, "JUSTID"});
+        return commandManager.submitNewCommand(
+                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start,
+            long count) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {
+                            key,
+                            group,
+                            consumer,
+                            Long.toString(minIdleTime),
+                            start,
+                            Long.toString(count),
+                            "JUSTID"
+                        });
+        return commandManager.submitNewCommand(
+                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
