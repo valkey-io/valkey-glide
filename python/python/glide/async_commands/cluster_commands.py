@@ -595,7 +595,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[TFunctionStatsResponse],
-            await self._execute_command(RequestType.FunctionStats, [], route)
+            await self._execute_command(RequestType.FunctionStats, [], route),
         )
 
     async def function_dump(
