@@ -422,6 +422,14 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, Object>>> functionStatsBinary() {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new GlideString[0],
+                response -> handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
+    }
+
+    @Override
     public CompletableFuture<String> unwatch() {
         return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
     }
