@@ -4689,9 +4689,8 @@ public class SharedCommandTests {
     //     @ParameterizedTest(autoCloseArguments = false)
     //     @MethodSource("getClients")
     //     public void zmpop_binary(BaseClient client) {
-    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in
-    // version
-    // 7");
+    //         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in
+    // version 7");
     //         GlideString key1 = gs("{zmpop}-1-" + UUID.randomUUID());
     //         GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
     //         GlideString key3 = gs("{zmpop}-3-" + UUID.randomUUID());
@@ -4798,9 +4797,8 @@ public class SharedCommandTests {
     //     @ParameterizedTest(autoCloseArguments = false)
     //     @MethodSource("getClients")
     //     public void bzmpop_binary(BaseClient client) {
-    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in
-    // version
-    // 7");
+    //         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in
+    // version 7");
     //         GlideString key1 = gs("{bzmpop}-1-" + UUID.randomUUID());
     //         GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
     //         GlideString key3 = gs("{bzmpop}-3-" + UUID.randomUUID());
