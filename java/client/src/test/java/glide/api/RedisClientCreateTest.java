@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.BaseClient.buildChannelHandler;
 import static glide.api.BaseClient.buildMessageHandler;
+import static glide.api.RedisClient.createClient;
 import static glide.api.RedisClient.buildCommandManager;
 import static glide.api.RedisClient.buildConnectionManager;
 import static glide.api.RedisClient.createClient;
