@@ -11,7 +11,14 @@ This design ensures that updates easily propagate to each language and reduces o
 
 ## System Requirements
 
-The beta release of GLIDE for Valkey was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7 (aarch64-apple-darwin).
+The release of GLIDE for Valkey was tested on the following platforms:
+Linux:
+- Ubuntu 22.04.1 (x86_64)
+- Amazon Linux 2023 (AL2023) (x86_64)
+
+macOS:
+- macOS 12.7 (Apple silicon)
+
 
 ## Layout of Java code
 The Java client contains the following parts:
@@ -32,9 +39,9 @@ Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-
 
 For developers, please refer to Java's [DEVELOPER.md](./DEVELOPER.md) for further instruction on how to set up your development environment.
 
-**Java version check**
+**Java Requirements**
 
-Ensure that you have a minimum Java version of JDK 11 installed on your system:
+Minimum requirements: JDK 11 or later. Ensure that you have a minimum Java version of JDK 11 installed on your system:
 
 ```bash
 echo $JAVA_HOME
@@ -62,22 +69,22 @@ Gradle:
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
 
-// osx-aarch_64
+osx-aarch_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-aarch_64'
 }
 
-// osx-x86_64
+osx-x86_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-x86_64'
 }
 
-// linux-aarch_64
+linux-aarch_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-aarch_64'
 }
 
-// linux-x86_64
+linux-x86_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-x86_64'
 }
@@ -87,7 +94,7 @@ Maven:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
 ```xml
 
-<!--osx-aarch_64-->
+osx-aarch_64
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
@@ -95,7 +102,7 @@ Maven:
    <version>0.4.3</version>
 </dependency>
 
-<!--osx-x86_64-->
+osx-x86_64
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
@@ -103,7 +110,7 @@ Maven:
    <version><VERSION></version>
 </dependency>
 
-<!--linux-aarch_64-->
+linux-aarch_64
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
@@ -111,7 +118,7 @@ Maven:
    <version><VERSION></version>
 </dependency>
 
-<!--linux-x86_64-->
+linux-x86_64
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
