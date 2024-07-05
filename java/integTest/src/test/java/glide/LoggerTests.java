@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import glide.api.logging.Logger;
 import java.io.File;
 import java.util.Scanner;
+import java.util.UUID;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 
@@ -37,6 +38,8 @@ public class LoggerTests {
     @SneakyThrows
     @Test
     public void log_to_file() {
+        String logFileIdentifier = UUID.randomUUID().toString();
+
         String infoIdentifier = "Info";
         String infoMessage = "foo";
         String warnIdentifier = "Warn";
@@ -48,7 +51,9 @@ public class LoggerTests {
         String traceIdentifier = "Trace";
         String traceMessage = "squawk";
 
-        Logger.setLoggerConfig(Logger.Level.INFO, "log.txt");
+        String filename = logFileIdentifier + "log.txt";
+
+        Logger.setLoggerConfig(Logger.Level.INFO, filename);
         Logger.log(Logger.Level.INFO, infoIdentifier, infoMessage);
         Logger.log(Logger.Level.WARN, warnIdentifier, warnMessage);
         Logger.log(Logger.Level.ERROR, errorIdentifier, errorMessage);
@@ -63,24 +68,36 @@ public class LoggerTests {
         Logger.log(Logger.Level.TRACE, traceIdentifier, () -> traceMessage);
 
         File logFolder = new File("glide-logs");
-        File[] logFiles = logFolder.listFiles((dir, name) -> name.startsWith("log.txt."));
+
+        // Initialize a new logger to force closing of existing files
+        String dummyFilename = "dummy.txt";
+        Logger.setLoggerConfig(Logger.Level.DEFAULT, dummyFilename);
+        File[] dummyLogFiles = logFolder.listFiles((dir, name) -> name.startsWith(dummyFilename + "."));
+        assertNotNull(dummyLogFiles);
+        File dummyLogFile = dummyLogFiles[0];
+
+        File[] logFiles = logFolder.listFiles((dir, name) -> name.startsWith(filename + "."));
         assertNotNull(logFiles);
         File logFile = logFiles[0];
-        logFile.deleteOnExit();
-        Scanner reader = new Scanner(logFile);
-        String infoLine = reader.nextLine();
-        assertTrue(infoLine.contains(infoIdentifier + " - " + infoMessage));
-        String warnLine = reader.nextLine();
-        assertTrue(warnLine.contains(warnIdentifier + " - " + warnMessage));
-        String errorLine = reader.nextLine();
-        assertTrue(errorLine.contains(errorIdentifier + " - " + errorMessage));
-        String infoLineLazy = reader.nextLine();
-        assertTrue(infoLineLazy.contains(infoIdentifier + " - " + infoMessage));
-        String warnLineLazy = reader.nextLine();
-        assertTrue(warnLineLazy.contains(warnIdentifier + " - " + warnMessage));
-        String errorLineLazy = reader.nextLine();
-        assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
-        assertFalse(reader.hasNextLine());
-        reader.close();
+        try (Scanner reader = new Scanner(logFile)) {
+            String infoLine = reader.nextLine();
+            String warnLine = reader.nextLine();
+            String errorLine = reader.nextLine();
+            String infoLineLazy = reader.nextLine();
+            String warnLineLazy = reader.nextLine();
+            String errorLineLazy = reader.nextLine();
+            assertFalse(reader.hasNextLine());
+
+            assertTrue(infoLine.contains(infoIdentifier + " - " + infoMessage));
+            assertTrue(warnLine.contains(warnIdentifier + " - " + warnMessage));
+            assertTrue(errorLine.contains(errorIdentifier + " - " + errorMessage));
+            assertTrue(infoLineLazy.contains(infoIdentifier + " - " + infoMessage));
+            assertTrue(warnLineLazy.contains(warnIdentifier + " - " + warnMessage));
+            assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
+        } finally {
+            logFile.delete();
+            dummyLogFile.delete();
+            logFolder.delete();
+        }
     }
 }
