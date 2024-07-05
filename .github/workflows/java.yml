@@ -93,7 +93,12 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build
+              run: |
+                  rm -rf ~/.m2 ~/.gradle
+                  mvn clean
+                  ./gradlew clean
+                  ./gradlew :client:clean
+                  ./gradlew --continue build
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -169,7 +174,12 @@ jobs:
 
             - name: Build java part
               working-directory: java
-              run: ./gradlew --continue build
+              run: |
+                  rm -rf ~/.m2 ~/.gradle
+                  mvn clean
+                  ./gradlew clean
+                  ./gradlew :client:clean 
+                  ./gradlew --continue build
 
             - name: Upload test & spotbugs reports
               if: always()
