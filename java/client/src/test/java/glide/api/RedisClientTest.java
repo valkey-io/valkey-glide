@@ -12136,6 +12136,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void scan_binary_returns_success() {
+        // setup
+        GlideString cursor = gs("0");
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(Scan), eq(new GlideString[] {cursor}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.scan(cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void scan_with_options_returns_success() {
         // setup
         String cursor = "0";
@@ -12152,6 +12175,41 @@ public class RedisClientTest {
                     STRING.toString()
                 };
         Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(Scan), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.scan(cursor, options);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_binary_with_options_returns_success() {
+        // setup
+        GlideString cursor = gs("0");
+        ScanOptions options =
+                ScanOptions.builder().matchPattern("match").count(10L).type(STRING).build();
+        GlideString[] args =
+                new GlideString[] {
+                    cursor,
+                    gs(MATCH_OPTION_STRING),
+                    gs("match"),
+                    gs(COUNT_OPTION_STRING),
+                    gs("10"),
+                    gs(TYPE_OPTION_STRING),
+                    gs(STRING.toString())
+                };
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
