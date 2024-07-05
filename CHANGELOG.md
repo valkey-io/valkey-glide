@@ -83,6 +83,7 @@
 * Python: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#1769](https://github.com/aws/glide-for-redis/pull/1769))
 * Python: Added FUNCTION STATS command ([#1794](https://github.com/aws/glide-for-redis/pull/1794))
 * Python: Added XINFO STREAM command ([#1816](https://github.com/aws/glide-for-redis/pull/1816))
+* Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/aws/glide-for-redis/pull/1814))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
