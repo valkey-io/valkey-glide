@@ -3,6 +3,7 @@ package glide.api.models.commands.scan;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -26,7 +27,7 @@ public abstract class BaseScanOptions {
      * <code>COUNT</code> being <code>10</code> which indicates that it will only fetch and match
      * <code>10</code> items from the list.
      */
-    private final String matchPattern;
+    protected final String matchPattern;
 
     /**
      * <code>COUNT</code> is a just a hint for the command for how many elements to fetch from the
@@ -34,7 +35,15 @@ public abstract class BaseScanOptions {
      * enough for the <code>SCAN</code> commands to represent the results as compact single-allocation
      * packed encoding.
      */
-    private final Long count;
+    protected final Long count;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof BaseScanOptions)) return false;
+        BaseScanOptions that = (BaseScanOptions) o;
+        return Objects.equals(matchPattern, that.matchPattern) && Objects.equals(count, that.count);
+    }
 
     /**
      * Creates the arguments to be used in <code>SCAN</code> commands.

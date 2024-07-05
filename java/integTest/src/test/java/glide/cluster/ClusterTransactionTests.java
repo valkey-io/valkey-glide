@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -18,7 +19,9 @@ import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -277,7 +280,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void spublish() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        ClusterTransaction transaction = new ClusterTransaction().spublish("Schannel", "message");
+        ClusterTransaction transaction = new ClusterTransaction().publish("messagae", "Schannel", true);
 
         assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
     }
@@ -336,5 +339,33 @@ public class ClusterTransactionTests {
                 };
         assertEquals(expectedResult[0], results[0]);
         assertTrue((Long) expectedResult[1] <= (Long) results[1]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_function_dump_restore() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String libName = "mylib";
+        String funcName = "myfun";
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+
+        // Setup
+        clusterClient.functionLoad(code, true).get();
+
+        // Verify functionDump
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.withBinarySafeOutput();
+        transaction.functionDump();
+        Object[] result = clusterClient.exec(transaction).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify functionRestore
+        transaction = new ClusterTransaction();
+        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        // For the cluster mode, PRIMARY SlotType is required to avoid the error:
+        //  "RequestError: An error was signalled by the server -
+        //   ReadOnly: You can't write against a read only replica."
+        Object[] response = clusterClient.exec(transaction, new SlotIdRoute(1, SlotType.PRIMARY)).get();
+        assertEquals(OK, response[0]);
     }
 }

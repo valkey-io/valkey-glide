@@ -16,13 +16,13 @@ import lombok.RequiredArgsConstructor;
  * SortedSetBaseCommands#zrange}, {@link SortedSetBaseCommands#zrangestore}, {@link
  * SortedSetBaseCommands#zrangeWithScores}, and {@link SortedSetBaseCommands#zlexcount}
  *
- * @see <a href="https://redis.io/commands/zcount/">redis.io</a>
- * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a>
- * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a>
- * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a>
- * @see <a href="https://redis.io/commands/zrange/">redis.io</a>
- * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a>
- * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zremrangebylex/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zlexcount/">valkey.io</a>
  */
 public class RangeOptions {
 
@@ -302,21 +302,19 @@ public class RangeOptions {
     public static String[] createZRangeArgs(
             String key, RangeQuery rangeQuery, boolean reverse, boolean withScores) {
         String[] arguments =
-                concatenateArrays(new String[] {key}, createZRangeBaseArgs(rangeQuery, reverse));
-        if (withScores) {
-            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_REDIS_API});
-        }
-
+                concatenateArrays(
+                        new String[] {key}, createZRangeBaseArgs(rangeQuery, reverse, withScores));
         return arguments;
     }
 
     public static String[] createZRangeStoreArgs(
             String destination, String source, RangeQuery rangeQuery, boolean reverse) {
         return concatenateArrays(
-                new String[] {destination, source}, createZRangeBaseArgs(rangeQuery, reverse));
+                new String[] {destination, source}, createZRangeBaseArgs(rangeQuery, reverse, false));
     }
 
-    public static String[] createZRangeBaseArgs(RangeQuery rangeQuery, boolean reverse) {
+    public static String[] createZRangeBaseArgs(
+            RangeQuery rangeQuery, boolean reverse, boolean withScores) {
         String[] arguments = new String[] {rangeQuery.getStart(), rangeQuery.getEnd()};
 
         if (rangeQuery instanceof RangeByScore) {
@@ -338,6 +336,10 @@ public class RangeOptions {
                                 Long.toString(rangeQuery.getLimit().getOffset()),
                                 Long.toString(rangeQuery.getLimit().getCount())
                             });
+        }
+
+        if (withScores) {
+            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_REDIS_API});
         }
 
         return arguments;

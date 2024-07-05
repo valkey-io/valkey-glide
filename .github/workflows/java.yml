@@ -108,7 +108,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-java-${{ matrix.java }}-redis-${{ matrix.redis }}-${{ matrix.host.RUNNER }}
+                  name: test-reports-java-${{ matrix.java }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
@@ -126,7 +126,7 @@ jobs:
                     - 17
         runs-on: ubuntu-latest
         container: amazonlinux:latest
-        timeout-minutes: 15
+        timeout-minutes: 35
         steps:
             - name: Install git
               run: |

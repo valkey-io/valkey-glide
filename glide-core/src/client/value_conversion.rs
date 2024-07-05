@@ -25,7 +25,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
-    ArrayOfMaps(&'a ExpectedReturnType<'a>),
+    ArrayOfMaps(&'a Option<ExpectedReturnType<'a>>),
     StringOrSet,
     ArrayOfPairs,
     ArrayOfMemberScorePairs,
@@ -35,6 +35,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     GeoSearchReturnType,
     SimpleString,
     XAutoClaimReturnType,
+    XInfoStreamFullReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -493,7 +494,7 @@ pub(crate) fn convert_to_expected_type(
             Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Map(_)) => {
                 Ok(value)
             }
-            Value::Array(array) => convert_array_of_flat_maps(array, Some(*type_of_map_values)),
+            Value::Array(array) => convert_array_of_flat_maps(array, *type_of_map_values),
             // cluster (multi-node) response - go recursive
             Value::Map(map) => convert_map_entries(
                 map,
@@ -673,6 +674,237 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        // `XINFO STREAM` returns nested maps with different types of data
+        /* RESP2 response example
+
+        1) "length"
+        2) (integer) 2
+        ...
+        13) "recorded-first-entry-id"
+        14) "1719710679916-0"
+        15) "entries"
+        16) 1) 1) "1719710679916-0"
+               2) 1) "foo"
+                  2) "bar"
+                  3) "foo"
+                  4) "bar2"
+                  5) "some"
+                  6) "value"
+            2) 1) "1719710688676-0"
+               2) 1) "foo"
+                  2) "bar2"
+        17) "groups"
+        18) 1)  1) "name"
+                2) "mygroup"
+                ...
+                9) "pel-count"
+               10) (integer) 2
+               11) "pending"
+               12) 1) 1) "1719710679916-0"
+                      2) "Alice"
+                      3) (integer) 1719710707260
+                      4) (integer) 1
+                   2) 1) "1719710688676-0"
+                      2) "Alice"
+                      3) (integer) 1719710718373
+                      4) (integer) 1
+               13) "consumers"
+               14) 1) 1) "name"
+                      2) "Alice"
+                      ...
+                      7) "pel-count"
+                      8) (integer) 2
+                      9) "pending"
+                      10) 1) 1) "1719710679916-0"
+                             2) (integer) 1719710707260
+                             3) (integer) 1
+                          2) 1) "1719710688676-0"
+                             2) (integer) 1719710718373
+                             3) (integer) 1
+        
+        RESP3 response example
+
+        1# "length" => (integer) 2
+        ...
+        8# "entries" =>
+           1) 1) "1719710679916-0"
+              2) 1) "foo"
+                 2) "bar"
+                 3) "foo"
+                 4) "bar2"
+                 5) "some"
+                 6) "value"
+           2) 1) "1719710688676-0"
+              2) 1) "foo"
+                 2) "bar2"
+        9# "groups" =>
+           1) 1# "name" => "mygroup"
+              ...
+              6# "pending" =>
+                 1) 1) "1719710679916-0"
+                    2) "Alice"
+                    3) (integer) 1719710707260
+                    4) (integer) 1
+                 2) 1) "1719710688676-0"
+                    2) "Alice"
+                    3) (integer) 1719710718373
+                    4) (integer) 1
+              7# "consumers" =>
+                 1) 1# "name" => "Alice"
+                    ...
+                    5# "pending" =>
+                       1) 1) "1719710679916-0"
+                          2) (integer) 1719710707260
+                          3) (integer) 1
+                       2) 1) "1719710688676-0"
+                          2) (integer) 1719710718373
+                          3) (integer) 1
+        
+        Another RESP3 example on an empty stream
+
+        1# "length" => (integer) 0
+        2# "radix-tree-keys" => (integer) 0
+        3# "radix-tree-nodes" => (integer) 1
+        4# "last-generated-id" => "0-1"
+        5# "max-deleted-entry-id" => "0-1"
+        6# "entries-added" => (integer) 1
+        7# "recorded-first-entry-id" => "0-0"
+        8# "entries" => (empty array)
+        9# "groups" => (empty array)
+
+        We want to convert the RESP2 format to RESP3, so we need to:
+        - convert any consumer in the consumer array to a map, if there are any consumers
+        - convert any group in the group array to a map, if there are any groups
+        - convert the root of the response into a map
+        */
+        ExpectedReturnType::XInfoStreamFullReturnType => match value {
+            Value::Map(_) => Ok(value),  // Response is already in RESP3 format - no conversion needed
+            Value::Array(mut array) => {
+                // Response is in RESP2 format. We need to convert to RESP3 format.
+                let groups_key = Value::SimpleString("groups".into());
+                let opt_groups_key_index = array
+                    .iter()
+                    .position(
+                        |key| {
+                            let res = convert_to_expected_type(key.clone(), Some(ExpectedReturnType::SimpleString));
+                            match res {
+                                Ok(converted_key) => {
+                                    converted_key == groups_key
+                                },
+                                Err(_) => {
+                                    false
+                                }
+                            }
+                        }
+                    );
+
+                let Some(groups_key_index) = opt_groups_key_index else {
+                    return Err((ErrorKind::TypeError, "No groups key found").into());
+                };
+
+                let groups_value_index = groups_key_index + 1;
+                if array.get(groups_value_index).is_none() {
+                    return Err((ErrorKind::TypeError, "No groups value found.").into());
+                }
+
+                let Value::Array(groups) = array[groups_value_index].clone() else {
+                    return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted an Array.").into());
+                };
+
+                if groups.is_empty() {
+                    let converted_response = convert_to_expected_type(Value::Array(array), Some(ExpectedReturnType::Map {
+                        key_type: &Some(ExpectedReturnType::BulkString),
+                        value_type: &None,
+                    }))?;
+
+                    let Value::Map(map) = converted_response else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted a Map.").into());
+                    };
+
+                    return Ok(Value::Map(map));
+                }
+
+                let mut groups_as_maps = Vec::new();
+                for group_value in &groups {
+                    let Value::Array(mut group) = group_value.clone() else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received for group value. Wanted an Array").into());
+                    };
+
+                    let consumers_key = Value::SimpleString("consumers".into());
+                    let opt_consumers_key_index = group
+                        .iter()
+                        .position(
+                            |key| {
+                                let res = convert_to_expected_type(key.clone(), Some(ExpectedReturnType::SimpleString));
+                                match res {
+                                    Ok(converted_key) => {
+                                        converted_key == consumers_key
+                                    },
+                                    Err(_) => {
+                                        false
+                                    }
+                                }
+                            }
+                        );
+
+                    let Some(consumers_key_index) = opt_consumers_key_index else {
+                        return Err((ErrorKind::TypeError, "No consumers key found").into());
+                    };
+
+                    let consumers_value_index = consumers_key_index + 1;
+                    if group.get(consumers_value_index).is_none() {
+                        return Err((ErrorKind::TypeError, "No consumers value found.").into());
+                    }
+
+                    let Value::Array(ref consumers) = group[consumers_value_index] else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received for consumers. Wanted an Array.").into());
+                    };
+
+                    if consumers.is_empty() {
+                        groups_as_maps.push(
+                            convert_to_expected_type(Value::Array(group.clone()), Some(ExpectedReturnType::Map {
+                                key_type: &Some(ExpectedReturnType::BulkString),
+                                value_type: &None,
+                            }))?
+                        );
+                        continue;
+                    }
+
+                    let mut consumers_as_maps = Vec::new();
+                    for consumer in consumers {
+                        consumers_as_maps.push(convert_to_expected_type(consumer.clone(), Some(ExpectedReturnType::Map {
+                            key_type: &Some(ExpectedReturnType::BulkString),
+                            value_type: &None,
+                        }))?);
+                    }
+
+                    group[consumers_value_index] = Value::Array(consumers_as_maps);
+                    let group_map = convert_to_expected_type(Value::Array(group), Some(ExpectedReturnType::Map {
+                        key_type: &Some(ExpectedReturnType::BulkString),
+                        value_type: &None,
+                    }))?;
+                    groups_as_maps.push(group_map);
+                }
+
+                array[groups_value_index] = Value::Array(groups_as_maps);
+                let converted_response = convert_to_expected_type(Value::Array(array.to_vec()), Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &None,
+                }))?;
+
+                let Value::Map(map) = converted_response else {
+                    return Err((ErrorKind::TypeError, "Incorrect value type received for response. Wanted a Map.").into());
+                };
+
+                Ok(Value::Map(map))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to XInfoStreamFullReturnType",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        }
     }
 }
 
@@ -943,6 +1175,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 Some(ExpectedReturnType::XAutoClaimReturnType)
             }
         }
+        b"XINFO GROUPS" | b"XINFO CONSUMERS" => Some(ExpectedReturnType::ArrayOfMaps(&None)),
         b"XRANGE" | b"XREVRANGE" => Some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::ArrayOfPairs),
@@ -1008,9 +1241,9 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }
         }
         b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
-        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(
-            &ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::StringOrSet),
-        )),
+        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(&Some(
+            ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::StringOrSet)),
+        ))),
         b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
         b"GEOSEARCH" => {
             if cmd.position(b"WITHDIST").is_some()
@@ -1020,6 +1253,16 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 Some(ExpectedReturnType::GeoSearchReturnType)
             } else {
                 None
+            }
+        }
+        b"XINFO STREAM" => {
+            if cmd.position(b"FULL").is_some() {
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            } else {
+                Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &None,
+                })
             }
         }
         _ => None,
@@ -1050,6 +1293,251 @@ pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xinfo_stream_expected_return_type() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("STREAM").arg("key")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &None
+            })
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("STREAM").arg("key").arg("FULL")),
+            Some(ExpectedReturnType::XInfoStreamFullReturnType)
+        ));
+    }
+
+    #[test]
+    fn convert_xinfo_stream() {
+        // Only a partial response is represented here for brevity - the rest of the response follows the same format.
+        let groups_resp2_response = Value::Array(vec![
+            Value::BulkString("length".to_string().into_bytes()),
+            Value::Int(2),
+            Value::BulkString("entries".to_string().into_bytes()),
+            Value::Array(vec![Value::Array(vec![
+                Value::BulkString("1-0".to_string().into_bytes()),
+                Value::Array(vec![
+                    Value::BulkString("a".to_string().into_bytes()),
+                    Value::BulkString("b".to_string().into_bytes()),
+                    Value::BulkString("c".to_string().into_bytes()),
+                    Value::BulkString("d".to_string().into_bytes()),
+                ]),
+            ])]),
+            Value::BulkString("groups".to_string().into_bytes()),
+            Value::Array(vec![
+                Value::Array(vec![
+                    Value::BulkString("name".to_string().into_bytes()),
+                    Value::BulkString("group1".to_string().into_bytes()),
+                    Value::BulkString("consumers".to_string().into_bytes()),
+                    Value::Array(vec![
+                        Value::Array(vec![
+                            Value::BulkString("name".to_string().into_bytes()),
+                            Value::BulkString("consumer1".to_string().into_bytes()),
+                            Value::BulkString("pending".to_string().into_bytes()),
+                            Value::Array(vec![Value::Array(vec![
+                                Value::BulkString("1-0".to_string().into_bytes()),
+                                Value::Int(1),
+                            ])]),
+                        ]),
+                        Value::Array(vec![
+                            Value::BulkString("pending".to_string().into_bytes()),
+                            Value::Array(vec![]),
+                        ]),
+                    ]),
+                ]),
+                Value::Array(vec![
+                    Value::BulkString("consumers".to_string().into_bytes()),
+                    Value::Array(vec![]),
+                ]),
+            ]),
+        ]);
+
+        let groups_resp3_response = Value::Map(vec![
+            (
+                Value::BulkString("length".to_string().into_bytes()),
+                Value::Int(2),
+            ),
+            (
+                Value::BulkString("entries".to_string().into_bytes()),
+                Value::Array(vec![Value::Array(vec![
+                    Value::BulkString("1-0".to_string().into_bytes()),
+                    Value::Array(vec![
+                        Value::BulkString("a".to_string().into_bytes()),
+                        Value::BulkString("b".to_string().into_bytes()),
+                        Value::BulkString("c".to_string().into_bytes()),
+                        Value::BulkString("d".to_string().into_bytes()),
+                    ]),
+                ])]),
+            ),
+            (
+                Value::BulkString("groups".to_string().into_bytes()),
+                Value::Array(vec![
+                    Value::Map(vec![
+                        (
+                            Value::BulkString("name".to_string().into_bytes()),
+                            Value::BulkString("group1".to_string().into_bytes()),
+                        ),
+                        (
+                            Value::BulkString("consumers".to_string().into_bytes()),
+                            Value::Array(vec![
+                                Value::Map(vec![
+                                    (
+                                        Value::BulkString("name".to_string().into_bytes()),
+                                        Value::BulkString("consumer1".to_string().into_bytes()),
+                                    ),
+                                    (
+                                        Value::BulkString("pending".to_string().into_bytes()),
+                                        Value::Array(vec![Value::Array(vec![
+                                            Value::BulkString("1-0".to_string().into_bytes()),
+                                            Value::Int(1),
+                                        ])]),
+                                    ),
+                                ]),
+                                Value::Map(vec![(
+                                    Value::BulkString("pending".to_string().into_bytes()),
+                                    Value::Array(vec![]),
+                                )]),
+                            ]),
+                        ),
+                    ]),
+                    Value::Map(vec![(
+                        Value::BulkString("consumers".to_string().into_bytes()),
+                        Value::Array(vec![]),
+                    )]),
+                ]),
+            ),
+        ]);
+
+        // We want the RESP2 response to be converted into RESP3 format.
+        assert_eq!(
+            convert_to_expected_type(
+                groups_resp2_response.clone(),
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            )
+            .unwrap(),
+            groups_resp3_response.clone()
+        );
+
+        // RESP3 responses are already in the correct format and should not change format.
+        assert_eq!(
+            convert_to_expected_type(
+                groups_resp3_response.clone(),
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            )
+            .unwrap(),
+            groups_resp3_response.clone()
+        );
+
+        let resp2_empty_groups = Value::Array(vec![
+            Value::BulkString("groups".to_string().into_bytes()),
+            Value::Array(vec![]),
+        ]);
+
+        let resp3_empty_groups = Value::Map(vec![(
+            Value::BulkString("groups".to_string().into_bytes()),
+            Value::Array(vec![]),
+        )]);
+
+        // We want the RESP2 response to be converted into RESP3 format.
+        assert_eq!(
+            convert_to_expected_type(
+                resp2_empty_groups.clone(),
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            )
+            .unwrap(),
+            resp3_empty_groups.clone()
+        );
+
+        // RESP3 responses are already in the correct format and should not change format.
+        assert_eq!(
+            convert_to_expected_type(
+                resp3_empty_groups.clone(),
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            )
+            .unwrap(),
+            resp3_empty_groups.clone()
+        );
+    }
+
+    #[test]
+    fn xinfo_groups_xinfo_consumers_expected_return_type() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("GROUPS").arg("key")),
+            Some(ExpectedReturnType::ArrayOfMaps(&None))
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("CONSUMERS").arg("key").arg("group")),
+            Some(ExpectedReturnType::ArrayOfMaps(&None))
+        ));
+    }
+
+    #[test]
+    fn convert_xinfo_groups_xinfo_consumers() {
+        // The format of the XINFO GROUPS and XINFO CONSUMERS responses are essentially the same, so we only need to
+        // test one of them here. Only a partial response is represented here for brevity - the rest of the response
+        // follows the same format.
+        let groups_resp2_response = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString("name".to_string().into_bytes()),
+                Value::BulkString("mygroup".to_string().into_bytes()),
+                Value::BulkString("lag".to_string().into_bytes()),
+                Value::Int(0),
+            ]),
+            Value::Array(vec![
+                Value::BulkString("name".to_string().into_bytes()),
+                Value::BulkString("some-other-group".to_string().into_bytes()),
+                Value::BulkString("lag".to_string().into_bytes()),
+                Value::Nil,
+            ]),
+        ]);
+
+        let groups_resp3_response = Value::Array(vec![
+            Value::Map(vec![
+                (
+                    Value::BulkString("name".to_string().into_bytes()),
+                    Value::BulkString("mygroup".to_string().into_bytes()),
+                ),
+                (
+                    Value::BulkString("lag".to_string().into_bytes()),
+                    Value::Int(0),
+                ),
+            ]),
+            Value::Map(vec![
+                (
+                    Value::BulkString("name".to_string().into_bytes()),
+                    Value::BulkString("some-other-group".to_string().into_bytes()),
+                ),
+                (
+                    Value::BulkString("lag".to_string().into_bytes()),
+                    Value::Nil,
+                ),
+            ]),
+        ]);
+
+        // We want the RESP2 response to be converted into RESP3 format.
+        assert_eq!(
+            convert_to_expected_type(
+                groups_resp2_response.clone(),
+                Some(ExpectedReturnType::ArrayOfMaps(&None))
+            )
+            .unwrap(),
+            groups_resp3_response.clone()
+        );
+
+        // RESP3 responses are already in the correct format and should not be converted.
+        assert_eq!(
+            convert_to_expected_type(
+                groups_resp3_response.clone(),
+                Some(ExpectedReturnType::ArrayOfMaps(&None))
+            )
+            .unwrap(),
+            groups_resp3_response.clone()
+        );
+    }
 
     #[test]
     fn convert_function_list() {

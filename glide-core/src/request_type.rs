@@ -212,6 +212,10 @@ pub enum RequestType {
     ZScan = 201,
     HScan = 202,
     XAutoClaim = 203,
+    XInfoGroups = 204,
+    XInfoConsumers = 205,
+    XInfoStream = 207,
+    Scan = 206,
     Wait = 208,
     XClaim = 209,
 }
@@ -429,8 +433,12 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZScan => RequestType::ZScan,
             ProtobufRequestType::HScan => RequestType::HScan,
             ProtobufRequestType::XAutoClaim => RequestType::XAutoClaim,
+            ProtobufRequestType::XInfoGroups => RequestType::XInfoGroups,
+            ProtobufRequestType::XInfoConsumers => RequestType::XInfoConsumers,
+            ProtobufRequestType::XInfoStream => RequestType::XInfoStream,
             ProtobufRequestType::Wait => RequestType::Wait,
             ProtobufRequestType::XClaim => RequestType::XClaim,
+            ProtobufRequestType::Scan => RequestType::Scan,
         }
     }
 }
@@ -644,8 +652,12 @@ impl RequestType {
             RequestType::ZScan => Some(cmd("ZSCAN")),
             RequestType::HScan => Some(cmd("HSCAN")),
             RequestType::XAutoClaim => Some(cmd("XAUTOCLAIM")),
+            RequestType::XInfoGroups => Some(get_two_word_command("XINFO", "GROUPS")),
+            RequestType::XInfoConsumers => Some(get_two_word_command("XINFO", "CONSUMERS")),
+            RequestType::XInfoStream => Some(get_two_word_command("XINFO", "STREAM")),
             RequestType::Wait => Some(cmd("WAIT")),
             RequestType::XClaim => Some(cmd("XCLAIM")),
+            RequestType::Scan => Some(cmd("SCAN")),
         }
     }
 }

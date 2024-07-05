@@ -50,7 +50,7 @@ ext {
     extractRedisVersion = { String output ->
         // Redis response:
         // Redis server v=7.2.3 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=7504b1fedf883f2
-        // Valkey response: 
+        // Valkey response:
         // Server v=7.2.5 sha=26388270:0 malloc=jemalloc-5.3.0 bits=64 build=ea40bb1576e402d6
         return output.split("v=")[1].split(" ")[0]
     }
@@ -136,7 +136,10 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    jvmArgs "-Djava.library.path=${project.rootDir}/target/release"
+
+    minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
+    maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
+
     afterTest { desc, result ->
         logger.quiet "${desc.className}.${desc.name}: ${result.resultType} ${(result.getEndTime() - result.getStartTime())/1000}s"
     }

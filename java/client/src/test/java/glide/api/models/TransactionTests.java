@@ -75,6 +75,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
@@ -85,9 +86,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
@@ -158,6 +161,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -196,6 +200,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -818,15 +824,12 @@ public class TransactionTests {
         results.add(Pair.of(XGroupCreate, buildArgs("key", "group", "id")));
 
         transaction.xgroupCreate(
-                "key",
-                "group",
-                "id",
-                StreamGroupOptions.builder().makeStream().entriesRead("entry").build());
+                "key", "group", "id", StreamGroupOptions.builder().makeStream().entriesRead(123L).build());
         results.add(
                 Pair.of(
                         XGroupCreate,
                         buildArgs(
-                                "key", "group", "id", MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, "entry")));
+                                "key", "group", "id", MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, "123")));
 
         transaction.xgroupDestroy("key", "group");
         results.add(Pair.of(XGroupDestroy, buildArgs("key", "group")));
@@ -847,8 +850,8 @@ public class TransactionTests {
         transaction.xgroupSetId("key", "group", "id");
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
 
-        transaction.xgroupSetId("key", "group", "id", "1-1");
-        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1-1")));
+        transaction.xgroupSetId("key", "group", "id", 1);
+        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1")));
 
         transaction.xreadgroup(
                 Map.of("key", "id"),
@@ -954,6 +957,12 @@ public class TransactionTests {
                                 "5",
                                 FORCE_REDIS_API,
                                 JUST_ID_REDIS_API)));
+
+        transaction.xinfoGroups("key");
+        results.add(Pair.of(XInfoGroups, buildArgs("key")));
+
+        transaction.xinfoConsumers("key", "groupName");
+        results.add(Pair.of(XInfoConsumers, buildArgs("key", "groupName")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
@@ -1095,6 +1104,12 @@ public class TransactionTests {
         results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
         results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
 
+        transaction.functionDump();
+        results.add(Pair.of(FunctionDump, buildArgs()));
+
+        transaction.functionRestore("TEST".getBytes());
+        results.add(Pair.of(FunctionRestore, buildArgs("TEST")));
+
         transaction.fcall("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
         transaction.fcall("func", new String[] {"arg1", "arg2"});
@@ -1213,13 +1228,19 @@ public class TransactionTests {
         transaction.copy("key1", "key2", true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
 
+        transaction.dump("key1");
+        results.add(Pair.of(Dump, buildArgs("key1")));
+
+        transaction.restore("key2", 0, "TEST".getBytes());
+        results.add(Pair.of(Restore, buildArgs("key2", "0", "TEST")));
+
         transaction.lcs("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2")));
 
         transaction.lcsLen("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
 
-        transaction.publish("ch1", "msg");
+        transaction.publish("msg", "ch1");
         results.add(Pair.of(Publish, buildArgs("ch1", "msg")));
 
         transaction.lcsIdx("key1", "key2");

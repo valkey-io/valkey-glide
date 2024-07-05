@@ -242,6 +242,10 @@ enum RequestType {
     ZScan = 201;
     HScan = 202;
     XAutoClaim = 203;
+    XInfoGroups = 204;
+    XInfoConsumers = 205;
+    XInfoStream = 207;
+    Scan = 206;
     Wait = 208;
     XClaim = 209;
 }
@@ -258,6 +262,13 @@ message Command {
     }
 }
 
+// Used for script requests with large keys or args vectors
+message ScriptInvocationPointers {
+    string hash = 1;
+    optional uint64 keys_pointer = 2;
+    optional uint64 args_pointer = 3;
+}
+
 message ScriptInvocation {
     string hash = 1;
     repeated bytes keys = 2;
@@ -268,6 +279,13 @@ message Transaction {
     repeated Command commands = 1;
 }
 
+message ClusterScan {
+    string cursor = 1;
+    optional string match_pattern = 2;
+    optional int64 count = 3;
+    optional string object_type = 4;
+}
+
 message RedisRequest {
     uint32 callback_idx = 1;
 
@@ -275,6 +293,8 @@ message RedisRequest {
         Command single_command = 2;
         Transaction transaction = 3;
         ScriptInvocation script_invocation = 4;
+        ScriptInvocationPointers script_invocation_pointers = 5;
+        ClusterScan cluster_scan = 6;
     }
-    Routes route = 5;
+    Routes route = 7;
 }

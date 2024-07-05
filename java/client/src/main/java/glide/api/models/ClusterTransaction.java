@@ -37,12 +37,21 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Publishes message on pubsub channel in sharded mode.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
-     * @param channel The channel to publish the message on.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
+     *     to <code>true</code> is only applicable with Redis 7.0+.
      * @return Command response - The number of clients that received the message.
      */
-    public <ArgType> ClusterTransaction spublish(@NonNull ArgType channel, @NonNull ArgType message) {
+    public <ArgType> ClusterTransaction publish(
+            @NonNull ArgType message, @NonNull ArgType channel, boolean sharded) {
+        if (!sharded) {
+            return super.publish(message, channel);
+        }
+        checkTypeOrThrow(channel);
         protobufTransaction.addCommands(
                 buildCommand(SPublish, newArgsBuilder().add(channel).add(message)));
         return getThis();
@@ -55,12 +64,15 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * apply transformations on sorted elements.<br>
      * To store the result into a new key, see {@link #sortStore(String, String, SortClusterOptions)}.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public <ArgType> ClusterTransaction sort(
             @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(Sort, newArgsBuilder().add(key).add(sortClusterOptions.toArgs())));
         return this;
@@ -72,6 +84,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.<br>
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
@@ -79,6 +93,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public <ArgType> ClusterTransaction sortReadOnly(
             @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortClusterOptions.toArgs())));
         return this;
@@ -92,6 +107,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * To get the sort result without storing it into a key, see {@link #sort(String,
      * SortClusterOptions)} or {@link #sortReadOnly(String, SortClusterOptions)}.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param destination The key where the sorted result will be stored.
      * @param sortClusterOptions The {@link SortClusterOptions}.
@@ -102,6 +119,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
             @NonNull ArgType key,
             @NonNull ArgType destination,
             @NonNull SortClusterOptions sortClusterOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         Sort,

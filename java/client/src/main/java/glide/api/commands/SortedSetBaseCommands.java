@@ -16,7 +16,9 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.scan.ZScanOptions;
@@ -47,7 +49,7 @@ public interface SortedSetBaseCommands {
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
      * If a member is already a part of the sorted set, its score is updated.
      *
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param options The ZAdd options.
@@ -73,7 +75,7 @@ public interface SortedSetBaseCommands {
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
      * If a member is already a part of the sorted set, its score is updated.
      *
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param options The ZAdd options.
@@ -96,7 +98,7 @@ public interface SortedSetBaseCommands {
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
      * If a member is already a part of the sorted set, its score is updated.
      *
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param changed Modify the return value from the number of new elements added, to the total
@@ -115,7 +117,7 @@ public interface SortedSetBaseCommands {
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
      * If a member is already a part of the sorted set, its score is updated.
      *
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @return The number of elements added to the sorted set.
@@ -136,7 +138,7 @@ public interface SortedSetBaseCommands {
      * member is created.<br>
      * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
@@ -166,7 +168,7 @@ public interface SortedSetBaseCommands {
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
      * member is created.
      *
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
@@ -183,7 +185,7 @@ public interface SortedSetBaseCommands {
      * Removes the specified members from the sorted set stored at <code>key</code>.<br>
      * Specified members that are not a member of this set are ignored.
      *
-     * @see <a href="https://redis.io/commands/zrem/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members An array of members to remove from the sorted set.
      * @return The number of members that were removed from the sorted set, not including non-existing
@@ -205,7 +207,7 @@ public interface SortedSetBaseCommands {
      * Removes the specified members from the sorted set stored at <code>key</code>.<br>
      * Specified members that are not a member of this set are ignored.
      *
-     * @see <a href="https://redis.io/commands/zrem/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members An array of members to remove from the sorted set.
      * @return The number of members that were removed from the sorted set, not including non-existing
@@ -226,7 +228,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the cardinality (number of elements) of the sorted set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return The number of elements in the sorted set.<br>
      *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
@@ -245,7 +247,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the cardinality (number of elements) of the sorted set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return The number of elements in the sorted set.<br>
      *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
@@ -265,7 +267,7 @@ public interface SortedSetBaseCommands {
      * Removes and returns up to <code>count</code> members with the lowest scores from the sorted set
      * stored at the specified <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count Specifies the quantity of members to pop.<br>
      *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
@@ -277,10 +279,48 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<String, Double> payload = client.zpopmax("mySortedSet", 2).get();
-     * assert payload.equals(Map.of('member3', 7.5 , 'member2', 8.0)); // Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
+     * assert payload.equals(Map.of("member3", 7.5 , "member2", 8.0)); // Indicates that "member3" with a score of 7.5 and "member2" with a score of 8.0 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zpopmin(String key, long count);
+
+    /**
+     * Removes and returns up to <code>count</code> members with the lowest scores from the sorted set
+     * stored at the specified <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param count Specifies the quantity of members to pop.<br>
+     *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
+     *     their scores, ordered from lowest to highest.
+     * @return A map of the removed members and their scores, ordered from the one with the lowest
+     *     score to the one with the highest.<br>
+     *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
+     *     command returns an empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet"), 2).get();
+     * assert payload.equals(Map.of(gs("member3"), 7.5, gs("member2"), 8.0)); // Indicates that gs("member3") with a score of 7.5 and gs("member2") with a score of 8.0 have been removed from the sorted set.
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key, long count);
+
+    /**
+     * Removes and returns the member with the lowest score from the sorted set stored at the
+     * specified <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return A map containing the removed member and its corresponding score.<br>
+     *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
+     *     command returns an empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * Map<String, Double> payload = client.zpopmin("mySortedSet").get();
+     * assert payload.equals(Map.of("member1", 5.0)); // Indicates that "member1" with a score of 5.0 has been removed from the sorted set.
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zpopmin(String key);
 
     /**
      * Removes and returns the member with the lowest score from the sorted set stored at the
@@ -293,11 +333,41 @@ public interface SortedSetBaseCommands {
      *     command returns an empty <code>Map</code>.
      * @example
      *     <pre>{@code
-     * Map<String, Double> payload = client.zpopmin("mySortedSet").get();
-     * assert payload.equals(Map.of('member1', 5.0)); // Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
+     * Map<GlideString, Double> payload = client.zpopmin(gs("mySortedSet")).get();
+     * assert payload.equals(Map.of(gs("member1"), 5.0)); // Indicates that gs("member1") with a score of 5.0 has been removed from the sorted set.
      * }</pre>
      */
-    CompletableFuture<Map<String, Double>> zpopmin(String key);
+    CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key);
+
+    /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * first non-empty sorted set, with the given <code>keys</code> being checked in the order they
+     * are provided.<br>
+     * <code>BZPOPMIN</code> is the blocking variant of {@link #zpopmin(String)}.<br>
+     *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/bzpopmin/">valkey.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the key where the member was popped out, the member
+     *     itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Object[] data = client.bzpopmin(new String[] {"zset1", "zset2"}, 0.5).get();
+     * System.out.printf("Popped '%s' with score %d from sorted set '%s'%n", data[1], data[2], data[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout);
 
     /**
      * Blocks the connection until it removes and returns a member with the lowest score from the
@@ -323,11 +393,32 @@ public interface SortedSetBaseCommands {
      *     </code>.
      * @example
      *     <pre>{@code
-     * Object[] data = client.bzpopmin(new String[] {"zset1", "zset2"}, 0.5).get();
+     * Object[] data = client.bzpopmin(new GlideString[] {gs("zset1"), gs("zset2")}, 0.5).get();
      * System.out.printf("Popped '%s' with score %d from sorted set '%s'%n", data[1], data[2], data[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> bzpopmin(String[] keys, double timeout);
+    CompletableFuture<Object[]> bzpopmin(GlideString[] keys, double timeout);
+
+    /**
+     * Removes and returns up to <code>count</code> members with the highest scores from the sorted
+     * set stored at the specified <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param count Specifies the quantity of members to pop.<br>
+     *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
+     *     their scores, ordered from highest to lowest.
+     * @return A map of the removed members and their scores, ordered from the one with the highest
+     *     score to the one with the lowest.<br>
+     *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
+     *     command returns an empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * Map<String, Double> payload = client.zpopmax("mySortedSet", 2).get();
+     * assert payload.equals(Map.of("member2", 8.0, "member3", 7.5)); // Indicates that "member2" with a score of 8.0 and "member3" with a score of 7.5 have been removed from the sorted set.
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zpopmax(String key, long count);
 
     /**
      * Removes and returns up to <code>count</code> members with the highest scores from the sorted
@@ -344,11 +435,28 @@ public interface SortedSetBaseCommands {
      *     command returns an empty <code>Map</code>.
      * @example
      *     <pre>{@code
-     * Map<String, Double> payload = client.zpopmax("mySortedSet", 2).get();
-     * assert payload.equals(Map.of('member2', 8.0, 'member3', 7.5)); // Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+     * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet"), 2).get();
+     * assert payload.equals(Map.of(gs("member2"), 8.0, gs("member3"), 7.5)); // Indicates that gs("member2") with a score of 8.0 and gs("member3") with a score of 7.5 have been removed from the sorted set.
      * }</pre>
      */
-    CompletableFuture<Map<String, Double>> zpopmax(String key, long count);
+    CompletableFuture<Map<GlideString, Double>> zpopmax(GlideString key, long count);
+
+    /**
+     * Removes and returns the member with the highest score from the sorted set stored at the
+     * specified <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return A map containing the removed member and its corresponding score.<br>
+     *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
+     *     command returns an empty <code>Map</code>.
+     * @example
+     *     <pre>{@code
+     * Map<String, Double> payload = client.zpopmax("mySortedSet").get();
+     * assert payload.equals(Map.of("member1", 10.0)); // Indicates that "member1" with a score of 10.0 has been removed from the sorted set.
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zpopmax(String key);
 
     /**
      * Removes and returns the member with the highest score from the sorted set stored at the
@@ -361,11 +469,41 @@ public interface SortedSetBaseCommands {
      *     command returns an empty <code>Map</code>.
      * @example
      *     <pre>{@code
-     * Map<String, Double> payload = client.zpopmax("mySortedSet").get();
-     * assert payload.equals(Map.of('member1', 10.0)); // Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+     * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet")).get();
+     * assert payload.equals(Map.of(gs("member1"), 10.0)); // Indicates that gs("member1") with a score of 10.0 has been removed from the sorted set.
      * }</pre>
      */
-    CompletableFuture<Map<String, Double>> zpopmax(String key);
+    CompletableFuture<Map<GlideString, Double>> zpopmax(GlideString key);
+
+    /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * first non-empty sorted set, with the given <code>keys</code> being checked in the order they
+     * are provided.<br>
+     * <code>BZPOPMAX</code> is the blocking variant of {@link #zpopmax(String)}.<br>
+     *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/bzpopmax/">valkey.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return An <code>array</code> containing the key where the member was popped out, the member
+     *     itself, and the member score.<br>
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Object[] data = client.bzpopmax(new String[] {"zset1", "zset2"}, 0.5).get();
+     * System.out.printf("Popped '%s' with score %d from sorted set '%s'%n", data[1], data[2], data[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout);
 
     /**
      * Blocks the connection until it removes and returns a member with the highest score from the
@@ -391,16 +529,16 @@ public interface SortedSetBaseCommands {
      *     </code>.
      * @example
      *     <pre>{@code
-     * Object[] data = client.bzpopmax(new String[] {"zset1", "zset2"}, 0.5).get();
+     * Object[] data = client.bzpopmax(new GlideString[] {gs("zset1"), gs("zset2")}, 0.5).get();
      * System.out.printf("Popped '%s' with score %d from sorted set '%s'%n", data[1], data[2], data[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> bzpopmax(String[] keys, double timeout);
+    CompletableFuture<Object[]> bzpopmax(GlideString[] keys, double timeout);
 
     /**
      * Returns the score of <code>member</code> in the sorted set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose score is to be retrieved.
      * @return The score of the member.<br>
@@ -420,7 +558,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the score of <code>member</code> in the sorted set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose score is to be retrieved.
      * @return The score of the member.<br>
@@ -443,7 +581,7 @@ public interface SortedSetBaseCommands {
      * score, or by lexicographical order.<br>
      * To get the elements with their scores, see {@link #zrangeWithScores}.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -460,11 +598,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
      * String[] payload1 = client.zrange("mySortedSet", query1, true).get(); // Returns members with scores between 10 and 20.
-     * assert payload1.equals(new String[] {'member3', 'member2', 'member1'}); // Returns all members in descending order.
+     * assert payload1.equals(new String[] {"member3", "member2", "member1"}); // Returns all members in descending order.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * String[] payload2 = client.zrange("mySortedSet", query2, false).get();
-     * assert payload2.equals(new String[] {'member2', 'member3'}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * assert payload2.equals(new String[] {"member2", "member3"}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
      * }</pre>
      */
     CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery, boolean reverse);
@@ -475,7 +613,7 @@ public interface SortedSetBaseCommands {
      * score, or by lexicographical order.<br>
      * To get the elements with their scores, see {@link #zrangeWithScores}.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -490,11 +628,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByIndex query1 = new RangeByIndex(0, -1);
      * String[] payload1 = client.zrange("mySortedSet",query1).get();
-     * assert payload1.equals(new String[] {'member1', 'member2', 'member3'}); // Returns all members in ascending order.
+     * assert payload1.equals(new String[] {"member1", "member2", "member3"}); // Returns all members in ascending order.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * String[] payload2 = client.zrange("mySortedSet", query2).get();
-     * assert payload2.equals(new String[] {'member2', 'member3'}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
+     * assert payload2.equals(new String[] {"member2", "member3"}); // Returns members with scores within the range of negative infinity to 3, in ascending order.
      * }</pre>
      */
     CompletableFuture<String[]> zrange(String key, RangeQuery rangeQuery);
@@ -503,7 +641,7 @@ public interface SortedSetBaseCommands {
      * Returns the specified range of elements with their scores in the sorted set stored at <code>key
      * </code>. Similar to {@link #zrange} but with a <code>WITHSCORE</code> flag.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -520,11 +658,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
      * Map<String, Double> payload1 = client.zrangeWithScores("mySortedSet", query1, true).get();
-     * assert payload1.equals(Map.of('member2', 15.2, 'member1', 10.5)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
+     * assert payload1.equals(Map.of("member2", 15.2, "member1", 10.5)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * Map<String, Double> payload2 = client.zrangeWithScores("mySortedSet", query2, false).get();
-     * assert payload2.equals(Map.of('member4', -2.0, 'member7', 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
+     * assert payload2.equals(Map.of("member4", -2.0, "member7", 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zrangeWithScores(
@@ -534,7 +672,7 @@ public interface SortedSetBaseCommands {
      * Returns the specified range of elements with their scores in the sorted set stored at <code>key
      * </code>. Similar to {@link #zrange} but with a <code>WITHSCORE</code> flag.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -549,11 +687,11 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * RangeByScore query1 = new RangeByScore(new ScoreBoundary(10), new ScoreBoundary(20));
      * Map<String, Double> payload1 = client.zrangeWithScores("mySortedSet", query1).get();
-     * assert payload1.equals(Map.of('member1', 10.5, 'member2', 15.2)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
+     * assert payload1.equals(Map.of("member1", 10.5, "member2", 15.2)); // Returns members with scores between 10 and 20 (inclusive) with their scores.
      *
      * RangeByScore query2 = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3));
      * Map<String, Double> payload2 = client.zrangeWithScores("mySortedSet", query2).get();
-     * assert payload2.equals(Map.of('member4', -2.0, 'member7', 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
+     * assert payload2.equals(Map.of("member4", -2.0, "member7", 1.5)); // Returns members with with scores within the range of negative infinity to 3, with their scores.
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zrangeWithScores(String key, ScoredRangeQuery rangeQuery);
@@ -565,7 +703,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to the
      *     same hash slot.
-     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
@@ -599,7 +737,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to the
      *     same hash slot.
-     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
@@ -628,7 +766,7 @@ public interface SortedSetBaseCommands {
      * scores ordered from low to high, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
-     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return The rank of <code>member</code> in the sorted set.<br>
@@ -650,7 +788,7 @@ public interface SortedSetBaseCommands {
      * scores ordered from low to high, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
      *
-     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return The rank of <code>member</code> in the sorted set.<br>
@@ -671,7 +809,7 @@ public interface SortedSetBaseCommands {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the lowest to highest, starting from <code>0</code>.<br>
      *
-     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
@@ -694,7 +832,7 @@ public interface SortedSetBaseCommands {
      * scores are ordered from the highest to lowest, starting from <code>0</code>.<br>
      * To get the rank of <code>member</code> with its score, see {@link #zrevrankWithScore}.
      *
-     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return The rank of <code>member</code> in the sorted set, where ranks are ordered from high to
@@ -716,7 +854,7 @@ public interface SortedSetBaseCommands {
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
      * score, where scores are ordered from the highest to lowest, starting from <code>0</code>.
      *
-     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
@@ -739,7 +877,7 @@ public interface SortedSetBaseCommands {
      * Returns the scores associated with the specified <code>members</code> in the sorted set stored
      * at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members An array of members in the sorted set.
      * @return An <code>Array</code> of scores of the <code>members</code>.<br>
@@ -757,7 +895,7 @@ public interface SortedSetBaseCommands {
      * Returns the scores associated with the specified <code>members</code> in the sorted set stored
      * at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members An array of members in the sorted set.
      * @return An <code>Array</code> of scores of the <code>members</code>.<br>
@@ -777,7 +915,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
      *     <br>
@@ -796,7 +934,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
      *     sorted sets.<br>
@@ -818,7 +956,7 @@ public interface SortedSetBaseCommands {
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
      * @return The number of members in the resulting sorted set stored at <code>destination</code>.
@@ -838,7 +976,7 @@ public interface SortedSetBaseCommands {
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
      * @return The number of members in the resulting sorted set stored at <code>destination</code>.
@@ -854,7 +992,7 @@ public interface SortedSetBaseCommands {
      * Returns the number of members in the sorted set stored at <code>key</code> with scores between
      * <code>minScore</code> and <code>maxScore</code>.
      *
-     * @see <a href="https://redis.io/commands/zcount/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minScore The minimum score to count from. Can be an implementation of {@link
      *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
@@ -883,7 +1021,7 @@ public interface SortedSetBaseCommands {
      * indexes with <code>0</code> being the element with the lowest score. These indexes can be
      * negative numbers, where they indicate offsets starting at the element with the highest score.
      *
-     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param start The starting point of the range.
      * @param end The end of the range.
@@ -910,7 +1048,7 @@ public interface SortedSetBaseCommands {
      * indexes with <code>0</code> being the element with the lowest score. These indexes can be
      * negative numbers, where they indicate offsets starting at the element with the highest score.
      *
-     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param start The starting point of the range.
      * @param end The end of the range.
@@ -935,7 +1073,7 @@ public interface SortedSetBaseCommands {
      * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
      * between <code>minLex</code> and <code>maxLex</code>.
      *
-     * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebylex/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minLex The minimum bound of the lexicographical range. Can be an implementation of
      *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
@@ -962,7 +1100,7 @@ public interface SortedSetBaseCommands {
      * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
      * minScore</code> and <code>maxScore</code>.
      *
-     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minScore The minimum score to remove from. Can be an implementation of {@link
      *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
@@ -989,7 +1127,7 @@ public interface SortedSetBaseCommands {
      * Returns the number of members in the sorted set stored at <code>key</code> with scores between
      * <code>minLex</code> and <code>maxLex</code>.
      *
-     * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zlexcount/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minLex The minimum lex to count from. Can be an implementation of {@link InfLexBound}
      *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
@@ -1019,7 +1157,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
      *     keysOrWeightedKeys</code> must map to the same hash slot.
-     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1047,7 +1185,35 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
      *     keysOrWeightedKeys</code> must map to the same hash slot.
-     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * WeightedKeysBinary weightedKeys = new WeightedKeys(List.of(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * Long payload = client.zunionstore(gs("newSortedSet"), weightedKeys, Aggregate.MAX).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(
+            GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1066,13 +1232,39 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
 
     /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * Long payload = client.zunionstore(gs("newSortedSet"), keyArray).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(
+            GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys);
+
+    /**
      * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
      *     keysOrWeightedKeys</code> must map to the same hash slot.
-     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1100,7 +1292,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
      *     keysOrWeightedKeys</code> must map to the same hash slot.
-     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1124,7 +1316,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
@@ -1142,12 +1334,35 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier);
 
     /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
+     * being checked in the order they are provided.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @return A two-element <code>array</code> containing the key name of the set from which the
+     *     element was popped, and a member-score <code>Map</code> of the popped element.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * GlideString element = data.keySet().toArray(GlideString[]::new)[0];
+     * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zmpop(GlideString[] keys, ScoreFilter modifier);
+
+    /**
      * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
      * </code> being checked in the order they are provided.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -1165,6 +1380,64 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier, long count);
+
+    /**
+     * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
+     * </code> being checked in the order they are provided.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param count The number of elements to pop.
+     * @return A two-element <code>array</code> containing the key name of the set from which elements
+     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.zmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 2).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * for (Map.Entry<GlideString, Double> entry : data.entrySet()) {
+     *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zmpop(GlideString[] keys, ScoreFilter modifier, long count);
+
+    /**
+     * Blocks the connection until it pops and returns a member-score pair from the first non-empty
+     * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the key name of the set from which an
+     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * String element = data.keySet().toArray(String[]::new)[0];
+     * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzmpop(String[] keys, ScoreFilter modifier, double timeout);
 
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
@@ -1191,13 +1464,50 @@ public interface SortedSetBaseCommands {
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
-     * Map<String, Double> data = (Map<String, Double>)result[1];
-     * String element = data.keySet().toArray(String[]::new)[0];
+     * Object[] result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * GlideString element = data.keySet().toArray(GlideString[]::new)[0];
      * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
      * }</pre>
      */
-    CompletableFuture<Object[]> bzmpop(String[] keys, ScoreFilter modifier, double timeout);
+    CompletableFuture<Object[]> bzmpop(GlideString[] keys, ScoreFilter modifier, double timeout);
+
+    /**
+     * Blocks the connection until it pops and returns multiple member-score pairs from the first
+     * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
+     * provided.<br>
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @param count The number of elements to pop.
+     * @return A two-element <code>array</code> containing the key name of the set from which elements
+     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no members could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * for (Map.Entry<String, Double> entry : data.entrySet()) {
+     *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzmpop(
+            String[] keys, ScoreFilter modifier, double timeout, long count);
 
     /**
      * Blocks the connection until it pops and returns multiple member-score pairs from the first
@@ -1226,15 +1536,15 @@ public interface SortedSetBaseCommands {
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
-     * Map<String, Double> data = (Map<String, Double>)result[1];
-     * for (Map.Entry<String, Double> entry : data.entrySet()) {
+     * Object[] result = client.bzmpop(new GlideString[] { gs("zSet1"), gs("zSet2") }, MAX, 0.1, 2).get();
+     * Map<GlideString, Double> data = (Map<GlideString, Double>)result[1];
+     * for (Map.Entry<GlideString, Double> entry : data.entrySet()) {
      *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
      * }
      * }</pre>
      */
     CompletableFuture<Object[]> bzmpop(
-            String[] keys, ScoreFilter modifier, double timeout, long count);
+            GlideString[] keys, ScoreFilter modifier, double timeout, long count);
 
     /**
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
@@ -1242,21 +1552,43 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the union.
      * @example
      *     <pre>{@code
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
-     * String[] payload = client.zunion(keyArray).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * String[] payload1 = client.zunion(keyArray).get()
+     * assert Arrays.equals(payload1, new String[] {"elem1", "elem2", "elem3"});
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * String[] payload = client.zunion(weightedKeys).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * String[] payload2 = client.zunion(weightedKeys).get()
+     * assert Arrays.equals(payload2, new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
      */
     CompletableFuture<String[]> zunion(KeyArray keys);
+
+    /**
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
+     * To get the elements with their scores, see {@link #zunionWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * GlideString[] payload1 = client.zunion(keyArray).get()
+     * assert Arrays.equals(payload1, new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
+     *
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * GlideString[] payload2 = client.zunion(weightedKeys).get()
+     * assert Arrays.equals(payload2, new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> zunion(KeyArrayBinary keys);
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
@@ -1265,7 +1597,7 @@ public interface SortedSetBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -1279,15 +1611,46 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
-     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     * assert Arrays.equals(payload1, Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray, Aggregate.SUM).get();
-     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * assert Arrays.equals(payload2, Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(
             KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Returns the union of members and their scores from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * Map<GlideString, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
+     * assert Arrays.equals(payload1, Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
+     *
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * Map<GlideString, Double> payload2 = client.zunionWithScores(weightedKeys, Aggregate.SUM).get();
+     * assert Arrays.equals(payload2, Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Double>> zunionWithScores(
+            KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate);
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
@@ -1298,7 +1661,7 @@ public interface SortedSetBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -1310,14 +1673,45 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray).get();
-     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     * assert Arrays.equals(payload1, Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray).get();
-     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * assert Arrays.equals(payload2, Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the union of members and their scores from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
+     * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * Map<GlideString, Double> payload1 = client.zunionWithScores(keyArray).get();
+     * assert Arrays.equals(payload1, Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
+     *
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * Map<GlideString, Double> payload2 = client.zunionWithScores(keyArray).get();
+     * assert Arrays.equals(payload2, Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Double>> zunionWithScores(
+            KeysOrWeightedKeysBinary keysOrWeightedKeys);
 
     /**
      * Returns the intersection of members from sorted sets specified by the given <code>keys</code>.
@@ -1326,7 +1720,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the intersection.
      * @example
@@ -1350,7 +1744,7 @@ public interface SortedSetBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -1378,7 +1772,7 @@ public interface SortedSetBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -1405,7 +1799,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns a random element from the sorted set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return A <code>String</code> representing a random element from the sorted set.<br>
      *     If the sorted set does not exist or is empty, the response will be <code>null</code>.
@@ -1423,7 +1817,7 @@ public interface SortedSetBaseCommands {
     /**
      * Retrieves random elements from the sorted set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count The number of elements to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -1446,7 +1840,7 @@ public interface SortedSetBaseCommands {
      * Retrieves random elements along with their scores from the sorted set stored at <code>key
      * </code>.
      *
-     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count The number of elements to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -1473,7 +1867,7 @@ public interface SortedSetBaseCommands {
      * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
      * member as its sole member is created.
      *
-     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zincrby/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param increment The score increment.
      * @param member A member of the sorted set.
@@ -1493,7 +1887,7 @@ public interface SortedSetBaseCommands {
      * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
      * member as its sole member is created.
      *
-     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zincrby/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param increment The score increment.
      * @param member A member of the sorted set.
@@ -1511,7 +1905,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @return The cardinality of the intersection of the given sorted sets.
      * @example
@@ -1527,7 +1921,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @return The cardinality of the intersection of the given sorted sets.
      * @example
@@ -1545,7 +1939,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
      *     <code>0</code> the range will be unlimited.
@@ -1566,7 +1960,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
      *     <code>0</code> the range will be unlimited.

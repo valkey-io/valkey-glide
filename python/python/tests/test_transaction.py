@@ -2,7 +2,7 @@
 
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Union, cast
+from typing import List, Optional, Union, cast
 
 import pytest
 from glide import RequestError
@@ -22,6 +22,7 @@ from glide.async_commands.core import (
     ExpiryGetEx,
     ExpiryTypeGetEx,
     FlushMode,
+    FunctionRestorePolicy,
     InsertPosition,
 )
 from glide.async_commands.sorted_set import (
@@ -42,6 +43,7 @@ from glide.async_commands.stream import (
     MaxId,
     MinId,
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamReadGroupOptions,
     TrimByMinId,
@@ -54,6 +56,7 @@ from glide.async_commands.transaction import (
 from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.routes import SlotIdRoute, SlotType
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -66,7 +69,7 @@ from tests.utils.utils import (
 async def transaction_test(
     transaction: Union[Transaction, ClusterTransaction],
     keyslot: str,
-    redis_client: TGlideClient,
+    glide_client: TGlideClient,
 ) -> List[TResult]:
     key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -104,11 +107,44 @@ async def transaction_test(
     code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
     args: List[TResult] = []
 
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.function_load(code)
         args.append(lib_name.encode())
         transaction.function_load(code, True)
         args.append(lib_name.encode())
+        transaction.function_list(lib_name)
+        args.append(
+            [
+                {
+                    b"library_name": lib_name.encode(),
+                    b"engine": b"LUA",
+                    b"functions": [
+                        {
+                            b"name": func_name.encode(),
+                            b"description": None,
+                            b"flags": {b"no-writes"},
+                        }
+                    ],
+                }
+            ]
+        )
+        transaction.function_list(lib_name, True)
+        args.append(
+            [
+                {
+                    b"library_name": lib_name.encode(),
+                    b"engine": b"LUA",
+                    b"functions": [
+                        {
+                            b"name": func_name.encode(),
+                            b"description": None,
+                            b"flags": {b"no-writes"},
+                        }
+                    ],
+                    b"library_code": code.encode(),
+                }
+            ]
+        )
         transaction.fcall(func_name, [], arguments=["one", "two"])
         args.append(b"one")
         transaction.fcall(func_name, [key], arguments=["one", "two"])
@@ -125,6 +161,18 @@ async def transaction_test(
         args.append(OK)
         transaction.function_flush(FlushMode.SYNC)
         args.append(OK)
+        transaction.function_stats()
+        args.append(
+            {
+                b"running_script": None,
+                b"engines": {
+                    b"LUA": {
+                        b"libraries_count": 0,
+                        b"functions_count": 0,
+                    }
+                },
+            }
+        )
 
     transaction.dbsize()
     args.append(0)
@@ -135,11 +183,19 @@ async def transaction_test(
     args.append(len(value))
     transaction.get(key)
     args.append(value_bytes)
+    transaction.get(key.encode())
+    args.append(value_bytes)
     transaction.type(key)
+    args.append(b"string")
+    transaction.type(key.encode())
     args.append(b"string")
     transaction.echo(value)
     args.append(value_bytes)
+    transaction.echo(value.encode())
+    args.append(value_bytes)
     transaction.strlen(key)
+    args.append(len(value))
+    transaction.strlen(key.encode())
     args.append(len(value))
     transaction.append(key, value)
     args.append(len(value) * 2)
@@ -148,13 +204,13 @@ async def transaction_test(
     args.append(False)
     transaction.ttl(key)
     args.append(-1)
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.expiretime(key)
         args.append(-1)
         transaction.pexpiretime(key)
         args.append(-1)
 
-    if not await check_if_server_version_lt(redis_client, "6.2.0"):
+    if not await check_if_server_version_lt(glide_client, "6.2.0"):
         transaction.copy(key, key2, replace=True)
         args.append(True)
 
@@ -284,7 +340,7 @@ async def transaction_test(
     args.append([value2_bytes, value_bytes])
     transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
     args.append(0)
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.lpush(key5, [value, value2])
         args.append(2)
         transaction.lmpop([key5], ListDirection.LEFT)
@@ -342,7 +398,7 @@ async def transaction_test(
     args.append({b"foo", b"bar"})
     transaction.sinterstore(key7, [key7, key7])
     args.append(2)
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.sintercard([key7, key7])
         args.append(2)
         transaction.sintercard([key7, key7], 1)
@@ -355,20 +411,20 @@ async def transaction_test(
     args.append(False)
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
-    args.append(4)
+    args.append(4.0)
     transaction.zrank(key8, "one")
     args.append(0)
     transaction.zrevrank(key8, "one")
     args.append(3)
-    if not await check_if_server_version_lt(redis_client, "7.2.0"):
+    if not await check_if_server_version_lt(glide_client, "7.2.0"):
         transaction.zrank_withscore(key8, "one")
         args.append([0, 1])
         transaction.zrevrank_withscore(key8, "one")
         args.append([3, 1])
     transaction.zadd_incr(key8, "one", 3)
-    args.append(4)
+    args.append(4.0)
     transaction.zincrby(key8, 3, "one")
-    args.append(7)
+    args.append(7.0)
     transaction.zrem(key8, ["one"])
     args.append(1)
     transaction.zcard(key8)
@@ -382,7 +438,7 @@ async def transaction_test(
     transaction.zrange(key8, RangeByIndex(start=0, stop=-1))
     args.append([b"two", b"three", b"four"])
     transaction.zrange_withscores(key8, RangeByIndex(start=0, stop=-1))
-    args.append({b"two": 2, b"three": 3, b"four": 4})
+    args.append({b"two": 2.0, b"three": 3.0, b"four": 4.0})
     transaction.zmscore(key8, ["two", "three"])
     args.append([2.0, 3.0])
     transaction.zrangestore(key8, key8, RangeByIndex(0, -1))
@@ -414,7 +470,7 @@ async def transaction_test(
     args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.zmpop([key8], ScoreFilter.MAX)
         args.append(None)
         transaction.zmpop([key8], ScoreFilter.MAX, 1)
@@ -426,7 +482,7 @@ async def transaction_test(
     args.append([b"one", b"two"])
     transaction.zdiff_withscores([key13, key8])
     args.append({b"one": 1.0, b"two": 2.0})
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.zintercard([key13, key8])
         args.append(0)
         transaction.zintercard([key13, key8], 1)
@@ -438,16 +494,16 @@ async def transaction_test(
     args.append(3)
     transaction.zinter([key14, key15])
     args.append([b"one", b"two"])
-    transaction.zinter_withscores(cast(list[str | bytes], [key14, key15]))
+    transaction.zinter_withscores(cast(List[Union[str, bytes]], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0})
-    transaction.zinterstore(key8, cast(list[str | bytes], [key14, key15]))
+    transaction.zinterstore(key8, cast(List[Union[str, bytes]], [key14, key15]))
     args.append(2)
     transaction.zunion([key14, key15])
     args.append([b"one", b"three", b"two"])
-    transaction.zunion_withscores(cast(list[str | bytes], [key14, key15]))
+    transaction.zunion_withscores(cast(List[Union[str, bytes]], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0, b"three": 3.5})
     transaction.zunionstore(
-        key8, cast(list[str | bytes], [key14, key15]), AggregationType.MAX
+        key8, cast(List[Union[str, bytes]], [key14, key15]), AggregationType.MAX
     )
     args.append(3)
 
@@ -472,7 +528,7 @@ async def transaction_test(
     transaction.bitpos(key20, 1)
     args.append(1)
 
-    if not await check_if_server_version_lt(redis_client, "6.0.0"):
+    if not await check_if_server_version_lt(glide_client, "6.0.0"):
         transaction.bitfield_read_only(
             key20, [BitFieldGet(SignedEncoding(5), BitOffset(3))]
         )
@@ -489,7 +545,7 @@ async def transaction_test(
     )
     args.append([609])
 
-    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
         transaction.set(key20, "foobar")
         args.append(OK)
         transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
@@ -537,62 +593,84 @@ async def transaction_test(
     args.append(b"0-1")
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
     args.append(b"0-2")
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-3"))
+    args.append(b"0-3")
     transaction.xlen(key11)
-    args.append(2)
-    transaction.xread({key11: "0-1"})
-    args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
+    args.append(3)
+    transaction.xread({key11: "0-2"})
+    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
     transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({b"0-1": [[b"foo", b"bar"]]})
     transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({b"0-1": [[b"foo", b"bar"]]})
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
+    transaction.xinfo_groups(key11)
+    args.append([])
 
     group_name1 = get_random_string(10)
     group_name2 = get_random_string(10)
     consumer = get_random_string(10)
-    transaction.xgroup_create(key11, group_name1, "0-1")
+    consumer2 = get_random_string(10)
+    transaction.xgroup_create(key11, group_name1, "0-2")
     args.append(OK)
     transaction.xgroup_create(
         key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
     )
     args.append(OK)
+    transaction.xinfo_consumers(key11, group_name1)
+    args.append([])
     transaction.xgroup_create_consumer(key11, group_name1, consumer)
     args.append(True)
+    transaction.xgroup_set_id(key11, group_name1, "0-2")
+    args.append(OK)
+    transaction.xreadgroup({key11: ">"}, group_name1, consumer)
+    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
     transaction.xreadgroup(
-        {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
+        {key11: "0-3"}, group_name1, consumer, StreamReadGroupOptions(count=2)
     )
-    args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
+    args.append({key11.encode(): {}})
+    transaction.xclaim(key11, group_name1, consumer, 0, ["0-1"])
+    args.append({})
+    transaction.xclaim(
+        key11, group_name1, consumer, 0, ["0-3"], StreamClaimOptions(is_force=True)
+    )
+    args.append({b"0-3": [[b"foo", b"bar"]]})
+    transaction.xclaim_just_id(key11, group_name1, consumer, 0, ["0-3"])
+    args.append([b"0-3"])
+    transaction.xclaim_just_id(
+        key11, group_name1, consumer, 0, ["0-4"], StreamClaimOptions(is_force=True)
+    )
+    args.append([])
+
     transaction.xpending(key11, group_name1)
-    args.append([1, b"0-2", b"0-2", [[consumer.encode(), b"1"]]])
+    args.append([1, b"0-3", b"0-3", [[consumer.encode(), b"1"]]])
 
     min_version = "6.2.0"
-    if not await check_if_server_version_lt(redis_client, min_version):
+    if not await check_if_server_version_lt(glide_client, min_version):
         transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
         transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
-        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             args.append(
-                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}]
+                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}]
             )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
             args.append(
-                [b"0-0", [b"0-2"]]
+                [b"0-0", [b"0-3"]]
             )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
         else:
             args.append(
-                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}, []]
+                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}, []]
             )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
             args.append(
-                [b"0-0", [b"0-2"], []]
+                [b"0-0", [b"0-3"], []]
             )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
 
-    transaction.xack(key11, group_name1, ["0-2"])
+    transaction.xack(key11, group_name1, ["0-3"])
     args.append(1)
     transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
     args.append([])
-    transaction.xgroup_set_id(key11, group_name1, "0-2")
-    args.append(OK)
     transaction.xgroup_del_consumer(key11, group_name1, consumer)
     args.append(0)
     transaction.xgroup_destroy(key11, group_name1)
@@ -600,7 +678,7 @@ async def transaction_test(
     transaction.xgroup_destroy(key11, group_name2)
     args.append(True)
 
-    transaction.xdel(key11, ["0-2", "0-3"])
+    transaction.xdel(key11, ["0-3", "0-5"])
     args.append(1)
 
     transaction.lpush(key17, ["2", "1", "4", "3", "a"])
@@ -612,6 +690,14 @@ async def transaction_test(
         alpha=True,
     )
     args.append([b"2", b"3", b"4", b"a"])
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
     transaction.sort_store(
         key17,
         key18,
@@ -626,8 +712,6 @@ async def transaction_test(
     args.append(b"one")
     transaction.srandmember_count(key7, 1)
     args.append([b"one"])
-    transaction.wait(1, 1000)
-    args.append(0)
     transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
     transaction.flushall()
@@ -642,7 +726,7 @@ async def transaction_test(
     args.append(key.encode())
 
     min_version = "6.0.6"
-    if not await check_if_server_version_lt(redis_client, min_version):
+    if not await check_if_server_version_lt(glide_client, min_version):
         transaction.rpush(key25, ["a", "a", "b", "c", "a", "b"])
         args.append(6)
         transaction.lpos(key25, "a")
@@ -651,14 +735,14 @@ async def transaction_test(
         args.append([0, 1, 4])
 
     min_version = "6.2.0"
-    if not await check_if_server_version_lt(redis_client, min_version):
+    if not await check_if_server_version_lt(glide_client, min_version):
         transaction.flushall(FlushMode.SYNC)
         args.append(OK)
         transaction.flushdb(FlushMode.SYNC)
         args.append(OK)
 
     min_version = "6.2.0"
-    if not await check_if_server_version_lt(redis_client, min_version):
+    if not await check_if_server_version_lt(glide_client, min_version):
         transaction.set(key22, "value")
         args.append(OK)
         transaction.getex(key22)
@@ -667,7 +751,7 @@ async def transaction_test(
         args.append(b"value")
 
     min_version = "7.0.0"
-    if not await check_if_server_version_lt(redis_client, min_version):
+    if not await check_if_server_version_lt(glide_client, min_version):
         transaction.zadd(key16, {"a": 1, "b": 2, "c": 3, "d": 4})
         args.append(4)
         transaction.bzmpop([key16], ScoreFilter.MAX, 0.1)
@@ -693,95 +777,109 @@ async def transaction_test(
 
 @pytest.mark.asyncio
 class TestTransaction:
+
+    async def exec_transaction(
+        self, glide_client: TGlideClient, transaction: BaseTransaction
+    ) -> Optional[List[TResult]]:
+        """
+        Exec a transaction on a client with proper typing. Casts are required to satisfy `mypy`.
+        """
+        if isinstance(glide_client, GlideClient):
+            return await cast(GlideClient, glide_client).exec(
+                cast(Transaction, transaction)
+            )
+        else:
+            return await cast(GlideClusterClient, glide_client).exec(
+                cast(ClusterTransaction, transaction)
+            )
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_with_different_slots(self, redis_client: TGlideClient):
-        transaction = (
-            Transaction()
-            if isinstance(redis_client, GlideClient)
-            else ClusterTransaction()
-        )
+    async def test_transaction_with_different_slots(
+        self, glide_client: GlideClusterClient
+    ):
+        transaction = ClusterTransaction()
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(RequestError, match="CrossSlot"):
-            await redis_client.exec(transaction)
+            await glide_client.exec(transaction)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_custom_command(self, redis_client: TGlideClient):
+    async def test_transaction_custom_command(self, glide_client: TGlideClient):
         key = get_random_string(10)
         transaction = (
             Transaction()
-            if isinstance(redis_client, GlideClient)
+            if isinstance(glide_client, GlideClient)
             else ClusterTransaction()
         )
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
-        result = await redis_client.exec(transaction)
+        result = await self.exec_transaction(glide_client, transaction)
         assert result == [1, b"bar"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_custom_unsupported_command(
-        self, redis_client: TGlideClient
+        self, glide_client: TGlideClient
     ):
         key = get_random_string(10)
         transaction = (
             Transaction()
-            if isinstance(redis_client, GlideClient)
+            if isinstance(glide_client, GlideClient)
             else ClusterTransaction()
         )
         transaction.custom_command(["WATCH", key])
         with pytest.raises(RequestError) as e:
-            await redis_client.exec(transaction)
+            await self.exec_transaction(glide_client, transaction)
         assert "WATCH inside MULTI is not allowed" in str(
             e
         )  # TODO : add an assert on EXEC ABORT
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_discard_command(self, redis_client: TGlideClient):
+    async def test_transaction_discard_command(self, glide_client: TGlideClient):
         key = get_random_string(10)
-        await redis_client.set(key, "1")
+        await glide_client.set(key, "1")
         transaction = (
             Transaction()
-            if isinstance(redis_client, GlideClient)
+            if isinstance(glide_client, GlideClient)
             else ClusterTransaction()
         )
 
         transaction.custom_command(["INCR", key])
         transaction.custom_command(["DISCARD"])
         with pytest.raises(RequestError) as e:
-            await redis_client.exec(transaction)
+            await self.exec_transaction(glide_client, transaction)
         assert "EXEC without MULTI" in str(e)  # TODO : add an assert on EXEC ABORT
-        value = await redis_client.get(key)
+        value = await glide_client.get(key)
         assert value == b"1"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_exec_abort(self, redis_client: TGlideClient):
+    async def test_transaction_exec_abort(self, glide_client: TGlideClient):
         key = get_random_string(10)
         transaction = BaseTransaction()
         transaction.custom_command(["INCR", key, key, key])
         with pytest.raises(RequestError) as e:
-            await redis_client.exec(transaction)
+            await self.exec_transaction(glide_client, transaction)
         assert "wrong number of arguments" in str(
             e
         )  # TODO : add an assert on EXEC ABORT
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cluster_transaction(self, redis_client: GlideClusterClient):
-        assert await redis_client.custom_command(["FLUSHALL"]) == OK
+    async def test_cluster_transaction(self, glide_client: GlideClusterClient):
+        assert await glide_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         transaction = ClusterTransaction()
         transaction.info()
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(glide_client, "7.0.0"):
             transaction.publish("test_message", keyslot, False)
         else:
             transaction.publish("test_message", keyslot, True)
-        expected = await transaction_test(transaction, keyslot, redis_client)
-        result = await redis_client.exec(transaction)
+        expected = await transaction_test(transaction, keyslot, glide_client)
+        result = await glide_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], bytes)
         result[0] = result[0].decode()
@@ -794,9 +892,9 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_return_null_on_watch_transaction_failures(
-        self, redis_client: TGlideClient, request
+        self, glide_client: TGlideClient, request
     ):
-        is_cluster = isinstance(redis_client, GlideClusterClient)
+        is_cluster = isinstance(glide_client, GlideClusterClient)
         client2 = await create_client(
             request,
             is_cluster,
@@ -804,13 +902,13 @@ class TestTransaction:
         keyslot = get_random_string(3)
         transaction = ClusterTransaction() if is_cluster else Transaction()
         transaction.get(keyslot)
-        result1 = await redis_client.watch([keyslot])
+        result1 = await glide_client.watch([keyslot])
         assert result1 == OK
 
         result2 = await client2.set(keyslot, "foo")
         assert result2 == OK
 
-        result3 = await redis_client.exec(transaction)
+        result3 = await self.exec_transaction(glide_client, transaction)
         assert result3 is None
 
         await client2.close()
@@ -818,7 +916,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_large_values(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**25  # 33mb
@@ -827,15 +925,15 @@ class TestTransaction:
         transaction = Transaction()
         transaction.set(key, value)
         transaction.get(key)
-        result = await redis_client.exec(transaction)
+        result = await glide_client.exec(transaction)
         assert isinstance(result, list)
         assert result[0] == OK
         assert result[1] == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_transaction(self, redis_client: GlideClient):
-        assert await redis_client.custom_command(["FLUSHALL"]) == OK
+    async def test_standalone_transaction(self, glide_client: GlideClient):
+        assert await glide_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
         key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -867,8 +965,8 @@ class TestTransaction:
         transaction.select(0)
         transaction.get(key)
         transaction.publish("test_message", "test_channel")
-        expected = await transaction_test(transaction, keyslot, redis_client)
-        result = await redis_client.exec(transaction)
+        expected = await transaction_test(transaction, keyslot, glide_client)
+        result = await glide_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], bytes)
         result[0] = result[0].decode()
@@ -887,10 +985,10 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_copy_transaction(self, redis_client: GlideClient):
+    async def test_standalone_copy_transaction(self, glide_client: GlideClient):
         min_version = "6.2.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+        if await check_if_server_version_lt(glide_client, min_version):
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -901,21 +999,22 @@ class TestTransaction:
         transaction.set(key, value)
         transaction.copy(key, key1, 1, replace=True)
         transaction.get(key1)
-        result = await redis_client.exec(transaction)
+        result = await glide_client.exec(transaction)
         assert result is not None
         assert result[2] == True
         assert result[3] == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_chaining_calls(self, redis_client: TGlideClient):
-        cluster_mode = isinstance(redis_client, GlideClusterClient)
+    async def test_transaction_chaining_calls(self, glide_client: TGlideClient):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
         key = get_random_string(3)
 
         transaction = ClusterTransaction() if cluster_mode else Transaction()
         transaction.set(key, "value").get(key).delete([key])
 
-        assert await redis_client.exec(transaction) == [OK, b"value", 1]
+        result = await self.exec_transaction(glide_client, transaction)
+        assert result == [OK, b"value", 1]
 
     # The object commands are tested here instead of transaction_test because they have special requirements:
     # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config
@@ -924,11 +1023,11 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_object_commands(
-        self, redis_client: TGlideClient, cluster_mode: bool
+        self, glide_client: TGlideClient, cluster_mode: bool
     ):
         string_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
-        config = await redis_client.config_get([maxmemory_policy_key])
+        config = await glide_client.config_get([maxmemory_policy_key])
         config_decoded = cast(dict, convert_bytes_to_string_object(config))
         assert config_decoded is not None
         maxmemory_policy = cast(str, config_decoded.get(maxmemory_policy_key))
@@ -945,7 +1044,7 @@ class TestTransaction:
             transaction.config_set({maxmemory_policy_key: "allkeys-random"})
             transaction.object_idletime(string_key)
 
-            response = await redis_client.exec(transaction)
+            response = await self.exec_transaction(glide_client, transaction)
             assert response is not None
             assert response[0] == OK  # transaction.set(string_key, "foo")
             assert response[1] == b"embstr"  # transaction.object_encoding(string_key)
@@ -959,18 +1058,47 @@ class TestTransaction:
             # transaction.object_idletime(string_key)
             assert cast(int, response[6]) >= 0
         finally:
-            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+            await glide_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_xinfo_stream(
+        self, glide_client: TGlideClient, cluster_mode: bool, protocol
+    ):
+        key = get_random_string(10)
+        stream_id1_0 = "1-0"
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
+        transaction.xinfo_stream(key)
+        transaction.xinfo_stream_full(key)
+
+        response = await glide_client.exec(transaction)
+        assert response is not None
+        # transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
+        assert response[0] == stream_id1_0.encode()
+        # transaction.xinfo_stream(key)
+        info = cast(dict, response[1])
+        assert info.get(b"length") == 1
+        assert info.get(b"groups") == 0
+        assert info.get(b"first-entry") == [stream_id1_0.encode(), [b"foo", b"bar"]]
+        assert info.get(b"first-entry") == info.get(b"last-entry")
+
+        # transaction.xinfo_stream_full(key)
+        info_full = cast(dict, response[2])
+        assert info_full.get(b"length") == 1
+        assert info_full.get(b"entries") == [[stream_id1_0.encode(), [b"foo", b"bar"]]]
+        assert info_full.get(b"groups") == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_lastsave(
-        self, redis_client: TGlideClient, cluster_mode: bool
+        self, glide_client: TGlideClient, cluster_mode: bool
     ):
         yesterday = date.today() - timedelta(1)
         yesterday_unix_time = time.mktime(yesterday.timetuple())
         transaction = ClusterTransaction() if cluster_mode else Transaction()
         transaction.lastsave()
-        response = await redis_client.exec(transaction)
+        response = await self.exec_transaction(glide_client, transaction)
         assert isinstance(response, list)
         lastsave_time = response[0]
         assert isinstance(lastsave_time, int)
@@ -978,12 +1106,83 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lolwut_transaction(self, redis_client: GlideClusterClient):
-        transaction = Transaction()
+    async def test_lolwut_transaction(self, glide_client: GlideClusterClient):
+        transaction = ClusterTransaction()
         transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
-        results = await redis_client.exec(transaction)
+        results = await glide_client.exec(transaction)
         assert results is not None
 
         for element in results:
             assert isinstance(element, bytes)
             assert b"Redis ver. " in element
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_dump_restore(
+        self, glide_client: TGlideClient, cluster_mode, protocol
+    ):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        keyslot = get_random_string(3)
+        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+
+        # Verify Dump
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.set(key1, "value")
+        transaction.dump(key1)
+        result1 = await glide_client.exec(transaction)
+        assert result1 is not None
+        assert isinstance(result1, list)
+        assert result1[0] == OK
+        assert isinstance(result1[1], bytes)
+
+        # Verify Restore - use result1[1] from above
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.restore(key2, 0, result1[1])
+        transaction.get(key2)
+        result2 = await glide_client.exec(transaction)
+        assert result2 is not None
+        assert isinstance(result2, list)
+        assert result2[0] == OK
+        assert result2[1] == b"value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_function_dump_restore(
+        self, glide_client: TGlideClient, cluster_mode, protocol
+    ):
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            # Setup (will not verify)
+            assert await glide_client.function_flush() == OK
+            lib_name = f"mylib_{get_random_string(10)}"
+            func_name = f"myfun_{get_random_string(10)}"
+            code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.function_load(code, True)
+
+            # Verify function_dump
+            transaction.function_dump()
+            result1 = await glide_client.exec(transaction)
+            assert result1 is not None
+            assert isinstance(result1, list)
+            assert isinstance(result1[1], bytes)
+
+            # Verify function_restore - use result1[2] from above
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.function_restore(result1[1], FunctionRestorePolicy.REPLACE)
+            # For the cluster mode, PRIMARY SlotType is required to avoid the error:
+            #  "RequestError: An error was signalled by the server -
+            #   ReadOnly: You can't write against a read only replica."
+            if isinstance(glide_client, GlideClusterClient):
+                result2 = await glide_client.exec(
+                    transaction, SlotIdRoute(SlotType.PRIMARY, 1)
+                )
+            else:
+                result2 = await glide_client.exec(transaction)
+
+            assert result2 is not None
+            assert isinstance(result2, list)
+            assert result2[0] == OK
+
+            # Test clean up
+            await glide_client.function_flush()

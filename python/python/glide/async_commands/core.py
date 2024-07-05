@@ -1,11 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
     Dict,
     List,
+    Mapping,
     Optional,
     Protocol,
     Set,
@@ -25,7 +25,7 @@ from glide.async_commands.bitmap import (
     _create_bitfield_args,
     _create_bitfield_read_only_args,
 )
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -46,6 +46,7 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
     StreamRangeBound,
@@ -54,18 +55,24 @@ from glide.async_commands.stream import (
     StreamTrimOptions,
     _create_xpending_range_args,
 )
-from glide.constants import TOK, TEncodable, TResult
+from glide.constants import (
+    TOK,
+    TEncodable,
+    TResult,
+    TXInfoStreamFullResponse,
+    TXInfoStreamResponse,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
-from ..glide import Script
+from ..glide import ClusterScanCursor, Script
 
 
 class ConditionalChange(Enum):
     """
     A condition to the `SET`, `ZADD` and `GEOADD` commands.
-    - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
-    - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
+    - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Valkey API.
+    - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API.
     """
 
     ONLY_IF_EXISTS = "XX"
@@ -74,56 +81,56 @@ class ConditionalChange(Enum):
 
 class ExpiryType(Enum):
     """SET option: The type of the expiry.
-    - SEC - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-    - MILLSEC - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - SEC - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
+    - MILLSEC - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Valkey API.
     - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
-        Redis API.
-    - KEEP_TTL - Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
+        Valkey API.
+    - KEEP_TTL - Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Valkey API.
     """
 
-    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
-    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
-    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
-    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
-    KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Redis API
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Valkey API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Valkey API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Valkey API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Valkey API
+    KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Valkey API
 
 
 class ExpiryTypeGetEx(Enum):
     """GetEx option: The type of the expiry.
-    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
+    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Valkey API.
     - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
-        Redis API.
-    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Redis API.
+        Valkey API.
+    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Valkey API.
     """
 
-    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
-    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
-    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
-    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
-    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Redis API
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Valkey API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Valkey API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Valkey API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Valkey API
+    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Valkey API
 
 
 class InfoSection(Enum):
     """
     INFO option: a specific section of information:
 
-    -SERVER: General information about the Redis server
+    -SERVER: General information about the server
     -CLIENTS: Client connections section
     -MEMORY: Memory consumption related information
     -PERSISTENCE: RDB and AOF related information
     -STATS: General statistics
     -REPLICATION: Master/replica replication information
     -CPU: CPU consumption statistics
-    -COMMANDSTATS: Redis command statistics
-    -LATENCYSTATS: Redis command latency percentile distribution statistics
-    -SENTINEL: Redis Sentinel section (only applicable to Sentinel instances)
-    -CLUSTER: Redis Cluster section
+    -COMMANDSTATS: Valkey command statistics
+    -LATENCYSTATS: Valkey command latency percentile distribution statistics
+    -SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
+    -CLUSTER: Valkey Cluster section
     -MODULES: Modules section
     -KEYSPACE: Database related statistics
-    -ERRORSTATS: Redis error statistics
+    -ERRORSTATS: Valkey error statistics
     -ALL: Return all sections (excluding module generated ones)
     -DEFAULT: Return only the default set of sections
     -EVERYTHING: Includes all and modules
@@ -153,11 +160,11 @@ class ExpireOptions(Enum):
     """
     EXPIRE option: options for setting key expiry.
 
-    - HasNoExpiry: Set expiry only when the key has no expiry (Equivalent to "NX" in Redis).
-    - HasExistingExpiry: Set expiry only when the key has an existing expiry (Equivalent to "XX" in Redis).
+    - HasNoExpiry: Set expiry only when the key has no expiry (Equivalent to "NX" in Valkey).
+    - HasExistingExpiry: Set expiry only when the key has an existing expiry (Equivalent to "XX" in Valkey).
     - NewExpiryGreaterThanCurrent: Set expiry only when the new expiry is greater than the current one (Equivalent
-        to "GT" in Redis).
-    - NewExpiryLessThanCurrent: Set expiry only when the new expiry is less than the current one (Equivalent to "LT" in Redis).
+        to "GT" in Valkey).
+    - NewExpiryLessThanCurrent: Set expiry only when the new expiry is less than the current one (Equivalent to "LT" in Valkey).
     """
 
     HasNoExpiry = "NX"
@@ -306,6 +313,22 @@ class FlushMode(Enum):
     SYNC = "SYNC"
 
 
+class FunctionRestorePolicy(Enum):
+    """
+    Options for the FUNCTION RESTORE command.
+
+    - APPEND: Appends the restored libraries to the existing libraries and aborts on collision. This is the
+        default policy.
+    - FLUSH: Deletes all existing libraries before restoring the payload.
+    - REPLACE: Appends the restored libraries to the existing libraries, replacing any existing ones in case
+        of name collisions. Note that this policy doesn't prevent function name collisions, only libraries.
+    """
+
+    APPEND = "APPEND"
+    FLUSH = "FLUSH"
+    REPLACE = "REPLACE"
+
+
 def _build_sort_args(
     key: TEncodable,
     by_pattern: Optional[TEncodable] = None,
@@ -361,6 +384,14 @@ class CoreCommands(Protocol):
         route: Optional[Route] = None,
     ) -> TResult: ...
 
+    async def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = ...,
+        count: Optional[int] = ...,
+        type: Optional[ObjectType] = ...,
+    ) -> TResult: ...
+
     async def set(
         self,
         key: TEncodable,
@@ -371,18 +402,18 @@ class CoreCommands(Protocol):
     ) -> Optional[bytes]:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
-        See https://redis.io/commands/set/ for more details.
+        See https://valkey.io/commands/set/ for more details.
 
         Args:
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
             conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
+                Equivalent to [`XX` | `NX`] in the Valkey API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
             return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
-                Equivalent to `GET` in the Redis API. Defaults to False.
+                Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Returns:
             Optional[bytes]:
@@ -412,7 +443,7 @@ class CoreCommands(Protocol):
     async def get(self, key: TEncodable) -> Optional[bytes]:
         """
         Get the value associated with the given key, or null if no such value exists.
-        See https://redis.io/commands/get/ for details.
+        See https://valkey.io/commands/get/ for details.
 
         Args:
             key (TEncodable): The key to retrieve from the database.
@@ -492,7 +523,7 @@ class CoreCommands(Protocol):
         Appends a value to a key.
         If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
 
-        See https://redis.io/commands/append for more details.
+        See https://valkey.io/commands/append for more details.
 
         Args:
             key (TEncodable): The key to which the value will be appended.
@@ -514,7 +545,7 @@ class CoreCommands(Protocol):
     async def strlen(self, key: TEncodable) -> int:
         """
         Get the length of the string value stored at `key`.
-        See https://redis.io/commands/strlen/ for more details.
+        See https://valkey.io/commands/strlen/ for more details.
 
         Args:
             key (TEncodable): The key to return its length.
@@ -535,7 +566,7 @@ class CoreCommands(Protocol):
         """
         Renames `key` to `new_key`.
         If `newkey` already exists it is overwritten.
-        See https://redis.io/commands/rename/ for more details.
+        See https://valkey.io/commands/rename/ for more details.
 
         Note:
             When in cluster mode, both `key` and `newkey` must map to the same hash slot.
@@ -579,7 +610,7 @@ class CoreCommands(Protocol):
     async def delete(self, keys: List[TEncodable]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
-        See https://redis.io/commands/del/ for details.
+        See https://valkey.io/commands/del/ for details.
 
         Note:
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
@@ -603,7 +634,7 @@ class CoreCommands(Protocol):
         """
         Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
-        See https://redis.io/commands/incr/ for more details.
+        See https://valkey.io/commands/incr/ for more details.
 
         Args:
           key (TEncodable): The key to increment its value.
@@ -621,7 +652,7 @@ class CoreCommands(Protocol):
     async def incrby(self, key: TEncodable, amount: int) -> int:
         """
         Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
-        the operation. See https://redis.io/commands/incrby/ for more details.
+        the operation. See https://valkey.io/commands/incrby/ for more details.
 
         Args:
           key (TEncodable): The key to increment its value.
@@ -644,7 +675,7 @@ class CoreCommands(Protocol):
         Increment the string representing a floating point number stored at `key` by `amount`.
         By using a negative increment value, the value stored at the `key` is decremented.
         If the key does not exist, it is set to 0 before performing the operation.
-        See https://redis.io/commands/incrbyfloat/ for more details.
+        See https://valkey.io/commands/incrbyfloat/ for more details.
 
         Args:
           key (TEncodable): The key to increment its value.
@@ -683,7 +714,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key", "Hello World")
-            >>> await client.setrange("key", 6, "Redis")
+            >>> await client.setrange("key", 6, "Glide")
                 11  # The length of the string stored at `key` after it was modified.
         """
         return cast(
@@ -696,7 +727,7 @@ class CoreCommands(Protocol):
     async def mset(self, key_value_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set multiple keys to multiple values in a single atomic operation.
-        See https://redis.io/commands/mset/ for more details.
+        See https://valkey.io/commands/mset/ for more details.
 
         Note:
             When in cluster mode, the command may route to multiple nodes when keys in `key_value_map` map to different hash slots.
@@ -749,7 +780,7 @@ class CoreCommands(Protocol):
     async def mget(self, keys: List[TEncodable]) -> List[Optional[bytes]]:
         """
         Retrieve the values of multiple keys.
-        See https://redis.io/commands/mget/ for more details.
+        See https://valkey.io/commands/mget/ for more details.
 
         Note:
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
@@ -775,7 +806,7 @@ class CoreCommands(Protocol):
         """
         Decrement the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
-        See https://redis.io/commands/decr/ for more details.
+        See https://valkey.io/commands/decr/ for more details.
 
         Args:
           key (TEncodable): The key to increment its value.
@@ -794,7 +825,7 @@ class CoreCommands(Protocol):
         """
         Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
-        See https://redis.io/commands/decrby/ for more details.
+        See https://valkey.io/commands/decrby/ for more details.
 
         Args:
           key (TEncodable): The key to decrement its value.
@@ -842,7 +873,7 @@ class CoreCommands(Protocol):
     ) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
-        See https://redis.io/commands/hset/ for more details.
+        See https://valkey.io/commands/hset/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -867,7 +898,7 @@ class CoreCommands(Protocol):
     async def hget(self, key: TEncodable, field: TEncodable) -> Optional[bytes]:
         """
         Retrieves the value associated with `field` in the hash stored at `key`.
-        See https://redis.io/commands/hget/ for more details.
+        See https://valkey.io/commands/hget/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -899,7 +930,7 @@ class CoreCommands(Protocol):
         Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
         If `key` does not exist, a new key holding a hash is created.
         If `field` already exists, this operation has no effect.
-        See https://redis.io/commands/hsetnx/ for more details.
+        See https://valkey.io/commands/hsetnx/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -925,7 +956,7 @@ class CoreCommands(Protocol):
         Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
-        See https://redis.io/commands/hincrby/ for more details.
+        See https://valkey.io/commands/hincrby/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -953,7 +984,7 @@ class CoreCommands(Protocol):
         amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
         If `field` or `key` does not exist, it is set to 0 before performing the operation.
-        See https://redis.io/commands/hincrbyfloat/ for more details.
+        See https://valkey.io/commands/hincrbyfloat/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -978,7 +1009,7 @@ class CoreCommands(Protocol):
     async def hexists(self, key: TEncodable, field: TEncodable) -> bool:
         """
         Check if a field exists in the hash stored at `key`.
-        See https://redis.io/commands/hexists/ for more details.
+        See https://valkey.io/commands/hexists/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1001,7 +1032,7 @@ class CoreCommands(Protocol):
     async def hgetall(self, key: TEncodable) -> Dict[bytes, bytes]:
         """
         Returns all fields and values of the hash stored at `key`.
-        See https://redis.io/commands/hgetall/ for details.
+        See https://valkey.io/commands/hgetall/ for details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1024,7 +1055,7 @@ class CoreCommands(Protocol):
     ) -> List[Optional[bytes]]:
         """
         Retrieve the values associated with specified fields in the hash stored at `key`.
-        See https://redis.io/commands/hmget/ for details.
+        See https://valkey.io/commands/hmget/ for details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1047,7 +1078,7 @@ class CoreCommands(Protocol):
     async def hdel(self, key: TEncodable, fields: List[TEncodable]) -> int:
         """
         Remove specified fields from the hash stored at `key`.
-        See https://redis.io/commands/hdel/ for more details.
+        See https://valkey.io/commands/hdel/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1067,7 +1098,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of fields contained in the hash stored at `key`.
 
-        See https://redis.io/commands/hlen/ for more details.
+        See https://valkey.io/commands/hlen/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1088,7 +1119,7 @@ class CoreCommands(Protocol):
         """
         Returns all values in the hash stored at `key`.
 
-        See https://redis.io/commands/hvals/ for more details.
+        See https://valkey.io/commands/hvals/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1106,7 +1137,7 @@ class CoreCommands(Protocol):
         """
         Returns all field names in the hash stored at `key`.
 
-        See https://redis.io/commands/hkeys/ for more details.
+        See https://valkey.io/commands/hkeys/ for more details.
 
         Args:
             key (TEncodable): The key of the hash.
@@ -1226,7 +1257,7 @@ class CoreCommands(Protocol):
         Insert all the specified values at the head of the list stored at `key`.
         `elements` are inserted one after the other to the head of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
-        See https://redis.io/commands/lpush/ for more details.
+        See https://valkey.io/commands/lpush/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1250,7 +1281,7 @@ class CoreCommands(Protocol):
         Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
 
-        See https://redis.io/commands/lpushx/ for more details.
+        See https://valkey.io/commands/lpushx/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1273,7 +1304,7 @@ class CoreCommands(Protocol):
         """
         Remove and return the first elements of the list stored at `key`.
         The command pops a single element from the beginning of the list.
-        See https://redis.io/commands/lpop/ for details.
+        See https://valkey.io/commands/lpop/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1296,7 +1327,7 @@ class CoreCommands(Protocol):
     async def lpop_count(self, key: TEncodable, count: int) -> Optional[List[bytes]]:
         """
         Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
-        See https://redis.io/commands/lpop/ for details.
+        See https://valkey.io/commands/lpop/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1372,7 +1403,7 @@ class CoreCommands(Protocol):
             >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
                {b"testKey": [b"three", b"two"]}
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1415,7 +1446,7 @@ class CoreCommands(Protocol):
             >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
                {b"testKey": [b"three", b"two"]}
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(timeout), str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1432,7 +1463,7 @@ class CoreCommands(Protocol):
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
         element and so on. These offsets can also be negative numbers indicating offsets starting at the end of the list,
         with -1 being the last element of the list, -2 being the penultimate, and so on.
-        See https://redis.io/commands/lrange/ for details.
+        See https://valkey.io/commands/lrange/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1472,7 +1503,7 @@ class CoreCommands(Protocol):
         Negative indices can be used to designate elements starting at the tail of the list.
         Here, -1 means the last element, -2 means the penultimate and so forth.
 
-        See https://redis.io/commands/lindex/ for more details.
+        See https://valkey.io/commands/lindex/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1525,7 +1556,7 @@ class CoreCommands(Protocol):
         Inserts all the specified values at the tail of the list stored at `key`.
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
         to the rightmost element. If `key` does not exist, it is created as empty list before performing the push operations.
-        See https://redis.io/commands/rpush/ for more details.
+        See https://valkey.io/commands/rpush/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1549,7 +1580,7 @@ class CoreCommands(Protocol):
         Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
 
-        See https://redis.io/commands/rpushx/ for more details.
+        See https://valkey.io/commands/rpushx/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1572,7 +1603,7 @@ class CoreCommands(Protocol):
         """
         Removes and returns the last elements of the list stored at `key`.
         The command pops a single element from the end of the list.
-        See https://redis.io/commands/rpop/ for details.
+        See https://valkey.io/commands/rpop/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1595,7 +1626,7 @@ class CoreCommands(Protocol):
     async def rpop_count(self, key: TEncodable, count: int) -> Optional[List[bytes]]:
         """
         Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
-        See https://redis.io/commands/rpop/ for details.
+        See https://valkey.io/commands/rpop/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1655,7 +1686,7 @@ class CoreCommands(Protocol):
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
 
-        See https://redis.io/commands/linsert/ for details.
+        See https://valkey.io/commands/linsert/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -1715,7 +1746,7 @@ class CoreCommands(Protocol):
             >>> await client.lrange("testKey2", 0, -1)
                 [b"one", b"three", b"four"]
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -1765,7 +1796,7 @@ class CoreCommands(Protocol):
             >>> updated_array2 = await client.lrange("testKey2", 0, -1)
                 [b"one", b"three", bb"four"]
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -1780,7 +1811,7 @@ class CoreCommands(Protocol):
         Add specified members to the set stored at `key`.
         Specified members that are already a member of this set are ignored.
         If `key` does not exist, a new set is created before adding `members`.
-        See https://redis.io/commands/sadd/ for more details.
+        See https://valkey.io/commands/sadd/ for more details.
 
         Args:
             key (TEncodable): The key where members will be added to its set.
@@ -1799,7 +1830,7 @@ class CoreCommands(Protocol):
         """
         Remove specified members from the set stored at `key`.
         Specified members that are not a member of this set are ignored.
-        See https://redis.io/commands/srem/ for details.
+        See https://valkey.io/commands/srem/ for details.
 
         Args:
             key (TEncodable): The key from which members will be removed.
@@ -1818,7 +1849,7 @@ class CoreCommands(Protocol):
     async def smembers(self, key: TEncodable) -> Set[bytes]:
         """
         Retrieve all the members of the set value stored at `key`.
-        See https://redis.io/commands/smembers/ for details.
+        See https://valkey.io/commands/smembers/ for details.
 
         Args:
             key (TEncodable): The key from which to retrieve the set members.
@@ -1838,7 +1869,7 @@ class CoreCommands(Protocol):
     async def scard(self, key: TEncodable) -> int:
         """
         Retrieve the set cardinality (number of elements) of the set stored at `key`.
-        See https://redis.io/commands/scard/ for details.
+        See https://valkey.io/commands/scard/ for details.
 
         Args:
             key (TEncodable): The key from which to retrieve the number of set members.
@@ -1909,7 +1940,7 @@ class CoreCommands(Protocol):
         """
         Returns if `member` is a member of the set stored at `key`.
 
-        See https://redis.io/commands/sismember/ for more details.
+        See https://valkey.io/commands/sismember/ for more details.
 
         Args:
             key (TEncodable): The key of the set.
@@ -2198,7 +2229,7 @@ class CoreCommands(Protocol):
         element and so on.
         These offsets can also be negative numbers indicating offsets starting at the end of the list, with -1 being the last
         element of the list, -2 being the penultimate, and so on.
-        See https://redis.io/commands/ltrim/ for more details.
+        See https://valkey.io/commands/ltrim/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -2228,7 +2259,7 @@ class CoreCommands(Protocol):
         If `count` is negative, it removes elements equal to `element` moving from tail to head.
         If `count` is 0 or greater than the occurrences of elements equal to `element`, it removes all elements
         equal to `element`.
-        See https://redis.io/commands/lrem/ for more details.
+        See https://valkey.io/commands/lrem/ for more details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -2251,7 +2282,7 @@ class CoreCommands(Protocol):
     async def llen(self, key: TEncodable) -> int:
         """
         Get the length of the list stored at `key`.
-        See https://redis.io/commands/llen/ for details.
+        See https://valkey.io/commands/llen/ for details.
 
         Args:
             key (TEncodable): The key of the list.
@@ -2269,7 +2300,7 @@ class CoreCommands(Protocol):
     async def exists(self, keys: List[TEncodable]) -> int:
         """
         Returns the number of keys in `keys` that exist in the database.
-        See https://redis.io/commands/exists/ for more details.
+        See https://valkey.io/commands/exists/ for more details.
 
         Note:
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
@@ -2292,8 +2323,8 @@ class CoreCommands(Protocol):
         Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
-        However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
-        See https://redis.io/commands/unlink/ for more details.
+        However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+        See https://valkey.io/commands/unlink/ for more details.
 
         Note:
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
@@ -2321,7 +2352,7 @@ class CoreCommands(Protocol):
         If `key` already has an existing expire set, the time to live is updated to the new value.
         If `seconds` is a non-positive number, the key will be deleted rather than expired.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-        See https://redis.io/commands/expire/ for more details.
+        See https://valkey.io/commands/expire/ for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2354,7 +2385,7 @@ class CoreCommands(Protocol):
         deleted.
         If `key` already has an existing expire set, the time to live is updated to the new value.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-        See https://redis.io/commands/expireat/ for more details.
+        See https://valkey.io/commands/expireat/ for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2387,7 +2418,7 @@ class CoreCommands(Protocol):
         If `key` already has an existing expire set, the time to live is updated to the new value.
         If `milliseconds` is a non-positive number, the key will be deleted rather than expired.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-        See https://redis.io/commands/pexpire/ for more details.
+        See https://valkey.io/commands/pexpire/ for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2422,7 +2453,7 @@ class CoreCommands(Protocol):
         deleted.
         If `key` already has an existing expire set, the time to live is updated to the new value.
         The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-        See https://redis.io/commands/pexpireat/ for more details.
+        See https://valkey.io/commands/pexpireat/ for more details.
 
         Args:
             key (TEncodable): The key to set a timeout on.
@@ -2468,7 +2499,7 @@ class CoreCommands(Protocol):
             >>> await client.expiretime("my_key")
                 1718614954
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return cast(int, await self._execute_command(RequestType.ExpireTime, [key]))
 
@@ -2495,14 +2526,14 @@ class CoreCommands(Protocol):
             >>> await client.pexpiretime("my_key")
                 1718615446670
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return cast(int, await self._execute_command(RequestType.PExpireTime, [key]))
 
     async def ttl(self, key: TEncodable) -> int:
         """
         Returns the remaining time to live of `key` that has a timeout.
-        See https://redis.io/commands/ttl/ for more details.
+        See https://valkey.io/commands/ttl/ for more details.
 
         Args:
             key (TEncodable): The key to return its timeout.
@@ -2526,7 +2557,7 @@ class CoreCommands(Protocol):
     ) -> int:
         """
         Returns the remaining time to live of `key` that has a timeout, in milliseconds.
-        See https://redis.io/commands/pttl for more details.
+        See https://valkey.io/commands/pttl for more details.
 
         Args:
             key (TEncodable): The key to return its timeout.
@@ -2553,7 +2584,7 @@ class CoreCommands(Protocol):
         Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
         persistent (a key that will never expire as no timeout is associated).
 
-        See https://redis.io/commands/persist/ for more details.
+        See https://valkey.io/commands/persist/ for more details.
 
         Args:
             key (TEncodable): The key to remove the existing timeout on.
@@ -2574,7 +2605,7 @@ class CoreCommands(Protocol):
         """
         Returns the bytes string representation of the type of the value stored at `key`.
 
-        See https://redis.io/commands/type/ for more details.
+        See https://valkey.io/commands/type/ for more details.
 
         Args:
             key (TEncodable): The key to check its data type.
@@ -2976,7 +3007,7 @@ class CoreCommands(Protocol):
         key: TEncodable,
         group_name: TEncodable,
         stream_id: TEncodable,
-        entries_read_id: Optional[TEncodable] = None,
+        entries_read: Optional[int] = None,
     ) -> TOK:
         """
         Set the last delivered ID for a consumer group.
@@ -2987,9 +3018,8 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the stream.
             group_name (TEncodable): The consumer group name.
             stream_id (TEncodable): The stream entry ID that should be set as the last delivered ID for the consumer group.
-            entries_read_id (Optional[TEncodable]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
-                used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
-                entry. This argument can only be specified if you are using Redis version 7.0.0 or above.
+            entries_read: (Optional[int]): A value representing the number of stream entries already read by the
+                group. This option can only be specified if you are using Valkey version 7.0.0 or above.
 
         Returns:
             TOK: A simple "OK" response.
@@ -2999,8 +3029,8 @@ class CoreCommands(Protocol):
                 OK  # The last delivered ID for consumer group "mygroup" was set to 0.
         """
         args: List[TEncodable] = [key, group_name, stream_id]
-        if entries_read_id is not None:
-            args.extend(["ENTRIESREAD", entries_read_id])
+        if entries_read is not None:
+            args.extend(["ENTRIESREAD", str(entries_read)])
 
         return cast(
             TOK,
@@ -3181,6 +3211,111 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XPending, args),
         )
 
+    async def xclaim(
+        self,
+        key: TEncodable,
+        group: TEncodable,
+        consumer: TEncodable,
+        min_idle_time_ms: int,
+        ids: List[TEncodable],
+        options: Optional[StreamClaimOptions] = None,
+    ) -> Mapping[bytes, List[List[bytes]]]:
+        """
+        Changes the ownership of a pending message.
+
+        See https://valkey.io/commands/xclaim for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group (TEncodable): The consumer group name.
+            consumer (TEncodable): The group consumer.
+            min_idle_time_ms (int): The minimum idle time for the message to be claimed.
+            ids (List[TEncodable]): A array of entry ids.
+            options (Optional[StreamClaimOptions]): Stream claim options.
+
+        Returns:
+            A Mapping of message entries with the format
+                {"entryId": [["entry", "data"], ...], ...} that are claimed by the consumer.
+
+        Examples:
+            # read messages from streamId for consumer1
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "consumer1")
+                {
+                    b"mystream": {
+                        b"1-0": [[b"field1", b"value1"]],
+                    }
+                }
+                # "1-0" is now read, and we can assign the pending messages to consumer2
+            >>> await client.xclaim("mystream", "mygroup", "consumer2", 0, ["1-0"])
+                {b"1-0": [[b"field1", b"value1"]]}
+        """
+
+        args = [key, group, consumer, str(min_idle_time_ms), *ids]
+
+        if options:
+            args.extend(options.to_args())
+
+        return cast(
+            Mapping[bytes, List[List[bytes]]],
+            await self._execute_command(RequestType.XClaim, args),
+        )
+
+    async def xclaim_just_id(
+        self,
+        key: TEncodable,
+        group: TEncodable,
+        consumer: TEncodable,
+        min_idle_time_ms: int,
+        ids: List[TEncodable],
+        options: Optional[StreamClaimOptions] = None,
+    ) -> List[TEncodable]:
+        """
+        Changes the ownership of a pending message. This function returns a List with
+        only the message/entry IDs, and is equivalent to using JUSTID in the Valkey API.
+
+        See https://valkey.io/commands/xclaim for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group (TEncodable): The consumer group name.
+            consumer (TEncodable): The group consumer.
+            min_idle_time_ms (int): The minimum idle time for the message to be claimed.
+            ids (List[TEncodable]): A array of entry ids.
+            options (Optional[StreamClaimOptions]): Stream claim options.
+
+        Returns:
+            A List of message ids claimed by the consumer.
+
+        Examples:
+            # read messages from streamId for consumer1
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "consumer1")
+                {
+                    b"mystream": {
+                        b"1-0": [[b"field1", b"value1"]],
+                    }
+                }
+                # "1-0" is now read, and we can assign the pending messages to consumer2
+            >>> await client.xclaim_just_id("mystream", "mygroup", "consumer2", 0, ["1-0"])
+                ["1-0"]
+        """
+
+        args = [
+            key,
+            group,
+            consumer,
+            str(min_idle_time_ms),
+            *ids,
+            StreamClaimOptions.JUST_ID_VALKEY_API,
+        ]
+
+        if options:
+            args.extend(options.to_args())
+
+        return cast(
+            List[TEncodable],
+            await self._execute_command(RequestType.XClaim, args),
+        )
+
     async def xautoclaim(
         self,
         key: TEncodable,
@@ -3211,12 +3346,12 @@ class CoreCommands(Protocol):
                 scanned.
                 - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
                 2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
-                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                 message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                 deleted from the Pending Entries List.
 
         Examples:
-            # Redis version < 7.0.0:
+            # Valkey version < 7.0.0:
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
                     b"0-0",
@@ -3230,7 +3365,7 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
-            # Redis version 7.0.0 and above:
+            # Valkey version 7.0.0 and above:
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
                     b"0-0",
@@ -3246,7 +3381,7 @@ class CoreCommands(Protocol):
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -3294,25 +3429,25 @@ class CoreCommands(Protocol):
                 to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
                 scanned.
                 - A list of the IDs for the claimed entries.
-                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                 message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                 deleted from the Pending Entries List.
 
         Examples:
-            # Redis version < 7.0.0:
+            # Valkey version < 7.0.0:
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [b"0-0", [b"1-1"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
-            # Redis version 7.0.0 and above:
+            # Valkey version 7.0.0 and above:
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [b"0-0", [b"1-1"], [b"1-2"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -3329,6 +3464,231 @@ class CoreCommands(Protocol):
         return cast(
             List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.XAutoClaim, args),
+        )
+
+    async def xinfo_groups(
+        self,
+        key: TEncodable,
+    ) -> List[Mapping[bytes, Union[bytes, int, None]]]:
+        """
+        Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-groups for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Returns:
+            List[Mapping[bytes, Union[bytes, int, None]]]: A list of mappings, where each mapping represents the
+                attributes of a consumer group for the stream at `key`.
+
+        Examples:
+            >>> await client.xinfo_groups("my_stream")
+                [
+                    {
+                        b"name": b"mygroup",
+                        b"consumers": 2,
+                        b"pending": 2,
+                        b"last-delivered-id": b"1638126030001-0",
+                        b"entries-read": 2,  # The "entries-read" field was added in Valkey version 7.0.0.
+                        b"lag": 0,  # The "lag" field was added in Valkey version 7.0.0.
+                    },
+                    {
+                        b"name": b"some-other-group",
+                        b"consumers": 1,
+                        b"pending": 0,
+                        b"last-delivered-id": b"1638126028070-0",
+                        b"entries-read": 1,
+                        b"lag": 1,
+                    }
+                ]
+                # The list of consumer groups and their attributes for stream "my_stream".
+        """
+        return cast(
+            List[Mapping[bytes, Union[bytes, int, None]]],
+            await self._execute_command(RequestType.XInfoGroups, [key]),
+        )
+
+    async def xinfo_consumers(
+        self,
+        key: TEncodable,
+        group_name: TEncodable,
+    ) -> List[Mapping[bytes, Union[bytes, int]]]:
+        """
+        Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
+        `key`.
+
+        See https://valkey.io/commands/xinfo-consumers for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+
+        Returns:
+            List[Mapping[bytes, Union[bytes, int]]]: A list of mappings, where each mapping contains the attributes of a
+                consumer for the given consumer group of the stream at `key`.
+
+        Examples:
+            >>> await client.xinfo_consumers("my_stream", "my_group")
+                [
+                    {
+                        b"name": b"Alice",
+                        b"pending": 1,
+                        b"idle": 9104628,
+                        b"inactive": 18104698,  # The "inactive" field was added in Valkey version 7.2.0.
+                    },
+                    {
+                        b"name": b"Bob",
+                        b"pending": 1,
+                        b"idle": 83841983,
+                        b"inactive": 993841998,
+                    }
+                ]
+                # The list of consumers and their attributes for consumer group "my_group" of stream "my_stream".
+        """
+        return cast(
+            List[Mapping[bytes, Union[bytes, int]]],
+            await self._execute_command(RequestType.XInfoConsumers, [key, group_name]),
+        )
+
+    async def xinfo_stream(
+        self,
+        key: TEncodable,
+    ) -> TXInfoStreamResponse:
+        """
+        Returns information about the stream stored at `key`. To get more detailed information, use `xinfo_stream_full`.
+
+        See https://valkey.io/commands/xinfo-stream for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Returns:
+            TXInfoStreamResponse: A mapping of stream information for the given `key`. See the example for a sample
+                response.
+
+        Examples:
+            >>> await client.xinfo_stream("my_stream")
+                {
+                    b"length": 4,
+                    b"radix-tree-keys": 1L,
+                    b"radix-tree-nodes": 2L,
+                    b"last-generated-id": b"1719877599564-0",
+                    b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
+                    b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
+                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
+                    b"groups": 1L,
+                    b"first-entry": [
+                        b"1719710679916-0",
+                        [b"foo1", b"bar1", b"foo2", b"bar2"],
+                    ],
+                    b"last-entry": [
+                        b"1719877599564-0",
+                        [b"field1", b"value1"],
+                    ],
+                }
+                # Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `None` if
+                # the stream is empty.
+        """
+        return cast(
+            TXInfoStreamResponse,
+            await self._execute_command(RequestType.XInfoStream, [key]),
+        )
+
+    async def xinfo_stream_full(
+        self,
+        key: TEncodable,
+        count: Optional[int] = None,
+    ) -> TXInfoStreamFullResponse:
+        """
+        Returns verbose information about the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-stream for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            count (Optional[int]): The number of stream and PEL entries that are returned. A value of `0` means that all
+                entries will be returned. If not provided, defaults to `10`.
+
+        Returns:
+            TXInfoStreamFullResponse: A mapping of detailed stream information for the given `key`. See the example for
+                a sample response.
+
+        Examples:
+            >>> await client.xinfo_stream_full("my_stream")
+                {
+                    b"length": 4,
+                    b"radix-tree-keys": 1L,
+                    b"radix-tree-nodes": 2L,
+                    b"last-generated-id": b"1719877599564-0",
+                    b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
+                    b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
+                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
+                    b"entries": [
+                        [
+                            b"1719710679916-0",
+                            [b"foo1", b"bar1", b"foo2", b"bar2"],
+                        ],
+                        [
+                            b"1719877599564-0":
+                            [b"field1", b"value1"],
+                        ]
+                    ],
+                    b"groups": [
+                        {
+                            b"name": b"mygroup",
+                            b"last-delivered-id": b"1719710688676-0",
+                            b"entries-read": 2,  # This field was added in Redis version 7.0.0.
+                            b"lag": 0,  # This field was added in Redis version 7.0.0.
+                            b"pel-count": 2,
+                            b"pending": [
+                                [
+                                    b"1719710679916-0",
+                                    b"Alice",
+                                    1719710707260,
+                                    1,
+                                ],
+                                [
+                                    b"1719710688676-0",
+                                    b"Alice",
+                                    1719710718373,
+                                    1,
+                                ],
+                            ],
+                            b"consumers": [
+                                {
+                                    b"name": b"Alice",
+                                    b"seen-time": 1719710718373,
+                                    b"active-time": 1719710718373,  # This field was added in Redis version 7.2.0.
+                                    b"pel-count": 2,
+                                    b"pending": [
+                                        [
+                                            b"1719710679916-0",
+                                            1719710707260,
+                                            1
+                                        ],
+                                        [
+                                            b"1719710688676-0",
+                                            1719710718373,
+                                            1
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+                # Detailed stream information for "my_stream".
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key, "FULL"]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            TXInfoStreamFullResponse,
+            await self._execute_command(RequestType.XInfoStream, args),
         )
 
     async def geoadd(
@@ -3546,7 +3906,7 @@ class CoreCommands(Protocol):
                     ],
                 ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest to farthest with the dist, hash and coords.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -3611,7 +3971,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
                 {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -3642,7 +4002,7 @@ class CoreCommands(Protocol):
         Adds members with their scores to the sorted set stored at `key`.
         If a member is already a part of the sorted set, its score is updated.
 
-        See https://redis.io/commands/zadd/ for more details.
+        See https://valkey.io/commands/zadd/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3705,7 +4065,7 @@ class CoreCommands(Protocol):
         If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
         If `key` does not exist, a new sorted set with the specified member as its sole member is created.
 
-        See https://redis.io/commands/zadd/ for more details.
+        See https://valkey.io/commands/zadd/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3754,7 +4114,7 @@ class CoreCommands(Protocol):
         """
         Returns the cardinality (number of elements) of the sorted set stored at `key`.
 
-        See https://redis.io/commands/zcard/ for more details.
+        See https://valkey.io/commands/zcard/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3780,7 +4140,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of members in the sorted set stored at `key` with scores between `min_score` and `max_score`.
 
-        See https://redis.io/commands/zcount/ for more details.
+        See https://valkey.io/commands/zcount/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3861,7 +4221,7 @@ class CoreCommands(Protocol):
         If `count` is provided, up to `count` members with the highest scores are removed and returned.
         Otherwise, only one member with the highest score is removed and returned.
 
-        See https://redis.io/commands/zpopmax for more details.
+        See https://valkey.io/commands/zpopmax for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -3929,7 +4289,7 @@ class CoreCommands(Protocol):
         If `count` is provided, up to `count` members with the lowest scores are removed and returned.
         Otherwise, only one member with the lowest score is removed and returned.
 
-        See https://redis.io/commands/zpopmin for more details.
+        See https://valkey.io/commands/zpopmin for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4000,7 +4360,7 @@ class CoreCommands(Protocol):
 
         ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
 
-        See https://redis.io/commands/zrange/ for more details.
+        See https://valkey.io/commands/zrange/ for more details.
 
         To get the elements with their scores, see zrange_withscores.
 
@@ -4036,7 +4396,7 @@ class CoreCommands(Protocol):
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
         Similar to ZRANGE but with a WITHSCORE flag.
 
-        See https://redis.io/commands/zrange/ for more details.
+        See https://valkey.io/commands/zrange/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4110,7 +4470,7 @@ class CoreCommands(Protocol):
         """
         Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
 
-        See https://redis.io/commands/zrank for more details.
+        See https://valkey.io/commands/zrank for more details.
 
         To get the rank of `member` with its score, see `zrank_withscore`.
 
@@ -4140,7 +4500,7 @@ class CoreCommands(Protocol):
         """
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
 
-        See https://redis.io/commands/zrank for more details.
+        See https://valkey.io/commands/zrank for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4156,7 +4516,7 @@ class CoreCommands(Protocol):
             >>> await client.zrank_withscore("my_sorted_set", "non_existing_member")
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
 
-        Since: Redis version 7.2.0.
+        Since: Valkey version 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -4213,7 +4573,7 @@ class CoreCommands(Protocol):
             >>> await client.zrevrank("my_sorted_set", "member2")
                 [2, 8.2]  # "member2" with score 8.2 has the third-highest score in the sorted set "my_sorted_set"
 
-        Since: Redis version 7.2.0.
+        Since: Valkey version 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -4231,7 +4591,7 @@ class CoreCommands(Protocol):
         Removes the specified members from the sorted set stored at `key`.
         Specified members that are not a member of this set are ignored.
 
-        See https://redis.io/commands/zrem/ for more details.
+        See https://valkey.io/commands/zrem/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4261,7 +4621,7 @@ class CoreCommands(Protocol):
         """
         Removes all elements in the sorted set stored at `key` with a score between `min_score` and `max_score`.
 
-        See https://redis.io/commands/zremrangebyscore/ for more details.
+        See https://valkey.io/commands/zremrangebyscore/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4310,7 +4670,7 @@ class CoreCommands(Protocol):
         Removes all elements in the sorted set stored at `key` with a lexicographical order between `min_lex` and
         `max_lex`.
 
-        See https://redis.io/commands/zremrangebylex/ for more details.
+        See https://valkey.io/commands/zremrangebylex/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4392,7 +4752,7 @@ class CoreCommands(Protocol):
         """
         Returns the number of members in the sorted set stored at `key` with lexicographical values between `min_lex` and `max_lex`.
 
-        See https://redis.io/commands/zlexcount/ for more details.
+        See https://valkey.io/commands/zlexcount/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4432,7 +4792,7 @@ class CoreCommands(Protocol):
         """
         Returns the score of `member` in the sorted set stored at `key`.
 
-        See https://redis.io/commands/zscore/ for more details.
+        See https://valkey.io/commands/zscore/ for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
@@ -4931,7 +5291,7 @@ class CoreCommands(Protocol):
             >>> await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2)
                 [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [str(len(keys))] + keys + [filter.value]
         if count is not None:
@@ -4984,7 +5344,7 @@ class CoreCommands(Protocol):
             >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
                 [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(timeout), str(len(keys))] + keys + [modifier.value]
         if count is not None:
@@ -5024,7 +5384,7 @@ class CoreCommands(Protocol):
             >>> await client.zintercard(["key1", "key2"], 1)
                 1  # A `limit` of 1 was provided, so the intersection computation exits early and yields the `limit` value of 1.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys))] + keys
         if limit is not None:
@@ -5043,12 +5403,12 @@ class CoreCommands(Protocol):
     ) -> TResult:
         """
         Invokes a Lua script with its keys and arguments.
-        This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
         The script loading, argument preparation, and execution will all be handled internally.
-        If the script has not already been loaded, it will be loaded automatically using the Redis `SCRIPT LOAD` command.
-        After that, it will be invoked using the Redis `EVALSHA` command.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
 
-        See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for more details.
+        See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
 
         Args:
             script (Script): The Lua script to execute.
@@ -5071,7 +5431,7 @@ class CoreCommands(Protocol):
         Creates a new structure if the `key` does not exist.
         When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
 
-        See https://redis.io/commands/pfadd/ for more details.
+        See https://valkey.io/commands/pfadd/ for more details.
 
         Args:
             key (TEncodable): The key of the HyperLogLog data structure to add elements into.
@@ -5288,7 +5648,7 @@ class CoreCommands(Protocol):
         numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
         being the penultimate, and so on.
 
-        If you are using Redis 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
         `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
         are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
         specified, `start=0` and `end=2` means to look at the first three bytes.
@@ -5301,7 +5661,7 @@ class CoreCommands(Protocol):
             start (int): The starting offset.
             end (int): The ending offset.
             index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
-                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
                 If no index type is provided, the indexes will be assumed to be byte indexes.
 
         Returns:
@@ -5421,7 +5781,7 @@ class CoreCommands(Protocol):
             >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
                 [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
 
-        Since: Redis version 6.0.0.
+        Since: Valkey version 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return cast(
@@ -5453,7 +5813,7 @@ class CoreCommands(Protocol):
 
     async def object_freq(self, key: TEncodable) -> Optional[int]:
         """
-        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+        Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
         See https://valkey.io/commands/object-freq for more details.
 
@@ -5581,7 +5941,7 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key to get.
             expiry (Optional[ExpiryGetEx], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Returns:
             Optional[bytes]:
@@ -5599,7 +5959,7 @@ class CoreCommands(Protocol):
             >>> await client.getex(b"key")
                 None
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = [key]
         if expiry is not None:
@@ -5607,6 +5967,88 @@ class CoreCommands(Protocol):
         return cast(
             Optional[bytes],
             await self._execute_command(RequestType.GetEx, args),
+        )
+
+    async def dump(
+        self,
+        key: TEncodable,
+    ) -> Optional[bytes]:
+        """
+        Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+
+        See https://valkey.io/commands/dump for more details.
+
+        Args:
+            key (TEncodable): The `key` to serialize.
+
+        Returns:
+            Optional[bytes]: The serialized value of the data stored at `key`.
+                If `key` does not exist, `None` will be returned.
+
+        Examples:
+            >>> await client.dump("key")
+                b"value" # The serialized value stored at `key`.
+            >>> await client.dump("nonExistingKey")
+                None # Non-existing key will return `None`.
+        """
+        return cast(
+            Optional[bytes],
+            await self._execute_command(RequestType.Dump, [key]),
+        )
+
+    async def restore(
+        self,
+        key: TEncodable,
+        ttl: int,
+        value: TEncodable,
+        replace: bool = False,
+        absttl: bool = False,
+        idletime: Optional[int] = None,
+        frequency: Optional[int] = None,
+    ) -> TOK:
+        """
+        Create a `key` associated with a `value` that is obtained by deserializing the provided
+        serialized `value` obtained via `dump`.
+
+        See https://valkey.io/commands/restore for more details.
+
+        Args:
+            key (TEncodable): The `key` to create.
+            ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
+            value (TEncodable) The serialized value to deserialize and assign to `key`.
+            replace (bool): Set to `True` to replace the key if it exists.
+            absttl (bool): Set to `True` to specify that `ttl` represents an absolute Unix
+                timestamp (in milliseconds).
+            idletime (Optional[int]): Set the `IDLETIME` option with object idletime to the given key.
+            frequency (Optional[int]): Set the `FREQ` option with object frequency to the given key.
+
+        Returns:
+            OK: If the `key` was successfully restored with a `value`.
+
+        Examples:
+            >>> await client.restore("newKey", 0, value)
+                OK # Indicates restore `newKey` without any ttl expiry nor any option
+            >>> await client.restore("newKey", 0, value, replace=True)
+                OK # Indicates restore `newKey` with `REPLACE` option
+            >>> await client.restore("newKey", 0, value, absttl=True)
+                OK # Indicates restore `newKey` with `ABSTTL` option
+            >>> await client.restore("newKey", 0, value, idletime=10)
+                OK # Indicates restore `newKey` with `IDLETIME` option
+            >>> await client.restore("newKey", 0, value, frequency=5)
+                OK # Indicates restore `newKey` with `FREQ` option
+        """
+        args = [key, str(ttl), value]
+        if replace is True:
+            args.append("REPLACE")
+        if absttl is True:
+            args.append("ABSTTL")
+        if idletime is not None:
+            args.extend(["IDLETIME", str(idletime)])
+        if frequency is not None:
+            args.extend(["FREQ", str(frequency)])
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Restore, args),
         )
 
     async def sscan(
@@ -5644,7 +6086,7 @@ class CoreCommands(Protocol):
             # Assume "key" contains a set with 130 members
             >>> result_cursor = "0"
             >>> while True:
-            ...     result = await redis_client.sscan("key", "0", match="*")
+            ...     result = await client.sscan("key", "0", match="*")
             ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
@@ -5705,7 +6147,7 @@ class CoreCommands(Protocol):
             # Assume "key" contains a sorted set with multiple members
             >>> result_cursor = "0"
             >>> while True:
-            ...     result = await redis_client.zscan("key", "0", match="*", count=5)
+            ...     result = await client.zscan("key", "0", match="*", count=5)
             ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
@@ -5766,7 +6208,7 @@ class CoreCommands(Protocol):
             # Assume "key" contains a hash with multiple members
             >>> result_cursor = "0"
             >>> while True:
-            ...     result = await redis_client.hscan("key", "0", match="*", count=3)
+            ...     result = await client.hscan("key", "0", match="*", count=3)
             ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
@@ -5799,7 +6241,7 @@ class CoreCommands(Protocol):
     ) -> TResult:
         """
         Invokes a previously loaded function.
-        See https://redis.io/commands/fcall/ for more details.
+        See https://valkey.io/commands/fcall/ for more details.
         When in cluster mode, all keys in `keys` must map to the same hash slot.
         Args:
             function (TEncodable): The function name.
@@ -5814,7 +6256,8 @@ class CoreCommands(Protocol):
         Example:
             >>> await client.fcall("Deep_Thought")
                 b'new_value' # Returns the function's return value.
-        Since: Redis version 7.0.0.
+
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = []
         if keys is not None:
@@ -5857,7 +6300,7 @@ class CoreCommands(Protocol):
                     "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"])
                 42 # The return value on the function that was executed
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = []
         if keys is not None:
@@ -5892,7 +6335,7 @@ class CoreCommands(Protocol):
             >>> await client.watch("sampleKey")
                 'OK'
             >>> transaction.set("sampleKey", "foobar")
-            >>> await redis_client.exec(transaction)
+            >>> await client.exec(transaction)
                 'OK' # Executes successfully and keys are unwatched.
 
             >>> await client.watch("sampleKey")
@@ -5900,7 +6343,7 @@ class CoreCommands(Protocol):
             >>> transaction.set("sampleKey", "foobar")
             >>> await client.set("sampleKey", "hello world")
                 'OK'
-            >>> await redis_client.exec(transaction)
+            >>> await client.exec(transaction)
                 None  # None is returned when the watched key is modified before transaction execution.
         """
 
@@ -5988,7 +6431,7 @@ class CoreCommands(Protocol):
             >>> await client.lcs("testKey1", "testKey2")
                 b'acd'
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [key1, key2]
 
@@ -6026,7 +6469,7 @@ class CoreCommands(Protocol):
             >>> await client.lcs_len("testKey1", "testKey2")
                 3  # the length of the longest common subsequence between these 2 strings (b"acd") is 3.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [key1, key2, "LEN"]
 
@@ -6041,7 +6484,7 @@ class CoreCommands(Protocol):
         key2: TEncodable,
         min_match_len: Optional[int] = None,
         with_match_len: Optional[bool] = False,
-    ) -> Mapping[bytes, Union[list[list[Union[list[int], int]]], int]]:
+    ) -> Mapping[bytes, Union[List[List[Union[List[int], int]]], int]]:
         """
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
@@ -6113,7 +6556,7 @@ class CoreCommands(Protocol):
                     b'len': 7
                 }
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [key1, key2, "IDX"]
 
@@ -6124,7 +6567,7 @@ class CoreCommands(Protocol):
             args.append("WITHMATCHLEN")
 
         return cast(
-            Mapping[bytes, Union[list[list[Union[list[int], int]]], int]],
+            Mapping[bytes, Union[List[List[Union[List[int], int]]], int]],
             await self._execute_command(RequestType.LCS, args),
         )
 
@@ -6135,7 +6578,7 @@ class CoreCommands(Protocol):
         rank: Optional[int] = None,
         count: Optional[int] = None,
         max_len: Optional[int] = None,
-    ) -> Union[int, list[int], None]:
+    ) -> Union[int, List[int], None]:
         """
         Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
         None is returned.
@@ -6151,7 +6594,7 @@ class CoreCommands(Protocol):
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Returns:
-            Union[int, list[int], None]: The index of the first occurrence of `element`,
+            Union[int, List[int], None]: The index of the first occurrence of `element`,
             or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 
@@ -6168,7 +6611,7 @@ class CoreCommands(Protocol):
             >>> await client.lpos(key, 'c', count = 0)
                 [2, 6, 7]
 
-        Since: Redis version 6.0.6.
+        Since: Valkey version 6.0.6.
         """
         args: List[TEncodable] = [key, element]
 
@@ -6182,6 +6625,6 @@ class CoreCommands(Protocol):
             args.extend(["MAXLEN", str(max_len)])
 
         return cast(
-            Union[int, list[int], None],
+            Union[int, List[int], None],
             await self._execute_command(RequestType.LPos, args),
         )

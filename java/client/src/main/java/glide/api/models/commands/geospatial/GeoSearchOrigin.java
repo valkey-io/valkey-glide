@@ -2,6 +2,7 @@
 package glide.api.models.commands.geospatial;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
 
@@ -59,6 +60,22 @@ public final class GeoSearchOrigin {
          */
         public String[] toArgs() {
             return new String[] {FROMMEMBER_VALKEY_API, member};
+        }
+    }
+
+    /** The search origin represented by an existing member. */
+    @RequiredArgsConstructor
+    public static class MemberOriginBinary implements SearchOrigin {
+        private final GlideString member;
+
+        /**
+         * Converts GeoSearchOrigin into a String[].
+         *
+         * @return String[] An array containing arguments corresponding to the starting point of the
+         *     query.
+         */
+        public String[] toArgs() {
+            return new String[] {FROMMEMBER_VALKEY_API, member.toString()};
         }
     }
 }

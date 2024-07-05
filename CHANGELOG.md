@@ -64,6 +64,7 @@
 * Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
 * Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
 * Python: Added FUNCTION DELETE command ([#1714](https://github.com/aws/glide-for-redis/pull/1714))
+* Python: Added FUNCTION LIST command ([#1738](https://github.com/aws/glide-for-redis/pull/1738))
 * Python: Added SSCAN command ([#1709](https://github.com/aws/glide-for-redis/pull/1709))
 * Python: Added LCS command ([#1716](https://github.com/aws/glide-for-redis/pull/1716))
 * Python: Added WAIT command ([#1710](https://github.com/aws/glide-for-redis/pull/1710))
@@ -71,12 +72,27 @@
 * Python: Add ZSCAN and HSCAN commands ([#1732](https://github.com/aws/glide-for-redis/pull/1732))
 * Python: Added FCALL_RO command ([#1721](https://github.com/aws/glide-for-redis/pull/1721))
 * Python: Added WATCH and UNWATCH command ([#1736](https://github.com/aws/glide-for-redis/pull/1736))
-* Python: Added LPos command ([#1740](https://github.com/aws/glide-for-redis/pull/1740))
+* Python: Added XCLAIM command ([#1772](https://github.com/aws/glide-for-redis/pull/1772))
+* Python: Added XINFO GROUPS and XINFO CONSUMERS commands ([#1753](https://github.com/aws/glide-for-redis/pull/1753))
+* Python: Added LPOS command ([#1740](https://github.com/aws/glide-for-redis/pull/1740))
+* Python: Added SCAN command ([#1623](https://github.com/aws/glide-for-redis/pull/1623))
+* Python: Added DUMP and Restore commands ([#1733](https://github.com/aws/glide-for-redis/pull/1733))
+* Java: Added SCAN command ([#1751](https://github.com/aws/glide-for-redis/pull/1751))
+* Python: Added FUNCTION KILL command ([#1797](https://github.com/aws/glide-for-redis/pull/1797))
+* Python: Type migration for entries_read ([#1768](https://github.com/aws/glide-for-redis/pull/1768))
+* Python: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#1769](https://github.com/aws/glide-for-redis/pull/1769))
+* Python: Added FUNCTION STATS command ([#1794](https://github.com/aws/glide-for-redis/pull/1794))
+* Python: Added XINFO STREAM command ([#1816](https://github.com/aws/glide-for-redis/pull/1816))
+* Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/aws/glide-for-redis/pull/1814))
 
-### Breaking Changes
+#### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
 * Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/aws/glide-for-redis/pull/1670))
 * Python: Rename RedisClient to GlideClient, RedisClusterClient to GlideClusterClient and BaseRedisClient to BaseClient([#1669](https://github.com/aws/glide-for-redis/pull/1669))
+* Python: Rename ClusterClientConfiguration to GlideClusterClientConfiguration ([#1806](https://github.com/aws/glide-for-redis/pull/1806))
+
+#### Fixes
+* Python: fixing a bug with transaction exec ([#1796](https://github.com/aws/glide-for-redis/pull/1796))
 
 ## 0.4.1 (2024-02-06)
 

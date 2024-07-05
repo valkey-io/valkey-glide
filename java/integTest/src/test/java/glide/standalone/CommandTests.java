@@ -4,6 +4,8 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionListResponseBinary;
+import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
@@ -11,6 +13,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -27,6 +30,9 @@ import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
 import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
 import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
+import static glide.api.models.commands.scan.ScanOptions.ObjectType.HASH;
+import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
+import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -34,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -44,17 +51,21 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -590,36 +601,32 @@ public class CommandTests {
                 regularClient
                         .fcall(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
-        assertEquals("one", functionResult);
+        assertEquals(gs("one"), functionResult);
         functionResult =
                 regularClient
                         .fcallReadOnly(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
-        assertEquals("one", functionResult);
+        assertEquals(gs("one"), functionResult);
 
-        var flist = regularClient.functionList(false).get();
+        var flist = regularClient.functionListBinary(false).get();
         var expectedDescription =
-                new HashMap<String, String>() {
+                new HashMap<GlideString, GlideString>() {
                     {
-                        put(funcName.toString(), null);
+                        put(funcName, null);
                     }
                 };
         var expectedFlags =
-                new HashMap<String, Set<String>>() {
+                new HashMap<GlideString, Set<GlideString>>() {
                     {
-                        put(funcName.toString(), Set.of("no-writes"));
+                        put(funcName, Set.of(gs("no-writes")));
                     }
                 };
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionList(true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(code.toString()));
+        flist = regularClient.functionListBinary(true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
         var executionException =
@@ -651,19 +658,15 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library not found"));
 
-        flist = regularClient.functionList(libName.toString(), false).get();
-        expectedDescription.put(newFuncName.toString(), null);
-        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
-        checkFunctionListResponse(
-                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        flist = regularClient.functionListBinary(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of(gs("no-writes")));
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionList(libName.toString(), true).get();
-        checkFunctionListResponse(
-                flist,
-                libName.toString(),
-                expectedDescription,
-                expectedFlags,
-                Optional.of(newCode.toString()));
+        flist = regularClient.functionListBinary(libName, true).get();
+        checkFunctionListResponseBinary(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         functionResult =
                 regularClient
@@ -728,143 +731,236 @@ public class CommandTests {
         }
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
-    public void functionStats_and_functionKill() {
+    public void functionKill_no_write() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        String libName = "functionStats_and_functionKill";
+        String libName = "functionKill_no_write";
         String funcName = "deadlock";
-        String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
-        String error = "";
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, true);
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, regularClient.functionLoad(code, true).get());
+        // load the lib
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-            try (var testClient =
-                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName);
-
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var stats = regularClient.functionStats().get();
-                    if (stats.get("running_script") != null) {
-                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
-                        break;
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // redis kills a function with 5 sec delay
-                assertEquals(OK, regularClient.functionKill().get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
+        try (var testClient =
+                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
-                regularClient.functionKill().get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
+                // call the function without await
+                testClient.fcall(funcName);
+
+                Thread.sleep(1000);
+
+                // Run FKILL until it returns OK
+                boolean functionKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, regularClient.functionKill().get());
+                        functionKilled = true;
+                        break;
+                    } catch (RequestException ignored) {
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+
+                assertTrue(functionKilled);
+            } finally {
+                waitForNotBusy(regularClient);
             }
         }
-
-        assertEquals(OK, regularClient.functionDelete(libName).get());
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
-    public void functionStats_and_functionKill_write_function() {
+    public void functionKillBinary_no_write() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        String libName = "functionStats_and_functionKill_write_function";
+        GlideString libName = gs("functionKillBinary_no_write");
+        GlideString funcName = gs("binary_deadlock");
+        GlideString code =
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, true));
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+        // load the lib
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        try (var testClient =
+                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+            try {
+                // call the function without await
+                testClient.fcall(funcName);
+
+                Thread.sleep(1000);
+
+                // Run FKILL until it returns OK
+                boolean functionKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, regularClient.functionKill().get());
+                        functionKilled = true;
+                        break;
+                    } catch (RequestException ignored) {
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+
+                assertTrue(functionKilled);
+            } finally {
+                waitForNotBusy(regularClient);
+            }
+        }
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void functionKill_write_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionKill_write_function";
         String funcName = "deadlock_write_function";
         String key = libName;
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
-        String error = "";
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, regularClient.functionLoad(code, true).get());
+        // load the lib
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
 
-            try (var testClient =
-                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
-
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var stats = regularClient.functionStats().get();
-                    if (stats.get("running_script") != null) {
-                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
-                        break;
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // can't kill a write function
-                exception =
-                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
-
-                assertEquals("Timed out 6 sec", promise.get());
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
+        try (var testClient =
+                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
-                regularClient.functionKill().get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should finish prior to the test end.";
-            } catch (Exception ignored) {
+                // call the function without await
+                promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
+
+                Thread.sleep(1000);
+
+                boolean foundUnkillable = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        // redis kills a function with 5 sec delay
+                        // but this will always throw an error in the test
+                        regularClient.functionKill().get();
+                    } catch (ExecutionException executionException) {
+                        // looking for an error with "unkillable" in the message
+                        // at that point we can break the loop
+                        if (executionException.getCause() instanceof RequestException
+                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+                assertTrue(foundUnkillable);
+
+            } finally {
+                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                // test to fail.
+                // wait for the function to complete (we cannot kill it)
+                try {
+                    promise.get();
+                } catch (Exception ignored) {
+                }
             }
         }
+    }
 
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void functionKillBinary_write_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString libName = gs("functionKill_write_function");
+        GlideString funcName = gs("deadlock_write_function");
+        GlideString key = libName;
+        GlideString code =
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, false));
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+        // load the lib
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        try (var testClient =
+                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+            try {
+                // call the function without await
+                promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
+
+                Thread.sleep(1000);
+
+                boolean foundUnkillable = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        // redis kills a function with 5 sec delay
+                        // but this will always throw an error in the test
+                        regularClient.functionKill().get();
+                    } catch (ExecutionException executionException) {
+                        // looking for an error with "unkillable" in the message
+                        // at that point we can break the loop
+                        if (executionException.getCause() instanceof RequestException
+                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+                assertTrue(foundUnkillable);
+
+            } finally {
+                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                // test to fail.
+                // wait for the function to complete (we cannot kill it)
+                try {
+                    promise.get();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     @Test
@@ -897,6 +993,43 @@ public class CommandTests {
 
         response = regularClient.functionStats().get();
         checkFunctionStatsResponse(response, new String[0], 0, 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStatsBinary() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString libName = gs("functionStats");
+        GlideString funcName = libName;
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // function $funcName returns first argument
+        GlideString code =
+                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), false);
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        var response = regularClient.functionStatsBinary().get();
+        checkFunctionStatsBinaryResponse(response, new GlideString[0], 1, 1);
+
+        code =
+                generateLuaLibCodeBinary(
+                        gs(libName.toString() + "_2"),
+                        Map.of(
+                                gs(funcName.toString() + "_2"),
+                                gs("return 'OK'"),
+                                gs(funcName.toString() + "_3"),
+                                gs("return 42")),
+                        false);
+        assertEquals(gs(libName.toString() + "_2"), regularClient.functionLoad(code, true).get());
+
+        response = regularClient.functionStatsBinary().get();
+        checkFunctionStatsBinaryResponse(response, new GlideString[0], 2, 3);
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        response = regularClient.functionStatsBinary().get();
+        checkFunctionStatsBinaryResponse(response, new GlideString[0], 0, 0);
     }
 
     @Test
@@ -981,6 +1114,23 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, regularClient.flushall().get());
         assertNull(regularClient.randomKey().get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKeyBinary() {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+
+        assertEquals(OK, regularClient.set(key1, gs("a")).get());
+        assertEquals(OK, regularClient.set(key2, gs("b")).get());
+
+        GlideString randomKeyBinary = regularClient.randomKeyBinary().get();
+        assertEquals(1L, regularClient.exists(new GlideString[] {randomKeyBinary}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKeyBinary().get());
     }
 
     @Test
@@ -1351,5 +1501,139 @@ public class CommandTests {
                                 SortOptionsBinary.builder().byPattern(agePattern).getPattern(namePattern).build())
                         .get());
         assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey.toString(), 0, -1).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void scan() {
+        String initialCursor = "0";
+
+        int numberKeys = 500;
+        Map<String, String> keys = new HashMap<>();
+        for (int i = 0; i < numberKeys; i++) {
+            keys.put("{key}-" + i + "-" + UUID.randomUUID(), "{value}-" + i + "-" + UUID.randomUUID());
+        }
+
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // empty the database
+        assertEquals(OK, regularClient.flushdb().get());
+
+        // Empty return
+        Object[] emptyResult = regularClient.scan(initialCursor).get();
+        assertEquals(initialCursor, emptyResult[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
+
+        // Negative cursor
+        Object[] negativeResult = regularClient.scan("-1").get();
+        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+
+        // Add keys to the database using mset
+        regularClient.mset(keys).get();
+
+        Object[] result;
+        Object[] keysFound = new String[0];
+        String resultCursor = "0";
+        boolean isFirstLoop = true;
+        do {
+            result = regularClient.scan(resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            Object[] resultKeys = (Object[]) result[resultCollectionIndex];
+            keysFound = ArrayUtils.addAll(keysFound, resultKeys);
+
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
+                break;
+            }
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        // check that each key added to the database is found through the cursor
+        Object[] finalKeysFound = keysFound;
+        keys.entrySet().forEach(e -> assertTrue(ArrayUtils.contains(finalKeysFound, e.getKey())));
+    }
+
+    @Test
+    @SneakyThrows
+    public void scan_with_options() {
+        String initialCursor = "0";
+        String matchPattern = UUID.randomUUID().toString();
+
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Add string keys to the database using mset
+        Map<String, String> stringKeys = new HashMap<>();
+        for (int i = 0; i < 10; i++) {
+            stringKeys.put("{key}-" + i + "-" + matchPattern, "{value}-" + i + "-" + matchPattern);
+        }
+        regularClient.mset(stringKeys).get();
+
+        // Add set keys to the database using sadd
+        List<String> setKeys = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            String key = "{key}-set-" + i + "-" + matchPattern;
+            regularClient.sadd(
+                    gs(key),
+                    new GlideString[] {gs(UUID.randomUUID().toString()), gs(UUID.randomUUID().toString())});
+            setKeys.add(key);
+        }
+
+        // Empty return - match a random UUID
+        ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
+        Object[] emptyResult = regularClient.scan(initialCursor, options).get();
+        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
+
+        // Negative cursor
+        Object[] negativeResult = regularClient.scan("-1", options).get();
+        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+
+        // scan for strings by match pattern:
+        options =
+                ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(STRING).build();
+        Object[] result;
+        Object[] keysFound = new String[0];
+        String resultCursor = "0";
+        do {
+            result = regularClient.scan(resultCursor, options).get();
+            resultCursor = result[resultCursorIndex].toString();
+            Object[] resultKeys = (Object[]) result[resultCollectionIndex];
+            keysFound = ArrayUtils.addAll(keysFound, resultKeys);
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        // check that each key added to the database is found through the cursor
+        Object[] finalKeysFound = keysFound;
+        stringKeys.entrySet().forEach(e -> assertTrue(ArrayUtils.contains(finalKeysFound, e.getKey())));
+
+        // scan for sets by match pattern:
+        options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(SET).build();
+        Object[] setResult;
+        Object[] setsFound = new String[0];
+        String setCursor = "0";
+        do {
+            setResult = regularClient.scan(setCursor, options).get();
+            setCursor = setResult[resultCursorIndex].toString();
+            Object[] resultKeys = (Object[]) setResult[resultCollectionIndex];
+            setsFound = ArrayUtils.addAll(setsFound, resultKeys);
+        } while (!setCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        // check that each key added to the database is found through the cursor
+        Object[] finalSetsFound = setsFound;
+        setKeys.forEach(k -> assertTrue(ArrayUtils.contains(finalSetsFound, k)));
+
+        // scan for hashes by match pattern:
+        // except in this case, we should never find anything
+        options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(HASH).build();
+        String hashCursor = "0";
+        do {
+            Object[] hashResult = regularClient.scan(hashCursor, options).get();
+            hashCursor = hashResult[resultCursorIndex].toString();
+            assertTrue(((Object[]) hashResult[resultCollectionIndex]).length == 0);
+        } while (!hashCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
     }
 }

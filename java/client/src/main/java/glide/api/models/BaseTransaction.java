@@ -14,18 +14,16 @@ import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
-import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
-import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
-import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
@@ -51,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
@@ -61,9 +60,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
@@ -134,6 +135,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -172,6 +174,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -207,7 +211,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import com.google.protobuf.ByteString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -228,6 +231,7 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
@@ -251,6 +255,7 @@ import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
 import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoSearchOptions;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
@@ -275,11 +280,9 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.ReadFrom;
 import glide.managers.CommandManager;
-import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
-import org.apache.commons.lang3.ArrayUtils;
 import redis_request.RedisRequestOuterClass.Command;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
@@ -333,7 +336,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return A response from Redis with an <code>Object</code>.
      * @example Returns a list of all pub/sub clients:
      *     <pre>{@code
-     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST", "TYPE", "PUBSUB" }).get();
+     * Object result = client.customCommand(new String[]{ "CLIENT", "LIST",
+     * "TYPE", "PUBSUB" }).get();
      * }</pre>
      */
     public <ArgType> T customCommand(ArgType[] args) {
@@ -347,7 +351,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/echo>redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/echo>valkey.io</a> for details.
      * @param message The message to be echoed back.
      * @return Command Response - The provided <code>message</code>.
      */
@@ -360,7 +364,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Pings the Redis server.
      *
-     * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @return Command Response - A response from Redis with a <code>String</code>.
      */
     public T ping() {
@@ -373,7 +377,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/ping/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param msg The ping argument that will be returned.
      * @return Command Response - A response from Redis with a <code>String</code>.
      */
@@ -387,7 +391,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Gets information and statistics about the Redis server using the {@link Section#DEFAULT}
      * option.
      *
-     * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @return Command Response - A <code>String</code> with server info.
      */
     public T info() {
@@ -398,7 +402,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Gets information and statistics about the Redis server.
      *
-     * @see <a href="https://redis.io/commands/info/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param options A list of {@link Section} values specifying which sections of information to
      *     retrieve. When no parameter is provided, the {@link Section#DEFAULT} option is assumed.
      * @return Command Response - A <code>String</code> containing the requested {@link Section}s.
@@ -414,7 +418,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/del/">valkey.io</a> for details.
      * @param keys The keys we wanted to remove.
      * @return Command Response - The number of keys that were removed.
      */
@@ -429,10 +433,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The key to retrieve from the database.
      * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of <code>
-     *     key</code> as a String. Otherwise, return <code>null</code>.
+     *      key</code> as a String. Otherwise, return <code>null</code>.
      */
     public <ArgType> T get(@NonNull ArgType key) {
         checkTypeOrThrow(key);
@@ -445,10 +449,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of <code>
-     *     key</code>. Otherwise, return <code>null</code>.
+     *      key</code>. Otherwise, return <code>null</code>.
      */
     public <ArgType> T getdel(@NonNull ArgType key) {
         checkTypeOrThrow(key);
@@ -462,7 +466,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2.0.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return Command Response - If <code>key</code> exists, return the <code>value</code> of the
      *     <code>key</code>. Otherwise, return <code>null</code>.
@@ -479,7 +483,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2.0.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
      * @return Command Response - If <code>key</code> exists, return the <code>value</code> of the
@@ -497,7 +501,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
      * @param value The value to store with the given <code>key</code>.
      * @return Command Response - A response from Redis.
@@ -511,7 +515,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
      *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key to store.
@@ -536,7 +540,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
      * this special case.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key of the string.
@@ -552,7 +556,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
-     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param keys A list of keys to retrieve values for.
@@ -570,7 +574,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Sets multiple keys to multiple values in a single operation.
      *
-     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return Command Response - Always <code>OK</code>.
      */
@@ -584,7 +588,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Sets multiple keys to multiple values in a single operation. Performs no operation at all even
      * if just a single key already exists.
      *
-     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return Command Response - <code>true</code> if all keys were set, <code>false</code> if no key
      *     was set.
@@ -599,7 +603,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key to increment its value.
@@ -615,7 +619,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key to increment its value.
@@ -630,11 +634,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Increments the string representing a floating point number stored at <code>key</code> by <code>
-     * amount</code>. By using a negative increment value, the result is that the value stored at
+     *  amount</code>. By using a negative increment value, the result is that the value stored at
      * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
      * performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key to increment its value.
@@ -652,7 +656,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key to decrement its value.
@@ -668,7 +672,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @param key The key to decrement its value.
@@ -686,7 +690,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/strlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
      * @param key The key to check its length.
      * @return Command Response - The length of the string value stored at key.<br>
      *     If <code>key</code> does not exist, it is treated as an empty string, and the command
@@ -700,14 +704,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
-     * offset</code>, for the entire length of <code>value</code>.<br>
+     *  offset</code>, for the entire length of <code>value</code>.<br>
      * If the <code>offset</code> is larger than the current length of the string at <code>key</code>,
      * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
      * </code> if it doesn't exist.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
      * @param key The key of the string to update.
      * @param offset The position in the string where <code>value</code> should be written.
      * @param value The string written with <code>offset</code>.
@@ -729,7 +733,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param start The starting offset.
      * @param end The ending offset.
@@ -747,7 +751,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hget/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
      * @return Command Response - The value associated with <code>field</code>, or <code>null</code>
@@ -764,7 +768,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hset/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
@@ -786,7 +790,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hsetnx/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hsetnx/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to set the value for.
      * @param value The value to set.
@@ -806,7 +810,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove from the hash stored at <code>key</code>.
      * @return Command Response - The number of fields that were removed from the hash, not including
@@ -824,7 +828,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return Command Response - The number of fields in the hash, or <code>0</code> when the key
      *     does not exist.<br>
@@ -841,7 +845,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return Command Response - An <code>array</code> of values in the hash, or an <code>empty array
      *     </code> when the key does not exist.
@@ -857,7 +861,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
      * @return Command Response - An array of values associated with the given fields, in the same
@@ -877,7 +881,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to check in the hash stored at <code>key</code>.
      * @return Command Response - <code>True</code> if the hash contains the specified field. If the
@@ -895,7 +899,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hgetall/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return Command Response - A <code>Map</code> of fields and their values stored in the hash.
      *     Every field name in the map is associated with its corresponding value.<br>
@@ -915,7 +919,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to increment or decrement its
      *     value.
@@ -935,12 +939,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Increments the string representing a floating point number stored at <code>field</code> in the
      * hash stored at <code>key</code> by increment. By using a negative increment value, the value
      * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
-     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     *  field</code> or <code>key</code> does not exist, it is set to 0 before performing the
      * operation.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to increment or decrement its
      *     value.
@@ -961,10 +965,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://valkey.io/commands/hkeys/">redis.io</a> for details
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details
      * @param key The key of the hash.
      * @return Command Response - An <code>array</code> of field names in the hash, or an <code>
-     *     empty array</code> when the key does not exist.
+     *      empty array</code> when the key does not exist.
      */
     public <ArgType> T hkeys(@NonNull ArgType key) {
         checkTypeOrThrow(key);
@@ -982,7 +986,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the hash.
      * @param field The field in the hash.
      * @return Command Response - The string length or <code>0</code> if <code>field</code> or <code>
-     *     key</code> does not exist.
+     *      key</code> does not exist.
      */
     public <ArgType> T hstrlen(@NonNull ArgType key, @NonNull ArgType field) {
         checkTypeOrThrow(key);
@@ -996,7 +1000,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return Command Response - A random field name from the hash stored at <code>key</code>, or
      *     <code>null</code> when the key does not exist.
@@ -1014,7 +1018,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -1035,14 +1039,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
      *     If negative, allows for duplicates.
-     * @return Command Response - A 2D <code>array</code> of <code>[fieldName, value]</code> <code>
-     *     arrays</code>, where <code>fieldName</code> is a random field name from the hash and <code>
-     *     value</code> is the associated value of the field name.<br>
+     * @return Command Response - A 2D <code>array</code> of <code>[fieldName,
+     *     value]</code> <code> arrays</code>, where <code>fieldName</code> is a random field name
+     *     from the hash and <code> value</code> is the associated value of the field name.<br>
      *     If the hash does not exist or is empty, the response will be an empty <code>array</code>.
      */
     public <ArgType> T hrandfieldWithCountWithValues(@NonNull ArgType key, long count) {
@@ -1054,13 +1058,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
-     * elements</code> are inserted one after the other to the head of the list, from the leftmost
+     *  elements</code> are inserted one after the other to the head of the list, from the leftmost
      * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
      * list before performing the push operations.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpush/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param elements The elements to insert at the head of the list stored at <code>key</code>.
      * @return Command Response - The length of the list after the push operations.
@@ -1077,7 +1081,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return Command Response - The value of the first element.<br>
      *     If <code>key</code> does not exist, null will be returned.
@@ -1095,11 +1099,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0.6.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @return Command Response - The index of the first occurrence of <code>element</code>, or <code>
-     *     null</code> if <code>element</code> is not in the list.
+     *      null</code> if <code>element</code> is not in the list.
      */
     public <ArgType> T lpos(@NonNull ArgType key, @NonNull ArgType element) {
         checkTypeOrThrow(key);
@@ -1114,12 +1118,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0.6.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param options The LPos options.
      * @return Command Response - The index of <code>element</code>, or <code>null</code> if <code>
-     *     element</code> is not in the list.
+     *      element</code> is not in the list.
      */
     public <ArgType> T lpos(
             @NonNull ArgType key, @NonNull ArgType element, @NonNull LPosOptions options) {
@@ -1135,7 +1139,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0.6.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
@@ -1156,7 +1160,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0.6.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
@@ -1185,7 +1189,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return Command Response - An array of the popped elements will be returned depending on the
@@ -1208,7 +1212,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lrange/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param start The starting point of the range.
      * @param end The end of the range.
@@ -1235,7 +1239,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lindex/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param index The index of the element in the list to retrieve.
      * @return Command Response - The element at <code>index</code> in the list stored at <code>key
@@ -1260,7 +1264,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/ltrim/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param start The starting point of the range.
      * @param end The end of the range.
@@ -1283,7 +1287,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/llen/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return Command Response - The length of the list at <code>key</code>.<br>
      *     If <code>key</code> does not exist, it is interpreted as an empty list and <code>0</code>
@@ -1307,7 +1311,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/lrem/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lrem/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
      * @param element The element to remove from the list.
@@ -1329,7 +1333,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpush/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
      * @return Command Response - The length of the list after the push operations.
@@ -1346,7 +1350,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return Command Response - The value of the last element.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
@@ -1363,7 +1367,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
      * @param count The count of the elements to pop from the list.
      * @return Command Response - An array of popped elements will be returned depending on the list's
      *     length.<br>
@@ -1381,7 +1385,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sadd/">valkey.io</a> for details.
      * @param key The <code>key</code> where members will be added to its set.
      * @param members A list of members to add to the set stored at <code>key</code>.
      * @return Command Response - The number of members that were added to the set, excluding members
@@ -1400,7 +1404,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sismember/">valkey.io</a> for details.
      * @param key The key of the set.
      * @param member The member to check for existence in the set.
      * @return Command Response - <code>true</code> if the member exists in the set, <code>false
@@ -1419,7 +1423,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/srem/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/srem/">valkey.io</a> for details.
      * @param key The <code>key</code> from which members will be removed.
      * @param members A list of members to remove from the set stored at <code>key</code>.
      * @return Command Response - The number of members that were removed from the set, excluding
@@ -1438,7 +1442,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/smembers/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/smembers/">valkey.io</a> for details.
      * @param key The key from which to retrieve the set members.
      * @return Command Response - A <code>Set</code> of all members of the set.
      * @remarks If <code>key</code> does not exist an empty set will be returned.
@@ -1454,7 +1458,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/scard/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/scard/">valkey.io</a> for details.
      * @param key The key from which to retrieve the number of set members.
      * @return Command Response - The cardinality (number of elements) of the set, or 0 if the key
      *     does not exist.
@@ -1470,7 +1474,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sdiff/">valkey.io</a> for details.
      * @param keys The keys of the sets to diff.
      * @return Command Response - A <code>Set</code> of elements representing the difference between
      *     the sets.<br>
@@ -1487,7 +1491,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/smismember/">valkey.io</a> for details.
      * @param key The key of the set to check.
      * @param members A list of members to check for existence in the set.
      * @return Command Response - An <code>array</code> of <code>Boolean</code> values, each
@@ -1506,7 +1510,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sdiffstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys of the sets to diff.
      * @return Command Response - The number of elements in the resulting set.
@@ -1525,12 +1529,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/smove/">valkey.io</a> for details.
      * @param source The key of the set to remove the element from.
      * @param destination The key of the set to add the element to.
      * @param member The set element to move.
      * @return Command response - <code>true</code> on success, or <code>false</code> if the <code>
-     *     source</code> set does not exist or the element is not a member of the source set.
+     *      source</code> set does not exist or the element is not a member of the source set.
      */
     public <ArgType> T smove(
             @NonNull ArgType source, @NonNull ArgType destination, @NonNull ArgType member) {
@@ -1545,7 +1549,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sinter/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return Command Response - A <code>Set</code> of members which are present in all given sets.
      *     <br>
@@ -1563,7 +1567,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sinterstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys from which to retrieve the set members.
      * @return Command Response - The number of elements in the resulting set.
@@ -1581,7 +1585,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return Command Response - The cardinality of the intersection result. If one or more sets do
      *     not exist, <code>0</code> is returned.
@@ -1599,7 +1603,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @param limit The limit for the intersection cardinality value.
      * @return Command Response - The cardinality of the intersection result. If one or more sets do
@@ -1621,7 +1625,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/sunionstore/">valkey.io</a> for details.
      * @param destination The key of the destination set.
      * @param keys The keys from which to retrieve the set members.
      * @return Command Response - The number of elements in the resulting set.
@@ -1638,7 +1642,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/config-get/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
      *     for.
      * @return Command response - A <code>map</code> of values corresponding to the configuration
@@ -1655,7 +1659,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/config-set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
      * @return Command response - <code>OK</code> if all configurations have been successfully set.
@@ -1672,7 +1676,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/exists/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/exists/">valkey.io</a> for details.
      * @param keys The keys list to check.
      * @return Command Response - The number of keys that exist. If the same existing key is mentioned
      *     in <code>keys</code> multiple times, it will be counted multiple times.
@@ -1687,11 +1691,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Unlinks (deletes) multiple <code>keys</code> from the database. A key is ignored if it does not
      * exist. This command, similar to DEL, removes specified keys and ignores non-existent ones.
      * However, this command does not block the server, while <a
-     * href="https://redis.io/commands/del/">DEL</a> does.
+     * href="https://valkey.io/commands/del/">DEL</a> does.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/unlink/">valkey.io</a> for details.
      * @param keys The list of keys to unlink.
      * @return Command Response - The number of <code>keys</code> that were unlinked.
      */
@@ -1713,7 +1717,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
      * @param key The key to set timeout on it.
      * @param seconds The timeout in seconds.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
@@ -1737,7 +1741,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/expire/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/expire/">valkey.io</a> for details.
      * @param key The key to set timeout on it.
      * @param seconds The timeout in seconds.
      * @param expireOptions The expire options.
@@ -1765,7 +1769,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
      * @param key The key to set timeout on it.
      * @param unixSeconds The timeout in an absolute Unix timestamp.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
@@ -1790,7 +1794,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/expireat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/expireat/">valkey.io</a> for details.
      * @param key The key to set timeout on it.
      * @param unixSeconds The timeout in an absolute Unix timestamp.
      * @param expireOptions The expire options.
@@ -1809,9 +1813,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
-     * key</code> will automatically be deleted.<br>
-     * If <code>key</code> already has an existing <code>
-     * expire</code> set, the time to live is updated to the new value.<br>
+     *  key</code> will automatically be deleted.<br>
+     * If <code>key</code> already has an existing <code> expire</code> set, the time to live is
+     * updated to the new value.<br>
      * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
      * rather than expired.<br>
      * The timeout will only be cleared by commands that delete or overwrite the contents of <code>key
@@ -1819,7 +1823,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
      * @param key The key to set timeout on it.
      * @param milliseconds The timeout in milliseconds.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
@@ -1834,7 +1838,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
-     * key</code> will automatically be deleted.<br>
+     *  key</code> will automatically be deleted.<br>
      * If <code>key</code> already has an existing expire set, the time to live is updated to the new
      * value.<br>
      * If <code>milliseconds</code> is a non-positive number, the <code>key</code> will be deleted
@@ -1844,7 +1848,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/pexpire/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/pexpire/">valkey.io</a> for details.
      * @param key The key to set timeout on it.
      * @param milliseconds The timeout in milliseconds.
      * @param expireOptions The expire options.
@@ -1873,7 +1877,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
      * @param key The <code>key</code> to set timeout on it.
      * @param unixMilliseconds The timeout in an absolute Unix timestamp.
      * @return Command response - <code>true</code> if the timeout was set. <code>false</code> if the
@@ -1898,7 +1902,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/pexpireat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/pexpireat/">valkey.io</a> for details.
      * @param key The <code>key</code> to set timeout on it.
      * @param unixMilliseconds The timeout in an absolute Unix timestamp.
      * @param expireOptions The expiration option.
@@ -1921,7 +1925,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/ttl/">valkey.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
      * @return Command response - TTL in seconds, <code>-2</code> if <code>key</code> does not exist,
      *     or <code>-1</code> if <code>key</code> exists but has no associated expire.
@@ -1940,10 +1944,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return Command response - The expiration Unix timestamp in seconds, <code>-2</code> if <code>
-     *     key</code> does not exist, or <code>-1</code> if <code>key</code> exists but has no
+     *      key</code> does not exist, or <code>-1</code> if <code>key</code> exists but has no
      *     associated expiration.
      */
     public <ArgType> T expiretime(@NonNull ArgType key) {
@@ -1959,7 +1963,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return Command response - The expiration Unix timestamp in milliseconds, <code>-2</code> if
      *     <code>key
@@ -1975,7 +1979,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Gets the current connection id.
      *
-     * @see <a href="https://redis.io/commands/client-id/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/client-id/">valkey.io</a> for details.
      * @return Command response - The id of the client.
      */
     public T clientId() {
@@ -1986,7 +1990,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Gets the name of the current connection.
      *
-     * @see <a href="https://redis.io/commands/client-getname/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/client-getname/">valkey.io</a> for details.
      * @return Command response - The name of the client connection as a string if a name is set, or
      *     <code>null</code> if no name is assigned.
      */
@@ -1998,7 +2002,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Rewrites the configuration file with the current configuration.
      *
-     * @see <a href="https://redis.io/commands/config-rewrite/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
      * @return <code>OK</code> is returned when the configuration was rewritten properly. Otherwise,
      *     the transaction fails with an error.
      */
@@ -2009,10 +2013,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Resets the statistics reported by Redis using the <a
-     * href="https://redis.io/commands/info/">INFO</a> and <a
-     * href="https://redis.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
+     * href="https://valkey.io/commands/info/">INFO</a> and <a
+     * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
-     * @see <a href="https://redis.io/commands/config-resetstat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
      * @return <code>OK</code> to confirm that the statistics were successfully reset.
      */
     public T configResetStat() {
@@ -2026,7 +2030,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param options The ZAdd options.
@@ -2057,7 +2061,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param options The ZAdd options.
@@ -2076,7 +2080,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @param changed Modify the return value from the number of new elements added, to the total
@@ -2095,7 +2099,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
      * @return Command Response - The number of elements added to the sorted set.
@@ -2107,15 +2111,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
      * </code>.<br>
-     * If <code>member</code> does not exist in the sorted set, it is added with <code>
-     * increment</code> as its score (as if its previous score was 0.0).<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code> increment
+     * </code> as its score (as if its previous score was 0.0).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
      * member is created.<br>
      * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
@@ -2145,14 +2149,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
      * </code>.<br>
-     * If <code>member</code> does not exist in the sorted set, it is added with <code>
-     * increment</code> as its score (as if its previous score was 0.0).<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code> increment
+     * </code> as its score (as if its previous score was 0.0).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
      * member is created.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
@@ -2168,7 +2172,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrem/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members An array of members to remove from the sorted set.
      * @return Command Response - The number of members that were removed from the sorted set, not
@@ -2187,7 +2191,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return Command Response - The number of elements in the sorted set.<br>
      *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
@@ -2205,7 +2209,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count Specifies the quantity of members to pop.<br>
      *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
@@ -2227,7 +2231,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return Command Response - A map containing the removed member and its corresponding score.<br>
      *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
@@ -2244,7 +2248,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return Command Response - A <code>String</code> representing a random element from the sorted
      *     set.<br>
@@ -2261,7 +2265,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count The number of elements to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -2283,12 +2287,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count The number of elements to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
      *     If negative, allows duplicates.<br>
-     * @return Command Response - An <code>array</code> of <code>[element, score]</code> <code>arrays
+     * @return Command Response - An <code>array</code> of <code>[element,
+     *     score]</code> <code>arrays
      *     </code>, where element is a <code>String</code> and score is a <code>Double</code>.<br>
      *     If the sorted set does not exist or is empty, the response will be an empty <code>array
      *     </code>.
@@ -2309,7 +2314,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zincrby/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param increment The score increment.
      * @param member A member of the sorted set.
@@ -2330,7 +2335,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/bzpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/bzpopmin/">valkey.io</a> for more details.
      * @apiNote <code>BZPOPMIN</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -2355,7 +2360,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zpopmax/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count Specifies the quantity of members to pop.<br>
      *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
@@ -2377,7 +2382,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zpopmax/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return Command Response - A map containing the removed member and its corresponding score.<br>
      *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
@@ -2397,7 +2402,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/bzpopmax/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/bzpopmax/">valkey.io</a> for more details.
      * @apiNote <code>BZPOPMAX</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -2421,7 +2426,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose score is to be retrieved.
      * @return Command Response - The score of the member.<br>
@@ -2441,7 +2446,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return The rank of <code>member</code> in the sorted set.<br>
@@ -2460,7 +2465,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
@@ -2482,7 +2487,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return Command Response - The rank of <code>member</code> in the sorted set, where ranks are
@@ -2502,7 +2507,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrevrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
      * @return Command Response - An array containing the rank (as <code>Long</code>) and score (as
@@ -2524,7 +2529,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members An array of members in the sorted set.
      * @return Command Response - An <code>Array</code> of scores of the <code>members</code>.<br>
@@ -2544,7 +2549,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - An <code>array</code> of elements representing the difference
      *     between the sorted sets. <br>
@@ -2564,7 +2569,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - A <code>Map</code> of elements and their scores representing the
      *     difference between the sorted sets.<br>
@@ -2587,11 +2592,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
      * @return Command Response - The number of members in the resulting sorted set stored at <code>
-     *     destination</code>.
+     *      destination</code>.
      */
     public <ArgType> T zdiffstore(@NonNull ArgType destination, @NonNull ArgType[] keys) {
         checkTypeOrThrow(destination);
@@ -2606,7 +2611,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zcount/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minScore The minimum score to count from. Can be an implementation of {@link
      *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
@@ -2636,7 +2641,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param start The starting point of the range.
      * @param end The end of the range.
@@ -2661,7 +2666,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
@@ -2687,7 +2692,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(destination)
                                 .add(source)
-                                .add(RangeOptions.createZRangeBaseArgs(rangeQuery, reverse))));
+                                .add(RangeOptions.createZRangeBaseArgs(rangeQuery, reverse, false))));
         return getThis();
     }
 
@@ -2698,7 +2703,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
@@ -2722,7 +2727,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zremrangebylex/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebylex/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minLex The minimum bound of the lexicographical range. Can be an implementation of
      *     {@link InfLexBound} representing positive/negative infinity, or {@link LexBoundary}
@@ -2746,11 +2751,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Removes all elements in the sorted set stored at <code>key</code> with a score between <code>
-     * minScore</code> and <code>maxScore</code>.
+     *  minScore</code> and <code>maxScore</code>.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zremrangebyscore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minScore The minimum score to remove from. Can be an implementation of {@link
      *     InfScoreBound} representing positive/negative infinity, or {@link ScoreBoundary}
@@ -2779,7 +2784,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zlexcount/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zlexcount/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param minLex The minimum lex to count from. Can be an implementation of {@link InfLexBound}
      *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
@@ -2808,7 +2813,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2820,7 +2825,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
      *     elements.
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
-     *     destination</code>.
+     *      destination</code>.
      */
     public <ArgType> T zunionstore(
             @NonNull ArgType destination,
@@ -2844,7 +2849,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2853,7 +2858,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      *
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
-     *     destination</code>.
+     *      destination</code>.
      */
     public <ArgType> T zunionstore(
             @NonNull ArgType destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
@@ -2871,7 +2876,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2883,7 +2888,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
      *     elements.
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
-     *     destination</code>.
+     *      destination</code>.
      */
     public <ArgType> T zinterstore(
             @NonNull ArgType destination,
@@ -2906,7 +2911,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @return Command Response - The cardinality of the intersection of the given sorted sets.
      */
@@ -2925,7 +2930,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
      *     <code>0</code> the range will be unlimited.
@@ -2948,7 +2953,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
      * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
      *
-     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2957,7 +2962,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      *
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
-     *     destination</code>.
+     *      destination</code>.
      */
     public T zinterstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
@@ -2974,7 +2979,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
      * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
      *
-     * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2983,7 +2988,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      *
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
-     *     destination</code>.
+     *      destination</code>.
      */
     public T zinterstore(
             @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
@@ -2998,7 +3003,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
      */
@@ -3012,7 +3017,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
      */
@@ -3023,10 +3028,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.
+     *  keysOrWeightedKeys</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -3051,10 +3056,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.
+     *  keysOrWeightedKeys</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArrayBinary} for keys only.
@@ -3079,12 +3084,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.<br>
+     *  keysOrWeightedKeys</code>.<br>
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -3102,12 +3107,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.<br>
+     *  keysOrWeightedKeys</code>.<br>
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArrayBinary} for keys only.
@@ -3129,7 +3134,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
      */
@@ -3144,7 +3149,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
      */
@@ -3159,7 +3164,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -3181,7 +3186,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArrayBinary} for keys only.
@@ -3202,7 +3207,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>keysOrWeightedKeys</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
@@ -3230,7 +3235,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>keysOrWeightedKeys</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
      *       <li>Use {@link KeyArrayBinary} for keys only.
@@ -3257,12 +3262,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @return Command Response - The id of the added entry.
      */
-    public T xadd(@NonNull String key, @NonNull Map<String, String> values) {
+    public <ArgType> T xadd(@NonNull ArgType key, @NonNull Map<ArgType, ArgType> values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
 
@@ -3270,6 +3277,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
@@ -3278,76 +3287,105 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
      *     with the matching <code>key</code> exists.
      */
-    public T xadd(
-            @NonNull String key, @NonNull Map<String, String> values, @NonNull StreamAddOptions options) {
-        String[] arguments =
-                ArrayUtils.addAll(
-                        ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
-        ArgsArray commandArgs = buildArgs(arguments);
-        protobufTransaction.addCommands(buildCommand(XAdd, commandArgs));
+    public <ArgType> T xadd(
+            @NonNull ArgType key,
+            @NonNull Map<ArgType, ArgType> values,
+            @NonNull StreamAddOptions options) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XAdd,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add(flattenMapToGlideStringArray(values))));
         return getThis();
     }
 
     /**
      * Reads entries from the given streams.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will
+     * throw IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
-     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
-     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to
+     *     read from. A <code> pair</code> is composed of a stream's key and the
+     *     id of the entry after which the stream will be read.
+     * @return Command Response - A <code>{@literal Map<String, Map<String,
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of
+     *     stream-ids, to an array of pairings with format <code>[[field, entry],
+     *     [field, entry], ...]<code>.
      */
-    public T xread(@NonNull Map<String, String> keysAndIds) {
+    public <ArgType> T xread(@NonNull Map<ArgType, ArgType> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
     }
 
     /**
      * Reads entries from the given streams.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will
+     * throw IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
-     * @param options options detailing how to read the stream {@link StreamReadOptions}.
-     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
-     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to
+     *     read from. A <code> pair</code> is composed of a stream's key and the
+     *     id of the entry after which the stream will be read.
+     * @param options options detailing how to read the stream {@link
+     *     StreamReadOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<String,
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of
+     *     stream-ids, to an array of pairings with format <code>[[field, entry],
+     *     [field, entry], ...]<code>.
      */
-    public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
-        protobufTransaction.addCommands(buildCommand(XRead, buildArgs(options.toArgs(keysAndIds))));
+    public <ArgType> T xread(
+            @NonNull Map<ArgType, ArgType> keysAndIds, @NonNull StreamReadOptions options) {
+        checkTypeOrThrow(keysAndIds);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XRead,
+                        newArgsBuilder()
+                                .add(options.toArgs())
+                                .add(flattenAllKeysFollowedByAllValues(keysAndIds))));
         return getThis();
     }
 
     /**
      * Trims the stream by evicting older entries.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xtrim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param options Stream trim options {@link StreamTrimOptions}.
      * @return Command Response - The number of entries deleted from the stream.
      */
-    public T xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(XTrim, commandArgs));
+    public <ArgType> T xtrim(@NonNull ArgType key, @NonNull StreamTrimOptions options) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XTrim, newArgsBuilder().add(key).add(options.toArgs())));
         return getThis();
     }
 
     /**
      * Returns the number of entries in the stream stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xlen/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return Command Response - The number of entries in the stream. If <code>key</code> does not
      *     exist, return <code>0</code>.
      */
-    public T xlen(@NonNull String key) {
-        protobufTransaction.addCommands(buildCommand(XLen, buildArgs(key)));
+    public <ArgType> T xlen(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(XLen, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Removes the specified entries by id from a stream, and returns the number of entries deleted.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xdel/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param ids An array of entry ids.
@@ -3355,135 +3393,160 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     less than the number of entries in <code>ids</code>, if the specified <code>ids</code>
      *     don't exist in the stream.
      */
-    public T xdel(@NonNull String key, @NonNull String[] ids) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(ids, key));
-        protobufTransaction.addCommands(buildCommand(XDel, commandArgs));
+    public <ArgType> T xdel(@NonNull ArgType key, @NonNull ArgType[] ids) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(XDel, newArgsBuilder().add(key).add(ids)));
         return getThis();
     }
 
     /**
      * Returns stream entries matching a given range of IDs.
      *
-     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will
+     * throw IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for
+     *     details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MIN}
+     * to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MAX}
+     * to end with the maximum available ID.
      *     </ul>
      *
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @return Command Response - A <code>Map</code> of key to stream entry data,
+     *     where entry data is an array of pairings with format <code>[[field,
+     *     entry], [field, entry], ...]<code>.
      */
-    public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
-        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+    public <ArgType> T xrange(
+            @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XRange, newArgsBuilder().add(key).add(StreamRange.toArgs(start, end))));
         return getThis();
     }
 
     /**
      * Returns stream entries matching a given range of IDs.
      *
-     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will
+     * throw IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for
+     *     details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MIN}
+     * to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MAX}
+     * to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @return Command Response - A <code>Map</code> of key to stream entry data,
+     *     where entry data is an array of pairings with format <code>[[field,
+     *     entry], [field, entry], ...]<code>.
      */
-    public T xrange(
-            @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
-        ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key));
-        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+    public <ArgType> T xrange(
+            @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XRange, newArgsBuilder().add(key).add(StreamRange.toArgs(start, end, count))));
         return getThis();
     }
 
     /**
      * Returns stream entries matching a given range of IDs in reverse order.<br>
-     * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
-     * reverse order.
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns
+     * the entries in reverse order.
      *
-     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will
+     * throw IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for
+     *     details.
      * @param key The key of the stream.
      * @param end Ending stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MAX}
+     * to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MIN}
+     * to start with the minimum available ID.
      *     </ul>
      *
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @return Command Response - A <code>Map</code> of key to stream entry data,
+     *     where entry data is an array of pairings with format <code>[[field,
+     *     entry], [field, entry], ...]<code>.
      */
-    public T xrevrange(@NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start), key));
-        protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
+    public <ArgType> T xrevrange(
+            @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XRevRange, newArgsBuilder().add(key).add(StreamRange.toArgs(end, start))));
         return getThis();
     }
 
     /**
      * Returns stream entries matching a given range of IDs in reverse order.<br>
-     * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
-     * in reverse order.
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but
+     * returns the entries in reverse order.
      *
-     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will
+     * throw IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for
+     *     details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MIN}
+     * to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
      *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an
+     * exclusive bounded stream ID. <li>Use {@link StreamRange.InfRangeBound#MAX}
+     * to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @return Command Response - A <code>Map</code> of key to stream entry data,
+     *     where entry data is an array of pairings with format <code>[[field,
+     *     entry], [field, entry], ...]<code>.
      */
-    public T xrevrange(
-            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
-        ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key));
-        protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
+    public <ArgType> T xrevrange(
+            @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XRevRange, newArgsBuilder().add(key).add(StreamRange.toArgs(end, start, count))));
         return getThis();
     }
 
@@ -3491,6 +3554,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
      * stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
@@ -3499,8 +3564,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     in the stream.
      * @return Command Response - <code>OK</code>.
      */
-    public T xgroupCreate(@NonNull String key, @NonNull String groupName, @NonNull String id) {
-        protobufTransaction.addCommands(buildCommand(XGroupCreate, buildArgs(key, groupName, id)));
+    public <ArgType> T xgroupCreate(
+            @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XGroupCreate, newArgsBuilder().add(key).add(groupName).add(id)));
         return getThis();
     }
 
@@ -3508,6 +3576,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
      * stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
@@ -3522,6 +3592,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType groupName,
             @NonNull ArgType id,
             @NonNull StreamGroupOptions options) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         XGroupCreate, newArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs())));
@@ -3531,14 +3602,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupname The newly created consumer group name.
      * @return Command Response - <code>true</code> if the consumer group is destroyed. Otherwise,
      *     <code>false</code>.
      */
-    public T xgroupDestroy(@NonNull String key, @NonNull String groupname) {
-        protobufTransaction.addCommands(buildCommand(XGroupDestroy, buildArgs(key, groupname)));
+    public <ArgType> T xgroupDestroy(@NonNull ArgType key, @NonNull ArgType groupname) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XGroupDestroy, newArgsBuilder().add(key).add(groupname)));
         return getThis();
     }
 
@@ -3546,6 +3621,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
      * stream stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xgroup-createconsumer/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3553,16 +3630,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>true</code> if the consumer is created. Otherwise, <code>false
      *     </code>.
      */
-    public T xgroupCreateConsumer(
-            @NonNull String key, @NonNull String group, @NonNull String consumer) {
+    public <ArgType> T xgroupCreateConsumer(
+            @NonNull ArgType key, @NonNull ArgType group, @NonNull ArgType consumer) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(XGroupCreateConsumer, buildArgs(key, group, consumer)));
+                buildCommand(XGroupCreateConsumer, newArgsBuilder().add(key).add(group).add(consumer)));
         return getThis();
     }
 
     /**
      * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3570,15 +3650,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of pending messages the <code>consumer</code> had before
      *     it was deleted.
      */
-    public T xgroupDelConsumer(@NonNull String key, @NonNull String group, @NonNull String consumer) {
+    public <ArgType> T xgroupDelConsumer(
+            @NonNull ArgType key, @NonNull ArgType group, @NonNull ArgType consumer) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(XGroupDelConsumer, buildArgs(key, group, consumer)));
+                buildCommand(XGroupDelConsumer, newArgsBuilder().add(key).add(group).add(consumer)));
         return getThis();
     }
 
     /**
      * Sets the last delivered ID for a consumer group.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -3586,91 +3670,106 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     group.
      * @return Command Response - <code>OK</code>.
      */
-    public T xgroupSetId(@NonNull String key, @NonNull String groupName, @NonNull String id) {
-        protobufTransaction.addCommands(buildCommand(XGroupSetId, buildArgs(key, groupName, id)));
+    public <ArgType> T xgroupSetId(
+            @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XGroupSetId, newArgsBuilder().add(key).add(groupName).add(id)));
         return getThis();
     }
 
     /**
      * Sets the last delivered ID for a consumer group.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @since Redis 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
-     *     "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
-     *     it) and the stream's last entry.
+     * @param entriesRead A value representing the number of stream entries already read by the group.
      * @return Command Response - <code>OK</code>.
      */
     public <ArgType> T xgroupSetId(
-            @NonNull ArgType key,
-            @NonNull ArgType groupName,
-            @NonNull ArgType id,
-            @NonNull ArgType entriesReadId) {
+            @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id, long entriesRead) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         XGroupSetId,
-                        newArgsBuilder()
-                                .add(key)
-                                .add(groupName)
-                                .add(id)
-                                .add("ENTRIESREAD")
-                                .add(entriesReadId)));
+                        newArgsBuilder().add(key).add(groupName).add(id).add("ENTRIESREAD").add(entriesRead)));
         return getThis();
     }
 
     /**
      * Reads entries from the given streams owned by a consumer group.
      *
-     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
-     *     slot.
-     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map
+     * to the same hash slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for
+     *     details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from.
+     *     The <code> Map</code> is composed of a stream's key and the id of the
+     *     entry after which the stream will be read. Use the special id of
+     *     <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
-     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     * @return Command Response - A <code>{@literal Map<String, Map<String,
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of
+     *     stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
-     *     with a value of code>null</code> if the stream is empty.
+     *     Returns <code>null</code> if the consumer group does not exist. Returns
+     * a <code>Map</code> with a value of code>null</code> if the stream is empty.
      */
-    public T xreadgroup(
-            @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+    public <ArgType> T xreadgroup(
+            @NonNull Map<ArgType, ArgType> keysAndIds,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer) {
+        checkTypeOrThrow(group);
         return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
     }
 
     /**
      * Reads entries from the given streams owned by a consumer group.
      *
-     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
-     *     slot.
-     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map
+     * to the same hash slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for
+     *     details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from.
+     *     The <code> Map</code> is composed of a stream's key and the id of the
+     *     entry after which the stream will be read. Use the special id of
+     *     <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
-     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
-     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     * @param options Options detailing how to read the stream {@link
+     *     StreamReadGroupOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<String,
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of
+     *     stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
-     *     with a value of code>null</code> if the stream is empty.
+     *     Returns <code>null</code> if the consumer group does not exist. Returns
+     * a <code>Map</code> with a value of code>null</code> if the stream is empty.
      */
-    public T xreadgroup(
-            @NonNull Map<String, String> keysAndIds,
-            @NonNull String group,
-            @NonNull String consumer,
+    public <ArgType> T xreadgroup(
+            @NonNull Map<ArgType, ArgType> keysAndIds,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             @NonNull StreamReadGroupOptions options) {
+        checkTypeOrThrow(group);
         protobufTransaction.addCommands(
-                buildCommand(XReadGroup, buildArgs(options.toArgs(group, consumer, keysAndIds))));
+                buildCommand(
+                        XReadGroup,
+                        newArgsBuilder()
+                                .add(options.toArgs(group, consumer))
+                                .add(flattenAllKeysFollowedByAllValues(keysAndIds))));
         return getThis();
     }
 
@@ -3679,26 +3778,31 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * of a stream. This command should be called on a pending message so that such message does not
      * get processed again.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @param key The key of the stream.
      * @param group The consumer group name.
      * @param ids Stream entry ID to acknowledge and purge messages.
      * @return Command Response - The number of messages that were successfully acknowledged.
      */
-    public T xack(@NonNull String key, @NonNull String group, @NonNull String[] ids) {
-        String[] args = concatenateArrays(new String[] {key, group}, ids);
-        protobufTransaction.addCommands(buildCommand(XAck, buildArgs(args)));
+    public <ArgType> T xack(@NonNull ArgType key, @NonNull ArgType group, @NonNull ArgType[] ids) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(XAck, newArgsBuilder().add(key).add(group).add(ids)));
         return getThis();
     }
 
     /**
      * Returns stream message summary information for pending messages matching a given range of IDs.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
      * @return Command Response - A 2D-<code>array</code> that includes the summary of pending
-     *     messages, with the format <code>
-     *     [NumOfMessages, StartId, EndId, [[Consumer, NumOfMessages], ...]</code>, where:
+     *     messages, with the format <code> [NumOfMessages,
+     *     StartId, EndId, [[Consumer, NumOfMessages], ...]</code>, where:
      *     <ul>
      *       <li><code>NumOfMessages</code>: The total number of pending messages for this consumer
      *           group.
@@ -3709,9 +3813,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           pending messages it has.
      *     </ul>
      */
-    public T xpending(@NonNull String key, @NonNull String group) {
-        String[] args = {key, group};
-        protobufTransaction.addCommands(buildCommand(XPending, buildArgs(args)));
+    public <ArgType> T xpending(@NonNull ArgType key, @NonNull ArgType group) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(XPending, newArgsBuilder().add(key).add(group)));
         return getThis();
     }
 
@@ -3719,6 +3823,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns an extended form of stream message information for pending messages matching a given
      * range of IDs.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3738,7 +3844,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param count Limits the number of messages returned.
      * @return Command Response - A 2D-<code>array</code> of 4-tuples containing extended message
-     *     information with the format <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]
+     *     information with the format <code>[[ID, Consumer,
+     *     TimeElapsed, NumOfDelivered], ... ]
      *     </code>, where:
      *     <ul>
      *       <li><code>ID</code>: The ID of the message.
@@ -3749,12 +3856,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li><code>NumOfDelivered</code>: The number of times this message was delivered.
      *     </ul>
      */
-    public T xpending(
-            @NonNull String key,
-            @NonNull String group,
+    public <ArgType> T xpending(
+            @NonNull ArgType key,
+            @NonNull ArgType group,
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count) {
+        checkTypeOrThrow(key);
         return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
     }
 
@@ -3762,6 +3870,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns an extended form of stream message information for pending messages matching a given
      * range of IDs.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3782,7 +3892,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Limits the number of messages returned.
      * @param options Stream add options {@link StreamPendingOptions}.
      * @return Command Response - A 2D-<code>array</code> of 4-tuples containing extended message
-     *     information with the format <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]
+     *     information with the format <code>[[ID, Consumer,
+     *     TimeElapsed, NumOfDelivered], ... ]
      *     </code>, where:
      *     <ul>
      *       <li><code>ID</code>: The ID of the message.
@@ -3793,21 +3904,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li><code>NumOfDelivered</code>: The number of times this message was delivered.
      *     </ul>
      */
-    public T xpending(
-            @NonNull String key,
-            @NonNull String group,
+    public <ArgType> T xpending(
+            @NonNull ArgType key,
+            @NonNull ArgType group,
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count,
             @NonNull StreamPendingOptions options) {
-        String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
-        protobufTransaction.addCommands(buildCommand(XPending, buildArgs(args)));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XPending, newArgsBuilder().add(key).add(group).add(options.toArgs(start, end, count))));
         return getThis();
     }
 
     /**
      * Changes the ownership of a pending message.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3817,21 +3932,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Map</code> of message entries with the format <code>
      *      {"entryId": [["entry", "data"], ...], ...}</code> that are claimed by the consumer.
      */
-    public T xclaim(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+    public <ArgType> T xclaim(
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String[] ids) {
-        String[] args =
-                concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids);
-        protobufTransaction.addCommands(buildCommand(XClaim, buildArgs(args)));
+            @NonNull ArgType[] ids) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XClaim, newArgsBuilder().add(key).add(group).add(consumer).add(minIdleTime).add(ids)));
         return getThis();
     }
 
     /**
      * Changes the ownership of a pending message.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3842,17 +3960,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Map</code> of message entries with the format <code>
      *      {"entryId": [["entry", "data"], ...], ...}</code> that are claimed by the consumer.
      */
-    public T xclaim(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+    public <ArgType> T xclaim(
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String[] ids,
+            @NonNull ArgType[] ids,
             @NonNull StreamClaimOptions options) {
-        String[] args =
-                concatenateArrays(
-                        new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids, options.toArgs());
-        protobufTransaction.addCommands(buildCommand(XClaim, buildArgs(args)));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XClaim,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(group)
+                                .add(consumer)
+                                .add(minIdleTime)
+                                .add(ids)
+                                .add(options.toArgs())));
         return getThis();
     }
 
@@ -3860,6 +3985,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
      * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3868,18 +3995,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param ids An array of entry ids.
      * @return Command Response - An <code>array</code> of message ids claimed by the consumer.
      */
-    public T xclaimJustId(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+    public <ArgType> T xclaimJustId(
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String[] ids) {
-        String[] args =
-                concatenateArrays(
-                        new String[] {key, group, consumer, Long.toString(minIdleTime)},
-                        ids,
-                        new String[] {JUST_ID_REDIS_API});
-        protobufTransaction.addCommands(buildCommand(XClaim, buildArgs(args)));
+            @NonNull ArgType[] ids) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XClaim,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(group)
+                                .add(consumer)
+                                .add(minIdleTime)
+                                .add(ids)
+                                .add(JUST_ID_REDIS_API)));
         return getThis();
     }
 
@@ -3887,6 +4019,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
      * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
@@ -3896,34 +4030,72 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options Stream claim options {@link StreamClaimOptions}.
      * @return Command Response - An <code>array</code> of message ids claimed by the consumer.
      */
-    public T xclaimJustId(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+    public <ArgType> T xclaimJustId(
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String[] ids,
+            @NonNull ArgType[] ids,
             @NonNull StreamClaimOptions options) {
-        String[] args =
-                concatenateArrays(
-                        new String[] {key, group, consumer, Long.toString(minIdleTime)},
-                        ids,
-                        options.toArgs(),
-                        new String[] {JUST_ID_REDIS_API});
-        protobufTransaction.addCommands(buildCommand(XClaim, buildArgs(args)));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XClaim,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(group)
+                                .add(consumer)
+                                .add(minIdleTime)
+                                .add(ids)
+                                .add(options.toArgs())
+                                .add(JUST_ID_REDIS_API)));
+        return getThis();
+    }
+
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at <code>key
+     * </code>.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-groups/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - An <code>Array</code> of <code>Maps</code>, where each mapping
+     *     represents the attributes of a consumer group for the stream at <code>key</code>.
+     */
+    public <ArgType> T xinfoGroups(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(XInfoGroups, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-consumers/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @return Command Response - An <code>Array</code> of <code>Maps</code>, where each mapping
+     *     contains the attributes of a consumer for the given consumer group of the stream at <code>
+     *     key</code>.
+     */
+    public <ArgType> T xinfoConsumers(@NonNull ArgType key, @NonNull ArgType groupName) {
+        protobufTransaction.addCommands(
+                buildCommand(XInfoConsumers, newArgsBuilder().add(key).add(groupName)));
         return getThis();
     }
 
     /**
      * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
      *
-     * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/pttl/">valkey.io</a> for details.
      * @param key The key to return its timeout.
      * @return Command Response - TTL in milliseconds. <code>-2</code> if <code>key</code> does not
      *     exist, <code>-1</code> if <code>key</code> exists but has no associated expire.
      */
-    public T pttl(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(PTTL, commandArgs));
+    public <ArgType> T pttl(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(PTTL, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -3932,21 +4104,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key</code> with an expire set) to persistent (a <code>key</code> that will never expire
      * as no timeout is associated).
      *
-     * @see <a href="https://redis.io/commands/persist/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/persist/">valkey.io</a> for details.
      * @param key The <code>key</code> to remove the existing timeout on.
      * @return Command Response - <code>false</code> if <code>key</code> does not exist or does not
      *     have an associated timeout, <code>true</code> if the timeout has been removed.
      */
-    public T persist(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Persist, commandArgs));
+    public <ArgType> T persist(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Persist, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Returns the server time.
      *
-     * @see <a href="https://redis.io/commands/time/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
      * @return Command Response - The current server time as a <code>String</code> array with two
      *     elements: A <code>UNIX TIME</code> and the amount of microseconds already elapsed in the
      *     current second. The returned array is in a <code>[UNIX TIME, Microseconds already elapsed]
@@ -3961,7 +4135,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns <code>UNIX TIME</code> of the last DB save timestamp or startup timestamp if no save
      * was made since then.
      *
-     * @see <a href="https://redis.io/commands/lastsave/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
      * @return Command Response - <code>UNIX TIME</code> of the last DB save executed with success.
      */
     public T lastsave() {
@@ -3989,7 +4163,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T flushall(FlushMode mode) {
-        protobufTransaction.addCommands(buildCommand(FlushAll, buildArgs(mode.toString())));
+        protobufTransaction.addCommands(buildCommand(FlushAll, newArgsBuilder().add(mode)));
         return getThis();
     }
 
@@ -4013,14 +4187,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public T flushdb(FlushMode mode) {
-        protobufTransaction.addCommands(buildCommand(FlushDB, buildArgs(mode.toString())));
+        protobufTransaction.addCommands(buildCommand(FlushDB, newArgsBuilder().add(mode)));
         return getThis();
     }
 
     /**
      * Displays a piece of generative computer art and the Redis version.
      *
-     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @return Command Response - A piece of generative computer art along with the current Redis
      *     version.
      */
@@ -4032,7 +4206,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Displays a piece of generative computer art and the Redis version.
      *
-     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param parameters Additional set of arguments in order to change the output:
      *     <ul>
      *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
@@ -4045,9 +4219,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut(int @NonNull [] parameters) {
-        String[] arguments =
-                Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
+        protobufTransaction.addCommands(buildCommand(Lolwut, newArgsBuilder().add(parameters)));
         return getThis();
     }
 
@@ -4055,14 +4227,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Displays a piece of generative computer art and the Redis version.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
-     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
      * @return Command Response - A piece of generative computer art along with the current Redis
      *     version.
      */
     public T lolwut(int version) {
-        ArgsArray commandArgs = buildArgs(VERSION_REDIS_API, Integer.toString(version));
-        protobufTransaction.addCommands(buildCommand(Lolwut, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(Lolwut, newArgsBuilder().add(VERSION_REDIS_API).add(version)));
         return getThis();
     }
 
@@ -4070,7 +4242,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Displays a piece of generative computer art and the Redis version.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
-     * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
      * @param parameters Additional set of arguments in order to change the output:
      *     <ul>
@@ -4083,11 +4255,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     version.
      */
     public T lolwut(int version, int @NonNull [] parameters) {
-        String[] arguments =
-                concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
-                        Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
+        protobufTransaction.addCommands(
+                buildCommand(Lolwut, newArgsBuilder().add(VERSION_REDIS_API).add(version).add(parameters)));
         return getThis();
     }
 
@@ -4105,21 +4274,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/type/>valkey.io</a> for details.
      * @param key The <code>key</code> to check its data type.
      * @return Command Response - If the <code>key</code> exists, the type of the stored value is
      *     returned. Otherwise, a "none" string is returned.
      */
-    public T type(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+    public <ArgType> T type(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Type, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Returns a random key from the currently selected database. *
      *
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @return Command Response - A random <code>key</code> from the database.
      */
     public T randomKey() {
@@ -4131,38 +4302,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Renames <code>key</code> to <code>newKey</code>.<br>
      * If <code>newKey</code> already exists it is overwritten.
      *
-     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/rename/">valkey.io</a> for details.
      * @param key The <code>key</code> to rename.
      * @param newKey The new name of the <code>key</code>.
      * @return Command Response - If the <code>key</code> was successfully renamed, return <code>"OK"
      *     </code>. If <code>key</code> does not exist, the transaction fails with an error.
      */
-    public T rename(@NonNull String key, @NonNull String newKey) {
-        ArgsArray commandArgs = buildArgs(key, newKey);
-        protobufTransaction.addCommands(buildCommand(Rename, commandArgs));
+    public <ArgType> T rename(@NonNull ArgType key, @NonNull ArgType newKey) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Rename, newArgsBuilder().add(key).add(newKey)));
         return getThis();
     }
 
     /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
-     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/renamenx/">valkey.io</a> for details.
      * @param key The key to rename.
      * @param newKey The new key name.
      * @return Command Response - <code>true</code> if <code>key</code> was renamed to <code>newKey
      *     </code>, <code>false</code> if <code>newKey</code> already exists.
      */
-    public T renamenx(@NonNull String key, @NonNull String newKey) {
-        ArgsArray commandArgs = buildArgs(key, newKey);
-        protobufTransaction.addCommands(buildCommand(RenameNX, commandArgs));
+    public <ArgType> T renamenx(@NonNull ArgType key, @NonNull ArgType newKey) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(RenameNX, newArgsBuilder().add(key).add(newKey)));
         return getThis();
     }
 
     /**
      * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
-     * pivot</code>.
+     *  pivot</code>.
      *
-     * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/linsert/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
      *     {@link InsertPosition#AFTER} the <code>pivot</code>.
@@ -4172,13 +4349,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If the <code>key</code> doesn't exist returns <code>-1</code>.<br>
      *     If the <code>pivot</code> wasn't found, returns <code>0</code>.
      */
-    public T linsert(
-            @NonNull String key,
+    public <ArgType> T linsert(
+            @NonNull ArgType key,
             @NonNull InsertPosition position,
-            @NonNull String pivot,
-            @NonNull String element) {
-        ArgsArray commandArgs = buildArgs(key, position.toString(), pivot, element);
-        protobufTransaction.addCommands(buildCommand(LInsert, commandArgs));
+            @NonNull ArgType pivot,
+            @NonNull ArgType element) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(LInsert, newArgsBuilder().add(key).add(position).add(pivot).add(element)));
         return getThis();
     }
 
@@ -4187,7 +4365,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
-     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/brpop/">valkey.io</a> for details.
      * @apiNote <code>BRPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -4196,13 +4376,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
      *     from which the element was popped and the <code>value</code> of the popped element,
-     *     formatted as <code>
-     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
-     *     null</code>.
+     *     formatted as <code> [key,
+     *     value]</code>. If no element could be popped and the timeout expired, returns </code> null
+     *     </code>.
      */
-    public T brpop(@NonNull String[] keys, double timeout) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
-        protobufTransaction.addCommands(buildCommand(BRPop, commandArgs));
+    public <ArgType> T brpop(@NonNull ArgType[] keys, double timeout) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(buildCommand(BRPop, newArgsBuilder().add(keys).add(timeout)));
         return getThis();
     }
 
@@ -4211,14 +4391,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
      * operation.
      *
-     * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/lpushx/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param elements The elements to insert at the head of the list stored at <code>key</code>.
      * @return Command Response - The length of the list after the push operation.
      */
-    public T lpushx(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-        protobufTransaction.addCommands(buildCommand(LPushX, commandArgs));
+    public <ArgType> T lpushx(@NonNull ArgType key, @NonNull ArgType[] elements) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(LPushX, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -4227,14 +4409,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
      * operation.
      *
-     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/rpushx/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
      * @return Command Response - The length of the list after the push operation.
      */
-    public T rpushx(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-        protobufTransaction.addCommands(buildCommand(RPushX, commandArgs));
+    public <ArgType> T rpushx(@NonNull ArgType key, @NonNull ArgType[] elements) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(RPushX, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -4243,7 +4427,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
-     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/blpop/">valkey.io</a> for details.
      * @apiNote <code>BLPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -4252,13 +4438,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
      *     from which the element was popped and the <code>value</code> of the popped element,
-     *     formatted as <code>
-     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
-     *     null</code>.
+     *     formatted as <code> [key,
+     *     value]</code>. If no element could be popped and the timeout expired, returns </code> null
+     *     </code>.
      */
-    public T blpop(@NonNull String[] keys, double timeout) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.add(keys, Double.toString(timeout)));
-        protobufTransaction.addCommands(buildCommand(BLPop, commandArgs));
+    public <ArgType> T blpop(@NonNull ArgType[] keys, double timeout) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(buildCommand(BLPop, newArgsBuilder().add(keys).add(timeout)));
         return getThis();
     }
 
@@ -4268,7 +4454,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * score, or by lexicographical order.<br>
      * To get the elements with their scores, see {@link #zrangeWithScores}.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -4283,9 +4471,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     does not exist, it is treated as an empty sorted set, and the command returns an empty
      *     array.
      */
-    public T zrange(@NonNull String key, @NonNull RangeQuery rangeQuery, boolean reverse) {
-        ArgsArray commandArgs = buildArgs(createZRangeArgs(key, rangeQuery, reverse, false));
-        protobufTransaction.addCommands(buildCommand(ZRange, commandArgs));
+    public <ArgType> T zrange(@NonNull ArgType key, @NonNull RangeQuery rangeQuery, boolean reverse) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZRange,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(RangeOptions.createZRangeBaseArgs(rangeQuery, reverse, false))));
         return getThis();
     }
 
@@ -4295,7 +4488,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * score, or by lexicographical order.<br>
      * To get the elements with their scores, see {@link #zrangeWithScores}.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -4308,7 +4503,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     does not exist, it is treated as an empty sorted set, and the command returns an empty
      *     array.
      */
-    public T zrange(@NonNull String key, @NonNull RangeQuery rangeQuery) {
+    public <ArgType> T zrange(@NonNull ArgType key, @NonNull RangeQuery rangeQuery) {
         return getThis().zrange(key, rangeQuery, false);
     }
 
@@ -4316,7 +4511,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the specified range of elements with their scores in the sorted set stored at <code>key
      * </code>. Similar to {@link #zrange} but with a <code>WITHSCORE</code> flag.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -4330,10 +4527,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     range. If <code>key</code> does not exist, it is treated as an empty sorted set, and the
      *     command returns an empty <code>Map</code>.
      */
-    public T zrangeWithScores(
-            @NonNull String key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
-        ArgsArray commandArgs = buildArgs(createZRangeArgs(key, rangeQuery, reverse, true));
-        protobufTransaction.addCommands(buildCommand(ZRange, commandArgs));
+    public <ArgType> T zrangeWithScores(
+            @NonNull ArgType key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZRange,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(RangeOptions.createZRangeBaseArgs(rangeQuery, reverse, true))));
         return getThis();
     }
 
@@ -4341,7 +4543,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the specified range of elements with their scores in the sorted set stored at <code>key
      * </code>. Similar to {@link #zrange} but with a <code>WITHSCORE</code> flag.
      *
-     * @see <a href="https://redis.io/commands/zrange/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param rangeQuery The range query object representing the type of range query to perform.<br>
      *     <ul>
@@ -4353,7 +4557,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     range. If <code>key</code> does not exist, it is treated as an empty sorted set, and the
      *     command returns an empty <code>Map</code>.
      */
-    public T zrangeWithScores(@NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
+    public <ArgType> T zrangeWithScores(@NonNull ArgType key, @NonNull ScoredRangeQuery rangeQuery) {
         return zrangeWithScores(key, rangeQuery, false);
     }
 
@@ -4361,8 +4565,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
      * being checked in the order they are provided.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
@@ -4371,14 +4577,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     element.<br>
      *     If no member could be popped, returns <code>null</code>.
      */
-    public T zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Integer.toString(keys.length)},
-                                keys,
-                                new String[] {modifier.toString()}));
-        protobufTransaction.addCommands(buildCommand(ZMPop, commandArgs));
+    public <ArgType> T zmpop(@NonNull ArgType[] keys, @NonNull ScoreFilter modifier) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(ZMPop, newArgsBuilder().add(keys.length).add(keys).add(modifier)));
         return getThis();
     }
 
@@ -4386,8 +4588,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
      * </code> being checked in the order they are provided.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -4397,14 +4601,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no member could be popped, returns <code>null</code>.
      */
-    public T zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier, long count) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Integer.toString(keys.length)},
-                                keys,
-                                new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)}));
-        protobufTransaction.addCommands(buildCommand(ZMPop, commandArgs));
+    public <ArgType> T zmpop(@NonNull ArgType[] keys, @NonNull ScoreFilter modifier, long count) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZMPop,
+                        newArgsBuilder()
+                                .add(keys.length)
+                                .add(keys)
+                                .add(modifier)
+                                .add(COUNT_REDIS_API)
+                                .add(count)));
         return getThis();
     }
 
@@ -4414,7 +4621,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -4428,14 +4637,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T bzmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Double.toString(timeout), Integer.toString(keys.length)},
-                                keys,
-                                new String[] {modifier.toString()}));
-        protobufTransaction.addCommands(buildCommand(BZMPop, commandArgs));
+    public <ArgType> T bzmpop(
+            @NonNull ArgType[] keys, @NonNull ScoreFilter modifier, double timeout) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BZMPop, newArgsBuilder().add(timeout).add(keys.length).add(keys).add(modifier)));
         return getThis();
     }
 
@@ -4446,7 +4653,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -4461,15 +4670,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no members could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T bzmpop(
-            @NonNull String[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Double.toString(timeout), Integer.toString(keys.length)},
-                                keys,
-                                new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)}));
-        protobufTransaction.addCommands(buildCommand(BZMPop, commandArgs));
+    public <ArgType> T bzmpop(
+            @NonNull ArgType[] keys, @NonNull ScoreFilter modifier, double timeout, long count) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BZMPop,
+                        newArgsBuilder()
+                                .add(timeout)
+                                .add(keys.length)
+                                .add(keys)
+                                .add(modifier)
+                                .add(COUNT_REDIS_API)
+                                .add(count)));
         return getThis();
     }
 
@@ -4482,16 +4695,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * HyperLogLog, then no operation is performed. If <code>key</code> does not exist, then the
      * HyperLogLog structure is created.
      *
-     * @see <a href="https://redis.io/commands/pfadd/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/pfadd/">valkey.io</a> for details.
      * @param key The <code>key</code> of the HyperLogLog data structure to add elements into.
      * @param elements An array of members to add to the HyperLogLog stored at <code>key</code>.
      * @return Command Response - If the HyperLogLog is newly created, or if the HyperLogLog
      *     approximated cardinality is altered, then returns <code>1</code>. Otherwise, returns <code>
-     *     0</code>.
+     *      0</code>.
      */
-    public T pfadd(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-        protobufTransaction.addCommands(buildCommand(PfAdd, commandArgs));
+    public <ArgType> T pfadd(@NonNull ArgType key, @NonNull ArgType[] elements) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(PfAdd, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -4499,15 +4714,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
      * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
      *
-     * @see <a href="https://redis.io/commands/pfcount/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/pfcount/">valkey.io</a> for details.
      * @param keys The keys of the HyperLogLog data structures to be analyzed.
      * @return Command Response - The approximated cardinality of given HyperLogLog data structures.
      *     <br>
      *     The cardinality of a key that does not exist is <code>0</code>.
      */
-    public T pfcount(@NonNull String[] keys) {
-        ArgsArray commandArgs = buildArgs(keys);
-        protobufTransaction.addCommands(buildCommand(PfCount, commandArgs));
+    public <ArgType> T pfcount(@NonNull ArgType[] keys) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(buildCommand(PfCount, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -4516,88 +4733,101 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * If the destination variable exists, it is treated as one of the source HyperLogLog data sets,
      * otherwise a new HyperLogLog is created.
      *
-     * @see <a href="https://redis.io/commands/pfmerge/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/pfmerge/">valkey.io</a> for details.
      * @param destination The key of the destination HyperLogLog where the merged data sets will be
      *     stored.
      * @param sourceKeys The keys of the HyperLogLog structures to be merged.
      * @return Command Response - <code>OK</code>.
      */
-    public T pfmerge(@NonNull String destination, @NonNull String[] sourceKeys) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sourceKeys, destination));
-        protobufTransaction.addCommands(buildCommand(PfMerge, commandArgs));
+    public <ArgType> T pfmerge(@NonNull ArgType destination, @NonNull ArgType[] sourceKeys) {
+        checkTypeOrThrow(destination);
+        protobufTransaction.addCommands(
+                buildCommand(PfMerge, newArgsBuilder().add(destination).add(sourceKeys)));
         return getThis();
     }
 
     /**
      * Returns the internal encoding for the Redis object stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the internal encoding of.
      * @return Command response - If <code>key</code> exists, returns the internal encoding of the
      *     object stored at <code>key</code> as a <code>String</code>. Otherwise, return <code>null
      *     </code>.
      */
-    public T objectEncoding(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(ObjectEncoding, commandArgs));
+    public <ArgType> T objectEncoding(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(ObjectEncoding, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
      *     of.
      * @return Command response - If <code>key</code> exists, returns the logarithmic access frequency
      *     counter of the object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns
      *     <code>null</code>.
      */
-    public T objectFreq(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(ObjectFreq, commandArgs));
+    public <ArgType> T objectFreq(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(ObjectFreq, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Returns the time in seconds since the last access to the value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the idle time of.
      * @return Command response - If <code>key</code> exists, returns the idle time in seconds.
      *     Otherwise, returns <code>null</code>.
      */
-    public T objectIdletime(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(ObjectIdleTime, commandArgs));
+    public <ArgType> T objectIdletime(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(ObjectIdleTime, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Returns the reference count of the object stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the reference count of.
      * @return Command response - If <code>key</code> exists, returns the reference count of the
      *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
      *     </code>.
      */
-    public T objectRefcount(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(ObjectRefCount, commandArgs));
+    public <ArgType> T objectRefcount(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(ObjectRefCount, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Updates the last access time of specified <code>keys</code>.
      *
-     * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/touch/">valkey.io</a> for details.
      * @param keys The keys to update last access time.
      * @return Command Response - The number of keys that were updated.
      */
-    public T touch(@NonNull String[] keys) {
-        ArgsArray commandArgs = buildArgs(keys);
-        protobufTransaction.addCommands(buildCommand(Touch, commandArgs));
+    public <ArgType> T touch(@NonNull ArgType[] keys) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(buildCommand(Touch, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -4607,20 +4837,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param replace If the destination key should be removed before copying the value to it.
      * @return Command Response - <code>1L</code> if <code>source</code> was copied, <code>0L</code>
      *     if <code>source</code> was not copied.
      */
-    public T copy(@NonNull String source, @NonNull String destination, boolean replace) {
-        String[] args = new String[] {source, destination};
-        if (replace) {
-            args = ArrayUtils.add(args, REPLACE_REDIS_API);
-        }
-        ArgsArray commandArgs = buildArgs(args);
-        protobufTransaction.addCommands(buildCommand(Copy, commandArgs));
+    public <ArgType> T copy(@NonNull ArgType source, @NonNull ArgType destination, boolean replace) {
+        checkTypeOrThrow(source);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Copy, newArgsBuilder().add(source).add(destination).addIf(REPLACE_REDIS_API, replace)));
         return getThis();
     }
 
@@ -4629,27 +4859,95 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>destination</code> key does not yet exist.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
      *     </code> if <code>source</code> was not copied.
      */
-    public T copy(@NonNull String source, @NonNull String destination) {
+    public <ArgType> T copy(@NonNull ArgType source, @NonNull ArgType destination) {
         return copy(source, destination, false);
+    }
+
+    /**
+     * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
+     * user.
+     *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return Command Response - The serialized value of a set. If <code>key</code> does not exist,
+     *     <code>null</code> will be returned.
+     */
+    public <ArgType> T dump(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Dump, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
+     *     with a <code>value</code>.
+     */
+    public <ArgType> T restore(@NonNull ArgType key, long ttl, @NonNull byte[] value) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value)));
+        return getThis();
+    }
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @param restoreOptions The restore options. See {@link RestoreOptions}.
+     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
+     *     with a <code>value</code>.
+     */
+    public <ArgType> T restore(
+            @NonNull ArgType key,
+            long ttl,
+            @NonNull byte[] value,
+            @NonNull RestoreOptions restoreOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(Restore, newArgsBuilder().add(key).add(ttl).add(value).add(restoreOptions)));
+        return getThis();
     }
 
     /**
      * Counts the number of set bits (population counting) in a string stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @return Command Response - The number of set bits in the string. Returns zero if the key is
      *     missing as it is treated as an empty string.
      */
-    public T bitcount(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
+    public <ArgType> T bitcount(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(BitCount, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4661,6 +4959,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting byte offset.
@@ -4669,10 +4969,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>start</code> and <code>end</code>. Returns zero if the key is missing as it is
      *     treated as an empty string.
      */
-    public T bitcount(@NonNull String key, long start, long end) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-
-        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
+    public <ArgType> T bitcount(@NonNull ArgType key, long start, long end) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(BitCount, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
 
@@ -4685,6 +4985,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * so on.
      *
      * @since Redis 7.0 and above
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
@@ -4692,14 +4994,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options The index offset type. Could be either {@link BitmapIndexType#BIT} or {@link
      *     BitmapIndexType#BYTE}.
      * @return Command Response - The number of set bits in the string interval specified by <code>
-     *     start</code>, <code>end</code>, and <code>options</code>. Returns zero if the key is
+     *      start</code>, <code>end</code>, and <code>options</code>. Returns zero if the key is
      *     missing as it is treated as an empty string.
      */
-    public T bitcount(@NonNull String key, long start, long end, @NonNull BitmapIndexType options) {
-        ArgsArray commandArgs =
-                buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
-
-        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
+    public <ArgType> T bitcount(
+            @NonNull ArgType key, long start, long end, @NonNull BitmapIndexType options) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(BitCount, newArgsBuilder().add(key).add(start).add(end).add(options)));
         return getThis();
     }
 
@@ -4708,7 +5010,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * </code>.<br>
      * If a member is already a part of the sorted set, its position is updated.
      *
-     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @param key The key of the sorted set.
      * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
@@ -4718,15 +5022,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> is set to <code>true</code> in the options, returns the number of elements updated
      *     in the sorted set.
      */
-    public T geoadd(
-            @NonNull String key,
-            @NonNull Map<String, GeospatialData> membersToGeospatialData,
+    public <ArgType> T geoadd(
+            @NonNull ArgType key,
+            @NonNull Map<ArgType, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {key}, options.toArgs(), mapGeoDataToArray(membersToGeospatialData)));
-        protobufTransaction.addCommands(buildCommand(GeoAdd, commandArgs));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoAdd,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add(mapGeoDataToGlideStringArray(membersToGeospatialData))));
         return getThis();
     }
 
@@ -4737,15 +5044,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>geoadd</code> operation while specifying optional parameters, use {@link
      * #geoadd(String, Map, GeoAddOptions)}.
      *
-     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
      *     coordinates outside the specified ranges.
      * @return Command Response - The number of elements added to the sorted set.
      */
-    public T geoadd(
-            @NonNull String key, @NonNull Map<String, GeospatialData> membersToGeospatialData) {
+    public <ArgType> T geoadd(
+            @NonNull ArgType key, @NonNull Map<ArgType, GeospatialData> membersToGeospatialData) {
         return geoadd(key, membersToGeospatialData, new GeoAddOptions(false));
     }
 
@@ -4753,6 +5062,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the positions (longitude,latitude) of all the specified <code>members</code> of the
      * geospatial index represented by the sorted set at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geopos">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members The members for which to get the positions.
@@ -4760,9 +5071,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     latitude) corresponding to the given members. If a member does not exist, its position will
      *     be <code>null</code>.
      */
-    public T geopos(@NonNull String key, @NonNull String[] members) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-        protobufTransaction.addCommands(buildCommand(GeoPos, commandArgs));
+    public <ArgType> T geopos(@NonNull ArgType key, @NonNull ArgType[] members) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(GeoPos, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -4770,6 +5081,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
      * geospatial index stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member1 The name of the first member.
@@ -4783,6 +5096,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType member1,
             @NonNull ArgType member2,
             @NonNull GeoUnit geoUnit) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoDist,
@@ -4794,6 +5108,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
      * geospatial index stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member1 The name of the first member.
@@ -4802,16 +5118,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If one or both members do not exist or if the key does not exist returns <code>null</code>.
      *     The default unit is {@see GeoUnit#METERS}.
      */
-    public T geodist(@NonNull String key, @NonNull String member1, @NonNull String member2) {
-        ArgsArray commandArgs = buildArgs(key, member1, member2);
-        protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
+    public <ArgType> T geodist(
+            @NonNull ArgType key, @NonNull ArgType member1, @NonNull ArgType member2) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(GeoDist, newArgsBuilder().add(key).add(member1).add(member2)));
         return getThis();
     }
 
     /**
      * Returns the <code>GeoHash</code> strings representing the positions of all the specified <code>
-     * members</code> in the sorted set stored at <code>key</code>.
+     *  members</code> in the sorted set stored at <code>key</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geohash">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members The array of members whose <code>GeoHash</code> strings are to be retrieved.
@@ -4819,9 +5139,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     of the specified members stored at <code>key</code>. If a member does not exist in the
      *     sorted set, a <code>null</code> value is returned for that member.
      */
-    public T geohash(@NonNull String key, @NonNull String[] members) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
-        protobufTransaction.addCommands(buildCommand(GeoHash, commandArgs));
+    public <ArgType> T geohash(@NonNull ArgType key, @NonNull ArgType[] members) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(GeoHash, newArgsBuilder().add(key).add(members)));
         return getThis();
     }
 
@@ -4829,16 +5149,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
      *     already exists.
      * @return Command Response - The library name that was loaded.
      */
-    public T functionLoad(@NonNull String libraryCode, boolean replace) {
-        ArgsArray commandArgs =
-                replace ? buildArgs(REPLACE.toString(), libraryCode) : buildArgs(libraryCode);
-        protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
+    public <ArgType> T functionLoad(@NonNull ArgType libraryCode, boolean replace) {
+        checkTypeOrThrow(libraryCode);
+        protobufTransaction.addCommands(
+                buildCommand(FunctionLoad, newArgsBuilder().addIf(REPLACE, replace).add(libraryCode)));
         return getThis();
     }
 
@@ -4846,13 +5168,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns information about the functions and libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Command Response - Info about all libraries and their functions.
      */
     public T functionList(boolean withCode) {
-        ArgsArray commandArgs = withCode ? buildArgs(WITH_CODE_REDIS_API) : emptyArgs();
-        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(FunctionList, newArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode)));
         return getThis();
     }
 
@@ -4860,17 +5182,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns information about the functions and libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Command Response - Info about queried libraries and their functions.
      */
-    public T functionList(@NonNull String libNamePattern, boolean withCode) {
-        ArgsArray commandArgs =
-                withCode
-                        ? buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API)
-                        : buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
-        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
+    public <ArgType> T functionList(@NonNull ArgType libNamePattern, boolean withCode) {
+        checkTypeOrThrow(libNamePattern);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        FunctionList,
+                        newArgsBuilder()
+                                .add(LIBRARY_NAME_REDIS_API)
+                                .add(libNamePattern)
+                                .addIf(WITH_CODE_REDIS_API, withCode)));
         return getThis();
     }
 
@@ -4878,7 +5205,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
      *     correct execution of functions, both in standalone and clustered deployments, all names of
@@ -4887,12 +5216,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
-    public T fcall(@NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
-        protobufTransaction.addCommands(buildCommand(FCall, commandArgs));
+    public <ArgType> T fcall(
+            @NonNull ArgType function, @NonNull ArgType[] keys, @NonNull ArgType[] arguments) {
+        checkTypeOrThrow(function);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        FCall, newArgsBuilder().add(function).add(keys.length).add(keys).add(arguments)));
         return getThis();
     }
 
@@ -4900,21 +5229,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
-    public T fcall(@NonNull String function, @NonNull String[] arguments) {
-        return fcall(function, new String[0], arguments);
+    public <ArgType> T fcall(@NonNull ArgType function, @NonNull ArgType[] arguments) {
+        return fcall(function, createArray(), arguments);
     }
 
     /**
      * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
      *     correct execution of functions, both in standalone and clustered deployments, all names of
@@ -4923,13 +5256,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
-    public T fcallReadOnly(
-            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
-        protobufTransaction.addCommands(buildCommand(FCallReadOnly, commandArgs));
+    public <ArgType> T fcallReadOnly(
+            @NonNull ArgType function, @NonNull ArgType[] keys, @NonNull ArgType[] arguments) {
+        checkTypeOrThrow(function);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        FCallReadOnly,
+                        newArgsBuilder().add(function).add(keys.length).add(keys).add(arguments)));
         return getThis();
     }
 
@@ -4937,14 +5270,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
-    public T fcallReadOnly(@NonNull String function, @NonNull String[] arguments) {
-        return fcallReadOnly(function, new String[0], arguments);
+    public <ArgType> T fcallReadOnly(@NonNull ArgType function, @NonNull ArgType[] arguments) {
+        return fcallReadOnly(function, createArray(), arguments);
     }
 
     /**
@@ -4952,7 +5287,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * available execution engines.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return Command Response - A <code>Map</code> with two keys:
      *     <ul>
      *       <li><code>running_script</code> with information about the running script.
@@ -4965,6 +5300,49 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the serialized payload of all loaded libraries. The command will be routed to a random
+     * node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
+     * @return Command Response - The serialized payload of all loaded libraries.
+     */
+    public T functionDump() {
+        protobufTransaction.addCommands(buildCommand(FunctionDump));
+        return getThis();
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
+     * will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionRestore(@NonNull byte[] payload) {
+        protobufTransaction.addCommands(buildCommand(FunctionRestore, newArgsBuilder().add(payload)));
+        return getThis();
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
+     * will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param policy A policy for handling existing libraries.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionRestore(@NonNull byte[] payload, @NonNull FunctionRestorePolicy policy) {
+        protobufTransaction.addCommands(
+                buildCommand(FunctionRestore, newArgsBuilder().add(payload).add(policy)));
+        return getThis();
+    }
+
+    /**
      * Sets or clears the bit at <code>offset</code> in the string value stored at <code>key</code>.
      * The <code>offset</code> is a zero-based index, with <code>0</code> being the first element of
      * the list, <code>1</code> being the next element, and so on. The <code>offset</code> must be
@@ -4972,6 +5350,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * non-existent then the bit at <code>offset</code> is set to <code>value</code> and the preceding
      * bits are set to <code>0</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/setbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to be set.
@@ -4979,9 +5359,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>1</code>.
      * @return Command Response - The bit value that was previously stored at <code>offset</code>.
      */
-    public T setbit(@NonNull String key, long offset, long value) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(offset), Long.toString(value));
-        protobufTransaction.addCommands(buildCommand(SetBit, commandArgs));
+    public <ArgType> T setbit(@NonNull ArgType key, long offset, long value) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(SetBit, newArgsBuilder().add(key).add(offset).add(value)));
         return getThis();
     }
 
@@ -4989,15 +5370,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
      * <code>offset</code> should be greater than or equal to zero.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/getbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to return.
      * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
      *     if the positive <code>offset</code> exceeds the length of the string.
      */
-    public T getbit(@NonNull String key, long offset) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
-        protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
+    public <ArgType> T getbit(@NonNull ArgType key, long offset) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(GetBit, newArgsBuilder().add(key).add(offset)));
         return getThis();
     }
 
@@ -5006,6 +5389,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * provided <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link
      * #lmpop(String[], ListDirection, Long)}.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -5021,20 +5406,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T blmpop(
-            @NonNull String[] keys,
+    public <ArgType> T blmpop(
+            @NonNull ArgType[] keys,
             @NonNull ListDirection direction,
             @NonNull Long count,
             double timeout) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Double.toString(timeout), Long.toString(keys.length)},
-                                keys,
-                                new String[] {
-                                    direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
-                                }));
-        protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BLMPop,
+                        newArgsBuilder()
+                                .add(timeout)
+                                .add(keys.length)
+                                .add(keys)
+                                .add(direction)
+                                .add(COUNT_FOR_LIST_REDIS_API)
+                                .add(count)));
         return getThis();
     }
 
@@ -5043,6 +5430,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
      * ListDirection)}.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -5057,20 +5446,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T blmpop(@NonNull String[] keys, @NonNull ListDirection direction, double timeout) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Double.toString(timeout), Long.toString(keys.length)},
-                                keys,
-                                new String[] {direction.toString()}));
-        protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
+    public <ArgType> T blmpop(
+            @NonNull ArgType[] keys, @NonNull ListDirection direction, double timeout) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BLMPop, newArgsBuilder().add(timeout).add(keys.length).add(keys).add(direction)));
         return getThis();
     }
 
     /**
      * Returns the position of the first bit matching the given <code>bit</code> value.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
@@ -5078,9 +5467,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the binary value of the string held at <code>key</code>. If <code>bit</code> is not found,
      *     a <code>-1</code> is returned.
      */
-    public T bitpos(@NonNull String key, long bit) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(bit));
-        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+    public <ArgType> T bitpos(@NonNull ArgType key, long bit) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(BitPos, newArgsBuilder().add(key).add(bit)));
         return getThis();
     }
 
@@ -5091,6 +5480,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * indicating offsets starting at the end of the list, with <code>-1</code> being the last byte of
      * the list, <code>-2</code> being the penultimate, and so on.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
@@ -5099,9 +5490,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> offset of the <code>bit</code> in the binary value of the string held at <code>key
      *     </code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
      */
-    public T bitpos(@NonNull String key, long bit, long start) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(bit), Long.toString(start));
-        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+    public <ArgType> T bitpos(@NonNull ArgType key, long bit, long start) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(BitPos, newArgsBuilder().add(key).add(bit).add(start)));
         return getThis();
     }
 
@@ -5112,6 +5504,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
      * the last byte of the list, <code>-2</code> being the penultimate, and so on.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
@@ -5121,10 +5515,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the <code>end</code> offsets of the <code>bit</code> in the binary value of the string held
      *     at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
      */
-    public T bitpos(@NonNull String key, long bit, long start, long end) {
-        ArgsArray commandArgs =
-                buildArgs(key, Long.toString(bit), Long.toString(start), Long.toString(end));
-        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+    public <ArgType> T bitpos(@NonNull ArgType key, long bit, long start, long end) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(BitPos, newArgsBuilder().add(key).add(bit).add(start).add(end)));
         return getThis();
     }
 
@@ -5139,6 +5533,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * list, <code>-2</code> being the penultimate, and so on.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
@@ -5150,17 +5546,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the <code>end</code> offsets of the <code>bit</code> in the binary value of the string held
      *     at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
      */
-    public T bitpos(
-            @NonNull String key, long bit, long start, long end, @NonNull BitmapIndexType offsetType) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        key,
-                        Long.toString(bit),
-                        Long.toString(start),
-                        Long.toString(end),
-                        offsetType.toString());
-
-        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+    public <ArgType> T bitpos(
+            @NonNull ArgType key, long bit, long start, long end, @NonNull BitmapIndexType offsetType) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BitPos, newArgsBuilder().add(key).add(bit).add(start).add(end).add(offsetType)));
         return getThis();
     }
 
@@ -5168,20 +5559,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Perform a bitwise operation between multiple keys (containing string values) and store the
      * result in the <code>destination</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitop/">valkey.io</a> for details.
      * @param bitwiseOperation The bitwise operation to perform.
      * @param destination The key that will store the resulting string.
      * @param keys The list of keys to perform the bitwise operation on.
      * @return Command Response - The size of the string stored in <code>destination</code>.
      */
-    public T bitop(
+    public <ArgType> T bitop(
             @NonNull BitwiseOperation bitwiseOperation,
-            @NonNull String destination,
-            @NonNull String[] keys) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(new String[] {bitwiseOperation.toString(), destination}, keys));
-
-        protobufTransaction.addCommands(buildCommand(BitOp, commandArgs));
+            @NonNull ArgType destination,
+            @NonNull ArgType[] keys) {
+        checkTypeOrThrow(destination);
+        protobufTransaction.addCommands(
+                buildCommand(BitOp, newArgsBuilder().add(bitwiseOperation).add(destination).add(keys)));
         return getThis();
     }
 
@@ -5190,6 +5582,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * </code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -5198,16 +5592,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
      *     elements.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction, @NonNull Long count) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Long.toString(keys.length)},
-                                keys,
-                                new String[] {
-                                    direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
-                                }));
-        protobufTransaction.addCommands(buildCommand(LMPop, commandArgs));
+    public <ArgType> T lmpop(
+            @NonNull ArgType[] keys, @NonNull ListDirection direction, @NonNull Long count) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        LMPop,
+                        newArgsBuilder()
+                                .add(keys.length)
+                                .add(keys)
+                                .add(direction)
+                                .add(COUNT_FOR_LIST_REDIS_API)
+                                .add(count)));
         return getThis();
     }
 
@@ -5215,6 +5611,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -5222,14 +5620,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped array of the
      *     popped element.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(
-                                new String[] {Long.toString(keys.length)},
-                                keys,
-                                new String[] {direction.toString()}));
-        protobufTransaction.addCommands(buildCommand(LMPop, commandArgs));
+    public <ArgType> T lmpop(@NonNull ArgType[] keys, @NonNull ListDirection direction) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(
+                buildCommand(LMPop, newArgsBuilder().add(keys.length).add(keys).add(direction)));
         return getThis();
     }
 
@@ -5240,14 +5634,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
      * and so forth.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param index The index of the element in the list to be set.
      * @return Command Response - <code>OK</code>.
      */
-    public T lset(@NonNull String key, long index, @NonNull String element) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(index), element);
-        protobufTransaction.addCommands(buildCommand(LSet, commandArgs));
+    public <ArgType> T lset(@NonNull ArgType key, long index, @NonNull ArgType element) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(LSet, newArgsBuilder().add(key).add(index).add(element)));
         return getThis();
     }
 
@@ -5257,6 +5654,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
      * @since Redis 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
      * @param source The key to the source list.
      * @param destination The key to the destination list.
@@ -5265,14 +5664,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
      *     not exist.
      */
-    public T lmove(
-            @NonNull String source,
-            @NonNull String destination,
+    public <ArgType> T lmove(
+            @NonNull ArgType source,
+            @NonNull ArgType destination,
             @NonNull ListDirection wherefrom,
             @NonNull ListDirection whereto) {
-        ArgsArray commandArgs =
-                buildArgs(source, destination, wherefrom.toString(), whereto.toString());
-        protobufTransaction.addCommands(buildCommand(LMove, commandArgs));
+        checkTypeOrThrow(source);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        LMove, newArgsBuilder().add(source).add(destination).add(wherefrom).add(whereto)));
         return getThis();
     }
 
@@ -5285,6 +5685,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * ListDirection)}.
      *
      * @since Redis 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @apiNote <code>BLMove</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *     Commands</a> for more details and best practices.
@@ -5298,65 +5700,74 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
      *     not exist or if the operation timed-out.
      */
-    public T blmove(
-            @NonNull String source,
-            @NonNull String destination,
+    public <ArgType> T blmove(
+            @NonNull ArgType source,
+            @NonNull ArgType destination,
             @NonNull ListDirection wherefrom,
             @NonNull ListDirection whereto,
             double timeout) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        source,
-                        destination,
-                        wherefrom.toString(),
-                        whereto.toString(),
-                        Double.toString(timeout));
-        protobufTransaction.addCommands(buildCommand(BLMove, commandArgs));
+        checkTypeOrThrow(source);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BLMove,
+                        newArgsBuilder()
+                                .add(source)
+                                .add(destination)
+                                .add(wherefrom)
+                                .add(whereto)
+                                .add(timeout)));
         return getThis();
     }
 
     /**
      * Returns a random element from the set value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/srandmember/">valkey.io</a> for details.
      * @param key The key from which to retrieve the set member.
      * @return Command Response - A random element from the set, or <code>null</code> if <code>key
      *     </code> does not exist.
      */
-    public T srandmember(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+    public <ArgType> T srandmember(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(SRandMember, newArgsBuilder().add(key)));
         return getThis();
     }
 
     /**
      * Returns random elements from the set value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/srandmember/">valkey.io</a> for details.
      * @param key The key from which to retrieve the set members.
      * @param count The number of elements to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
      *     If negative, allows for duplicates.<br>
      * @return Command Response - An <code>array</code> of elements from the set, or an empty <code>
-     *     array</code> if <code>key</code> does not exist.
+     *      array</code> if <code>key</code> does not exist.
      */
-    public T srandmember(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+    public <ArgType> T srandmember(@NonNull ArgType key, long count) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(SRandMember, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
     /**
      * Removes and returns one random member from the set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/spop/">valkey.io</a> for details.
      * @param key The key of the set.
      * @return Command Response - The value of the popped member.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      */
-    public T spop(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(SPop, commandArgs));
+    public <ArgType> T spop(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(SPop, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5364,7 +5775,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Removes and returns up to <code>count</code> random members from the set stored at <code>key
      * </code>, depending on the set's length.
      *
-     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/spop/">valkey.io</a> for details.
      * @param key The key of the set.
      * @param count The count of the elements to pop from the set.
      * @return Command Response - A set of popped elements will be returned depending on the set's
@@ -5372,6 +5785,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, an empty <code>Set</code> will be returned.
      */
     public <ArgType> T spopCount(@NonNull ArgType key, long count) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(buildCommand(SPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
@@ -5380,10 +5794,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Reads or modifies the array of bits representing the string that is held at <code>key</code>
      * based on the specified <code>subCommands</code>.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitfield/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The subCommands to be performed on the binary value of the string at <code>
-     *     key</code>, which could be any of the following:
+     *      key</code>, which could be any of the following:
      *     <ul>
      *       <li>{@link BitFieldGet}.
      *       <li>{@link BitFieldSet}.
@@ -5399,13 +5815,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>{@link BitFieldIncrby} returns the new value in {@link Offset} or {@link
      *           OffsetMultiplier}.
      *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
-     *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
+     *            INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
      *           and does not contribute a value to the array response.
      *     </ul>
      */
-    public T bitfield(@NonNull String key, @NonNull BitFieldSubCommands[] subCommands) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
-        protobufTransaction.addCommands(buildCommand(BitField, commandArgs));
+    public <ArgType> T bitfield(@NonNull ArgType key, @NonNull BitFieldSubCommands[] subCommands) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(BitField, newArgsBuilder().add(key).add(createBitFieldArgs(subCommands))));
         return getThis();
     }
 
@@ -5415,15 +5832,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 6.0 and above
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
      * @return Command Response - An array of results from the <code>GET</code> subcommands.
      */
-    public T bitfieldReadOnly(
-            @NonNull String key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
-        protobufTransaction.addCommands(buildCommand(BitFieldReadOnly, commandArgs));
+    public <ArgType> T bitfieldReadOnly(
+            @NonNull ArgType key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        BitFieldReadOnly, newArgsBuilder().add(key).add(createBitFieldArgs(subCommands))));
         return getThis();
     }
 
@@ -5431,7 +5852,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Deletes all function libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @return Command Response - <code>OK</code>.
      */
     public T functionFlush() {
@@ -5443,13 +5864,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Deletes all function libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @return Command Response - <code>OK</code>.
      */
     public T functionFlush(@NonNull FlushMode mode) {
-        protobufTransaction.addCommands(buildCommand(FunctionFlush, buildArgs(mode.toString())));
+        protobufTransaction.addCommands(buildCommand(FunctionFlush, newArgsBuilder().add(mode)));
         return getThis();
     }
 
@@ -5457,20 +5878,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Deletes a library and all its functions.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return Command Response - <code>OK</code>.
      */
-    public T functionDelete(@NonNull String libName) {
-        protobufTransaction.addCommands(buildCommand(FunctionDelete, buildArgs(libName)));
+    public <ArgType> T functionDelete(@NonNull ArgType libName) {
+        checkTypeOrThrow(libName);
+        protobufTransaction.addCommands(buildCommand(FunctionDelete, newArgsBuilder().add(libName)));
         return getThis();
     }
 
     /**
      * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
-     * key2</code>.
+     *  key2</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
@@ -5478,8 +5904,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     between the 2 strings. An empty <code>String</code> is returned if the keys do not exist or
      *     have no common subsequences.
      */
-    public T lcs(@NonNull String key1, @NonNull String key2) {
-        protobufTransaction.addCommands(buildCommand(LCS, buildArgs(key1, key2)));
+    public <ArgType> T lcs(@NonNull ArgType key1, @NonNull ArgType key2) {
+        checkTypeOrThrow(key1);
+        protobufTransaction.addCommands(buildCommand(LCS, newArgsBuilder().add(key1).add(key2)));
         return getThis();
     }
 
@@ -5488,6 +5915,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * </code> and <code>key2</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -5495,35 +5924,43 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key2 The key that stores the second string.
      * @return Command Response - The length of the longest common subsequence between the 2 strings.
      */
-    public T lcsLen(@NonNull String key1, @NonNull String key2) {
-        ArgsArray args = buildArgs(key1, key2, LEN_REDIS_API);
-        protobufTransaction.addCommands(buildCommand(LCS, args));
+    public <ArgType> T lcsLen(@NonNull ArgType key1, @NonNull ArgType key2) {
+        checkTypeOrThrow(key1);
+        protobufTransaction.addCommands(
+                buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(LEN_REDIS_API)));
         return getThis();
     }
 
     /**
      * Publishes message on pubsub channel.
      *
-     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
-     * @param channel The channel to publish the message on.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param message The message to publish.
+     * @param channel The channel to publish the message on.
      * @return Command response - The number of clients that received the message.
      */
-    public T publish(@NonNull String channel, @NonNull String message) {
-        protobufTransaction.addCommands(buildCommand(Publish, buildArgs(channel, message)));
+    public <ArgType> T publish(@NonNull ArgType message, @NonNull ArgType channel) {
+        checkTypeOrThrow(channel);
+        protobufTransaction.addCommands(
+                buildCommand(Publish, newArgsBuilder().add(channel).add(message)));
         return getThis();
     }
 
     /**
      * Gets the union of all the given sets.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
      * @param keys The keys of the sets.
      * @return Command Response - A set of members which are present in at least one of the given
      *     sets. If none of the sets exist, an empty set will be returned.
      */
-    public T sunion(@NonNull String[] keys) {
-        protobufTransaction.addCommands(buildCommand(SUnion, buildArgs(keys)));
+    public <ArgType> T sunion(@NonNull ArgType[] keys) {
+        checkTypeOrThrow(keys);
+        protobufTransaction.addCommands(buildCommand(SUnion, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -5532,6 +5969,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
@@ -5548,8 +5987,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @example If <code>key1</code> holds the string <code>"abcd123"</code> and <code>key2</code>
      *     holds the string <code>"bcdef123"</code> then the sample result would be
-     *     <pre>{@code
-     * new Long[][][] {
+     *     <pre>{@code new Long[][][] {
      *      {
      *          {4L, 6L},
      *          {5L, 7L}
@@ -5563,10 +6001,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     The result indicates that the first substring match is <code>"123"</code> in <code>key1
      *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
      *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
-     *     "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
+     *      "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
      *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2) {
+        checkTypeOrThrow(key1);
         protobufTransaction.addCommands(
                 buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING)));
         return getThis();
@@ -5577,6 +6016,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
@@ -5594,8 +6035,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @example If <code>key1</code> holds the string <code>"abcd123"</code> and <code>key2</code>
      *     holds the string <code>"bcdef123"</code> then the sample result would be
-     *     <pre>{@code
-     * new Long[][][] {
+     *     <pre>{@code new Long[][][] {
      *      {
      *          {4L, 6L},
      *          {5L, 7L}
@@ -5609,10 +6049,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     The result indicates that the first substring match is <code>"123"</code> in <code>key1
      *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
      *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
-     *     "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
+     *      "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
      *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
+        checkTypeOrThrow(key1);
         protobufTransaction.addCommands(
                 buildCommand(
                         LCS,
@@ -5630,6 +6071,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
@@ -5646,16 +6089,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @example If <code>key1</code> holds the string <code>"abcd1234"</code> and <code>key2</code>
      *     holds the string <code>"bcdef1234"</code> then the sample result would be
-     *     <pre>{@code
-     * new Object[] {
-     *      new Object[] {
-     *          new Long[] {4L, 7L},
-     *          new Long[] {5L, 8L},
-     *          4L},
-     *      new Object[] {
-     *          new Long[] {1L, 3L},
-     *          new Long[] {0L, 2L},
-     *          3L}
+     *     <pre>{@code new Object[] { new Object[] { new Long[] {4L,
+     * 7L}, new Long[] {5L, 8L}, 4L}, new Object[] { new Long[] {1L, 3L}, new
+     * Long[] {0L, 2L}, 3L}
      *      }
      * }</pre>
      *     The result indicates that the first substring match is <code>"1234"</code> in <code>key1
@@ -5667,6 +6103,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the last element in the array is the length of the substring match which is <code>3</code>.
      */
     public <ArgType> T lcsIdxWithMatchLen(@NonNull ArgType key1, @NonNull ArgType key2) {
+        checkTypeOrThrow(key1);
         protobufTransaction.addCommands(
                 buildCommand(
                         LCS,
@@ -5683,6 +6120,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Redis 7.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
@@ -5700,16 +6139,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @example If <code>key1</code> holds the string <code>"abcd1234"</code> and <code>key2</code>
      *     holds the string <code>"bcdef1234"</code> then the sample result would be
-     *     <pre>{@code
-     * new Object[] {
-     *      new Object[] {
-     *          new Long[] {4L, 7L},
-     *          new Long[] {5L, 8L},
-     *          4L},
-     *      new Object[] {
-     *          new Long[] {1L, 3L},
-     *          new Long[] {0L, 2L},
-     *          3L}
+     *     <pre>{@code new Object[] { new Object[] { new Long[] {4L,
+     * 7L}, new Long[] {5L, 8L}, 4L}, new Object[] { new Long[] {1L, 3L}, new
+     * Long[] {0L, 2L}, 3L}
      *      }
      * }</pre>
      *     The result indicates that the first substring match is <code>"1234"</code> in <code>key1
@@ -5722,6 +6154,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcsIdxWithMatchLen(
             @NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
+        checkTypeOrThrow(key1);
         protobufTransaction.addCommands(
                 buildCommand(
                         LCS,
@@ -5742,12 +6175,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * apply transformations on sorted elements.<br>
      * To store the result into a new key, see {@link #sortStore(String, String)}.<br>
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public T sort(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+    public <ArgType> T sort(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Sort, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5757,13 +6192,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public T sortReadOnly(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
+    public <ArgType> T sortReadOnly(@NonNull ArgType key) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(SortReadOnly, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -5775,12 +6212,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
      * #sortReadOnly(String)}.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param destination The key where the sorted result will be stored.
      * @return Command Response - The number of elements in the sorted key stored at <code>destination
      *     </code>.
      */
     public <ArgType> T sortStore(@NonNull ArgType key, @NonNull ArgType destination) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(Sort, newArgsBuilder().add(key).add(STORE_COMMAND_STRING).add(destination)));
         return getThis();
@@ -5791,6 +6231,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5815,6 +6257,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType key,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearch, newArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs())));
@@ -5826,6 +6269,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5853,6 +6298,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearch,
@@ -5869,6 +6315,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5903,6 +6351,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearch,
@@ -5919,6 +6368,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5956,6 +6407,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearch,
@@ -5976,6 +6428,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape)}.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -6002,6 +6456,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType source,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
+        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearchStore,
@@ -6021,6 +6476,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchResultOptions)}.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -6050,6 +6507,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
+        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearchStore,
@@ -6070,6 +6528,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions)}.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -6098,6 +6558,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options) {
+        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearchStore,
@@ -6118,6 +6579,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
      * @since Valkey 6.2.0 and above.
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -6149,6 +6612,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
+        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         GeoSearchStore,
@@ -6165,6 +6629,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Iterates incrementally over a set.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
      * @param key The key of the set.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
@@ -6175,13 +6641,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     always an <code>Array</code> of the subset of the set held in <code>key</code>.
      */
     public <ArgType> T sscan(@NonNull ArgType key, @NonNull ArgType cursor) {
-        protobufTransaction.addCommands(buildCommand(SScan, buildArgs(key, cursor)));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(SScan, newArgsBuilder().add(key).add(cursor)));
         return getThis();
     }
 
     /**
      * Iterates incrementally over a set.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
      * @param key The key of the set.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
@@ -6194,6 +6663,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull SScanOptions sScanOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(SScan, newArgsBuilder().add(key).add(cursor).add(sScanOptions.toArgs())));
         return getThis();
@@ -6202,6 +6672,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Iterates incrementally over a sorted set.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the sorted set.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
@@ -6214,13 +6686,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> pairs, where the value is at even indices and the score is at odd indices.
      */
     public <ArgType> T zscan(@NonNull ArgType key, @NonNull ArgType cursor) {
-        protobufTransaction.addCommands(buildCommand(ZScan, buildArgs(key, cursor)));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(ZScan, newArgsBuilder().add(key).add(cursor)));
         return getThis();
     }
 
     /**
      * Iterates incrementally over a sorted set.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the sorted set.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
@@ -6235,6 +6710,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull ZScanOptions zScanOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(ZScan, newArgsBuilder().add(key).add(cursor).add(zScanOptions.toArgs())));
         return getThis();
@@ -6243,6 +6719,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Iterates fields of Hash types and their associated values.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
@@ -6255,13 +6733,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     key is at even indices and the value is at odd indices.
      */
     public <ArgType> T hscan(@NonNull ArgType key, @NonNull ArgType cursor) {
-        protobufTransaction.addCommands(buildCommand(HScan, buildArgs(key, cursor)));
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(HScan, newArgsBuilder().add(key).add(cursor)));
         return getThis();
     }
 
     /**
      * Iterates fields of Hash types and their associated values.
      *
+     * @implNote ArgType is limited to String or GlideString, any other type will throw
+     *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
@@ -6276,6 +6757,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull HScanOptions hScanOptions) {
+        checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(HScan, newArgsBuilder().add(key).add(cursor).add(hScanOptions.toArgs())));
         return getThis();
@@ -6292,7 +6774,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     context of the current connection.
      */
     public T wait(long numreplicas, long timeout) {
-        protobufTransaction.addCommands(buildCommand(Wait, buildArgs(numreplicas, timeout)));
+        protobufTransaction.addCommands(
+                buildCommand(Wait, newArgsBuilder().add(numreplicas).add(timeout)));
         return getThis();
     }
 
@@ -6320,19 +6803,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return commandArgs.build();
     }
 
-    protected <ArgType> ArgsArray.Builder newArgsArrayBuilder(ArgType... args) {
-        ArgsArray.Builder builder = ArgsArray.newBuilder();
-        for (ArgType arg : args) {
-            builder.addArgs(ByteString.copyFrom(GlideString.of(arg).getBytes()));
-        }
-        return builder;
-    }
-
-    /** Build protobuf {@link ArgsArray} object for given arguments. */
-    protected <ArgType> ArgsArray buildArgs(ArgType... args) {
-        return this.newArgsArrayBuilder(args).build();
-    }
-
     protected ArgsBuilder newArgsBuilder() {
         return new ArgsBuilder();
     }
@@ -6349,10 +6819,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             // nothing to check here
             return;
         }
+        checkTypeOrThrow(args[0]);
+    }
 
-        if ((args[0] instanceof String) || (args[0] instanceof GlideString)) {
+    protected <ArgType> void checkTypeOrThrow(Map<ArgType, ArgType> argsMap) {
+        if (argsMap.isEmpty()) {
+            // nothing to check here
             return;
         }
-        throw new IllegalArgumentException("Expected String or GlideString");
+
+        var arg = argsMap.keySet().iterator().next();
+        checkTypeOrThrow(arg);
+    }
+
+    /** Helper function for creating generic type ("ArgType") array */
+    protected <ArgType> ArgType[] createArray(ArgType... args) {
+        return args;
     }
 }

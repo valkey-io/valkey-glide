@@ -1,6 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
+import static glide.api.models.GlideString.gs;
+
+import glide.api.logging.Logger;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.exceptions.RedisException;
@@ -19,6 +22,19 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class MessageHandler {
 
+    /** A wrapper for exceptions thrown from {@link MessageCallback} implementations. */
+    static class MessageCallbackException extends Exception {
+        private MessageCallbackException(Exception cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized Exception getCause() {
+            // Overridden to restrict the return type to Exception rather than Throwable.
+            return (Exception) super.getCause();
+        }
+    }
+
     // TODO maybe store `BaseSubscriptionConfiguration` as is?
     /**
      * A user callback to call for every incoming message, if given. If missing, messages are pushed
@@ -36,32 +52,36 @@ public class MessageHandler {
     private final ConcurrentLinkedDeque<PubSubMessage> queue = new ConcurrentLinkedDeque<>();
 
     /** Process a push (PUBSUB) message received as a part of {@link Response} from GLIDE. */
-    public void handle(Response response) {
+    void handle(Response response) throws MessageCallbackException {
         Object data = responseResolver.apply(response);
         if (!(data instanceof Map)) {
-            // TODO log thru logger https://github.com/aws/glide-for-redis/pull/1422
-            System.err.println("Received invalid push: empty or in incorrect format.");
+            Logger.log(
+                    Logger.Level.WARN,
+                    "invalid push",
+                    "Received invalid push: empty or in incorrect format.");
             throw new RedisException("Received invalid push: empty or in incorrect format.");
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> push = (Map<String, Object>) data;
-        PushKind pushType = Enum.valueOf(PushKind.class, (String) push.get("kind"));
+        PushKind pushType = Enum.valueOf(PushKind.class, push.get("kind").toString());
+        // The objects in values will actually be byte[].
         Object[] values = (Object[]) push.get("values");
 
         switch (pushType) {
             case Disconnection:
-                // TODO log thru logger https://github.com/aws/glide-for-redis/pull/1422
-                // ClientLogger.log(
-                //    LogLevel.WARN,
-                //    "disconnect notification",
-                //    "Transport disconnected, messages might be lost",
+                Logger.log(
+                        Logger.Level.WARN,
+                        "disconnect notification",
+                        "Transport disconnected, messages might be lost");
                 break;
             case PMessage:
-                handle(new PubSubMessage((String) values[2], (String) values[1], (String) values[0]));
+                handle(
+                        new PubSubMessage(
+                                gs((byte[]) values[2]), gs((byte[]) values[1]), gs((byte[]) values[0])));
                 return;
             case Message:
             case SMessage:
-                handle(new PubSubMessage((String) values[1], (String) values[0]));
+                handle(new PubSubMessage(gs((byte[]) values[1]), gs((byte[]) values[0])));
                 return;
             case Subscribe:
             case PSubscribe:
@@ -70,28 +90,34 @@ public class MessageHandler {
             case PUnsubscribe:
             case SUnsubscribe:
                 // ignore for now
-                // TODO log thru logger https://github.com/aws/glide-for-redis/pull/1422
-                System.out.printf(
-                        "Received push notification of type '%s': %s\n",
-                        pushType,
-                        Arrays.stream(values)
-                                .map(v -> v instanceof Number ? v.toString() : String.format("'%s'", v))
-                                .collect(Collectors.joining(" ")));
+                Logger.log(
+                        Logger.Level.INFO,
+                        "subscribe/unsubscribe notification",
+                        () ->
+                                String.format(
+                                        "Received push notification of type '%s': %s",
+                                        pushType,
+                                        Arrays.stream(values)
+                                                .map(v -> v instanceof Number ? v.toString() : String.format("'%s'", v))
+                                                .collect(Collectors.joining(" "))));
                 break;
             default:
-                // TODO log thru logger https://github.com/aws/glide-for-redis/pull/1422
-                System.err.printf("Received push with unsupported type: %s.\n", pushType);
-                // ClientLogger.log(
-                //    LogLevel.WARN,
-                //    "unknown notification",
-                //    f"Unknown notification message: '{message_kind}'",
+                Logger.log(
+                        Logger.Level.WARN,
+                        "unknown notification",
+                        () -> String.format("Unknown notification message: '%s'", pushType));
         }
     }
 
     /** Process a {@link PubSubMessage} received. */
-    private void handle(PubSubMessage message) {
+    private void handle(PubSubMessage message) throws MessageCallbackException {
         if (callback.isPresent()) {
-            callback.get().accept(message, context.orElse(null));
+            try {
+                callback.get().accept(message, context.orElse(null));
+            } catch (Exception callbackException) {
+                throw new MessageCallbackException(callbackException);
+            }
+            // Note: Error subclasses are uncaught and will just propagate.
         } else {
             queue.push(message);
         }

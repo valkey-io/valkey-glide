@@ -10,9 +10,6 @@ import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
@@ -66,6 +63,8 @@ import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
@@ -78,6 +77,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
@@ -1534,6 +1534,30 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void functionList_binary_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object>[] value = new Map[0];
+        CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
+                        eq(FunctionList), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>[]> response = service.functionListBinary(false);
+        Map<GlideString, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void functionList_with_pattern_returns_success() {
         // setup
         String pattern = "*";
@@ -1550,6 +1574,33 @@ public class RedisClusterClientTest {
         // exercise
         CompletableFuture<Map<String, Object>[]> response = service.functionList(pattern, true);
         Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_binary_with_pattern_returns_success() {
+        // setup
+        GlideString pattern = gs("*");
+        GlideString[] args =
+                new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern, gs(WITH_CODE_REDIS_API)};
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object>[] value = new Map[0];
+        CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
+                        eq(FunctionList), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>[]> response =
+                service.functionListBinary(pattern, true);
+        Map<GlideString, Object>[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -1583,6 +1634,32 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void functionList_binary_with_route_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[] {gs(WITH_CODE_REDIS_API)};
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object>[] value = new Map[0];
+        CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<GlideString, Object>[]>>submitNewCommand(
+                        eq(FunctionList), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> response =
+                service.functionListBinary(true, RANDOM);
+        ClusterValue<Map<GlideString, Object>[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload.getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
     public void functionList_with_pattern_and_route_returns_success() {
         // setup
         String pattern = "*";
@@ -1601,6 +1678,33 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
                 service.functionList(pattern, false, RANDOM);
         ClusterValue<Map<String, Object>[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload.getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_binary_with_pattern_and_route_returns_success() {
+        // setup
+        GlideString pattern = gs("*");
+        GlideString[] args = new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern};
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object>[] value = new Map[0];
+        CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<GlideString, Object>[]>>submitNewCommand(
+                        eq(FunctionList), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> response =
+                service.functionListBinary(pattern, false, RANDOM);
+        ClusterValue<Map<GlideString, Object>[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2125,6 +2229,32 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void functionStatsBinary_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of(gs("1"), Map.of(gs("2"), 2)));
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> response =
+                service.functionStatsBinary();
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcallReadOnly_without_keys_and_without_args_but_with_route_returns_success() {
         // setup
         String function = "func";
@@ -2291,6 +2421,32 @@ public class RedisClusterClientTest {
         CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> response =
                 service.functionStats(RANDOM);
         ClusterValue<Map<String, Map<String, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStatsBinary_with_route_returns_success() {
+        // setup
+        GlideString[] args = new GlideString[0];
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of(gs("1"), Map.of(gs("2"), 2)));
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<GlideString, Map<GlideString, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> response =
+                service.functionStatsBinary(RANDOM);
+        ClusterValue<Map<GlideString, Map<GlideString, Object>>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2481,7 +2637,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.spublish(channel, message);
+        CompletableFuture<String> response = service.publish(message, channel, true);
         String payload = response.get();
 
         // verify
@@ -2871,5 +3027,121 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_new_cursor() {
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockCursor.getCursorHandle()).thenReturn("1");
+
+        final Object[] result = new Object[] {mockCursor.getCursorHandle(), new Object[] {"foo"}};
+        final CompletableFuture<Object[]> testResponse = CompletableFuture.completedFuture(result);
+        when(commandManager.<Object[]>submitClusterScan(
+                        eq(ClusterScanCursor.INITIAL_CURSOR_INSTANCE),
+                        eq(ScanOptions.builder().build()),
+                        any()))
+                .thenReturn(testResponse);
+
+        final CompletableFuture<Object[]> actualResponse =
+                service.scan(ClusterScanCursor.initalCursor());
+        assertEquals(
+                mockCursor.getCursorHandle(),
+                ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_existing_cursor() {
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockCursor.getCursorHandle()).thenReturn("1");
+
+        CommandManager.ClusterScanCursorDetail mockResultCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockResultCursor.getCursorHandle()).thenReturn("2");
+
+        final Object[] result = new Object[] {mockResultCursor.getCursorHandle(), new Object[] {"foo"}};
+        final CompletableFuture<Object[]> testResponse = CompletableFuture.completedFuture(result);
+        when(commandManager.<Object[]>submitClusterScan(
+                        eq(mockCursor), eq(ScanOptions.builder().build()), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<Object[]> actualResponse = service.scan(mockCursor);
+        assertEquals(
+                mockResultCursor.getCursorHandle(),
+                ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_new_cursor_options() {
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockCursor.getCursorHandle()).thenReturn("1");
+
+        final Object[] result = new Object[] {mockCursor.getCursorHandle(), new Object[] {"foo"}};
+        final CompletableFuture<Object[]> testResponse = CompletableFuture.completedFuture(result);
+        when(commandManager.<Object[]>submitClusterScan(
+                        eq(ClusterScanCursor.INITIAL_CURSOR_INSTANCE),
+                        eq(
+                                ScanOptions.builder()
+                                        .matchPattern("key:*")
+                                        .count(10L)
+                                        .type(ScanOptions.ObjectType.STRING)
+                                        .build()),
+                        any()))
+                .thenReturn(testResponse);
+
+        final CompletableFuture<Object[]> actualResponse =
+                service.scan(
+                        ClusterScanCursor.initalCursor(),
+                        ScanOptions.builder()
+                                .matchPattern("key:*")
+                                .count(10L)
+                                .type(ScanOptions.ObjectType.STRING)
+                                .build());
+
+        assertEquals(
+                mockCursor.getCursorHandle(),
+                ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_existing_cursor_options() {
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockCursor.getCursorHandle()).thenReturn("1");
+
+        CommandManager.ClusterScanCursorDetail mockResultCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockResultCursor.getCursorHandle()).thenReturn("2");
+
+        final Object[] result = new Object[] {mockResultCursor.getCursorHandle(), new Object[] {"foo"}};
+        final CompletableFuture<Object[]> testResponse = CompletableFuture.completedFuture(result);
+        when(commandManager.<Object[]>submitClusterScan(
+                        eq(mockCursor),
+                        eq(
+                                ScanOptions.builder()
+                                        .matchPattern("key:*")
+                                        .count(10L)
+                                        .type(ScanOptions.ObjectType.STRING)
+                                        .build()),
+                        any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<Object[]> actualResponse =
+                service.scan(
+                        mockCursor,
+                        ScanOptions.builder()
+                                .matchPattern("key:*")
+                                .count(10L)
+                                .type(ScanOptions.ObjectType.STRING)
+                                .build());
+        assertEquals(
+                mockResultCursor.getCursorHandle(),
+                ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
     }
 }

@@ -22,6 +22,10 @@ The Java client contains the following parts:
 4. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Valkey and other Java clients.
 5. `integTest`: An integration test sub-project for API and E2E testing.
 
+## Supported Engine Versions
+
+Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-redis/blob/main/README.md#supported-engine-versions) for details.
+
 ## Installation and Setup
 
 #### Prerequisites

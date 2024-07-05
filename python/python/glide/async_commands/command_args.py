@@ -6,12 +6,12 @@ from typing import List, Optional, Union
 
 class Limit:
     """
-    Represents a limit argument for range queries in various Redis commands.
+    Represents a limit argument for range queries in various commands.
 
     The `LIMIT` argument is commonly used to specify a subset of results from the matching elements,
     similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
 
-    This class can be utilized in multiple Redis commands that support limit options,
+    This class can be utilized in multiple commands that support limit options,
     such as [ZRANGE](https://valkey.io/commands/zrange), [SORT](https://valkey.io/commands/sort/), and others.
 
     Args:
@@ -62,4 +62,40 @@ class ListDirection(Enum):
     RIGHT = "RIGHT"
     """
     RIGHT: Represents the option that elements should be popped from or added to the right side of a list.
+    """
+
+
+class ObjectType(Enum):
+    """
+    Enumeration representing the data types supported by the database.
+    """
+
+    STRING = "String"
+    """
+    Represents a string data type.
+    """
+
+    LIST = "List"
+    """
+    Represents a list data type.
+    """
+
+    SET = "Set"
+    """
+    Represents a set data type.
+    """
+
+    ZSET = "ZSet"
+    """
+    Represents a sorted set data type.
+    """
+
+    HASH = "Hash"
+    """
+    Represents a hash data type.    
+    """
+
+    STREAM = "Stream"
+    """
+    Represents a stream data type.
     """

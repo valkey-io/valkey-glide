@@ -9,12 +9,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import glide.api.BaseClient;
+import glide.api.RedisClient;
+import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -167,6 +171,56 @@ public class TestUtilities {
         assertTrue(hasLib);
     }
 
+    private <T> void assertSetsEqual(Set<T> expected, Set<T> actual) {
+        // Convert both sets to lists. It is needed due to issue that rust return the flags as string
+        List<GlideString> expectedList =
+                expected.stream().sorted().map(GlideString::of).collect(Collectors.toList());
+        List<GlideString> actualList =
+                actual.stream().sorted().map(GlideString::of).collect(Collectors.toList());
+
+        assertEquals(expectedList, actualList);
+    }
+
+    /**
+     * Validate whether `FUNCTION LIST` response contains required info.
+     *
+     * @param response The response from redis.
+     * @param libName Expected library name.
+     * @param functionDescriptions Expected function descriptions. Key - function name, value -
+     *     description.
+     * @param functionFlags Expected function flags. Key - function name, value - flags set.
+     * @param libCode Expected library to check if given.
+     */
+    @SuppressWarnings("unchecked")
+    public static void checkFunctionListResponseBinary(
+            Map<GlideString, Object>[] response,
+            GlideString libName,
+            Map<GlideString, GlideString> functionDescriptions,
+            Map<GlideString, Set<GlideString>> functionFlags,
+            Optional<GlideString> libCode) {
+        assertTrue(response.length > 0);
+        boolean hasLib = false;
+        for (var lib : response) {
+            hasLib = lib.containsValue(libName);
+            if (hasLib) {
+                var functions = (Object[]) lib.get(gs("functions"));
+                assertEquals(functionDescriptions.size(), functions.length);
+                for (var functionInfo : functions) {
+                    var function = (Map<GlideString, Object>) functionInfo;
+                    var functionName = (GlideString) function.get(gs("name"));
+                    assertEquals(functionDescriptions.get(functionName), function.get(gs("description")));
+                    assertSetsEqual(
+                            functionFlags.get(functionName), (Set<GlideString>) function.get(gs("flags")));
+                }
+                if (libCode.isPresent()) {
+                    assertEquals(libCode.get(), lib.get(gs("library_code")));
+                }
+                break;
+            }
+        }
+        assertTrue(hasLib);
+    }
+
     /**
      * Validate whether `FUNCTION STATS` response contains required info.
      *
@@ -199,6 +253,42 @@ public class TestUtilities {
         var expected =
                 Map.of("LUA", Map.of("libraries_count", libCount, "functions_count", functionCount));
         assertEquals(expected, response.get("engines"));
+    }
+
+    /**
+     * Validate whether `FUNCTION STATS` response contains required info.
+     *
+     * @param response The response from server.
+     * @param runningFunction Command line of running function expected. Empty, if nothing expected.
+     * @param libCount Expected libraries count.
+     * @param functionCount Expected functions count.
+     */
+    public static void checkFunctionStatsBinaryResponse(
+            Map<GlideString, Map<GlideString, Object>> response,
+            GlideString[] runningFunction,
+            long libCount,
+            long functionCount) {
+        Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
+        if (runningScriptInfo == null && runningFunction.length != 0) {
+            fail("No running function info");
+        }
+        if (runningScriptInfo != null && runningFunction.length == 0) {
+            GlideString[] command = (GlideString[]) runningScriptInfo.get(gs("command"));
+            fail("Unexpected running function info: " + String.join(" ", Arrays.toString(command)));
+        }
+
+        if (runningScriptInfo != null) {
+            GlideString[] command = (GlideString[]) runningScriptInfo.get(gs("command"));
+            assertArrayEquals(runningFunction, command);
+            // command line format is:
+            // fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+            assertEquals(runningFunction[1], runningScriptInfo.get(gs("name")));
+        }
+        var expected =
+                Map.of(
+                        gs("LUA"),
+                        Map.of(gs("libraries_count"), libCount, gs("functions_count"), functionCount));
+        assertEquals(expected, response.get(gs("engines")));
     }
 
     /** Generate a String of LUA library code. */
@@ -235,8 +325,6 @@ public class TestUtilities {
     /**
      * Create a lua lib with a RO function which runs an endless loop up to timeout sec.<br>
      * Execution takes at least 5 sec regardless of the timeout configured.<br>
-     * If <code>readOnly</code> is <code>false</code>, function sets a dummy value to the first key
-     * given.
      */
     public static String createLuaLibWithLongRunningFunction(
             String libName, String funcName, int timeout, boolean readOnly) {
@@ -262,5 +350,25 @@ public class TestUtilities {
         return code.replace("$timeout", Integer.toString(timeout))
                 .replace("$funcName", funcName)
                 .replace("$libName", libName);
+    }
+
+    public static void waitForNotBusy(BaseClient client) {
+        // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+        // test to fail.
+        boolean isBusy = true;
+        do {
+            try {
+                if (client instanceof RedisClusterClient) {
+                    ((RedisClusterClient) client).functionKill().get();
+                } else if (client instanceof RedisClient) {
+                    ((RedisClient) client).functionKill().get();
+                }
+            } catch (Exception busy) {
+                // should throw `notbusy` error, because the function should be killed before
+                if (busy.getMessage().toLowerCase().contains("notbusy")) {
+                    isBusy = false;
+                }
+            }
+        } while (isBusy);
     }
 }

@@ -18,24 +18,30 @@ public class Script implements AutoCloseable {
     /** Hash string representing the code. */
     @Getter private final String hash;
 
-    /** Indicatoin if script invocation output can return binary data. */
-    @Getter private final Boolean binarySafeOutput;
+    private boolean isDropped = false;
+
+    /** Indication if script invocation output can return binary data. */
+    @Getter private final Boolean binaryOutput;
 
     /**
      * Wraps around creating a Script object from <code>code</code>.
      *
      * @param code To execute with a ScriptInvoke call.
-     * @param binarySafeOutput Indicates if the output can return binary data.
+     * @param binaryOutput Indicates if the output can return binary data.
      */
-    public <T> Script(T code, Boolean binarySafeOutput) {
+    public <T> Script(T code, Boolean binaryOutput) {
         this.hash = storeScript(GlideString.of(code).getBytes());
-        this.binarySafeOutput = binarySafeOutput;
+        this.binaryOutput = binaryOutput;
     }
 
     /** Drop the linked script from glide-rs <code>code</code>. */
     @Override
     public void close() throws Exception {
-        dropScript(hash);
+
+        if (!isDropped) {
+            dropScript(hash);
+            isDropped = true;
+        }
     }
 
     @Override

@@ -36,6 +36,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
+import static redis_request.RedisRequestOuterClass.RequestType.Scan;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
@@ -47,6 +48,7 @@ import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
+import glide.api.models.ArgsBuilder;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
@@ -54,6 +56,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.Arrays;
 import java.util.Map;
@@ -290,6 +293,14 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>[]> functionList(
             @NonNull String libNamePattern, boolean withCode) {
         return commandManager.submitNewCommand(
@@ -298,6 +309,19 @@ public class RedisClient extends BaseClient
                         ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
                         : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
+            @NonNull GlideString libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                new ArgsBuilder()
+                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(libNamePattern)
+                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .toArray(),
+                response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
     @Override
@@ -420,6 +444,14 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, Object>>> functionStatsBinary() {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new GlideString[0],
+                response -> handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
+    }
+
+    @Override
     public CompletableFuture<String> unwatch() {
         return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
     }
@@ -428,6 +460,12 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> randomKey() {
         return commandManager.submitNewCommand(
                 RandomKey, new String[0], this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> randomKeyBinary() {
+        return commandManager.submitNewCommand(
+                RandomKey, new GlideString[0], this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -440,7 +478,7 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<GlideString[]> sort(
             @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
         return commandManager.submitNewCommand(
                 Sort,
                 arguments,
@@ -460,7 +498,8 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(
             @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
+
         return commandManager.submitNewCommand(
                 SortReadOnly,
                 arguments,
@@ -481,9 +520,26 @@ public class RedisClient extends BaseClient
             @NonNull GlideString key,
             @NonNull GlideString destination,
             @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
+
         GlideString[] arguments =
-                concatenateArrays(new GlideString[] {key}, sortOptions.toGlideStringArgs(), storeArguments);
+                new ArgsBuilder()
+                        .add(key)
+                        .add(sortOptions.toArgs())
+                        .add(STORE_COMMAND_STRING)
+                        .add(destination)
+                        .toArray();
+
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> scan(@NonNull String cursor) {
+        return commandManager.submitNewCommand(Scan, new String[] {cursor}, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> scan(@NonNull String cursor, @NonNull ScanOptions options) {
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), cursor);
+        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponse);
     }
 }

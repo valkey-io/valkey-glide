@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * Optional arguments to {@link StringBaseCommands#getex(String, GetExOptions)} command.
  *
- * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/getex/">valkey.io</a>
  */
 public class GetExOptions {
 
@@ -107,7 +107,6 @@ public class GetExOptions {
         if (count != null) {
             optionArgs.add(String.valueOf(count));
         }
-        System.out.println(optionArgs);
         return optionArgs.toArray(new String[0]);
     }
 

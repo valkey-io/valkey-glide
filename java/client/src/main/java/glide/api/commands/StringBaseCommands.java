@@ -36,7 +36,7 @@ public interface StringBaseCommands {
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
      * value exists.
      *
-     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
      *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
@@ -55,7 +55,7 @@ public interface StringBaseCommands {
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
      * value exists.
      *
-     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
      *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
@@ -73,7 +73,7 @@ public interface StringBaseCommands {
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code>.
      *     Otherwise, return <code>null</code>.
@@ -91,7 +91,7 @@ public interface StringBaseCommands {
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getdel/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code>.
      *     Otherwise, return <code>null</code>.
@@ -110,7 +110,7 @@ public interface StringBaseCommands {
      * Gets the value associated with the given <code>key</code>.
      *
      * @since Redis 6.2.0.
-     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
      *     Otherwise, return <code>null</code>.
@@ -126,7 +126,7 @@ public interface StringBaseCommands {
      * Gets the value associated with the given <code>key</code>.
      *
      * @since Redis 6.2.0.
-     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
      *     Otherwise, return <code>null</code>.
@@ -142,7 +142,7 @@ public interface StringBaseCommands {
      * Gets the value associated with the given <code>key</code>.
      *
      * @since Redis 6.2.0.
-     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -161,7 +161,7 @@ public interface StringBaseCommands {
      * Gets the value associated with the given <code>key</code>.
      *
      * @since Redis 6.2.0.
-     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -179,7 +179,7 @@ public interface StringBaseCommands {
     /**
      * Sets the given <code>key</code> with the given value.
      *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The <code>key</code> to store.
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis containing <code>"OK"</code>.
@@ -194,7 +194,7 @@ public interface StringBaseCommands {
     /**
      * Sets the given <code>key</code> with the given value.
      *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The <code>key</code> to store.
      * @param value The value to store with the given <code>key</code>.
      * @return Response from Redis containing <code>"OK"</code>.
@@ -209,7 +209,7 @@ public interface StringBaseCommands {
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
      *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
      * @param value The value to store with the given key.
      * @param options The Set options.
@@ -230,7 +230,7 @@ public interface StringBaseCommands {
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
      *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
      * @param value The value to store with the given key.
      * @param options The Set options.
@@ -253,7 +253,7 @@ public interface StringBaseCommands {
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
      *     map to different hash slots.
-     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>
      *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
@@ -271,7 +271,7 @@ public interface StringBaseCommands {
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
      *     map to different hash slots.
-     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/mget/">valkey.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>
      *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
@@ -289,7 +289,7 @@ public interface StringBaseCommands {
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
      *     keyValueMap</code> map to different hash slots.
-     * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return Always <code>OK</code>.
      * @example
@@ -306,7 +306,7 @@ public interface StringBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
      *     slot.
-     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
      * @example
@@ -321,7 +321,7 @@ public interface StringBaseCommands {
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
      * @param key The key to increment its value.
      * @return The value of <code>key</code> after the increment.
      * @example
@@ -336,7 +336,7 @@ public interface StringBaseCommands {
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incr/">valkey.io</a> for details.
      * @param key The key to increment its value.
      * @return The value of <code>key</code> after the increment.
      * @example
@@ -351,7 +351,7 @@ public interface StringBaseCommands {
      * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
      * @return The value of <code>key</code> after the increment.
@@ -367,7 +367,7 @@ public interface StringBaseCommands {
      * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incrby/">valkey.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
      * @return The value of <code>key</code> after the increment.
@@ -385,7 +385,7 @@ public interface StringBaseCommands {
      * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
      * performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
      * @return The value of <code>key</code> after the increment.
@@ -403,7 +403,7 @@ public interface StringBaseCommands {
      * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
      * performing the operation.
      *
-     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/incrbyfloat/">valkey.io</a> for details.
      * @param key The key to increment its value.
      * @param amount The amount to increment.
      * @return The value of <code>key</code> after the increment.
@@ -419,7 +419,7 @@ public interface StringBaseCommands {
      * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
      * @param key The key to decrement its value.
      * @return The value of <code>key</code> after the decrement.
      * @example
@@ -434,7 +434,7 @@ public interface StringBaseCommands {
      * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/decr/">valkey.io</a> for details.
      * @param key The key to decrement its value.
      * @return The value of <code>key</code> after the decrement.
      * @example
@@ -449,7 +449,7 @@ public interface StringBaseCommands {
      * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
      * @param key The key to decrement its value.
      * @param amount The amount to decrement.
      * @return The value of <code>key</code> after the decrement.
@@ -465,7 +465,7 @@ public interface StringBaseCommands {
      * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/decrby/">valkey.io</a> for details.
      * @param key The key to decrement its value.
      * @param amount The amount to decrement.
      * @return The value of <code>key</code> after the decrement.
@@ -480,7 +480,7 @@ public interface StringBaseCommands {
     /**
      * Returns the length of the string value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/strlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
      * @param key The key to check its length.
      * @return The length of the string value stored at key.<br>
      *     If <code>key</code> does not exist, it is treated as an empty string, and the command
@@ -500,7 +500,7 @@ public interface StringBaseCommands {
     /**
      * Returns the length of the string value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/strlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
      * @param key The key to check its length.
      * @return The length of the string value stored at key.<br>
      *     If <code>key</code> does not exist, it is treated as an empty string, and the command
@@ -524,7 +524,7 @@ public interface StringBaseCommands {
      * the string is padded with zero bytes to make <code>offset</code> fit. Creates the <code>key
      * </code> if it doesn't exist.
      *
-     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
      * @param key The key of the string to update.
      * @param offset The position in the string where <code>value</code> should be written.
      * @param value The string written with <code>offset</code>.
@@ -547,7 +547,7 @@ public interface StringBaseCommands {
      * <code>key
      * </code> if it doesn't exist.
      *
-     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
      * @param key The key of the GlideString to update.
      * @param offset The position in the GlideString where <code>value</code> should be written.
      * @param value The GlideString written with <code>offset</code>.
@@ -568,7 +568,7 @@ public interface StringBaseCommands {
      * order to provide an offset starting from the end of the string. So <code>-1</code> means the
      * last character, <code>-2</code> the penultimate and so forth.
      *
-     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param start The starting offset.
      * @param end The ending offset.
@@ -590,7 +590,7 @@ public interface StringBaseCommands {
      * be used in order to provide an offset starting from the end of the GlideString. So <code>-1
      * </code> means the last character, <code>-2</code> the penultimate and so forth.
      *
-     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
      * @param key The key of the GlideString.
      * @param start The starting offset.
      * @param end The ending offset.
@@ -611,7 +611,7 @@ public interface StringBaseCommands {
      * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
      * this special case.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param value The value to append.
      * @return The length of the string after appending the value.
@@ -628,7 +628,7 @@ public interface StringBaseCommands {
      * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
      * this special case.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param value The value to append.
      * @return The length of the string after appending the value.
@@ -663,6 +663,28 @@ public interface StringBaseCommands {
     CompletableFuture<String> lcs(String key1, String key2);
 
     /**
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
+     * key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
+     *     An empty <code>String</code> is returned if the keys do not exist or have no common
+     *     subsequences.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * GlideString result = client.lcs(gs("testKey1"), gs("testKey2")).get();
+     * assert result.equals(gs("acd"));
+     * }</pre>
+     */
+    CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2);
+
+    /**
      * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
@@ -681,6 +703,26 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> lcsLen(String key1, String key2);
+
+    /**
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
+     * </code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return The length of the longest common subsequence between the 2 strings.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * Long result = client.lcsLen(gs("testKey1"), gs("testKey2")).get();
+     * assert result.equals(3L);
+     * }</pre>
+     */
+    CompletableFuture<Long> lcsLen(GlideString key1, GlideString key2);
 
     /**
      * Returns the indices and length of the longest common subsequence between strings stored at
@@ -735,6 +777,49 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd123")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef123")</code> then the sample result would be
+     *     <pre>{@code
+     * new Long[][][] {
+     *      {
+     *          {4L, 6L},
+     *          {5L, 7L}
+     *      },
+     *      {
+     *          {1L, 3L},
+     *          {0L, 2L}
+     *      }
+     *  }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("123")</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
+     *     gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
      * @param minMatchLen The minimum length of matches to include in the result.
      * @return A <code>Map</code> containing the indices of the longest common subsequence between the
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
@@ -768,6 +853,51 @@ public interface StringBaseCommands {
      *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
      */
     CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2, long minMatchLen);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @param minMatchLen The minimum length of matches to include in the result.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd123")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef123")</code> then the sample result would be
+     *     <pre>{@code
+     * new Long[][][] {
+     *      {
+     *          {4L, 6L},
+     *          {5L, 7L}
+     *      },
+     *      {
+     *          {1L, 3L},
+     *          {0L, 2L}
+     *      }
+     *  }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("123")</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
+     *     gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdx(
+            GlideString key1, GlideString key2, long minMatchLen);
 
     /**
      * Returns the indices and length of the longest common subsequence between strings stored at
@@ -824,6 +954,52 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd1234")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef1234")</code> then the sample result would be
+     *     <pre>{@code
+     * new Object[] {
+     *      new Object[] {
+     *          new Long[] {4L, 7L},
+     *          new Long[] {5L, 8L},
+     *          4L},
+     *      new Object[] {
+     *          new Long[] {1L, 3L},
+     *          new Long[] {0L, 2L},
+     *          3L}
+     *      }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("1234")</code> in <code>
+     *     key1
+     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
+     *     length of the substring match which is <code>4</code>. And the second substring match is
+     *     <code>gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
+     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
      * @param minMatchLen The minimum length of matches to include in the result.
      * @return A <code>Map</code> containing the indices of the longest common subsequence between the
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
@@ -860,4 +1036,52 @@ public interface StringBaseCommands {
      */
     CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
             String key1, String key2, long minMatchLen);
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @param minMatchLen The minimum length of matches to include in the result.
+     * @return A <code>Map</code> containing the indices of the longest common subsequence between the
+     *     2 strings and the length of the longest common subsequence. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the GlideString <code>gs("abcd1234")</code> and <code>key2
+     *     </code> holds the GlideString <code>gs("bcdef1234")</code> then the sample result would be
+     *     <pre>{@code
+     * new Object[] {
+     *      new Object[] {
+     *          new Long[] {4L, 7L},
+     *          new Long[] {5L, 8L},
+     *          4L},
+     *      new Object[] {
+     *          new Long[] {1L, 3L},
+     *          new Long[] {0L, 2L},
+     *          3L}
+     *      }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>gs("1234")</code> in <code>
+     *     key1
+     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
+     *     length of the substring match which is <code>4</code>. And the second substring match is
+     *     <code>gs("bcd")</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
+     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     */
+    CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
+            GlideString key1, GlideString key2, long minMatchLen);
 }
