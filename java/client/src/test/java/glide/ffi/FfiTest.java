@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.ffi.resolvers.RedisValueResolver;
+import lombok.SneakyThrows;
+
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import org.junit.jupiter.api.Test;
@@ -87,10 +90,17 @@ public class FfiTest {
     }
 
     @Test
+    @SneakyThrows
     public void redisValueToJavaValue_BulkString() {
-        String input = "dummyString";
-        byte[] bulkString = input.getBytes();
+        // This is explicitly for testing non-ASCII UTF-8 byte sequences.
+        // Note that these can't be encoded as String literals without introducing compiler
+        // warnings and errors.
+
+        // This is the 'alpha' character.
+        byte[] bulkString = new byte[] { (byte)0xCE, (byte)0xB1 };
         long ptr = FfiTest.createLeakedBulkString(bulkString);
+        final String input;
+        input = new String(bulkString, StandardCharsets.UTF_8);
         Object bulkStringValue = RedisValueResolver.valueFromPointer(ptr);
         assertEquals(input, bulkStringValue);
     }
