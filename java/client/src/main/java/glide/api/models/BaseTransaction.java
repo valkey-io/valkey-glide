@@ -21,6 +21,8 @@ import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_R
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
@@ -178,6 +180,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -3709,23 +3712,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map
-     * to the same hash slot.
-     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for
-     *     details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from.
-     *     The <code> Map</code> is composed of a stream's key and the id of the
-     *     entry after which the stream will be read. Use the special id of
-     *     <code>{@literal Map<String, Map<String, String[][]>>}
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code> Map</code>
+     *     is composed of a stream's key and the id of the entry after which the stream will be read.
+     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
-     *     String[][]>>}</code> with stream keys, to <code>Map</code> of
-     *     stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns
-     * a <code>Map</code> with a value of code>null</code> if the stream is empty.
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
+     *     pairings with format <code>
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public <ArgType> T xreadgroup(
             @NonNull Map<ArgType, ArgType> keysAndIds,
@@ -3740,25 +3740,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map
-     * to the same hash slot.
-     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for
-     *     details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from.
-     *     The <code> Map</code> is composed of a stream's key and the id of the
-     *     entry after which the stream will be read. Use the special id of
-     *     <code>{@literal Map<String, Map<String, String[][]>>}
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code> Map</code>
+     *     is composed of a stream's key and the id of the entry after which the stream will be read.
+     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
-     * @param options Options detailing how to read the stream {@link
-     *     StreamReadGroupOptions}.
+     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
-     *     String[][]>>}</code> with stream keys, to <code>Map</code> of
-     *     stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns
-     * a <code>Map</code> with a value of code>null</code> if the stream is empty.
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
+     *     pairings with format <code>
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public <ArgType> T xreadgroup(
             @NonNull Map<ArgType, ArgType> keysAndIds,
@@ -3917,6 +3913,53 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(
                 buildCommand(
                         XPending, newArgsBuilder().add(key).add(group).add(options.toArgs(start, end, count))));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link
+     * #xinfoStreamFull(String, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - Stream information.
+     */
+    public T xinfoStream(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - Detailed stream information.
+     */
+    public T xinfoStreamFull(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key).add(FULL)));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
+     * @return Command Response - Detailed stream information.
+     */
+    public T xinfoStreamFull(@NonNull String key, int count) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XInfoStream,
+                        newArgsBuilder().add(key).add(FULL).add(COUNT).add(Integer.toString(count))));
         return getThis();
     }
 

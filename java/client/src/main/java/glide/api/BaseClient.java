@@ -7,12 +7,15 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArg
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
+import static glide.utils.ArrayTransformUtils.castMapOf2DArrayGlideString;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
@@ -150,6 +153,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -580,6 +584,17 @@ public abstract class BaseClient
     }
 
     /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>V</code>.
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
+    protected <V> Map<GlideString, V> handleMapResponseGlideString(Response response)
+            throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    /**
      * Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
      *
      * @param response A Protobuf response
@@ -612,23 +627,6 @@ public abstract class BaseClient
     protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
             throws RedisException {
         return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of a map of <code>String[][]</code>
-     */
-    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-            throws RedisException {
-        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
-        if (mapResponse == null) {
-            return null;
-        }
-        return mapResponse.entrySet().stream()
-                .collect(
-                        Collectors.toMap(
-                                Map.Entry::getKey,
-                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
@@ -700,6 +698,78 @@ public abstract class BaseClient
 
         response.put("matches", convertedMatchesObject);
         return response;
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>String[][]</code>
+     */
+    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
+            throws RedisException {
+        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+    }
+
+    /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
+    @SuppressWarnings("unchecked")
+    protected Map<String, Object> handleXInfoStreamResponse(Map<String, Object> map) {
+        // convert entries from `Object[][]` to `String[][]` inside a map
+        for (var keyName : List.of("entries", "first-entry", "last-entry")) {
+            if (!map.containsKey(keyName)) continue;
+            var entries = (Map<String, Object[][]>) map.get(keyName);
+            map.put(keyName, castMapOf2DArray(entries, String.class));
+        }
+        for (var keyName : List.of("groups", "consumers")) {
+            if (!map.containsKey(keyName)) continue;
+            var value = map.get(keyName);
+            // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
+            if (value instanceof Long) {
+                return map;
+            }
+            // convert `Object[]` to `Map[]`
+            value = castArray((Object[]) value, Map.class);
+            for (var subMap : (Map<String, Object>[]) value) {
+                // recursively inline update the map
+                handleXInfoStreamResponse(subMap);
+            }
+            map.put(keyName, value);
+        }
+        return map;
+    }
+
+    /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, Object> handleXInfoStreamResponseGlideString(
+            Map<GlideString, Object> map) {
+        // convert entries from `Object[][]` to `GlideString[][]` inside a map
+        for (var keyName : List.of(gs("entries"), gs("first-entry"), gs("last-entry"))) {
+            if (!map.containsKey(keyName)) continue;
+            var entries = (Map<GlideString, Object[][]>) map.get(keyName);
+            map.put(keyName, castMapOf2DArrayGlideString(entries, GlideString.class));
+        }
+        for (var keyName : List.of(gs("groups"), gs("consumers"))) {
+            if (!map.containsKey(keyName)) continue;
+            var value = map.get(keyName);
+            // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
+            if (value instanceof Long) {
+                return map;
+            }
+            // convert `Object[]` to `Map[]`
+            value = castArray((Object[]) value, Map.class);
+            for (var subMap : (Map<String, Object>[]) value) {
+                // recursively inline update the map
+                handleXInfoStreamResponse(subMap);
+            }
+            map.put(keyName, value);
+        }
+        return map;
     }
 
     @Override
@@ -2929,6 +2999,55 @@ public abstract class BaseClient
                     gs(JUST_ID_REDIS_API)
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStream(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key},
+                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key, FULL},
+                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key, FULL, COUNT, Integer.toString(count)},
+                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStream(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key},
+                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key, gs(FULL)},
+                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(
+            @NonNull GlideString key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key, gs(FULL), gs(COUNT), gs(Integer.toString(count))},
+                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
     }
 
     @Override
