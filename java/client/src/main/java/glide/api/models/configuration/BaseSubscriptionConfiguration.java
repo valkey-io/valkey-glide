@@ -2,12 +2,14 @@
 package glide.api.models.configuration;
 
 import glide.api.BaseClient;
+import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.ClusterSubscriptionConfigurationBuilder;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.StandaloneSubscriptionConfigurationBuilder;
-import java.util.HashSet;
+import glide.api.models.exceptions.ConfigurationError;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -69,9 +71,10 @@ public abstract class BaseSubscriptionConfiguration {
         protected Optional<Object> context = Optional.empty();
 
         protected <M extends ChannelMode> void addSubscription(
-                Map<M, Set<String>> subscriptions, M mode, String channelOrPattern) {
+                Map<M, Set<GlideString>> subscriptions, M mode, GlideString channelOrPattern) {
             if (!subscriptions.containsKey(mode)) {
-                subscriptions.put(mode, new HashSet<>());
+                // Note: Use a LinkedHashSet to preserve order for ease of debugging and unit testing.
+                subscriptions.put(mode, new LinkedHashSet<>());
             }
             subscriptions.get(mode).add(channelOrPattern);
         }
@@ -83,10 +86,14 @@ public abstract class BaseSubscriptionConfiguration {
         /**
          * Set a callback and a context.
          *
-         * @param callback The {@link #callback}.
+         * @param callback The {@link #callback}. This can be null to unset the callback.
          * @param context The {@link #context}.
          */
         public B callback(MessageCallback callback, Object context) {
+            if (context != null && callback == null) {
+                throw new ConfigurationError(
+                        "PubSub subscriptions with a context require a callback function to be configured.");
+            }
             this.callback = Optional.ofNullable(callback);
             this.context = Optional.ofNullable(context);
             return self();
@@ -96,9 +103,13 @@ public abstract class BaseSubscriptionConfiguration {
          * Set a callback without context. <code>null</code> will be supplied to all callback calls as a
          * context.
          *
-         * @param callback The {@link #callback}.
+         * @param callback The {@link #callback}. This can be null to unset the callback.
          */
         public B callback(MessageCallback callback) {
+            if (callback == null && this.context.isPresent()) {
+                throw new ConfigurationError(
+                        "PubSub subscriptions with a context require a callback function to be configured.");
+            }
             this.callback = Optional.ofNullable(callback);
             return self();
         }

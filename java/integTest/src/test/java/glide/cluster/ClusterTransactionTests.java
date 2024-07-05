@@ -280,7 +280,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public void spublish() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        ClusterTransaction transaction = new ClusterTransaction().spublish("Schannel", "message");
+        ClusterTransaction transaction = new ClusterTransaction().publish("messagae", "Schannel", true);
 
         assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
     }

@@ -4,9 +4,12 @@ package glide;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -17,6 +20,7 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
@@ -28,6 +32,7 @@ import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSub
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,11 +41,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -56,24 +64,27 @@ public class PubSubTests {
     @SuppressWarnings("unchecked")
     private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
             boolean standalone,
-            Map<M, Set<String>> subscriptions,
+            Map<M, Set<GlideString>> subscriptions,
             Optional<MessageCallback> callback,
             Optional<Object> context) {
         if (standalone) {
             var subConfigBuilder =
                     StandaloneSubscriptionConfiguration.builder()
-                            .subscriptions((Map<PubSubChannelMode, Set<String>>) subscriptions);
+                            .subscriptions((Map<PubSubChannelMode, Set<GlideString>>) subscriptions);
 
             if (callback.isPresent()) {
                 subConfigBuilder.callback(callback.get(), context.get());
             }
             return RedisClient.CreateClient(
-                            commonClientConfig().subscriptionConfiguration(subConfigBuilder.build()).build())
+                            commonClientConfig()
+                                    .requestTimeout(5000)
+                                    .subscriptionConfiguration(subConfigBuilder.build())
+                                    .build())
                     .get();
         } else {
             var subConfigBuilder =
                     ClusterSubscriptionConfiguration.builder()
-                            .subscriptions((Map<PubSubClusterChannelMode, Set<String>>) subscriptions);
+                            .subscriptions((Map<PubSubClusterChannelMode, Set<GlideString>>) subscriptions);
 
             if (callback.isPresent()) {
                 subConfigBuilder.callback(callback.get(), context.get());
@@ -81,6 +92,7 @@ public class PubSubTests {
 
             return RedisClusterClient.CreateClient(
                             commonClusterClientConfig()
+                                    .requestTimeout(5000)
                                     .subscriptionConfiguration(subConfigBuilder.build())
                                     .build())
                     .get();
@@ -88,7 +100,7 @@ public class PubSubTests {
     }
 
     private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
-            boolean standalone, Map<M, Set<String>> subscriptions) {
+            boolean standalone, Map<M, Set<GlideString>> subscriptions) {
         return createClientWithSubscriptions(
                 standalone, subscriptions, Optional.empty(), Optional.empty());
     }
@@ -166,7 +178,7 @@ public class PubSubTests {
             boolean standalone,
             boolean useCallback,
             int clientId,
-            Map<? extends ChannelMode, Set<String>> subscriptions) {
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
         MessageCallback callback =
                 (msg, ctx) ->
                         ((ConcurrentLinkedDeque<Pair<Integer, PubSubMessage>>) ctx)
@@ -182,11 +194,6 @@ public class PubSubTests {
     //  test_pubsub_exact_happy_path_many_channels_co_existence
     //  test_sharded_pubsub_co_existence
     //  test_pubsub_pattern_co_existence
-    // TODO tests below blocked by https://github.com/aws/glide-for-redis/issues/1649
-    //  test_pubsub_exact_max_size_PubsubMessage
-    //  test_pubsub_sharded_max_size_PubsubMessage
-    //  test_pubsub_exact_max_size_PubsubMessage_callback
-    //  test_pubsub_sharded_max_size_PubsubMessage_callback
 
     // TODO why `publish` returns 0 on cluster or > 1 on standalone when there is only 1 receiver???
     //  meanwhile, all pubsubMessages are delivered.
@@ -205,15 +212,15 @@ public class PubSubTests {
     @MethodSource("getTwoBoolPermutations")
     public void exact_happy_path(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
-        String channel = UUID.randomUUID().toString();
-        String message = UUID.randomUUID().toString();
+        GlideString channel = gs(UUID.randomUUID().toString());
+        GlideString message = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(exact(standalone), Set.of(channel));
 
         var listener = createListener(standalone, useCallback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
-        sender.publish(channel, message).get();
+        sender.publish(message, channel).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -230,13 +237,13 @@ public class PubSubTests {
         int messagesPerChannel = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         ChannelMode mode = exact(standalone);
-        Map<? extends ChannelMode, Set<String>> subscriptions = Map.of(mode, new HashSet<>());
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
             for (var j = 0; j < messagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 messages.add(new PubSubMessage(message, channel));
             }
         }
@@ -246,7 +253,7 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -265,15 +272,15 @@ public class PubSubTests {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         skipTestsOnMac();
 
-        String channel = UUID.randomUUID().toString();
-        String pubsubMessage = UUID.randomUUID().toString();
+        GlideString channel = gs(UUID.randomUUID().toString());
+        GlideString pubsubMessage = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
         var listener = createListener(false, useCallback, 1, subscriptions);
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
-        sender.spublish(channel, pubsubMessage).get();
+        sender.publish(pubsubMessage, channel, true).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -292,13 +299,13 @@ public class PubSubTests {
         int pubsubMessagesPerChannel = 256;
         var pubsubMessages = new ArrayList<PubSubMessage>(numChannels * pubsubMessagesPerChannel);
         PubSubClusterChannelMode mode = PubSubClusterChannelMode.SHARDED;
-        Map<PubSubClusterChannelMode, Set<String>> subscriptions = Map.of(mode, new HashSet<>());
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
             for (var j = 0; j < pubsubMessagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 pubsubMessages.add(new PubSubMessage(message, channel));
             }
         }
@@ -308,9 +315,9 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : pubsubMessages) {
-            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
         }
-        sender.spublish(UUID.randomUUID().toString(), UUID.randomUUID().toString()).get();
+        sender.publish(UUID.randomUUID().toString(), UUID.randomUUID().toString(), true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -327,10 +334,13 @@ public class PubSubTests {
     public void pattern(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
-        Map<String, String> message2channels =
+        GlideString pattern = gs(prefix + "*");
+        Map<GlideString, GlideString> message2channels =
                 Map.of(
-                        prefix + "1", UUID.randomUUID().toString(), prefix + "2", UUID.randomUUID().toString());
+                        gs(prefix + "1"),
+                        gs(UUID.randomUUID().toString()),
+                        gs(prefix + "2"),
+                        gs(UUID.randomUUID().toString()));
         var subscriptions =
                 Map.of(
                         standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN,
@@ -343,9 +353,9 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // need some time to propagate subscriptions - why?
 
         for (var entry : message2channels.entrySet()) {
-            sender.publish(entry.getKey(), entry.getValue()).get();
+            sender.publish(entry.getValue(), entry.getKey()).get();
         }
-        sender.publish("channel", UUID.randomUUID().toString()).get();
+        sender.publish(UUID.randomUUID().toString(), "channel").get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         var expected =
@@ -363,7 +373,7 @@ public class PubSubTests {
     public void pattern_many_channels(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         int numChannels = 256;
         int messagesPerChannel = 256;
         ChannelMode mode = standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN;
@@ -371,9 +381,9 @@ public class PubSubTests {
         var subscriptions = Map.of(mode, Set.of(pattern));
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = prefix + "-" + i + "-" + UUID.randomUUID();
+            GlideString channel = gs(prefix + "-" + i + "-" + UUID.randomUUID());
             for (var j = 0; j < messagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 messages.add(new PubSubMessage(message, channel, pattern));
             }
         }
@@ -385,9 +395,9 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // need some time to propagate subscriptions - why?
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
-        sender.publish("channel", UUID.randomUUID().toString()).get();
+        sender.publish(UUID.randomUUID().toString(), "channel").get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         verifyReceivedPubsubMessages(
@@ -403,12 +413,12 @@ public class PubSubTests {
     public void combined_exact_and_pattern_one_client(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         int numChannels = 256;
         int messagesPerChannel = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         ChannelMode mode = standalone ? PubSubChannelMode.EXACT : PubSubClusterChannelMode.EXACT;
-        Map<? extends ChannelMode, Set<String>> subscriptions =
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
                 Map.of(
                         mode,
                         new HashSet<>(),
@@ -416,17 +426,17 @@ public class PubSubTests {
                         Set.of(pattern));
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
             for (var j = 0; j < messagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 messages.add(new PubSubMessage(message, channel));
             }
         }
 
         for (var j = 0; j < messagesPerChannel; j++) {
-            var pubsubMessage = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString pubsubMessage = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(pubsubMessage, channel, pattern));
         }
 
@@ -435,7 +445,7 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -455,22 +465,22 @@ public class PubSubTests {
     public void combined_exact_and_pattern_multiple_clients(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         int numChannels = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         ChannelMode mode = exact(standalone);
-        Map<? extends ChannelMode, Set<String>> subscriptions = Map.of(mode, new HashSet<>());
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel));
         }
 
         for (var j = 0; j < numChannels; j++) {
-            var message = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString message = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
@@ -483,7 +493,7 @@ public class PubSubTests {
         clients.addAll(List.of(listenerExactSub, listenerPatternSub, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -524,34 +534,34 @@ public class PubSubTests {
         skipTestsOnMac();
 
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         String shardPrefix = "{shard}";
         int numChannels = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptions =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions =
                 Map.of(
                         PubSubClusterChannelMode.EXACT, new HashSet<>(),
                         PubSubClusterChannelMode.PATTERN, Set.of(pattern),
                         PubSubClusterChannelMode.SHARDED, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(PubSubClusterChannelMode.EXACT).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel));
         }
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = shardPrefix + "-" + i + "-" + UUID.randomUUID();
+            GlideString channel = gs(shardPrefix + "-" + i + "-" + UUID.randomUUID());
             subscriptions.get(PubSubClusterChannelMode.SHARDED).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             shardedMessages.add(new PubSubMessage(message, channel));
         }
 
         for (var j = 0; j < numChannels; j++) {
-            var message = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString message = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
@@ -560,10 +570,10 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -587,36 +597,36 @@ public class PubSubTests {
         skipTestsOnMac();
 
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         String shardPrefix = "{shard}";
         int numChannels = 256;
         var exactMessages = new ArrayList<PubSubMessage>(numChannels);
         var patternMessages = new ArrayList<PubSubMessage>(numChannels);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsExact =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsExact =
                 Map.of(PubSubClusterChannelMode.EXACT, new HashSet<>());
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsPattern =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsPattern =
                 Map.of(PubSubClusterChannelMode.PATTERN, Set.of(pattern));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsSharded =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsSharded =
                 Map.of(PubSubClusterChannelMode.SHARDED, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptionsExact.get(PubSubClusterChannelMode.EXACT).add(channel);
-            var pubsubMessage = i + "-" + UUID.randomUUID();
+            GlideString pubsubMessage = gs(i + "-" + UUID.randomUUID());
             exactMessages.add(new PubSubMessage(pubsubMessage, channel));
         }
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = shardPrefix + "-" + i + "-" + UUID.randomUUID();
+            GlideString channel = gs(shardPrefix + "-" + i + "-" + UUID.randomUUID());
             subscriptionsSharded.get(PubSubClusterChannelMode.SHARDED).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             shardedMessages.add(new PubSubMessage(message, channel));
         }
 
         for (var j = 0; j < numChannels; j++) {
-            var message = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString message = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             patternMessages.add(new PubSubMessage(message, channel, pattern));
         }
 
@@ -634,13 +644,13 @@ public class PubSubTests {
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded, sender));
 
         for (var pubsubMessage : exactMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
         for (var pubsubMessage : patternMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -688,111 +698,86 @@ public class PubSubTests {
      * tests.
      */
     @SneakyThrows
-    @Test
-    public void three_publishing_clients_same_name_with_sharded_no_callback() {
+    @ParameterizedTest(name = "use callback = {0}")
+    @ValueSource(booleans = {true, false})
+    public void three_publishing_clients_same_name_with_sharded(boolean useCallback) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         skipTestsOnMac();
 
-        String channel = UUID.randomUUID().toString();
-        var exactMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        var patternMessage = new PubSubMessage(UUID.randomUUID().toString(), channel, channel);
-        var shardedMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsExact =
+        GlideString channel = gs(UUID.randomUUID().toString());
+        var exactMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
+        var patternMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel, channel);
+        var shardedMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsExact =
                 Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsPattern =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsPattern =
                 Map.of(PubSubClusterChannelMode.PATTERN, Set.of(channel));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsSharded =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsSharded =
                 Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
         var listenerExact =
-                (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact);
+                !useCallback
+                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact)
+                        : (RedisClusterClient)
+                                createListener(
+                                        false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact);
+
         var listenerPattern =
-                (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern);
+                !useCallback
+                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern)
+                        : createListener(
+                                false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern);
+
         var listenerSharded =
-                (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
-        clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
-
-        listenerPattern.publish(channel, exactMessage.getMessage()).get();
-        listenerSharded.publish(channel, patternMessage.getMessage()).get();
-        listenerExact.spublish(channel, shardedMessage.getMessage()).get();
-
-        Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
-
-        verifyReceivedPubsubMessages(
-                Set.of(
-                        Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
-                        Pair.of(
-                                PubSubClusterChannelMode.EXACT.ordinal(),
-                                new PubSubMessage(patternMessage.getMessage(), channel))),
-                listenerExact,
-                false);
-        verifyReceivedPubsubMessages(
-                Set.of(
-                        Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
-                        Pair.of(
-                                PubSubClusterChannelMode.PATTERN.ordinal(),
-                                new PubSubMessage(exactMessage.getMessage(), channel, channel))),
-                listenerPattern,
-                false);
-        verifyReceivedPubsubMessages(
-                Set.of(Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage)),
-                listenerSharded,
-                false);
-    }
-
-    /**
-     * Similar to `test_pubsub_three_publishing_clients_same_name_with_sharded` in python client
-     * tests.
-     */
-    @SneakyThrows
-    @Test
-    public void three_publishing_clients_same_name_with_sharded_with_callback() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
-
-        String channel = UUID.randomUUID().toString();
-        var exactMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        var patternMessage = new PubSubMessage(UUID.randomUUID().toString(), channel, channel);
-        var shardedMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsExact =
-                Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsPattern =
-                Map.of(PubSubClusterChannelMode.PATTERN, Set.of(channel));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsSharded =
-                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
-
-        var listenerExact =
-                (RedisClusterClient)
-                        createListener(
-                                false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact);
-        var listenerPattern =
-                createListener(
-                        false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern);
-        var listenerSharded =
-                createListener(
-                        false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded);
+                !useCallback
+                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded)
+                        : createListener(
+                                false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded);
 
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
-        listenerPattern.publish(channel, exactMessage.getMessage()).get();
-        listenerSharded.publish(channel, patternMessage.getMessage()).get();
-        listenerExact.spublish(channel, shardedMessage.getMessage()).get();
+        listenerPattern.publish(exactMessage.getMessage(), channel).get();
+        listenerSharded.publish(patternMessage.getMessage(), channel).get();
+        listenerExact.publish(shardedMessage.getMessage(), channel, true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
-        var expected =
-                Set.of(
-                        Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
-                        Pair.of(
-                                PubSubClusterChannelMode.EXACT.ordinal(),
-                                new PubSubMessage(patternMessage.getMessage(), channel)),
-                        Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
-                        Pair.of(
-                                PubSubClusterChannelMode.PATTERN.ordinal(),
-                                new PubSubMessage(exactMessage.getMessage(), channel, channel)),
-                        Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage));
+        if (!useCallback) {
+            verifyReceivedPubsubMessages(
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.EXACT.ordinal(),
+                                    new PubSubMessage(patternMessage.getMessage(), channel))),
+                    listenerExact,
+                    false);
+            verifyReceivedPubsubMessages(
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.PATTERN.ordinal(),
+                                    new PubSubMessage(exactMessage.getMessage(), channel, channel))),
+                    listenerPattern,
+                    false);
+            verifyReceivedPubsubMessages(
+                    Set.of(Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage)),
+                    listenerSharded,
+                    false);
+        } else {
+            var expected =
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.EXACT.ordinal(),
+                                    new PubSubMessage(patternMessage.getMessage(), channel)),
+                            Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.PATTERN.ordinal(),
+                                    new PubSubMessage(exactMessage.getMessage(), channel, channel)),
+                            Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage));
 
-        verifyReceivedPubsubMessages(expected, listenerExact, true);
+            verifyReceivedPubsubMessages(expected, listenerExact, true);
+        }
     }
 
     @SneakyThrows
@@ -816,16 +801,13 @@ public class PubSubTests {
         var clusterClient = (RedisClusterClient) createClient(false);
         var transaction =
                 new ClusterTransaction()
-                        .spublish("abc", "one")
-                        .spublish("mnk", "two")
-                        .spublish("xyz", "three");
+                        .publish("one", "abc", true)
+                        .publish("two", "mnk", true)
+                        .publish("three", "xyz", true);
         var exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("crossslot"));
-
-        // TODO test when callback throws an exception - currently nothing happens now
-        //  it should terminate the client
     }
 
     @SneakyThrows
@@ -840,14 +822,14 @@ public class PubSubTests {
                 "Test doesn't work on cluster due to Cross Slot error, probably a bug in `redis-rs`");
 
         String prefix = "channel";
-        String pattern = prefix + "*";
-        String shardPrefix = "{shard}";
-        String channel = UUID.randomUUID().toString();
-        var exactMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        var patternMessage = new PubSubMessage(UUID.randomUUID().toString(), prefix, pattern);
-        var shardedMessage = new PubSubMessage(UUID.randomUUID().toString(), shardPrefix);
+        GlideString pattern = gs(prefix + "*");
+        GlideString shardPrefix = gs("{shard}");
+        GlideString channel = gs(UUID.randomUUID().toString());
+        var exactMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
+        var patternMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), gs(prefix), pattern);
+        var shardedMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), shardPrefix);
 
-        Map<? extends ChannelMode, Set<String>> subscriptions =
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
                 standalone
                         ? Map.of(
                                 PubSubChannelMode.EXACT,
@@ -869,15 +851,15 @@ public class PubSubTests {
         if (standalone) {
             var transaction =
                     new Transaction()
-                            .publish(exactMessage.getChannel(), exactMessage.getMessage())
-                            .publish(patternMessage.getChannel(), patternMessage.getMessage());
+                            .publish(exactMessage.getMessage(), exactMessage.getChannel())
+                            .publish(patternMessage.getMessage(), patternMessage.getChannel());
             ((RedisClient) sender).exec(transaction).get();
         } else {
             var transaction =
                     new ClusterTransaction()
-                            .spublish(shardedMessage.getChannel(), shardedMessage.getMessage())
-                            .publish(exactMessage.getChannel(), exactMessage.getMessage())
-                            .publish(patternMessage.getChannel(), patternMessage.getMessage());
+                            .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
+                            .publish(exactMessage.getMessage(), exactMessage.getChannel())
+                            .publish(patternMessage.getMessage(), patternMessage.getChannel());
             ((RedisClusterClient) sender).exec(transaction).get();
         }
 
@@ -889,5 +871,264 @@ public class PubSubTests {
                         : Set.of(
                                 Pair.of(1, exactMessage), Pair.of(1, patternMessage), Pair.of(1, shardedMessage));
         verifyReceivedPubsubMessages(expected, listener, useCallback);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    @Disabled(
+            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+    public void pubsub_exact_max_size_message(boolean standalone) {
+        final GlideString channel = gs(UUID.randomUUID().toString());
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
+        final GlideString message2 = gs("2".repeat(1 << 25)); // 3MB
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+        var listener = createClientWithSubscriptions(standalone, subscriptions);
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
+
+        assertEquals(OK, sender.publish(message, channel).get());
+        assertEquals(OK, sender.publish(message2, channel).get());
+
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        PubSubMessage asyncMessage = listener.getPubSubMessage().get();
+        assertEquals(message, asyncMessage.getMessage());
+        assertEquals(channel, asyncMessage.getChannel());
+        assertTrue(asyncMessage.getPattern().isEmpty());
+
+        PubSubMessage syncMessage = listener.tryGetPubSubMessage();
+        assertEquals(message2, syncMessage.getMessage());
+        assertEquals(channel, syncMessage.getChannel());
+        assertTrue(syncMessage.getPattern().isEmpty());
+
+        // Assert there are no more messages to read.
+        assertThrows(
+                TimeoutException.class, () -> listener.getPubSubMessage().get(3, TimeUnit.SECONDS));
+        assertNull(listener.tryGetPubSubMessage());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {false})
+    @Disabled(
+            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+    public void pubsub_sharded_max_size_message(boolean standalone) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        final GlideString channel = gs(UUID.randomUUID().toString());
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
+        final GlideString message2 = gs("2".repeat(1 << 25)); // 3MB
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
+        var listener = createClientWithSubscriptions(standalone, subscriptions);
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
+
+        assertEquals(OK, sender.publish(message, channel).get());
+        assertEquals(OK, ((RedisClusterClient) sender).publish(message2, channel, true).get());
+
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        PubSubMessage asyncMessage = listener.getPubSubMessage().get();
+        assertEquals(message, asyncMessage.getMessage());
+        assertEquals(channel, asyncMessage.getChannel());
+        assertTrue(asyncMessage.getPattern().isEmpty());
+
+        PubSubMessage syncMessage = listener.tryGetPubSubMessage();
+        assertEquals(message2, syncMessage.getMessage());
+        assertEquals(channel, syncMessage.getChannel());
+        assertTrue(syncMessage.getPattern().isEmpty());
+
+        // Assert there are no more messages to read.
+        assertThrows(
+                TimeoutException.class,
+                () -> {
+                    listener.getPubSubMessage().get(3, TimeUnit.SECONDS);
+                });
+
+        assertNull(listener.tryGetPubSubMessage());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    @Disabled(
+            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+    public void pubsub_exact_max_size_message_callback(boolean standalone) {
+        final GlideString channel = gs(UUID.randomUUID().toString());
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
+
+        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        final MessageCallback callback =
+                (pubSubMessage, context) -> {
+                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    receivedMessages.add(pubSubMessage);
+                };
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+
+        var listener =
+                createClientWithSubscriptions(
+                        standalone,
+                        subscriptions,
+                        Optional.ofNullable(callback),
+                        Optional.of(callbackMessages));
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
+
+        assertEquals(OK, sender.publish(message, channel).get());
+
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        assertEquals(1, callbackMessages.size());
+        assertEquals(message, callbackMessages.get(0).getMessage());
+        assertEquals(channel, callbackMessages.get(0).getChannel());
+        assertTrue(callbackMessages.get(0).getPattern().isEmpty());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {false})
+    @Disabled(
+            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+    public void pubsub_sharded_max_size_message_callback(boolean standalone) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        final GlideString channel = gs(UUID.randomUUID().toString());
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
+
+        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        final MessageCallback callback =
+                (pubSubMessage, context) -> {
+                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    receivedMessages.add(pubSubMessage);
+                };
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
+
+        var listener =
+                createClientWithSubscriptions(
+                        standalone,
+                        subscriptions,
+                        Optional.ofNullable(callback),
+                        Optional.of(callbackMessages));
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
+
+        assertEquals(OK, ((RedisClusterClient) sender).publish(message, channel, true).get());
+
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        assertEquals(1, callbackMessages.size());
+        assertEquals(message, callbackMessages.get(0).getMessage());
+    }
+
+    /** Test the behavior if the callback supplied to a subscription throws an uncaught exception. */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_test_callback_exception(boolean standalone) {
+        final GlideString channel = gs(UUID.randomUUID().toString());
+        final GlideString message1 = gs("message1");
+        final GlideString message2 = gs("message2");
+        final GlideString errorMsg = gs("errorMsg");
+        final GlideString message3 = gs("message3");
+
+        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        final MessageCallback callback =
+                (pubSubMessage, context) -> {
+                    if (pubSubMessage.getMessage().equals(errorMsg)) {
+                        throw new RuntimeException("Test callback error message");
+                    }
+                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    receivedMessages.add(pubSubMessage);
+                };
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+
+        var listener =
+                createClientWithSubscriptions(
+                        standalone,
+                        subscriptions,
+                        Optional.ofNullable(callback),
+                        Optional.of(callbackMessages));
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
+
+        assertEquals(OK, sender.publish(message1, channel).get());
+        assertEquals(OK, sender.publish(message2, channel).get());
+        assertEquals(OK, sender.publish(errorMsg, channel).get());
+        assertEquals(OK, sender.publish(message3, channel).get());
+
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        assertEquals(3, callbackMessages.size());
+        assertEquals(message1, callbackMessages.get(0).getMessage());
+        assertEquals(channel, callbackMessages.get(0).getChannel());
+        assertTrue(callbackMessages.get(0).getPattern().isEmpty());
+
+        assertEquals(message2, callbackMessages.get(1).getMessage());
+        assertEquals(channel, callbackMessages.get(1).getChannel());
+        assertTrue(callbackMessages.get(1).getPattern().isEmpty());
+
+        // Ensure we can receive message 3 which is after the message that triggers a throw.
+        assertEquals(message3, callbackMessages.get(2).getMessage());
+        assertEquals(channel, callbackMessages.get(2).getChannel());
+        assertTrue(callbackMessages.get(2).getPattern().isEmpty());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_with_binary(boolean standalone) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString channel = gs(new byte[] {(byte) 0xE2, 0x28, (byte) 0xA1});
+        var message =
+                new PubSubMessage(gs(new byte[] {(byte) 0xF0, 0x28, (byte) 0x8C, (byte) 0xBC}), channel);
+
+        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        final MessageCallback callback =
+                (pubSubMessage, context) -> {
+                    ArrayList<PubSubMessage> receivedMessages = (ArrayList<PubSubMessage>) context;
+                    receivedMessages.add(pubSubMessage);
+                };
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+
+        var listener = createClientWithSubscriptions(standalone, subscriptions);
+        var listener2 =
+                createClientWithSubscriptions(
+                        standalone, subscriptions, Optional.of(callback), Optional.of(callbackMessages));
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, listener2, sender));
+
+        assertEquals(OK, sender.publish(message.getMessage(), channel).get());
+        Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
+
+        assertEquals(message, listener.tryGetPubSubMessage());
+        assertEquals(1, callbackMessages.size());
+        assertEquals(message, callbackMessages.get(0));
     }
 }
