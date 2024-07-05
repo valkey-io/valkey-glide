@@ -862,7 +862,7 @@ public class TransactionTestUtilities {
                         StreamClaimOptions.builder().force().build())
                 .xpending(streamKey1, groupName1);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
                     .xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
@@ -940,7 +940,7 @@ public class TransactionTestUtilities {
                         1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}} // xpending(streamKey1, groupName1)
                     }
                 };
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             result =
                     concatenateArrays(
                             result,
@@ -956,7 +956,7 @@ public class TransactionTestUtilities {
                                     new Object[] {} // one more array is returned here for version >= 7.0.0
                                 } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
                             });
-        } else if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        } else if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             result =
                     concatenateArrays(
                             result,

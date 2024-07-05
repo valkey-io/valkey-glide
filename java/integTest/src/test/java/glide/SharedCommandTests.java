@@ -3385,7 +3385,7 @@ public class SharedCommandTests {
     //         // nothing popped out - key does not exist
     //         assertNull(
     //                 client
-    //                         .bzpopmin(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0")
+    //                         .bzpopmin(new GlideString[] {key3}, SERVER_VERSION.isLowerThan("7.0.0")
     // ? 1. : 0.001)
     //                         .get());
 
@@ -3536,7 +3536,7 @@ public class SharedCommandTests {
     //         // nothing popped out - key does not exist
     //         assertNull(
     //                 client
-    //                         .bzpopmax(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0")
+    //                         .bzpopmax(new GlideString[] {key3}, SERVER_VERSION.isLowerThan("7.0.0")
     // ? 1. : 0.001)
     //                         .get());
 
@@ -7122,7 +7122,7 @@ public class SharedCommandTests {
     public void xautoclaim(BaseClient client) {
         String minVersion = "6.2.0";
         assumeTrue(
-                REDIS_VERSION.isGreaterThanOrEqualTo(minVersion),
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
                 "This feature added in redis " + minVersion);
         String key = UUID.randomUUID().toString();
         String groupName = UUID.randomUUID().toString();
@@ -7169,7 +7169,7 @@ public class SharedCommandTests {
         // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed
         // from the Pending
         //     Entries List because they no longer exist in the stream
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertDeepEquals(new Object[] {}, xautoclaimResult1[2]);
         }
 
@@ -7187,7 +7187,7 @@ public class SharedCommandTests {
                         gs(streamid_1), new GlideString[][] {{gs("field1"), gs("value1")}},
                         gs(streamid_3), new GlideString[][] {{gs("field3"), gs("value3")}}),
                 xautoclaimResult2[1]);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertDeepEquals(new GlideString[] {gs(streamid_2)}, xautoclaimResult2[2]);
         }
 
@@ -7196,7 +7196,7 @@ public class SharedCommandTests {
         Object[] justIdResult =
                 client.xautoclaimJustId(key, groupName, consumer, 0L, zeroStreamId).get();
         assertEquals(zeroStreamId, justIdResult[0]);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, justIdResult[1]);
             assertDeepEquals(new Object[] {}, justIdResult[2]);
         } else {
@@ -7212,7 +7212,7 @@ public class SharedCommandTests {
                         .xautoclaimJustId(gs(key), gs(groupName), gs(consumer2), 0L, gs(zeroStreamId), 1L)
                         .get();
         assertEquals(gs(streamid_1), justIdResultCount[0]);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertDeepEquals(new GlideString[] {gs(streamid_0)}, justIdResultCount[1]);
             assertDeepEquals(new Object[] {}, justIdResultCount[2]);
         } else {
