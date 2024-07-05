@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
@@ -181,7 +181,7 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void zrank_zrevrank_withscores() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
         ClusterTransaction transaction = new ClusterTransaction();
         transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -279,7 +279,7 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void spublish() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         ClusterTransaction transaction = new ClusterTransaction().publish("messagae", "Schannel", true);
 
         assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
@@ -298,7 +298,7 @@ public class ClusterTransactionTests {
                 .sortStore(key1, key2, SortClusterOptions.builder().orderBy(DESC).build())
                 .lrange(key2, 0, -1);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build());
         }
 
@@ -311,7 +311,7 @@ public class ClusterTransactionTests {
                     descendingList, // lrange(key2, 0, -1)
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResult =
                     concatenateArrays(
                             expectedResult, new Object[] {descendingList} // sortReadOnly(key1, DESC)
@@ -344,7 +344,7 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void test_transaction_function_dump_restore() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
         String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);

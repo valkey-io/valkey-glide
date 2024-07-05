@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -269,7 +269,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "use callback = {0}")
     @ValueSource(booleans = {true, false})
     public void sharded_pubsub(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         GlideString channel = gs(UUID.randomUUID().toString());
@@ -292,7 +292,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "use callback = {0}")
     @ValueSource(booleans = {true, false})
     public void sharded_pubsub_many_channels(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         int numChannels = 256;
@@ -530,7 +530,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "use callback = {0}")
     @ValueSource(booleans = {true, false})
     public void combined_exact_pattern_and_sharded_one_client(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         String prefix = "channel.";
@@ -593,7 +593,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "use callback = {0}")
     @ValueSource(booleans = {true, false})
     public void combined_exact_pattern_and_sharded_multi_client(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         String prefix = "channel.";
@@ -701,7 +701,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "use callback = {0}")
     @ValueSource(booleans = {true, false})
     public void three_publishing_clients_same_name_with_sharded(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         GlideString channel = gs(UUID.randomUUID().toString());
@@ -815,7 +815,7 @@ public class PubSubTests {
     @MethodSource("getTwoBoolPermutations")
     public void transaction_with_all_types_of_PubsubMessages(
             boolean standalone, boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
         assumeTrue(
                 standalone, // TODO activate tests after fix
@@ -919,7 +919,7 @@ public class PubSubTests {
     @Disabled(
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_sharded_max_size_message(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
@@ -1004,7 +1004,7 @@ public class PubSubTests {
     @Disabled(
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_sharded_max_size_message_callback(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
@@ -1099,7 +1099,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
     public void pubsub_with_binary(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString channel = gs(new byte[] {(byte) 0xE2, 0x28, (byte) 0xA1});
         var message =

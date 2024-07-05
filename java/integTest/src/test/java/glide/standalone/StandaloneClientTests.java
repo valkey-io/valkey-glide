@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.getRandomString;
 import static glide.api.BaseClient.OK;
@@ -27,7 +27,7 @@ public class StandaloneClientTests {
     public void register_client_name_and_version() {
         String minVersion = "7.2.0";
         assumeTrue(
-                REDIS_VERSION.isGreaterThanOrEqualTo(minVersion),
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
                 "Redis version required >= " + minVersion);
 
         RedisClient client = RedisClient.CreateClient(commonClientConfig().build()).get();
