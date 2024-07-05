@@ -617,6 +617,23 @@ public abstract class BaseClient
         return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>String[][]</code>
+     */
+    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
+        throws RedisException {
+        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+            .collect(
+                Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+    }
+
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
         return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
@@ -686,23 +703,6 @@ public abstract class BaseClient
 
         response.put("matches", convertedMatchesObject);
         return response;
-    }
-
-    /**
-     * @param response A Protobuf response
-     * @return A map of a map of <code>String[][]</code>
-     */
-    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-            throws RedisException {
-        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
-        if (mapResponse == null) {
-            return null;
-        }
-        return mapResponse.entrySet().stream()
-                .collect(
-                        Collectors.toMap(
-                                Map.Entry::getKey,
-                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
     }
 
     @Override
