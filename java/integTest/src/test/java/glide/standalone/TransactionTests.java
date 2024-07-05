@@ -549,6 +549,27 @@ public class TransactionTests {
 
     @SneakyThrows
     @Test
+    public void scan_binary_test() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
+        assertEquals(OK, client.mset(msetMap).get());
+
+        GlideString cursor = gs("0");
+        Object[] keysFound = new Object[0];
+        do {
+            Transaction transaction = new Transaction();
+            transaction.scan(cursor);
+            Object[] results = client.exec(transaction).get();
+            cursor = (GlideString) ((Object[]) results[0])[0];
+            keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
+        } while (!cursor.equals(gs("0")));
+
+        assertTrue(ArrayUtils.contains(keysFound, gs(key)));
+    }
+
+    @SneakyThrows
+    @Test
     public void scan_with_options_test() {
         // setup
         Transaction setupTransaction = new Transaction();
@@ -603,6 +624,67 @@ public class TransactionTests {
             assertTrue(
                     ArrayUtils.contains(keysFound, typeKeys.get(type)),
                     "Unable to find " + typeKeys.get(type) + " in a scan by match pattern");
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_binary_with_options_test() {
+        // setup
+        Transaction setupTransaction = new Transaction();
+
+        Map<ScanOptions.ObjectType, GlideString> typeKeys =
+            Map.of(
+                STRING, gs("{string}-" + UUID.randomUUID()),
+                LIST, gs("{list}-" + UUID.randomUUID()),
+                SET, gs("{set}-" + UUID.randomUUID()),
+                ZSET, gs("{zset}-" + UUID.randomUUID()),
+                HASH, gs("{hash}-" + UUID.randomUUID()),
+                STREAM, gs("{stream}-" + UUID.randomUUID()));
+
+        setupTransaction.set(typeKeys.get(STRING), UUID.randomUUID().toString());
+        setupTransaction.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
+        setupTransaction.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
+        setupTransaction.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
+        setupTransaction.hset(
+            typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        setupTransaction.xadd(
+            typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        assertNotNull(client.exec(setupTransaction).get());
+
+        final GlideString initialCursor = gs("0");
+
+        for (var type : ScanOptions.ObjectType.values()) {
+            ScanOptions options = ScanOptions.builder().type(type).count(99L).build();
+
+            GlideString cursor = initialCursor;
+            Object[] keysFound = new Object[0];
+            do {
+                Transaction transaction = new Transaction();
+                transaction.scan(cursor, options);
+                Object[] results = client.exec(transaction).get();
+                cursor = (GlideString) ((Object[]) results[0])[0];
+                keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
+            } while (!cursor.equals(initialCursor));
+
+            assertTrue(
+                ArrayUtils.contains(keysFound, typeKeys.get(type)),
+                "Unable to find " + typeKeys.get(type) + " in a scan by type");
+
+            options = ScanOptions.builder().matchPattern(typeKeys.get(type).toString()).count(42L).build();
+            cursor = initialCursor;
+            keysFound = new Object[0];
+            do {
+                Transaction transaction = new Transaction();
+                transaction.scan(cursor, options);
+                Object[] results = client.exec(transaction).get();
+                cursor = (GlideString) ((Object[]) results[0])[0];
+                keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
+            } while (!cursor.equals(initialCursor));
+
+            assertTrue(
+                ArrayUtils.contains(keysFound, typeKeys.get(type)),
+                "Unable to find " + typeKeys.get(type) + " in a scan by match pattern");
         }
     }
 
