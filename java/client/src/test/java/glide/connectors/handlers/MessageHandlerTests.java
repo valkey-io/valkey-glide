@@ -13,9 +13,8 @@ import glide.managers.BaseResponseResolver;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
-import org.junit.jupiter.api.Test;
-
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.Test;
 import response.ResponseOuterClass;
 
 /** Unit tests for MessageHandler */
