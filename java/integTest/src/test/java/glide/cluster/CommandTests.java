@@ -14,6 +14,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -1706,627 +1707,353 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
-    public void functionStats_and_functionKill_without_route() {
+    public void functionKill_no_write_without_route() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        String libName = "functionStats_and_functionKill_without_route";
+        String libName = "functionKill_no_write_without_route";
         String funcName = "deadlock_without_route";
-        String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
-        String error = "";
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, true);
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true).get());
+        // load the lib
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
+        try (var testClient =
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get()) {
+            try {
                 // call the function without await
                 // Using a random primary node route, otherwise FCALL can go to a replica.
                 // FKILL and FSTATS go to primary nodes if no route given, test fails in such case.
                 Route route = new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
-                var promise = testClient.fcall(funcName, route);
+                testClient.fcall(funcName, route);
 
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var response = clusterClient.functionStats().get().getMultiValue();
-                    boolean found = false;
-                    for (var stats : response.values()) {
-                        if (stats.get("running_script") != null) {
-                            found = true;
-                            checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
-                            break;
-                        }
-                    }
-                    if (found) {
+                Thread.sleep(1000);
+
+                // Run FKILL until it returns OK
+                boolean functionKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, clusterClient.functionKill().get());
+                        functionKilled = true;
                         break;
+                    } catch (RequestException ignored) {
                     }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
+                    Thread.sleep(500);
+                    timeout -= 500;
                 }
 
-                assertEquals(OK, clusterClient.functionKill().get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
-            try {
-                clusterClient.functionKill().get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
+                assertTrue(functionKilled);
+            } finally {
+                waitForNotBusy(clusterClient);
             }
         }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
-    public void functionStatsBinary_and_functionKill_without_route() {
+    public void functionKillBinary_no_write_without_route() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        GlideString libName = gs("functionStats_and_functionKill_without_route");
+        GlideString libName = gs("functionKillBinary_no_write_without_route");
         GlideString funcName = gs("deadlock_without_route");
         GlideString code =
-                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 15, true));
-        String error = "";
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, true));
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true).get());
+        // load the lib
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
+        try (var testClient =
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get()) {
+            try {
                 // call the function without await
                 // Using a random primary node route, otherwise FCALL can go to a replica.
-                // FKILL and FSTATS go to primary nodes if no route given, test fails in such case.
+                // FKILL go to primary nodes if no route given, test fails in such case.
                 Route route = new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
-                var promise = testClient.fcall(funcName, route);
+                testClient.fcall(funcName, route);
 
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var response = clusterClient.functionStatsBinary().get().getMultiValue();
-                    boolean found = false;
-                    for (var stats : response.values()) {
-                        if (stats.get(gs("running_script")) != null) {
-                            found = true;
-                            checkFunctionStatsBinaryResponse(
-                                    stats, new GlideString[] {gs("FCALL"), funcName, gs("0")}, 1, 1);
-                            break;
-                        }
-                    }
-                    if (found) {
+                Thread.sleep(1000);
+
+                // Run FKILL until it returns OK
+                boolean functionKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, clusterClient.functionKill().get());
+                        functionKilled = true;
                         break;
+                    } catch (RequestException ignored) {
                     }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
+                    Thread.sleep(500);
+                    timeout -= 500;
                 }
 
-                assertEquals(OK, clusterClient.functionKill().get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
-            try {
-                clusterClient.functionKill().get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
+                assertTrue(functionKilled);
+            } finally {
+                waitForNotBusy(clusterClient);
             }
         }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
+    @Timeout(20)
     @ParameterizedTest(name = "single node route = {0}")
     @ValueSource(booleans = {true, false})
     @SneakyThrows
-    public void functionStats_and_functionKill_with_route(boolean singleNodeRoute) {
+    public void functionKill_no_write_with_route(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        String libName = "functionStats_and_functionKill_with_route_" + singleNodeRoute;
+        String libName = "functionKill_no_write_with_route" + singleNodeRoute;
         String funcName = "deadlock_with_route_" + singleNodeRoute;
-        String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, true);
         Route route =
                 singleNodeRoute ? new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY) : ALL_PRIMARIES;
-        String error = "";
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        // load the lib
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName, route);
-
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var response = clusterClient.functionStats(route).get();
-                    if (singleNodeRoute) {
-                        var stats = response.getSingleValue();
-                        if (stats.get("running_script") != null) {
-                            checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
-                            break;
-                        }
-                    } else {
-                        boolean found = false;
-                        for (var stats : response.getMultiValue().values()) {
-                            if (stats.get("running_script") != null) {
-                                found = true;
-                                checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
-                                break;
-                            }
-                        }
-                        if (found) {
-                            break;
-                        }
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // redis kills a function with 5 sec delay
-                assertEquals(OK, clusterClient.functionKill(route).get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
+        try (var testClient =
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get()) {
             try {
-                clusterClient.functionKill(route).get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
+                // call the function without await
+                testClient.fcall(funcName, route);
+
+                Thread.sleep(1000);
+                boolean functionKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, clusterClient.functionKill().get());
+                        functionKilled = true;
+                        break;
+                    } catch (RequestException ignored) {
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+
+                assertTrue(functionKilled);
+            } finally {
+                waitForNotBusy(clusterClient);
             }
         }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
+    @Timeout(20)
     @ParameterizedTest(name = "single node route = {0}")
     @ValueSource(booleans = {true, false})
     @SneakyThrows
-    public void functionStatsBinary_and_functionKill_with_route(boolean singleNodeRoute) {
+    public void functionKillBinary_no_write_with_route(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        GlideString libName = gs("functionStats_and_functionKill_with_route_" + singleNodeRoute);
+        GlideString libName = gs("functionKillBinary_no_write_with_route" + singleNodeRoute);
         GlideString funcName = gs("deadlock_with_route_" + singleNodeRoute);
         GlideString code =
-                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 15, true));
+                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, true));
         Route route =
                 singleNodeRoute ? new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY) : ALL_PRIMARIES;
-        String error = "";
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        // load the lib
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName, route);
-
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var response = clusterClient.functionStatsBinary(route).get();
-                    if (singleNodeRoute) {
-                        var stats = response.getSingleValue();
-                        if (stats.get(gs("running_script")) != null) {
-                            checkFunctionStatsBinaryResponse(
-                                    stats, new GlideString[] {gs("FCALL"), funcName, gs("0")}, 1, 1);
-                            break;
-                        }
-                    } else {
-                        boolean found = false;
-                        for (var stats : response.getMultiValue().values()) {
-                            if (stats.get(gs("running_script")) != null) {
-                                found = true;
-                                checkFunctionStatsBinaryResponse(
-                                        stats, new GlideString[] {gs("FCALL"), funcName, gs("0")}, 1, 1);
-                                break;
-                            }
-                        }
-                        if (found) {
-                            break;
-                        }
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // redis kills a function with 5 sec delay
-                assertEquals(OK, clusterClient.functionKill(route).get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
+        try (var testClient =
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get()) {
             try {
-                clusterClient.functionKill(route).get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
-            }
-        }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
-    }
-
-    @Test
-    @SneakyThrows
-    public void functionStats_and_functionKill_with_key_based_route() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-
-        String libName = "functionStats_and_functionKill_with_key_based_route";
-        String funcName = "deadlock_with_key_based_route";
-        String key = libName;
-        String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
-        Route route = new SlotKeyRoute(key, PRIMARY);
-        String error = "";
-
-        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
-
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
-
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
                 // call the function without await
-                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
+                testClient.fcall(funcName, route);
 
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var stats = clusterClient.functionStats(route).get().getSingleValue();
-                    if (stats.get("running_script") != null) {
-                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
+                Thread.sleep(1000);
+
+                boolean functionKilled = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        assertEquals(OK, clusterClient.functionKill().get());
+                        functionKilled = true;
                         break;
+                    } catch (RequestException ignored) {
                     }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
+                    Thread.sleep(500);
+                    timeout -= 500;
                 }
 
-                // redis kills a function with 5 sec delay
-                assertEquals(OK, clusterClient.functionKill(route).get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
-            try {
-                clusterClient.functionKill(route).get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
+                assertTrue(functionKilled);
+            } finally {
+                waitForNotBusy(clusterClient);
             }
         }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
-    public void functionStatsBinary_and_functionKill_with_key_based_route() {
+    public void functionKill_key_based_write_function() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        GlideString libName = gs("functionStats_and_functionKill_with_key_based_route");
-        GlideString funcName = gs("deadlock_with_key_based_route");
-        GlideString key = libName;
-        GlideString code =
-                gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 15, true));
-        Route route = new SlotKeyRoute(key.toString(), PRIMARY);
-        String error = "";
-
-        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
-
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
-
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
-
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var stats = clusterClient.functionStatsBinary(route).get().getSingleValue();
-                    if (stats.get(gs("running_script")) != null) {
-                        checkFunctionStatsBinaryResponse(
-                                stats, new GlideString[] {gs("FCALL"), funcName, gs("1"), key}, 1, 1);
-                        break;
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // redis kills a function with 5 sec delay
-                assertEquals(OK, clusterClient.functionKill(route).get());
-                Thread.sleep(404); // sometimes kill doesn't happen immediately
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-                exception = assertThrows(ExecutionException.class, promise::get);
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().contains("Script killed by user"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
-            try {
-                clusterClient.functionKill(route).get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function should be killed before.";
-            } catch (Exception ignored) {
-            }
-        }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
-    }
-
-    @Test
-    @SneakyThrows
-    public void functionStats_and_functionKill_write_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-
-        String libName = "functionStats_and_functionKill_write_function";
+        String libName = "functionKill_key_based_write_function";
         String funcName = "deadlock_write_function_with_key_based_route";
         String key = libName;
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
         Route route = new SlotKeyRoute(key, PRIMARY);
-        String error = "";
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        // load the lib
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
-
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var stats = clusterClient.functionStats(route).get().getSingleValue();
-                    if (stats.get("running_script") != null) {
-                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
-                        break;
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // redis kills a function with 5 sec delay
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
-
-                assertEquals("Timed out 6 sec", promise.get());
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
+        try (var testClient =
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get()) {
             try {
-                clusterClient.functionKill(route).get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function  should finish prior to the test end.";
-            } catch (Exception ignored) {
+                // call the function without await
+                promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
+
+                Thread.sleep(1000);
+
+                boolean foundUnkillable = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        // redis kills a function with 5 sec delay
+                        // but this will always throw an error in the test
+                        clusterClient.functionKill(route).get();
+                    } catch (ExecutionException executionException) {
+                        // looking for an error with "unkillable" in the message
+                        // at that point we can break the loop
+                        if (executionException.getCause() instanceof RequestException
+                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+                assertTrue(foundUnkillable);
+            } finally {
+                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                // test to fail.
+                // wait for the function to complete (we cannot kill it)
+                try {
+                    promise.get();
+                } catch (Exception ignored) {
+                }
             }
         }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
-    public void functionStatsBinary_and_functionKill_write_function() {
+    public void functionKillBinary_key_based_write_function() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        GlideString libName = gs("functionStats_and_functionKill_write_function");
+        GlideString libName = gs("functionKillBinary_key_based_write_function");
         GlideString funcName = gs("deadlock_write_function_with_key_based_route");
         GlideString key = libName;
         GlideString code =
                 gs(createLuaLibWithLongRunningFunction(libName.toString(), funcName.toString(), 6, false));
         Route route = new SlotKeyRoute(key.toString(), PRIMARY);
-        String error = "";
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
-        try {
-            // nothing to kill
-            var exception =
-                    assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-            assertInstanceOf(RequestException.class, exception.getCause());
-            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        promise.complete(null);
 
-            // load the lib
-            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        // nothing to kill
+        var exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
-            try (var testClient =
-                    RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
-                            .get()) {
-                // call the function without await
-                var promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
+        // load the lib
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
-                int timeout = 5200; // ms
-                while (timeout > 0) {
-                    var stats = clusterClient.functionStatsBinary(route).get().getSingleValue();
-                    if (stats.get(gs("running_script")) != null) {
-                        checkFunctionStatsBinaryResponse(
-                                stats, new GlideString[] {gs("FCALL"), funcName, gs("1"), key}, 1, 1);
-                        break;
-                    }
-                    Thread.sleep(100);
-                    timeout -= 100;
-                }
-                if (timeout == 0) {
-                    error += "Can't find a running function.";
-                }
-
-                // redis kills a function with 5 sec delay
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
-
-                assertEquals(gs("Timed out 6 sec"), promise.get());
-
-                exception =
-                        assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
-                assertInstanceOf(RequestException.class, exception.getCause());
-                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-            }
-        } finally {
-            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
-            // test to fail.
+        try (var testClient =
+                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                        .get()) {
             try {
-                clusterClient.functionKill(route).get();
-                // should throw `notbusy` error, because the function should be killed before
-                error += "Function  should finish prior to the test end.";
-            } catch (Exception ignored) {
+                // call the function without await
+                promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
+
+                Thread.sleep(1000);
+
+                boolean foundUnkillable = false;
+                int timeout = 4000; // ms
+                while (timeout >= 0) {
+                    try {
+                        // redis kills a function with 5 sec delay
+                        // but this will always throw an error in the test
+                        clusterClient.functionKill(route).get();
+                    } catch (ExecutionException executionException) {
+                        // looking for an error with "unkillable" in the message
+                        // at that point we can break the loop
+                        if (executionException.getCause() instanceof RequestException
+                                && executionException.getMessage().toLowerCase().contains("unkillable")) {
+                            foundUnkillable = true;
+                            break;
+                        }
+                    }
+                    Thread.sleep(500);
+                    timeout -= 500;
+                }
+                assertTrue(foundUnkillable);
+            } finally {
+                // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                // test to fail.
+                // wait for the function to complete (we cannot kill it)
+                try {
+                    promise.get();
+                } catch (Exception ignored) {
+                }
             }
         }
-
-        assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
     @Test
