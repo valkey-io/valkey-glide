@@ -67,10 +67,15 @@ public class LoggerTests {
         Logger.log(Logger.Level.DEBUG, debugIdentifier, () -> debugMessage);
         Logger.log(Logger.Level.TRACE, traceIdentifier, () -> traceMessage);
 
-        // Initialize a new logger to force closing of existing files
-        Logger.setLoggerConfig(Logger.Level.DEFAULT, "dummy.txt");
-
         File logFolder = new File("glide-logs");
+
+        // Initialize a new logger to force closing of existing files
+        String dummyFilename = "dummy.txt";
+        Logger.setLoggerConfig(Logger.Level.DEFAULT, dummyFilename);
+        File[] dummyLogFiles = logFolder.listFiles((dir, name) -> name.startsWith(dummyFilename + "."));
+        assertNotNull(dummyLogFiles);
+        File dummyLogFile = dummyLogFiles[0];
+
         File[] logFiles = logFolder.listFiles((dir, name) -> name.startsWith(filename + "."));
         assertNotNull(logFiles);
         File logFile = logFiles[0];
@@ -91,6 +96,8 @@ public class LoggerTests {
             assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
         } finally {
             logFile.delete();
+            dummyLogFile.delete();
+            logFolder.delete();
         }
     }
 }
