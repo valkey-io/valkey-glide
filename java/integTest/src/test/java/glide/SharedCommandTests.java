@@ -13028,7 +13028,6 @@ public class SharedCommandTests {
         }
     }
 
-    @Disabled
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -13041,23 +13040,21 @@ public class SharedCommandTests {
         String streamId1_1 = "1-1";
 
         // Setup: add stream entry, create consumer group and consumer, read from stream with consumer
+        final LinkedHashMap<String, String> dataToAdd = new LinkedHashMap<>() {{
+            put("a", "b");
+            put("c", "d");
+        }};
         assertEquals(
             streamId1_0,
-//                client
-//                        .xadd(
-//                                key, Map.of("a", "b", "c", "d"), StreamAddOptions.builder().id(streamId1_0).build())
-//                        .get());
-            client.xadd(key, Map.of("a", "b"),
-                StreamAddOptions.builder().id(streamId1_0).build()).get());
+                client
+                        .xadd(
+                                key, dataToAdd, StreamAddOptions.builder().id(streamId1_0).build())
+                        .get());
         assertEquals(OK, client.xgroupCreate(key, groupName, streamId0_0).get());
-
-        var readGroupResult = client.xreadgroup(Map.of(key, ">"), groupName, consumer).get();
 
         Map<String, Object> result = client.xinfoStream(key).get();
         assertEquals(1L, result.get("length"));
-        //        Map<String, String[][]> expectedFirstEntry = Map.of(streamId1_0, new String[][]{{"a",
-        // "b"}, {"c", "d"}});
-        Object[] expectedFirstEntry = new Object[]{streamId1_0, new String[] {"a", "b"}};
+        final Object[] expectedFirstEntry = new Object[]{streamId1_0, new Object[] {"a", "b", "c", "d"}};
         assertDeepEquals(expectedFirstEntry, result.get("first-entry"));
 
         // Only one entry exists, so first and last entry should be the same
