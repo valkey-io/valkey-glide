@@ -43,7 +43,7 @@ public class PubSubMessageQueue {
     }
 
     /** Get a promise for a next message. */
-    public synchronized CompletableFuture<PubSubMessage> popAsync() {
+    public CompletableFuture<PubSubMessage> popAsync() {
         synchronized (lock) {
             PubSubMessage message = messageQueue.poll();
             if (message == null) {
