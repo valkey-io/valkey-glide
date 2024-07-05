@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
 import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT;
@@ -144,9 +145,9 @@ public class ConnectionManagerTest {
                         .clientName(CLIENT_NAME)
                         .subscriptionConfiguration(
                                 StandaloneSubscriptionConfiguration.builder()
-                                        .subscription(EXACT, "channel_1")
-                                        .subscription(EXACT, "channel_2")
-                                        .subscription(PATTERN, "*chatRoom*")
+                                        .subscription(EXACT, gs("channel_1"))
+                                        .subscription(EXACT, gs("channel_2"))
+                                        .subscription(PATTERN, gs("*chatRoom*"))
                                         .build())
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
@@ -181,12 +182,15 @@ public class ConnectionManagerTest {
                                                 Map.of(
                                                         EXACT.ordinal(),
                                                                 PubSubChannelsOrPatterns.newBuilder()
-                                                                        .addChannelsOrPatterns(ByteString.copyFromUtf8("channel_1"))
-                                                                        .addChannelsOrPatterns(ByteString.copyFromUtf8("channel_2"))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("channel_1").getBytes()))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("channel_2").getBytes()))
                                                                         .build(),
                                                         PATTERN.ordinal(),
                                                                 PubSubChannelsOrPatterns.newBuilder()
-                                                                        .addChannelsOrPatterns(ByteString.copyFromUtf8("*chatRoom*"))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("*chatRoom*").getBytes()))
                                                                         .build()))
                                         .build())
                         .build();

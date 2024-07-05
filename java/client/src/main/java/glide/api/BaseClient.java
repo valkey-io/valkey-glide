@@ -432,12 +432,12 @@ public abstract class BaseClient
 
     protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
         if (config.getSubscriptionConfiguration() == null) {
-            return new MessageHandler(Optional.empty(), Optional.empty(), responseResolver);
+            return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
         }
         return new MessageHandler(
                 config.getSubscriptionConfiguration().getCallback(),
                 config.getSubscriptionConfiguration().getContext(),
-                responseResolver);
+                binaryResponseResolver);
     }
 
     protected static ChannelHandler buildChannelHandler(
@@ -3846,10 +3846,23 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> publish(@NonNull String channel, @NonNull String message) {
+    public CompletableFuture<String> publish(@NonNull String message, @NonNull String channel) {
         return commandManager.submitNewCommand(
                 Publish,
                 new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
+    }
+
+    @Override
+    public CompletableFuture<String> publish(
+            @NonNull GlideString message, @NonNull GlideString channel) {
+        return commandManager.submitNewCommand(
+                Publish,
+                new GlideString[] {channel, message},
                 response -> {
                     // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
                     handleLongResponse(response);

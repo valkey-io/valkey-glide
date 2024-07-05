@@ -64,8 +64,10 @@ public class GlideString implements Comparable<GlideString> {
             return string;
         }
 
-        assert canConvertToString() : "Value cannot be represented as a string";
-        return string;
+        if (canConvertToString()) {
+            return string;
+        }
+        return String.format("Value not convertible to string: byte[] %d", Arrays.hashCode(bytes));
     }
 
     public int compareTo(GlideString o) {

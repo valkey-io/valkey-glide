@@ -76,7 +76,7 @@ public class CallbackDispatcher {
      *
      * @param response A response received
      */
-    public void completeRequest(Response response) {
+    public void completeRequest(Response response) throws MessageHandler.MessageCallbackException {
         if (response.hasClosingError()) {
             // According to https://github.com/aws/glide-for-redis/issues/851
             // a response with a closing error may arrive with any/random callback ID (usually -1)

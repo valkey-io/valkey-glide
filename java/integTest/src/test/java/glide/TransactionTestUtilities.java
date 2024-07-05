@@ -1219,10 +1219,10 @@ public class TransactionTestUtilities {
     }
 
     private static Object[] pubsubCommands(BaseTransaction<?> transaction) {
-        transaction.publish("Tchannel", "message");
+        transaction.publish("message", "Tchannel");
 
         return new Object[] {
-            0L, // publish("Tchannel", "message")
+            0L, // publish("message", "Tchannel")
         };
     }
 }

@@ -28,7 +28,7 @@ public class ClusterTransactionTests {
         ClusterTransaction transaction = new ClusterTransaction();
         List<Pair<RequestType, ArgsArray>> results = new LinkedList<>();
 
-        transaction.spublish("ch1", "msg");
+        transaction.publish("msg", "ch1", true);
         results.add(Pair.of(SPublish, buildArgs("ch1", "msg")));
 
         transaction.sortReadOnly(

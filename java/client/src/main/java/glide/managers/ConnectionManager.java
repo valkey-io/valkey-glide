@@ -150,7 +150,7 @@ public class ConnectionManager {
             for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
                 var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
                 for (var channel : entry.getValue()) {
-                    channelsBuilder.addChannelsOrPatterns(ByteString.copyFromUtf8(channel));
+                    channelsBuilder.addChannelsOrPatterns(ByteString.copyFrom(channel.getBytes()));
                 }
                 subscriptionsBuilder.putChannelsOrPatternsByType(
                         entry.getKey().ordinal(), channelsBuilder.build());
@@ -178,7 +178,7 @@ public class ConnectionManager {
             for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
                 var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
                 for (var channel : entry.getValue()) {
-                    channelsBuilder.addChannelsOrPatterns(ByteString.copyFromUtf8(channel));
+                    channelsBuilder.addChannelsOrPatterns(ByteString.copyFrom(channel.getBytes()));
                 }
                 subscriptionsBuilder.putChannelsOrPatternsByType(
                         entry.getKey().ordinal(), channelsBuilder.build());
