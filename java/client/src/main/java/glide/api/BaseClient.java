@@ -6,6 +6,7 @@ import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -2815,7 +2816,7 @@ public abstract class BaseClient
             @NonNull GlideString start) {
         GlideString[] args =
                 new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime)), start};
-        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
 
     @Override
@@ -2828,7 +2829,13 @@ public abstract class BaseClient
             long count) {
         String[] args =
                 new String[] {
-                    key, group, consumer, Long.toString(minIdleTime), start, "COUNT", Long.toString(count)
+                    key,
+                    group,
+                    consumer,
+                    Long.toString(minIdleTime),
+                    start,
+                    READ_COUNT_REDIS_API,
+                    Long.toString(count)
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
@@ -2848,10 +2855,10 @@ public abstract class BaseClient
                     consumer,
                     gs(Long.toString(minIdleTime)),
                     start,
-                    gs("COUNT"),
+                    gs(READ_COUNT_REDIS_API),
                     gs(Long.toString(count))
                 };
-        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
 
     @Override
@@ -2862,7 +2869,7 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start) {
         String[] args =
-                new String[] {key, group, consumer, Long.toString(minIdleTime), start, "JUSTID"};
+                new String[] {key, group, consumer, Long.toString(minIdleTime), start, JUST_ID_REDIS_API};
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
@@ -2875,9 +2882,9 @@ public abstract class BaseClient
             @NonNull GlideString start) {
         GlideString[] args =
                 new GlideString[] {
-                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs("JUSTID")
+                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs(JUST_ID_REDIS_API)
                 };
-        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
 
     @Override
@@ -2895,9 +2902,9 @@ public abstract class BaseClient
                     consumer,
                     Long.toString(minIdleTime),
                     start,
-                    "COUNT",
+                    READ_COUNT_REDIS_API,
                     Long.toString(count),
-                    "JUSTID"
+                    JUST_ID_REDIS_API
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
@@ -2917,11 +2924,11 @@ public abstract class BaseClient
                     consumer,
                     gs(Long.toString(minIdleTime)),
                     start,
-                    gs("COUNT"),
+                    gs(READ_COUNT_REDIS_API),
                     gs(Long.toString(count)),
-                    gs("JUSTID")
+                    gs(JUST_ID_REDIS_API)
                 };
-        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
 
     @Override

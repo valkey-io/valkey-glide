@@ -20,6 +20,7 @@ import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAM
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
@@ -4087,6 +4088,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
@@ -4094,21 +4097,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
-     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
-     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
-     *     also include a list containing the message IDs that were in the Pending Entries List but no
-     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @return Command Response - An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
      */
     public <ArgType> T xautoclaim(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String start) {
+            @NonNull ArgType start) {
         protobufTransaction.addCommands(
                 buildCommand(
                         XAutoClaim,
@@ -4119,6 +4126,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
@@ -4127,21 +4136,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
-     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
-     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
-     *     also include a list containing the message IDs that were in the Pending Entries List but no
-     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @return Command Response - An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
      */
     public <ArgType> T xautoclaim(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String start,
+            @NonNull ArgType start,
             long count) {
         protobufTransaction.addCommands(
                 buildCommand(
@@ -4152,7 +4165,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add("COUNT")
+                                .add(READ_COUNT_REDIS_API)
                                 .add(count)));
         return getThis();
     }
@@ -4162,6 +4175,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
      * list of claimed IDs without their field-value info.
      *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
@@ -4169,20 +4184,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
-     *     above, the response list will also include a list containing the message IDs that were in
-     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
-     *     Pending Entries List.
+     * @return Command Response - An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
      */
     public <ArgType> T xautoclaimJustId(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String start) {
+            @NonNull ArgType start) {
         protobufTransaction.addCommands(
                 buildCommand(
                         XAutoClaim,
@@ -4201,6 +4219,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
      * list of claimed IDs without their field-value info.
      *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
@@ -4209,20 +4229,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
-     *     above, the response list will also include a list containing the message IDs that were in
-     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
-     *     Pending Entries List.
+     * @return Command Response - An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
      */
     public <ArgType> T xautoclaimJustId(
-            @NonNull String key,
-            @NonNull String group,
-            @NonNull String consumer,
+            @NonNull ArgType key,
+            @NonNull ArgType group,
+            @NonNull ArgType consumer,
             long minIdleTime,
-            @NonNull String start,
+            @NonNull ArgType start,
             long count) {
         protobufTransaction.addCommands(
                 buildCommand(
@@ -4233,7 +4256,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add("COUNT")
+                                .add(READ_COUNT_REDIS_API)
                                 .add(count)
                                 .add(JUST_ID_REDIS_API)));
         return getThis();

@@ -1376,32 +1376,36 @@ public interface StreamBaseCommands {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
-     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
-     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
-     *     also include a list containing the message IDs that were in the Pending Entries List but no
-     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
-     *      assertEquals(streamid_1, result[0]);
-     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
-     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
-     *          //     Entries List because they no longer exist in the stream
-     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
-     *          assertDeepEquals(new Object[] {},result[2]);
-     *      }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     * if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *     assertDeepEquals(new Object[] {},result[2]);
+     * }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start);
@@ -1409,32 +1413,36 @@ public interface StreamBaseCommands {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
-     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
-     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
-     *     also include a list containing the message IDs that were in the Pending Entries List but no
-     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
-     *      assertEquals(streamid_1, result[0]);
-     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
-     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
-     *          //     Entries List because they no longer exist in the stream
-     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
-     *          assertDeepEquals(new Object[] {},result[2]);
-     *      }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0")).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new GlideString[][] {{gs("f1"), gs("v1")}}),result[1]);
+     * if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *     assertDeepEquals(new Object[] {},result[2]);
+     * }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaim(
             GlideString key,
@@ -1446,33 +1454,37 @@ public interface StreamBaseCommands {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
-     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
-     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
-     *     also include a list containing the message IDs that were in the Pending Entries List but no
-     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
-     *      assertEquals(streamid_1, result[0]);
-     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
-     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
-     *          //     Entries List because they no longer exist in the stream
-     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
-     *          assertDeepEquals(new Object[] {},result[2]);
-     *      }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     * if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *     assertDeepEquals(new Object[] {},result[2]);
+     * }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count);
@@ -1480,33 +1492,37 @@ public interface StreamBaseCommands {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
-     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
-     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
-     *     also include a list containing the message IDs that were in the Pending Entries List but no
-     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
-     *      assertEquals(streamid_1, result[0]);
-     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
-     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
-     *          //     Entries List because they no longer exist in the stream
-     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
-     *          assertDeepEquals(new Object[] {},result[2]);
-     *      }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0"), 1L).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new GlideString[][] {{gs("f1"), gs("v1")}}),result[1]);
+     * if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *     assertDeepEquals(new Object[] {},result[2]);
+     * }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaim(
             GlideString key,
@@ -1521,32 +1537,37 @@ public interface StreamBaseCommands {
      * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
      * list of claimed IDs without their field-value info.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
-     *     above, the response list will also include a list containing the message IDs that were in
-     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
-     *     Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
-     *      assertEquals(zeroStreamId, result[0]);
-     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
-     *             assertDeepEquals(new Object[] {}, result[2]);
-     *         }
-     *         else {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
-     *         }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * assertEquals(zeroStreamId, result[0]);
+     *    if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *        assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *        assertDeepEquals(new Object[] {}, result[2]);
+     *    }
+     *    else {
+     *        assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *    }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             String key, String group, String consumer, long minIdleTime, String start);
@@ -1556,32 +1577,37 @@ public interface StreamBaseCommands {
      * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
      * list of claimed IDs without their field-value info.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
-     *     above, the response list will also include a list containing the message IDs that were in
-     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
-     *     Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
-     *      assertEquals(zeroStreamId, result[0]);
-     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
-     *             assertDeepEquals(new Object[] {}, result[2]);
-     *         }
-     *         else {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
-     *         }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0")).get();
+     * assertEquals(zeroStreamId, result[0]);
+     *    if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *        assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *        assertDeepEquals(new Object[] {}, result[2]);
+     *    }
+     *    else {
+     *        assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *    }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             GlideString key,
@@ -1595,33 +1621,38 @@ public interface StreamBaseCommands {
      * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
      * list of claimed IDs without their field-value info.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
-     *     above, the response list will also include a list containing the message IDs that were in
-     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
-     *     Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
-     *      assertEquals(zeroStreamId, result[0]);
-     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
-     *             assertDeepEquals(new Object[] {}, result[2]);
-     *         }
-     *         else {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
-     *         }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     * assertEquals(zeroStreamId, result[0]);
+     *    if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *        assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *        assertDeepEquals(new Object[] {}, result[2]);
+     *    }
+     *    else {
+     *        assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *    }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             String key, String group, String consumer, long minIdleTime, String start, long count);
@@ -1631,33 +1662,38 @@ public interface StreamBaseCommands {
      * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
      * list of claimed IDs without their field-value info.
      *
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param group The consumer group name
+     * @param group The consumer group name.
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return An array containing the following elements: - A stream ID to be used as the start
-     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
-     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
-     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
-     *     above, the response list will also include a list containing the message IDs that were in
-     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
-     *     Pending Entries List.
+     * @return An array containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
      * @example
-     *     <pre>
-     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
-     *      assertEquals(zeroStreamId, result[0]);
-     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
-     *             assertDeepEquals(new Object[] {}, result[2]);
-     *         }
-     *         else {
-     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
-     *         }
-     *  </pre>
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0"), 1L).get();
+     * assertEquals(zeroStreamId, result[0]);
+     *    if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *        assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *        assertDeepEquals(new Object[] {}, result[2]);
+     *    }
+     *    else {
+     *        assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *    }
+     *
+     * }</pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             GlideString key,

@@ -946,10 +946,14 @@ public class TransactionTestUtilities {
                             result,
                             new Object[] {
                                 new Object[] {
-                                    "0-0", Map.of("0-3", new String[][] {{"field3", "value3"}}), new Object[] {}
+                                    "0-0",
+                                    Map.of("0-3", new String[][] {{"field3", "value3"}}),
+                                    new Object[] {} // one more array is returned here for version >= 7.0.0
                                 }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
                                 new Object[] {
-                                    "0-0", new String[] {"0-3"}, new Object[] {}
+                                    "0-0",
+                                    new String[] {"0-3"},
+                                    new Object[] {} // one more array is returned here for version >= 7.0.0
                                 } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
                             });
         } else if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
