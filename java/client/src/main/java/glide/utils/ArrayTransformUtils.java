@@ -262,7 +262,6 @@ public class ArrayTransformUtils {
     public static GlideString[] flattenAllKeysFollowedByAllValues(Map<?, ?> args) {
         List<GlideString> keysList = new ArrayList<>();
         List<GlideString> valuesList = new ArrayList<>();
-        List<GlideString> all = new ArrayList<>();
 
         for (var entry : args.entrySet()) {
             keysList.add(GlideString.of(entry.getKey()));
