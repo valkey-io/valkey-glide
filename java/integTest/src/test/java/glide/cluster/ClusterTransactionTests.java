@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -355,8 +356,7 @@ public class ClusterTransactionTests {
         clusterClient.functionLoad(code, true).get();
 
         // Verify functionDump
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.withBinarySafeOutput();
+        ClusterTransaction transaction = new ClusterTransaction(true);
         transaction.functionDump();
         Object[] result = clusterClient.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
@@ -423,5 +423,24 @@ public class ClusterTransactionTests {
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
                 },
                 results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void binary_strings() {
+        String key = UUID.randomUUID().toString();
+        clusterClient.set(key, "_").get();
+        // use dump to ensure that we have non-string convertible bytes
+        var bytes = clusterClient.dump(gs(key)).get();
+
+        var transaction = new ClusterTransaction(true).set(gs(key), gs(bytes)).get(gs(key));
+
+        var responses = clusterClient.exec(transaction).get();
+
+        assertDeepEquals(
+                new Object[] {
+                    OK, gs(bytes),
+                },
+                responses);
     }
 }

@@ -706,8 +706,7 @@ public class TransactionTests {
         assertEquals(OK, client.set(key1, gs(value)).get());
 
         // Verify dump
-        Transaction transaction = new Transaction();
-        transaction.withBinarySafeOutput();
+        Transaction transaction = new Transaction(true);
         transaction.dump(key1);
         Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
@@ -733,8 +732,7 @@ public class TransactionTests {
         client.functionLoad(code, true).get();
 
         // Verify functionDump
-        Transaction transaction = new Transaction();
-        transaction.withBinarySafeOutput();
+        Transaction transaction = new Transaction(true);
         transaction.functionDump();
         Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
@@ -798,5 +796,24 @@ public class TransactionTests {
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
                 },
                 results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void binary_strings() {
+        String key = UUID.randomUUID().toString();
+        client.set(key, "_").get();
+        // use dump to ensure that we have non-string convertible bytes
+        var bytes = client.dump(gs(key)).get();
+
+        var transaction = new Transaction(true).set(gs(key), gs(bytes)).get(gs(key));
+
+        var responses = client.exec(transaction).get();
+
+        assertDeepEquals(
+                new Object[] {
+                    OK, gs(bytes),
+                },
+                responses);
     }
 }

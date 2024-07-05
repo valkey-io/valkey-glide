@@ -11,19 +11,19 @@ import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
+import glide.api.RedisClient;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
-import lombok.AllArgsConstructor;
 import lombok.NonNull;
 
 /**
- * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
- * a group of commands in a single step.
+ * Transaction implementation for standalone {@link RedisClient}. Transactions allow the execution
+ * of a group of commands in a single step.
  *
- * <p>Command Response: An array of command responses is returned by the client <code>exec</code>
- * command, in the order they were given. Each element in the array represents a command given to
- * the <code>Transaction</code>. The response for each command depends on the executed Redis
- * command. Specific response types are documented alongside each method.
+ * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
+ * {@link RedisClient#exec} API, in the order they were given. Each element in the array represents
+ * a command given to the {@link Transaction}. The response for each command depends on the executed
+ * Valkey command. Specific response types are documented alongside each method.
  *
  * @example
  *     <pre>{@code
@@ -36,15 +36,33 @@ import lombok.NonNull;
  * assert result[1].equals("value");
  * }</pre>
  */
-@AllArgsConstructor
 public class Transaction extends BaseTransaction<Transaction> {
+    /**
+     * Create a transaction for standalone client.
+     *
+     * @param binaryOutput Flag whether transaction commands may return binary data.<br>
+     *     If set to <code>true</code>, all commands return {@link GlideString} instead of {@link
+     *     String}.
+     */
+    public Transaction(boolean binaryOutput) {
+        super(binaryOutput);
+    }
+
+    /**
+     * Create a transaction for standalone client assuming {@link #binaryOutput} set to <code>false
+     * </code>.
+     */
+    public Transaction() {
+        this(false);
+    }
+
     @Override
     protected Transaction getThis() {
         return this;
     }
 
     /**
-     * Changes the currently selected Redis database.
+     * Changes the currently selected server database.
      *
      * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
      * @param index The index of the database to select.
@@ -59,6 +77,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
@@ -77,9 +97,9 @@ public class Transaction extends BaseTransaction<Transaction> {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @since Valkey 6.2.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -97,9 +117,9 @@ public class Transaction extends BaseTransaction<Transaction> {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @since Valkey 6.2.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -129,8 +149,9 @@ public class Transaction extends BaseTransaction<Transaction> {
      * apply transformations on sorted elements.<br>
      * To store the result into a new key, see {@link #sortStore(ArgType, ArgType, SortOptions)}.
      *
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
@@ -147,9 +168,10 @@ public class Transaction extends BaseTransaction<Transaction> {
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.<br>
      *
-     * @since Redis 7.0 and above.
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @since Valkey 7.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort_ro">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
@@ -169,8 +191,9 @@ public class Transaction extends BaseTransaction<Transaction> {
      * key.<br>
      * To get the sort result without storing it into a key, see {@link #sort(ArgType, SortOptions)}.
      *
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
      * @param destination The key where the sorted result will be stored.
@@ -194,7 +217,7 @@ public class Transaction extends BaseTransaction<Transaction> {
     /**
      * Iterates incrementally over a database for matching keys.
      *
-     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
@@ -211,7 +234,7 @@ public class Transaction extends BaseTransaction<Transaction> {
     /**
      * Iterates incrementally over a database for matching keys.
      *
-     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
      * @param options The {@link ScanOptions}.
