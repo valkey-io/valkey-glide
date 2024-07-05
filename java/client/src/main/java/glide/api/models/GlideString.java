@@ -11,16 +11,19 @@ import lombok.Getter;
  * can contain non-UTF8 compatible symbols or even arbitrary binary data BLOBs.<br>
  * This class stores data <code>byte[]</code> too, but provides API to represent data as a {@link
  * String} if conversion is possible.
+ *
+ * @see <a href="@see https://valkey.io/docs/topics/strings/">valkey.io</a> for more details.
  */
 public class GlideString implements Comparable<GlideString> {
 
-    /** The data itself. */
+    /** The Valkey string as a binary representation. */
     @Getter private byte[] bytes;
 
     /**
      * Stores a string when it is possible.<br>
-     * Value is written if conversion requested via {@link #toString()} or {@link #getString()} or
-     * checked with {@link #canConvertToString()} only if conversion is possible.
+     * {@link String} representation of the value is only stored if conversion via {@link
+     * #canConvertToString()} is possible. The conversion is lazy, and only converted on the first
+     * call {@link #toString()}, {@link #getString()}, or {@link #canConvertToString()}.
      */
     private String string = null;
 
