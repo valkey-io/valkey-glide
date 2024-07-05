@@ -3560,7 +3560,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @return Command Response - <code>OK</code>.
      */
@@ -3582,7 +3582,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @param options The group options {@link StreamGroupOptions}.
      * @return Command Response - <code>OK</code>.
