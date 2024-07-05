@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -148,7 +148,7 @@ public class TransactionTestUtilities {
                 .sortStore(genericKey3, genericKey4)
                 .lrange(genericKey4, 0, -1);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .set(genericKey1, value1)
                     .expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
@@ -160,7 +160,7 @@ public class TransactionTestUtilities {
                     .sortReadOnly(genericKey3);
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .set(genericKey3, "value")
                     .set(genericKey4, "value2")
@@ -196,7 +196,7 @@ public class TransactionTestUtilities {
                     ascendingList, // lrange(genericKey4, 0, -1)
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -212,7 +212,7 @@ public class TransactionTestUtilities {
                             });
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -271,7 +271,7 @@ public class TransactionTestUtilities {
                 .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
                 .mget(new String[] {stringKey4, stringKey5});
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .set(stringKey6, "abcd")
                     .set(stringKey7, "bcde")
@@ -286,7 +286,7 @@ public class TransactionTestUtilities {
                     .lcsIdxWithMatchLen(stringKey6, stringKey7, 1);
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .set(stringKey9, value1)
                     .getex(stringKey9)
@@ -319,7 +319,7 @@ public class TransactionTestUtilities {
                     new String[] {"foo", null}, // mget({stringKey4, stringKey5})
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -338,7 +338,7 @@ public class TransactionTestUtilities {
                             });
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -447,7 +447,7 @@ public class TransactionTestUtilities {
                 .lset(listKey5, 0, value1)
                 .lrange(listKey5, 0, -1);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
                     .lmpop(new String[] {listKey4}, ListDirection.LEFT)
@@ -456,7 +456,7 @@ public class TransactionTestUtilities {
                     .blmpop(new String[] {listKey4}, ListDirection.LEFT, 2L, 0.1);
         } // listKey4 is now empty
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .lpush(listKey6, new String[] {value3, value2, value1})
                     .lpush(listKey7, new String[] {value1, value2, value3})
@@ -499,7 +499,7 @@ public class TransactionTestUtilities {
                     new String[] {value1, value2}, // lrange(listKey5, 0, -1)
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -512,7 +512,7 @@ public class TransactionTestUtilities {
                             });
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -565,7 +565,7 @@ public class TransactionTestUtilities {
                 .spop(setKey4)
                 .spopCount(setKey4, 3); // setKey4 is now empty
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .sadd(setKey5, new String[] {"one", "two", "three", "four"})
                     .sadd(setKey6, new String[] {"two", "three", "four", "five"})
@@ -598,7 +598,7 @@ public class TransactionTestUtilities {
                     "foo", // spop(setKey4)
                     Set.of(), // spopCount(setKey4, 3)
                 };
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -652,7 +652,7 @@ public class TransactionTestUtilities {
                 .bzpopmin(new String[] {zSetKey2}, .1);
         // zSetKey2 is now empty
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
                     // zSetKey6 is empty
@@ -669,7 +669,7 @@ public class TransactionTestUtilities {
                     .zinterWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}), Aggregate.MAX);
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
                     .zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
@@ -715,7 +715,7 @@ public class TransactionTestUtilities {
                     new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -735,7 +735,7 @@ public class TransactionTestUtilities {
                             });
         }
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -770,7 +770,7 @@ public class TransactionTestUtilities {
             OK, // configSet(Map.of("timeout", "1000"))
             Map.of("timeout", "1000"), // configGet(new String[] {"timeout"})
             OK, // configResetStat()
-            "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
+            "Redis ver. " + SERVER_VERSION + '\n', // lolwut(1)
             OK, // flushall()
             OK, // flushall(ASYNC)
             OK, // flushdb()
@@ -876,7 +876,7 @@ public class TransactionTestUtilities {
                 .xgroupCreate(streamKey3, groupName3, "0")
                 .xinfoGroups(streamKey1);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .xadd(streamKey2, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
                     .xgroupCreate(streamKey2, groupName3, "0")
@@ -937,7 +937,7 @@ public class TransactionTestUtilities {
             new Map[] {}, // xinfoGroups(streamKey3)
         };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             result =
                     concatenateArrays(
                             result,
@@ -969,7 +969,7 @@ public class TransactionTestUtilities {
                 .geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
                 .geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"});
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             transaction
                     .geosearch(
                             geoKey1,
@@ -1021,7 +1021,7 @@ public class TransactionTestUtilities {
                     } // geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"})
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             expectedResults =
                     concatenateArrays(
                             expectedResults,
@@ -1076,7 +1076,7 @@ public class TransactionTestUtilities {
     }
 
     private static Object[] scriptingAndFunctionsCommands(BaseTransaction<?> transaction) {
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             return new Object[0];
         }
 
@@ -1181,7 +1181,7 @@ public class TransactionTestUtilities {
                 .bitfieldReadOnly(key1, new BitFieldReadOnlySubCommands[] {bitFieldGet})
                 .bitfield(key1, new BitFieldSubCommands[] {bitFieldSet});
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .set(key3, "foobar")
                     .bitcount(key3, 5, 30, BitmapIndexType.BIT)
@@ -1206,7 +1206,7 @@ public class TransactionTestUtilities {
                     new Long[] {609L}, // bitfield(key1, BitFieldSubCommands)
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {

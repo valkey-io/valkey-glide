@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -237,7 +237,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void zrank_zrevrank_withscores() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
         Transaction transaction = new Transaction();
         transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -253,7 +253,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void copy() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"));
         // setup
         String copyKey1 = "{CopyKey}-1-" + UUID.randomUUID();
         String copyKey2 = "{CopyKey}-2-" + UUID.randomUUID();
@@ -481,7 +481,7 @@ public class TransactionTests {
 
         assertArrayEquals(expectedResults, client.exec(transaction1).get());
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction2
                     .sortReadOnly(
                             genericKey1,
@@ -635,7 +635,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void test_transaction_function_dump_restore() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
         String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
