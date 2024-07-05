@@ -109,6 +109,11 @@ public class MessageHandler {
         }
     }
 
+    /** Peek at the first available message published. Note: For testing only. */
+    PubSubMessage peek() {
+        return queue.peek();
+    }
+
     /** Process a {@link PubSubMessage} received. */
     private void handle(PubSubMessage message) throws MessageCallbackException {
         if (callback.isPresent()) {
