@@ -194,11 +194,6 @@ public class PubSubTests {
     //  test_pubsub_exact_happy_path_many_channels_co_existence
     //  test_sharded_pubsub_co_existence
     //  test_pubsub_pattern_co_existence
-    // TODO tests below blocked by https://github.com/aws/glide-for-redis/issues/1649
-    //  test_pubsub_exact_max_size_PubsubMessage
-    //  test_pubsub_sharded_max_size_PubsubMessage
-    //  test_pubsub_exact_max_size_PubsubMessage_callback
-    //  test_pubsub_sharded_max_size_PubsubMessage_callback
 
     // TODO why `publish` returns 0 on cluster or > 1 on standalone when there is only 1 receiver???
     //  meanwhile, all pubsubMessages are delivered.
@@ -813,9 +808,6 @@ public class PubSubTests {
                 assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction).get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().toLowerCase().contains("crossslot"));
-
-        // TODO test when callback throws an exception - currently nothing happens now
-        //  it should terminate the client
     }
 
     @SneakyThrows
