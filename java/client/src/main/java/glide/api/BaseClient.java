@@ -584,17 +584,6 @@ public abstract class BaseClient
     }
 
     /**
-     * @param response A Protobuf response
-     * @return A map of <code>String</code> to <code>V</code>.
-     * @param <V> Value type.
-     */
-    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<GlideString, V> handleMapResponseGlideString(Response response)
-            throws RedisException {
-        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-    }
-
-    /**
      * Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
      *
      * @param response A Protobuf response
@@ -3006,7 +2995,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new String[] {key},
-                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+                response -> handleMapResponse(response));
     }
 
     @Override
@@ -3022,7 +3011,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new String[] {key, FULL, COUNT, Integer.toString(count)},
-                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+                response -> handleMapResponse(response));
     }
 
     @Override
@@ -3030,7 +3019,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new GlideString[] {key},
-                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+                response -> handleBinaryStringMapResponse(response));
     }
 
     @Override
@@ -3038,7 +3027,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new GlideString[] {key, gs(FULL)},
-                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+                response -> handleBinaryStringMapResponse(response));
     }
 
     @Override
@@ -3047,7 +3036,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new GlideString[] {key, gs(FULL), gs(COUNT), gs(Integer.toString(count))},
-                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+                response -> handleBinaryStringMapResponse(response));
     }
 
     @Override
