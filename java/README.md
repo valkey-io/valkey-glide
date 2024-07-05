@@ -69,22 +69,22 @@ Gradle:
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
 
-osx-aarch_64
+// osx-aarch_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-aarch_64'
 }
 
-osx-x86_64
+// osx-x86_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-x86_64'
 }
 
-linux-aarch_64
+// linux-aarch_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-aarch_64'
 }
 
-linux-x86_64
+// linux-x86_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-x86_64'
 }
@@ -94,36 +94,36 @@ Maven:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
 ```xml
 
-osx-aarch_64
+<!--osx-aarch_64-->
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>osx-aarch_64</classifier>
-   <version>0.4.3</version>
+   <version><LATEST></version>
 </dependency>
 
-osx-x86_64
+<!--osx-x86_64-->
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>osx-x86_64</classifier>
-   <version><VERSION></version>
+   <version><LATEST></version>
 </dependency>
 
-linux-aarch_64
+<!--linux-aarch_64-->
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>linux-aarch_64</classifier>
-   <version><VERSION></version>
+   <version><LATEST></version>
 </dependency>
 
-linux-x86_64
+<!--linux-x86_64-->
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>linux-x86_64</classifier>
-   <version><VERSION></version>
+   <version><LATEST></version>
 </dependency>
 ```
 
