@@ -16,7 +16,9 @@ import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.scan.ZScanOptions;
@@ -1187,6 +1189,34 @@ public interface SortedSetBaseCommands {
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * WeightedKeysBinary weightedKeys = new WeightedKeys(List.of(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * Long payload = client.zunionstore(gs("newSortedSet"), weightedKeys, Aggregate.MAX).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(
+            GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
      *       <li>Use {@link KeyArray} for keys only.
      *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
      *     </ul>
@@ -1200,6 +1230,32 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * Long payload = client.zunionstore(gs("newSortedSet"), keyArray).get()
+     * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
+     * }</pre>
+     */
+    CompletableFuture<Long> zunionstore(
+            GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys);
 
     /**
      * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
@@ -1502,15 +1558,37 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
-     * String[] payload = client.zunion(keyArray).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * String[] payload1 = client.zunion(keyArray).get()
+     * assert Arrays.equals(payload1, new String[] {"elem1", "elem2", "elem3"});
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * String[] payload = client.zunion(weightedKeys).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * String[] payload2 = client.zunion(weightedKeys).get()
+     * assert Arrays.equals(payload2, new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
      */
     CompletableFuture<String[]> zunion(KeyArray keys);
+
+    /**
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
+     * To get the elements with their scores, see {@link #zunionWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * GlideString[] payload1 = client.zunion(keyArray).get()
+     * assert Arrays.equals(payload1, new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
+     *
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * GlideString[] payload2 = client.zunion(weightedKeys).get()
+     * assert Arrays.equals(payload2, new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> zunion(KeyArrayBinary keys);
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
@@ -1533,15 +1611,46 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
-     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     * assert Arrays.equals(payload1, Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray, Aggregate.SUM).get();
-     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * assert Arrays.equals(payload2, Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(
             KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Returns the union of members and their scores from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * Map<GlideString, Double> payload1 = client.zunionWithScores(keyArray, Aggregate.MAX).get();
+     * assert Arrays.equals(payload1, Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
+     *
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * Map<GlideString, Double> payload2 = client.zunionWithScores(weightedKeys, Aggregate.SUM).get();
+     * assert Arrays.equals(payload2, Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Double>> zunionWithScores(
+            KeysOrWeightedKeysBinary keysOrWeightedKeys, Aggregate aggregate);
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
@@ -1564,14 +1673,45 @@ public interface SortedSetBaseCommands {
      *     <pre>{@code
      * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
      * Map<String, Double> payload1 = client.zunionWithScores(keyArray).get();
-     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     * assert Arrays.equals(payload1, Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
      * Map<String, Double> payload2 = client.zunionWithScores(keyArray).get();
-     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * assert Arrays.equals(payload2, Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the union of members and their scores from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
+     * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArrayBinary(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * Map<GlideString, Double> payload1 = client.zunionWithScores(keyArray).get();
+     * assert Arrays.equals(payload1, Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0, gs("elem3"), 3.0));
+     *
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * Map<GlideString, Double> payload2 = client.zunionWithScores(keyArray).get();
+     * assert Arrays.equals(payload2, Map.of(gs("elem1"), 2.0, gs("elem2"), 4.0, gs("elem3"), 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Double>> zunionWithScores(
+            KeysOrWeightedKeysBinary keysOrWeightedKeys);
 
     /**
      * Returns the intersection of members from sorted sets specified by the given <code>keys</code>.
