@@ -1,20 +1,11 @@
 # GLIDE for Valkey
 
-General Language Independent Driver for the Enterprise (GLIDE) for Valkey, is an AWS-sponsored, open-source Valkey client. GLIDE for Valkey works with any Valkey distribution that adheres to the Valkey Serialization
-Protocol (RESP) specification, including open-source Valkey, Amazon ElastiCache for Valkey, and Amazon MemoryDB for Valkey.
-Strategic, mission-critical Valkey-based applications have requirements for security, optimized performance, minimal downtime, and observability. GLIDE for Valkey is designed to provide a client experience that helps meet these objectives.
-It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating Valkey-compatible services used by hundreds of thousands of customers.
-To help ensure consistency in development and operations, GLIDE for Valkey is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language. This design ensures that updates easily propagate to each language and reduces overall complexity.
-In this release, GLIDE for Valkey is available for Python, Javascript (Node.js), and Java.
-
-## Supported Valkey Versions
-
-GLIDE for Valkey is API-compatible with open-source Valkey version 6 and 7.
-
-## Current Status
-
-We've made GLIDE for Valkey an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Valkey stakeholders.
-This preview release is recommended for testing purposes only.
+Valkey General Language Independent Driver for the Enterprise (GLIDE), is an AWS-sponsored, open-source Valkey client that includes support for open-source Redis 6.2 to 7.2.
+Valkey GLIDE works with any distribution that adheres to the Redis Serialization Protocol (RESP) specification, including Amazon ElastiCache, and Amazon MemoryDB.
+Strategic, mission-critical applications have requirements for security, optimized performance, minimal downtime, and observability.
+Valkey GLIDE is designed to provide a client experience that helps meet these objectives. It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating RESP-compatible services used by hundreds of thousands of customers.
+To help ensure consistency in development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language.
+This design ensures that updates easily propagate to each language and reduces overall complexity. In this Preview release, Valkey GLIDE is available for Python and Java, with support for Javascript (Node.js) actively under development.
 
 # Getting Started - Java Wrapper
 
@@ -33,13 +24,9 @@ The Java client contains the following parts:
 
 ## Installation and Setup
 
-### Install from Gradle
-
-At the moment, the Java client must be built from source.
-
 #### Prerequisites
 
-Refer to Java's [DEVELOPER.md](./DEVELOPER.md) for further instruction on how to set up your development environment.
+For developers, please refer to Java's [DEVELOPER.md](./DEVELOPER.md) for further instruction on how to set up your development environment.
 
 **Java version check**
 
@@ -50,16 +37,7 @@ echo $JAVA_HOME
 java -version
 ```
 
-Other useful gradle developer commands:
-* `./gradlew :client:test` to run client unit tests
-* `./gradlew :integTest:test` to run client examples
-* `./gradlew spotlessCheck` to check for codestyle issues
-* `./gradlew spotlessApply` to apply codestyle recommendations
-* `./gradlew :examples:run` to run client examples (make sure you have a running valkey on port `6379`)
-* `./gradlew :benchmarks:run` to run performance benchmarks
-
-
-### Setting up the Driver
+### Adding the client to your project
 
 Refer to https://central.sonatype.com/artifact/software.amazon.glide/glide-for-redis.
 Once set up, you can run the basic examples.
@@ -70,13 +48,13 @@ Gradle:
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
 dependencies {
-    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: `osx-aarch_64`
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-aarch_64'
 }
 ```
 
 Maven:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
-```java
+```xml
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
@@ -85,12 +63,31 @@ Maven:
 </dependency>
 ```
 
+## Setting up the Java module
+
+To use Glide for Valkey in a Java project with modules, include a module-info.java in your project.
+
+For example, if your program is called `App`, you can following this path
+```java
+app/src/main/java/module-info.java
+```
+
+and inside the module it will specifically require the line
+`requires glide.api;`
+
+For example, if your project has a module called playground, it would look like this
+```java
+module playground {
+    requires glide.api;
+}
+```
+
 ## Basic Examples
 
 ### Standalone Valkey:
 
 ```java
-// You can run this example code in the Main.
+// You can run this example code in Main.java.
 import glide.api.GlideClient;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -134,7 +131,7 @@ public class Main {
 
 ### Cluster Valkey:
 ```java
-// You can run this example code in the Main.
+// You can run this example code in Main.java.
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -194,9 +191,9 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 
 The following arguments are accepted:
 * `resultsFile`: the results output file
-* `concurrentTasks`: Number of concurrent tasks
+* `concurrentTasks`: number of concurrent tasks
 * `clients`: one of: all|jedis|lettuce|glide
-* `clientCount`: Client count
+* `clientCount`: client count
 * `host`: Valkey server host url
-* `port`: glide server port number
-* `tls`: glide TLS configured
+* `port`: Valkey server port number
+* `tls`: Valkey TLS configured
