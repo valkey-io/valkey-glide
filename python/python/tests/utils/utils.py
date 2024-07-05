@@ -3,8 +3,14 @@ import random
 import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
+import pytest
 from glide.async_commands.core import InfoSection
-from glide.constants import TClusterResponse, TFunctionListResponse, TResult
+from glide.constants import (
+    TClusterResponse,
+    TFunctionListResponse,
+    TFunctionStatsResponse,
+    TResult,
+)
 from glide.glide_client import TGlideClient
 from packaging import version
 
@@ -73,9 +79,9 @@ def get_random_string(length):
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     # TODO: change it to pytest fixture after we'll implement a sync client
     info_str = await client.info([InfoSection.SERVER])
-    redis_version = parse_info_response(info_str).get("redis_version")
-    assert redis_version is not None
-    return version.parse(redis_version) < version.parse(min_version)
+    server_version = parse_info_response(info_str).get("redis_version")
+    assert server_version is not None
+    return version.parse(server_version) < version.parse(min_version)
 
 
 def compare_maps(
@@ -227,6 +233,37 @@ def generate_lua_lib_code(
     return code
 
 
+def create_lua_lib_with_long_running_function(
+    lib_name: str, func_name: str, timeout: int, readonly: bool
+) -> str:
+    """
+    Create a lua lib with a (optionally) RO function which runs an endless loop up to timeout sec.
+    Execution takes at least 5 sec regardless of the timeout configured.
+    """
+    code = (
+        f"#!lua name={lib_name}\n"
+        f"local function {lib_name}_{func_name}(keys, args)\n"
+        "  local started = tonumber(redis.pcall('time')[1])\n"
+        # fun fact - redis does no writes if 'no-writes' flag is set
+        "  redis.pcall('set', keys[1], 42)\n"
+        "  while (true) do\n"
+        "    local now = tonumber(redis.pcall('time')[1])\n"
+        f"    if now > started + {timeout} then\n"
+        f"      return 'Timed out {timeout} sec'\n"
+        "    end\n"
+        "  end\n"
+        "  return 'OK'\n"
+        "end\n"
+        "redis.register_function{\n"
+        f"function_name='{func_name}',\n"
+        f"callback={lib_name}_{func_name},\n"
+    )
+    if readonly:
+        code += "flags={ 'no-writes' }\n"
+    code += "}"
+    return code
+
+
 def check_function_list_response(
     response: TClusterResponse[TFunctionListResponse],
     lib_name: str,
@@ -269,3 +306,39 @@ def check_function_list_response(
             break
 
     assert has_lib is True
+
+
+def check_function_stats_response(
+    response: TFunctionStatsResponse,
+    running_function: List[bytes],
+    lib_count: int,
+    function_count: int,
+):
+    """
+    Validate whether `FUNCTION STATS` response contains required info.
+
+    Args:
+        response (TFunctionStatsResponse): The response from server.
+        running_function (List[bytes]): Command line of running function expected. Empty, if nothing expected.
+        lib_count (int): Expected libraries count.
+        function_count (int): Expected functions count.
+    """
+    running_script_info = response.get(b"running_script")
+    if running_script_info is None and len(running_function) != 0:
+        pytest.fail("No running function info")
+
+    if running_script_info is not None and len(running_function) == 0:
+        command = cast(dict, running_script_info).get(b"command")
+        pytest.fail("Unexpected running function info: " + " ".join(cast(str, command)))
+
+    if running_script_info is not None:
+        command = cast(dict, running_script_info).get(b"command")
+        assert running_function == command
+        # command line format is:
+        # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+        assert running_function[1] == cast(dict, running_script_info).get(b"name")
+
+    expected = {
+        b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
+    }
+    assert expected == response.get(b"engines")

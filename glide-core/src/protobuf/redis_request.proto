@@ -244,9 +244,9 @@ enum RequestType {
     XAutoClaim = 203;
     XInfoGroups = 204;
     XInfoConsumers = 205;
+    Scan = 206;
     Wait = 208;
     XClaim = 209;
-    Scan = 210;
 }
 
 message Command {
@@ -259,6 +259,13 @@ message Command {
         ArgsArray args_array = 2;
         uint64 args_vec_pointer = 3;
     }
+}
+
+// Used for script requests with large keys or args vectors
+message ScriptInvocationPointers {
+    string hash = 1;
+    optional uint64 keys_pointer = 2;
+    optional uint64 args_pointer = 3;
 }
 
 message ScriptInvocation {
@@ -285,7 +292,8 @@ message RedisRequest {
         Command single_command = 2;
         Transaction transaction = 3;
         ScriptInvocation script_invocation = 4;
-        ClusterScan cluster_scan = 5;
+        ScriptInvocationPointers script_invocation_pointers = 5;
+        ClusterScan cluster_scan = 6;
     }
-    Routes route = 6;
+    Routes route = 7;
 }

@@ -74,6 +74,7 @@ import glide.api.models.commands.geospatial.GeoSearchOptions;
 import glide.api.models.commands.geospatial.GeoSearchOrigin;
 import glide.api.models.commands.geospatial.GeoSearchOrigin.CoordOrigin;
 import glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin;
+import glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOriginBinary;
 import glide.api.models.commands.geospatial.GeoSearchResultOptions;
 import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
@@ -1430,6 +1431,65 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hrandfieldBinary(BaseClient client) {
+        byte[] binvalue1 = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        byte[] binvalue2 = {(byte) 0xFF, (byte) 0x66, (byte) 0xFF, (byte) 0xAF, (byte) 0x22};
+
+        GlideString key1 = gs(binvalue1);
+        GlideString key2 = gs(binvalue2);
+
+        // key does not exist
+        assertNull(client.hrandfield(key1).get());
+        assertEquals(0, client.hrandfieldWithCount(key1, 5).get().length);
+        assertEquals(0, client.hrandfieldWithCountWithValues(key1, 5).get().length);
+
+        var data = Map.of(gs("f 1"), gs("v 1"), gs("f 2"), gs("v 2"), gs("f 3"), gs("v 3"));
+        assertEquals(3, client.hset(key1, data).get());
+
+        // random key
+        assertTrue(data.containsKey(client.hrandfield(key1).get()));
+
+        // WithCount - positive count
+        var keys = client.hrandfieldWithCount(key1, 5).get();
+        assertEquals(data.keySet().size(), keys.length);
+        assertEquals(data.keySet(), Set.of(keys));
+
+        // WithCount - negative count
+        keys = client.hrandfieldWithCount(key1, -5).get();
+        assertEquals(5, keys.length);
+        Arrays.stream(keys).forEach(key -> assertTrue(data.containsKey(key)));
+
+        // WithCountWithValues - positive count
+        var keysWithValues = client.hrandfieldWithCountWithValues(key1, 5).get();
+        assertEquals(data.keySet().size(), keysWithValues.length);
+        for (var pair : keysWithValues) {
+            assertEquals(data.get(pair[0]), pair[1]);
+        }
+
+        // WithCountWithValues - negative count
+        keysWithValues = client.hrandfieldWithCountWithValues(key1, -5).get();
+        assertEquals(5, keysWithValues.length);
+        for (var pair : keysWithValues) {
+            assertEquals(data.get(pair[0]), pair[1]);
+        }
+
+        // Key exists, but it is not a List
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.hrandfield(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.hrandfieldWithCount(key2, 2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.hrandfieldWithCountWithValues(key2, 3).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lpush_lpop_lrange_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
@@ -1441,6 +1501,26 @@ public class SharedCommandTests {
         assertArrayEquals(new String[] {}, client.lrange("non_existing_key", 0, -1).get());
         assertNull(client.lpop("non_existing_key").get());
     }
+
+    //     TODO: uncomment once client.lrange has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void lpush_lpop_lrange_binary_existing_non_existing_key(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString[] valueArray = new GlideString[] {gs("value4"), gs("value3"), gs("value2"),
+    // gs("value1")};
+
+    //         assertEquals(4, client.lpush(key, valueArray).get());
+    //         assertEquals("value1", client.lpop(key).get());
+    //         assertArrayEquals(new GlideString[] {gs("value2"), gs("value3"), gs("value4")},
+    // client.lrange(key, 0, -1).get());
+    //         assertArrayEquals(new GlideString[] {gs("value2"), gs("value3")}, client.lpopCount(key,
+    // 2).get());
+    //         assertArrayEquals(new GlideString[] {}, client.lrange(gs("non_existing_key"), 0,
+    // -1).get());
+    //         assertNull(client.lpop(gs("non_existing_key")).get());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -1465,6 +1545,33 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
         assertTrue(lrangeException.getCause() instanceof RequestException);
     }
+
+    //     TODO: uncomment once client.lrange has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void lpush_lpop_lrange_binary_type_error(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+
+    //         assertEquals(OK, client.set(key, "foo").get());
+
+    //         Exception lpushException =
+    //                 assertThrows(ExecutionException.class, () -> client.lpush(key, new
+    // GlideString[] {gs("foo")}).get());
+    //         assertTrue(lpushException.getCause() instanceof RequestException);
+
+    //         Exception lpopException = assertThrows(ExecutionException.class, () ->
+    // client.lpop(key).get());
+    //         assertTrue(lpopException.getCause() instanceof RequestException);
+
+    //         Exception lpopCountException =
+    //                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
+    //         assertTrue(lpopCountException.getCause() instanceof RequestException);
+
+    //         Exception lrangeException =
+    //                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
+    //         assertTrue(lrangeException.getCause() instanceof RequestException);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -1805,6 +1912,22 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void rpush_rpop_binary_existing_non_existing_key(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString[] valueArray =
+                new GlideString[] {gs("value1"), gs("value2"), gs("value3"), gs("value4")};
+
+        assertEquals(4, client.rpush(key, valueArray).get());
+        assertEquals(gs("value4"), client.rpop(key).get());
+
+        assertArrayEquals(
+                new GlideString[] {gs("value3"), gs("value2")}, client.rpopCount(key, 2).get());
+        assertNull(client.rpop(gs("non_existing_key")).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void rpush_rpop_type_error(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
@@ -1812,6 +1935,23 @@ public class SharedCommandTests {
 
         Exception rpushException =
                 assertThrows(ExecutionException.class, () -> client.rpush(key, new String[] {"foo"}).get());
+        assertTrue(rpushException.getCause() instanceof RequestException);
+
+        Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
+        assertTrue(rpopException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void rpush_rpop_binary_type_error(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        assertEquals(OK, client.set(key, gs("foo")).get());
+
+        Exception rpushException =
+                assertThrows(
+                        ExecutionException.class, () -> client.rpush(key, new GlideString[] {gs("foo")}).get());
         assertTrue(rpushException.getCause() instanceof RequestException);
 
         Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
@@ -2928,6 +3068,42 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void script_large_keys_and_or_args(BaseClient client) {
+        String str1 = "0".repeat(1 << 12); // 4k
+        String str2 = "0".repeat(1 << 12); // 4k
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 1 very big key
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().key(str1 + str2).build()).get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 2 big keys
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().key(str1).key(str2).build()).get();
+            assertEquals(str1, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 very big arg
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().arg(str1 + str2).build()).get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 big arg + 1 big key
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().arg(str1).key(str2).build()).get();
+            assertEquals(str2, response);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void invokeScript_gs_test(BaseClient client) {
         GlideString key1 = gs(UUID.randomUUID().toString());
         GlideString key2 = gs(UUID.randomUUID().toString());
@@ -3134,6 +3310,27 @@ public class SharedCommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void zpopmin_binary(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"),
+    // 3.0);
+    //         assertEquals(3, client.zadd(key, membersScores).get());
+    //         assertEquals(Map.of(gs("a"), 1.0), client.zpopmin(key).get());
+    //         assertEquals(Map.of(gs("b"), 2.0, gs("c"), 3.0), client.zpopmin(key, 3).get());
+    //         assertTrue(client.zpopmin(key).get().isEmpty());
+    //         assertTrue(client.zpopmin(gs("non_existing_key")).get().isEmpty());
+
+    //         // Key exists, but it is not a set
+    //         assertEquals(OK, client.set(key, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zpopmin(key).get());
+    //         assertTrue(executionException.getCause() instanceof RequestException);
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -3165,6 +3362,42 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void bzpopmin_binary(BaseClient client) {
+    //         GlideString key1 = gs("{test}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{test}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{test}-3-" + UUID.randomUUID());
+
+    //         assertEquals(2, client.zadd(key1, Map.of("a", 1.0, "b", 1.5)).get());
+    //         assertEquals(1, client.zadd(key2, Map.of("c", 2.0)).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key1, "a", 1.0}, client.bzpopmin(new GlideString[] {key1, key2},
+    // .5).get());
+
+    //         // nothing popped out - key does not exist
+    //         assertNull(
+    //                 client
+    //                         .bzpopmin(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0")
+    // ? 1. : 0.001)
+    //                         .get());
+
+    //         // pops from the second key
+    //         assertArrayEquals(
+    //                 new Object[] {key2, "c", 2.0}, client.bzpopmin(new GlideString[] {key3, key2},
+    // .5).get());
+
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzpopmin(new GlideString[]
+    // {key3}, .5).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -3190,6 +3423,28 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void bzpopmin_binary_timeout_check(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzpopmin(new GlideString[] {key}, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzpopmin(new GlideString[] {key}, 0).get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zpopmax(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
@@ -3205,6 +3460,27 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void zpopmax_binary(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"),
+    // 3.0);
+    //         assertEquals(3, client.zadd(key, membersScores).get());
+    //         assertEquals(Map.of(gs("c"), 3.0), client.zpopmax(key).get());
+    //         assertEquals(Map.of(gs("b"), 2.0, gs("a"), 1.0), client.zpopmax(key, 3).get());
+    //         assertTrue(client.zpopmax(key).get().isEmpty());
+    //         assertTrue(client.zpopmax(gs("non_existing_key")).get().isEmpty());
+
+    //         // Key exists, but it is not a set
+    //         assertEquals(OK, client.set(key, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
+    //         assertTrue(executionException.getCause() instanceof RequestException);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -3237,6 +3513,42 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void bzpopmax_binary(BaseClient client) {
+    //         GlideString key1 = gs("{test}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{test}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{test}-3-" + UUID.randomUUID());
+
+    //         assertEquals(2, client.zadd(key1, Map.of(gs("a"), 1.0, gs("b"), 1.5)).get());
+    //         assertEquals(1, client.zadd(key2, Map.of(gs("c"), 2.0)).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key1, "b", 1.5}, client.bzpopmax(new GlideString[] {key1, key2},
+    // .5).get());
+
+    //         // nothing popped out - key does not exist
+    //         assertNull(
+    //                 client
+    //                         .bzpopmax(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0")
+    // ? 1. : 0.001)
+    //                         .get());
+
+    //         // pops from the second key
+    //         assertArrayEquals(
+    //                 new Object[] {key2, "c", 2.0}, client.bzpopmax(new GlideString[] {key3, key2},
+    // .5).get());
+
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzpopmax(new GlideString[]
+    // {key3}, .5).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -3256,6 +3568,28 @@ public class SharedCommandTests {
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
                     () -> testClient.bzpopmax(new String[] {key}, 0).get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzpopmax_binary_timeout_check(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzpopmax(new GlideString[] {key}, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzpopmax(new GlideString[] {key}, 0).get(3, TimeUnit.SECONDS));
         }
     }
 
@@ -4175,6 +4509,64 @@ public class SharedCommandTests {
         assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
     }
 
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void zmpop_binary(BaseClient client) {
+    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis
+    // 7");
+    //         GlideString key1 = gs("{zmpop}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{zmpop}-3-" + UUID.randomUUID());
+
+    //         assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+    //         assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
+
+    //         assertArrayEquals(
+    //                 new Object[] {key1, Map.of(gs("b1"), 2.)}, client.zmpop(new GlideString[]
+    // {key1, key2}, MAX).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+    //                 client.zmpop(new GlideString[] {key2, key1}, MAX, 10).get());
+
+    //         // nothing popped out
+    //         assertNull(client.zmpop(new GlideString[] {key3}, MIN).get());
+    //         assertNull(client.zmpop(new GlideString[] {key3}, MIN, 1).get());
+
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zmpop(new GlideString[]
+    // {key3}, MAX).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.zmpop(new GlideString[] {key3},
+    // MAX, 1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // incorrect argument
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.zmpop(new GlideString[] {key1},
+    // MAX, 0).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zmpop(new GlideString[0],
+    // MAX).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // check that order of entries in the response is preserved
+    //         var entries = new LinkedHashMap<String, Double>();
+    //         for (int i = 0; i < 10; i++) {
+    //             // a => 1., b => 2. etc
+    //             entries.put(gs("" + ('a' + i)), (double) i);
+    //         }
+    //         assertEquals(10, client.zadd(key2, entries).get());
+    //         assertEquals(entries, client.zmpop(new GlideString[] {key2}, MIN, 10).get()[1]);
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -4225,6 +4617,61 @@ public class SharedCommandTests {
         assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
     }
 
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void bzmpop_binary(BaseClient client) {
+    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis
+    // 7");
+    //         GlideString key1 = gs("{bzmpop}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{bzmpop}-3-" + UUID.randomUUID());
+
+    //         assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+    //         assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
+
+    //         assertArrayEquals(
+    //                 new Object[] {key1, Map.of(gs("b1"), 2.)},
+    //                 client.bzmpop(new GlideString[] {key1, key2}, MAX, 0.1).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+    //                 client.bzmpop(new GlideString[] {key2, key1}, MAX, 0.1, 10).get());
+
+    //         // nothing popped out
+    //         assertNull(client.bzmpop(new GlideString[] {key3}, MIN, 0.001).get());
+    //         assertNull(client.bzmpop(new GlideString[] {key3}, MIN, 0.001, 1).get());
+
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzmpop(new GlideString[] {key3},
+    // MAX, .1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzmpop(new GlideString[] {key3},
+    // MAX, .1, 1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // incorrect argument
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzmpop(new GlideString[] {key1},
+    // MAX, .1, 0).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // check that order of entries in the response is preserved
+    //         var entries = new LinkedHashMap<GlideString, Double>();
+    //         for (int i = 0; i < 10; i++) {
+    //             // a => 1., b => 2. etc
+    //             entries.put(gs("" + ('a' + i)), (double) i);
+    //         }
+    //         assertEquals(10, client.zadd(key2, entries).get());
+    //         assertEquals(entries, client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get()[1]);
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -4249,6 +4696,29 @@ public class SharedCommandTests {
     }
 
     // TODO: add binary version
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzmpop_binary_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        GlideString key = gs(UUID.randomUUID().toString());
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzmpop(new GlideString[] {key}, MAX, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzmpop(new GlideString[] {key}, MAX, 0).get(3, TimeUnit.SECONDS));
+        }
+    }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -4881,7 +5351,7 @@ public class SharedCommandTests {
         assertEquals(false, client.xgroupDestroy(key, groupName).get());
 
         // ENTRIESREAD option was added in redis 7.0.0
-        StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead("10").build();
+        StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead(10L).build();
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
         } else {
@@ -4910,6 +5380,221 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.xgroupDestroy(stringKey, groupName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xinfoGroups_with_xinfoConsumers(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String groupName1 = "group1" + UUID.randomUUID();
+        String groupName2 = "group2" + UUID.randomUUID();
+        String consumer1 = "consumer1" + UUID.randomUUID();
+        String consumer2 = "consumer2" + UUID.randomUUID();
+        String streamId0_0 = "0-0";
+        String streamId1_0 = "1-0";
+        String streamId1_1 = "1-1";
+        String streamId1_2 = "1-2";
+        String streamId1_3 = "1-3";
+        LinkedHashMap<String, String> streamMap = new LinkedHashMap();
+        streamMap.put("f1", "v1");
+        streamMap.put("f2", "v2");
+
+        assertEquals(
+                streamId1_0,
+                client.xadd(key, streamMap, StreamAddOptions.builder().id(streamId1_0).build()).get());
+        assertEquals(
+                streamId1_1,
+                client
+                        .xadd(key, Map.of("f3", "v3"), StreamAddOptions.builder().id(streamId1_1).build())
+                        .get());
+        assertEquals(
+                streamId1_2,
+                client
+                        .xadd(key, Map.of("f4", "v4"), StreamAddOptions.builder().id(streamId1_2).build())
+                        .get());
+        assertEquals(OK, client.xgroupCreate(key, groupName1, streamId0_0).get());
+
+        Map<String, Map<String, String[][]>> result =
+                client
+                        .xreadgroup(
+                                Map.of(key, ">"),
+                                groupName1,
+                                consumer1,
+                                StreamReadGroupOptions.builder().count(1L).build())
+                        .get();
+        assertDeepEquals(
+                Map.of(key, Map.of(streamId1_0, new String[][] {{"f1", "v1"}, {"f2", "v2"}})), result);
+
+        // Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is >0
+        Thread.sleep(2000);
+        Map<String, Object>[] consumers = client.xinfoConsumers(key, groupName1).get();
+        assertEquals(1, consumers.length);
+        Map<String, Object> consumerInfo = consumers[0];
+        assertEquals(consumer1, consumerInfo.get("name"));
+        assertEquals(1L, consumerInfo.get("pending"));
+        assertTrue((Long) consumerInfo.get("idle") > 0L);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+            assertTrue((Long) consumerInfo.get("inactive") > 0L);
+        }
+
+        // Test with GlideString
+        Map<GlideString, Object>[] binaryConsumers =
+                client.xinfoConsumers(gs(key), gs(groupName1)).get();
+        assertEquals(1, binaryConsumers.length);
+        Map<GlideString, Object> binaryConsumerInfo = binaryConsumers[0];
+        assertEquals(gs(consumer1), binaryConsumerInfo.get(gs("name")));
+        assertEquals(1L, binaryConsumerInfo.get(gs("pending")));
+        assertTrue((Long) binaryConsumerInfo.get(gs("idle")) > 0L);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+            assertTrue((Long) binaryConsumerInfo.get(gs("inactive")) > 0L);
+        }
+
+        // Create consumer2 and read the rest of the entries with it
+        assertTrue(client.xgroupCreateConsumer(key, groupName1, consumer2).get());
+        result = client.xreadgroup(Map.of(key, ">"), groupName1, consumer2).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamId1_1, new String[][] {{"f3", "v3"}},
+                                streamId1_2, new String[][] {{"f4", "v4"}})),
+                result);
+
+        // Verify that xinfo_consumers contains info for 2 consumers now
+        // Test with byte string args
+        consumers = client.xinfoConsumers(key, groupName1).get();
+        assertEquals(2, consumers.length);
+
+        // Add one more entry
+        assertEquals(
+                streamId1_3,
+                client
+                        .xadd(key, Map.of("f5", "v5"), StreamAddOptions.builder().id(streamId1_3).build())
+                        .get());
+
+        Map<String, Object>[] groups = client.xinfoGroups(key).get();
+        assertEquals(1, groups.length);
+        Map<String, Object> group1Info = groups[0];
+        assertEquals(groupName1, group1Info.get("name"));
+        assertEquals(2L, group1Info.get("consumers"));
+        assertEquals(3L, group1Info.get("pending"));
+        assertEquals(streamId1_2, group1Info.get("last-delivered-id"));
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(
+                    3L, group1Info.get("entries-read")); // We have read stream entries 1-0, 1-1, and 1-2
+            assertEquals(
+                    1L, group1Info.get("lag")); // We still have not read one entry in the stream, entry 1-3
+        }
+
+        // Test with GlideString
+        Map<GlideString, Object>[] binaryGroups = client.xinfoGroups(gs(key)).get();
+        assertEquals(1, binaryGroups.length);
+        Map<GlideString, Object> binaryGroup1Info = binaryGroups[0];
+        assertEquals(gs(groupName1), binaryGroup1Info.get(gs("name")));
+        assertEquals(2L, binaryGroup1Info.get(gs("consumers")));
+        assertEquals(3L, binaryGroup1Info.get(gs("pending")));
+        assertEquals(gs(streamId1_2), binaryGroup1Info.get(gs("last-delivered-id")));
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(
+                    3L,
+                    binaryGroup1Info.get(
+                            gs("entries-read"))); // We have read stream entries 1-0, 1-1, and 1-2
+            assertEquals(
+                    1L,
+                    binaryGroup1Info.get(
+                            gs("lag"))); // We still have not read one entry in the stream, entry 1-3
+        }
+
+        // Verify xgroup_set_id effects the returned value from xinfo_groups
+        assertEquals(OK, client.xgroupSetId(key, groupName1, streamId1_1).get());
+        groups = client.xinfoGroups(key).get();
+        assertEquals(1, groups.length);
+        group1Info = groups[0];
+        assertEquals(groupName1, group1Info.get("name"));
+        assertEquals(2L, group1Info.get("consumers"));
+        assertEquals(3L, group1Info.get("pending"));
+        assertEquals(streamId1_1, group1Info.get("last-delivered-id"));
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertNull(
+                    group1Info.get("entries-read")); // Gets set to None when we change the last delivered ID
+            assertNull(group1Info.get("lag")); // Gets set to None when we change the last delivered ID
+
+            // Verify xgroup_set_id with entries_read_id effects the returned value from xinfo_groups
+            assertEquals(OK, client.xgroupSetId(key, groupName1, streamId1_1, 1L).get());
+            groups = client.xinfoGroups(key).get();
+            assertEquals(1, groups.length);
+            group1Info = groups[0];
+            assertEquals(groupName1, group1Info.get("name"));
+            assertEquals(2L, group1Info.get("consumers"));
+            assertEquals(3L, group1Info.get("pending"));
+            assertEquals(streamId1_1, group1Info.get("last-delivered-id"));
+            assertEquals(1L, group1Info.get("entries-read"));
+            assertEquals(3L, group1Info.get("lag"));
+        }
+
+        // Add one more consumer group
+        assertEquals(OK, client.xgroupCreate(key, groupName2, streamId0_0).get());
+
+        // Verify that xinfo_groups contains info for 2 consumer groups now
+        groups = client.xinfoGroups(key).get();
+        assertEquals(2, groups.length);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xinfoGroups_with_xinfoConsumers_and_edge_cases(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String nonExistentKey = UUID.randomUUID().toString();
+        String groupName = "group1" + UUID.randomUUID();
+        String streamId1_0 = "1-0";
+
+        // Passing a non-existing key raises an error
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.xinfoGroups(nonExistentKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xinfoConsumers(nonExistentKey, groupName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        assertEquals(
+                streamId1_0,
+                client
+                        .xadd(
+                                key,
+                                Map.of("f1", "v1", "f2", "v2"),
+                                StreamAddOptions.builder().id(streamId1_0).build())
+                        .get());
+
+        // Passing a non-existing group raises an error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xinfoConsumers(key, "nonExistentGroup").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // No groups exist yet
+        assertEquals(0, client.xinfoGroups(key).get().length);
+
+        assertEquals(OK, client.xgroupCreate(key, groupName, streamId1_0).get());
+
+        // No consumers exist yet
+        assertEquals(0, client.xinfoConsumers(key, groupName).get().length);
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(stringKey, "foo").get());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xinfoGroups(stringKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xinfoConsumers(stringKey, groupName).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -5066,15 +5751,7 @@ public class SharedCommandTests {
         if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
-            assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, streamId0).get());
-
-            // The entriesReadId cannot be the first, last, or zero ID. Here we pass the first ID and
-            // assert that an error is raised.
-            ExecutionException executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.xgroupSetId(key, groupName, streamId1_1, streamId1_0).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, 1L).get());
         }
 
         // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1.
@@ -5445,6 +6122,195 @@ public class SharedCommandTests {
         assertEquals(2, pending_results_extended.length);
     }
 
+    // TODO: uncomment once relevant methods are implemented with binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void xpending_xclaim_binary(BaseClient client) {
+
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString groupName = gs("group" + UUID.randomUUID());
+    //         GlideString zeroStreamId = gs("0");
+    //         GlideString consumer1 = gs("consumer-1-" + UUID.randomUUID());
+    //         GlideString consumer2 = gs("consumer-2-" + UUID.randomUUID());
+
+    //         // create group and consumer for the group
+    //         assertEquals(
+    //                 OK,
+    //                 client
+    //                         .xgroupCreate(
+    //                                 key, groupName, zeroStreamId,
+    // StreamGroupOptions.builder().makeStream().build())
+    //                         .get());
+    //         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+    //         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer2).get());
+
+    //         // Add two stream entries for consumer 1
+    //         GlideString streamid_1 = client.xadd(key, Map.of(gs("field1"), gs("value1"))).get();
+    //         assertNotNull(streamid_1);
+    //         GlideString streamid_2 = client.xadd(key, Map.of(gs("field2"), gs("value2"))).get();
+    //         assertNotNull(streamid_2);
+
+    //         // read the entire stream for the consumer and mark messages as pending
+    //         var result_1 = client.xreadgroup(Map.of(key, gs(">")), groupName, consumer1).get();
+    //         assertDeepEquals(
+    //                 Map.of(
+    //                         key,
+    //                         Map.of(
+    //                                 streamid_1, new GlideString[][] {{gs("field1"), gs("value1")}},
+    //                                 streamid_2, new GlideString[][] {{gs("field2"),
+    // gs("value2")}})),
+    //                 result_1);
+
+    //         // Add three stream entries for consumer 2
+    //         String streamid_3 = client.xadd(key, Map.of(gs("field3"), gs("value3"))).get();
+    //         assertNotNull(streamid_3);
+    //         String streamid_4 = client.xadd(key, Map.of(gs("field4"), gs("value4"))).get();
+    //         assertNotNull(streamid_4);
+    //         String streamid_5 = client.xadd(key, Map.of(gs("field5"), gs("value5"))).get();
+    //         assertNotNull(streamid_5);
+
+    //         // read the entire stream for the consumer and mark messages as pending
+    //         var result_2 = client.xreadgroup(Map.of(key, gs(">")), groupName, consumer2).get();
+    //         assertDeepEquals(
+    //                 Map.of(
+    //                         key,
+    //                         Map.of(
+    //                                 streamid_3, new GlideString[][] {{gs("field3"), gs("value3")}},
+    //                                 streamid_4, new GlideString[][] {{gs("field4"), gs("value4")}},
+    //                                 streamid_5, new GlideString[][] {{gs("field5"),
+    // gs("value5")}})),
+    //                 result_2);
+
+    //         Object[] pending_results = client.xpending(key, groupName).get();
+    //         Object[] expectedResult = {
+    //             Long.valueOf(5L), streamid_1, streamid_5, new Object[][] {{consumer1, "2"},
+    // {consumer2, "3"}}
+    //         };
+    //         assertDeepEquals(expectedResult, pending_results);
+
+    //         // ensure idle_time > 0
+    //         Thread.sleep(2000);
+    //         Object[][] pending_results_extended =
+    //                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX,
+    // 10L).get();
+
+    //         // because of idle time return, we have to remove it from the expected results
+    //         // and check it separately
+    //         assertArrayEquals(
+    //                 new Object[] {streamid_1, consumer1, 1L},
+    //                 ArrayUtils.remove(pending_results_extended[0], 2));
+    //         assertTrue((Long) pending_results_extended[0][2] > 0L);
+
+    //         assertArrayEquals(
+    //                 new Object[] {streamid_2, consumer1, 1L},
+    //                 ArrayUtils.remove(pending_results_extended[1], 2));
+    //         assertTrue((Long) pending_results_extended[1][2] > 0L);
+
+    //         assertArrayEquals(
+    //                 new Object[] {streamid_3, consumer2, 1L},
+    //                 ArrayUtils.remove(pending_results_extended[2], 2));
+    //         assertTrue((Long) pending_results_extended[2][2] >= 0L);
+
+    //         assertArrayEquals(
+    //                 new Object[] {streamid_4, consumer2, 1L},
+    //                 ArrayUtils.remove(pending_results_extended[3], 2));
+    //         assertTrue((Long) pending_results_extended[3][2] >= 0L);
+
+    //         assertArrayEquals(
+    //                 new Object[] {streamid_5, consumer2, 1L},
+    //                 ArrayUtils.remove(pending_results_extended[4], 2));
+    //         assertTrue((Long) pending_results_extended[4][2] >= 0L);
+
+    //         // use claim to claim stream 3 and 5 for consumer 1
+    //         var claimResults =
+    //                 client
+    //                         .xclaim(key, groupName, consumer1, 0L, new GlideString[] {streamid_3,
+    // streamid_5})
+    //                         .get();
+    //         assertDeepEquals(
+    //                 Map.of(
+    //                         streamid_3,
+    //                         new GlideString[][] {{gs("field3"), gs("value3")}},
+    //                         streamid_5,
+    //                         new GlideString[][] {{gs("field5"), gs("value5")}}),
+    //                 claimResults);
+
+    //         var claimResultsJustId =
+    //                 client
+    //                         .xclaimJustId(key, groupName, consumer1, 0L, new String[] {streamid_3,
+    // streamid_5})
+    //                         .get();
+    //         assertArrayEquals(new GlideString[] {streamid_3, streamid_5}, claimResultsJustId);
+
+    //         // add one more stream
+    //         String streamid_6 = client.xadd(key, Map.of(gs("field6"), gs("value6"))).get();
+    //         assertNotNull(streamid_6);
+
+    //         // using force, we can xclaim the message without reading it
+    //         var claimForceResults =
+    //                 client
+    //                         .xclaim(
+    //                                 key,
+    //                                 groupName,
+    //                                 consumer2,
+    //                                 0L,
+    //                                 new GlideString[] {streamid_6},
+    //                                 StreamClaimOptions.builder().force().retryCount(99L).build())
+    //                         .get();
+    //         assertDeepEquals(
+    //                 Map.of(streamid_6, new GlideString[][] {{gs("field6"), gs("value6")}}),
+    // claimForceResults);
+
+    //         Object[][] forcePendingResults =
+    //                 client.xpending(key, groupName, IdBound.of(streamid_6), IdBound.of(streamid_6),
+    // 1L).get();
+    //         assertEquals(streamid_6, forcePendingResults[0][0]);
+    //         assertEquals(consumer2, forcePendingResults[0][1]);
+    //         assertEquals(99L, forcePendingResults[0][3]);
+
+    //         // acknowledge streams 2, 3, 4, and 6 and remove them from the xpending results
+    //         assertEquals(
+    //                 4L,
+    //                 client
+    //                         .xack(
+    //                                 key, groupName, new GlideString[] {streamid_2, streamid_3,
+    // streamid_4, streamid_6})
+    //                         .get());
+
+    //         pending_results_extended =
+    //                 client
+    //                         .xpending(key, groupName, IdBound.ofExclusive(streamid_3),
+    // InfRangeBound.MAX, 10L)
+    //                         .get();
+    //         assertEquals(1, pending_results_extended.length);
+    //         assertEquals(streamid_5, pending_results_extended[0][0]);
+    //         assertEquals(consumer1, pending_results_extended[0][1]);
+
+    //         pending_results_extended =
+    //                 client
+    //                         .xpending(key, groupName, InfRangeBound.MIN,
+    // IdBound.ofExclusive(streamid_5), 10L)
+    //                         .get();
+    //         assertEquals(1, pending_results_extended.length);
+    //         assertEquals(streamid_1, pending_results_extended[0][0]);
+    //         assertEquals(consumer1, pending_results_extended[0][1]);
+
+    //         pending_results_extended =
+    //                 client
+    //                         .xpending(
+    //                                 key,
+    //                                 groupName,
+    //                                 InfRangeBound.MIN,
+    //                                 InfRangeBound.MAX,
+    //                                 10L,
+    //
+    // StreamPendingOptions.builder().minIdleTime(1L).consumer(consumer1).build())
+    //                         .get();
+    //         // note: streams ID 1 and 5 are still pending, all others were acknowledged
+    //         assertEquals(2, pending_results_extended.length);
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -5604,6 +6470,179 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+    // TODO: uncomment once relevant methods are implemented with binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void xpending_binary_return_failures(BaseClient client) {
+
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString stringkey = gs(UUID.randomUUID().toString());
+    //         GlideString groupName = gs("group" + UUID.randomUUID());
+    //         GlideString zeroStreamId = gs("0");
+    //         GlideString consumer1 = gs("consumer-1-" + UUID.randomUUID());
+
+    //         // create group and consumer for the group
+    //         assertEquals(
+    //                 OK,
+    //                 client
+    //                         .xgroupCreate(
+    //                                 key, groupName, zeroStreamId,
+    // StreamGroupOptions.builder().makeStream().build())
+    //                         .get());
+    //         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+
+    //         // Add two stream entries for consumer 1
+    //         GlideString streamid_1 = client.xadd(key, Map.of(gs("field1"), gs("value1"))).get();
+    //         assertNotNull(streamid_1);
+    //         GlideString streamid_2 = client.xadd(key, Map.of(gs("field2"), gs("value2"))).get();
+    //         assertNotNull(streamid_2);
+
+    //         // no pending messages yet...
+    //         var pending_results_summary = client.xpending(key, groupName).get();
+    //         assertArrayEquals(new Object[] {0L, null, null, null}, pending_results_summary);
+
+    //         var pending_results_extended =
+    //                 client.xpending(key, groupName, InfRangeBound.MAX, InfRangeBound.MIN,
+    // 10L).get();
+    //         assertEquals(0, pending_results_extended.length);
+
+    //         // read the entire stream for the consumer and mark messages as pending
+    //         var result_1 = client.xreadgroup(Map.of(key, gs(">")), groupName, consumer1).get();
+    //         assertDeepEquals(
+    //                 Map.of(
+    //                         key,
+    //                         Map.of(
+    //                                 streamid_1, new GlideString[][] {{gs("field1"), gs("value1")}},
+    //                                 streamid_2, new GlideString[][] {{gs("field2"),
+    // gs("value2")}})),
+    //                 result_1);
+
+    //         // sanity check - expect some results:
+    //         pending_results_summary = client.xpending(key, groupName).get();
+    //         assertTrue((Long) pending_results_summary[0] > 0L);
+
+    //         pending_results_extended =
+    //                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX,
+    // 1L).get();
+    //         assertTrue(pending_results_extended.length > 0);
+
+    //         // returns empty if + before -
+    //         pending_results_extended =
+    //                 client.xpending(key, groupName, InfRangeBound.MAX, InfRangeBound.MIN,
+    // 10L).get();
+    //         assertEquals(0, pending_results_extended.length);
+
+    //         // min idletime of 100 seconds shouldn't produce any results
+    //         pending_results_extended =
+    //                 client
+    //                         .xpending(
+    //                                 key,
+    //                                 groupName,
+    //                                 InfRangeBound.MIN,
+    //                                 InfRangeBound.MAX,
+    //                                 10L,
+    //                                 StreamPendingOptions.builder().minIdleTime(100000L).build())
+    //                         .get();
+    //         assertEquals(0, pending_results_extended.length);
+
+    //         // invalid consumer - no results
+    //         pending_results_extended =
+    //                 client
+    //                         .xpending(
+    //                                 key,
+    //                                 groupName,
+    //                                 InfRangeBound.MIN,
+    //                                 InfRangeBound.MAX,
+    //                                 10L,
+    //
+    // StreamPendingOptions.builder().consumer("invalid_consumer").build())
+    //                         .get();
+    //         assertEquals(0, pending_results_extended.length);
+
+    //         // xpending when range bound is not valid ID throws a RequestError
+    //         Exception executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xpending(
+    //                                                 key,
+    //                                                 groupName,
+    //                                                 IdBound.ofExclusive("not_a_stream_id"),
+    //                                                 InfRangeBound.MAX,
+    //                                                 10L)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xpending(
+    //                                                 key,
+    //                                                 groupName,
+    //                                                 InfRangeBound.MIN,
+    //                                                 IdBound.ofExclusive("not_a_stream_id"),
+    //                                                 10L)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // invalid count should return no results
+    //         pending_results_extended =
+    //                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX,
+    // -10L).get();
+    //         assertEquals(0, pending_results_extended.length);
+
+    //         pending_results_extended =
+    //                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX,
+    // 0L).get();
+    //         assertEquals(0, pending_results_extended.length);
+
+    //         // invalid group throws a RequestError (NOGROUP)
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.xpending(key,
+    // gs("not_a_group")).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         // non-existent key throws a RequestError (NOGROUP)
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.xpending(stringkey,
+    // groupName).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xpending(stringkey, groupName, InfRangeBound.MIN,
+    // InfRangeBound.MAX, 10L)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         // Key exists, but it is not a stream
+    //         assertEquals(OK, client.set(stringkey, gs("bar")).get());
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.xpending(stringkey,
+    // groupName).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xpending(stringkey, groupName, InfRangeBound.MIN,
+    // InfRangeBound.MAX, 10L)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -5746,6 +6785,161 @@ public class SharedCommandTests {
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    // TODO: uncomment once relevant methods are implemented with binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void xclaim_binary_return_failures(BaseClient client) {
+
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString stringkey = gs(UUID.randomUUID().toString());
+    //         GlideString groupName = gs("group" + UUID.randomUUID());
+    //         GlideString zeroStreamId = gs("0");
+    //         GlideString consumer1 = gs("consumer-1-" + UUID.randomUUID());
+    //         GlideString consumer2 = gs("consumer-2-" + UUID.randomUUID());
+
+    //         // create group and consumer for the group
+    //         assertEquals(
+    //                 OK,
+    //                 client
+    //                         .xgroupCreate(
+    //                                 key, groupName, zeroStreamId,
+    // StreamGroupOptions.builder().makeStream().build())
+    //                         .get());
+    //         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+
+    //         // Add stream entry and mark as pending:
+    //         GlideString streamid_1 = client.xadd(key, Map.of(gs("field1"), gs("value1"))).get();
+    //         assertNotNull(streamid_1);
+    //         assertNotNull(client.xreadgroup(Map.of(key, gs(">")), groupName, consumer1).get());
+
+    //         // claim with invalid stream entry IDs
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaimJustId(key, groupName, consumer1, 1L, new
+    // GlideString[] {gs("invalid")})
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // claim with empty stream entry IDs returns no results
+    //         var emptyClaim = client.xclaimJustId(key, groupName, consumer1, 1L, new
+    // GlideString[0]).get();
+    //         assertEquals(0L, emptyClaim.length);
+
+    //         // non-existent key throws a RequestError (NOGROUP)
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaim(stringkey, groupName, consumer1, 1L, new
+    // GlideString[] {streamid_1})
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         final var claimOptions = StreamClaimOptions.builder().idle(1L).build();
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaim(
+    //                                                 stringkey,
+    //                                                 groupName,
+    //                                                 consumer1,
+    //                                                 1L,
+    //                                                 new GlideString[] {streamid_1},
+    //                                                 claimOptions)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaimJustId(
+    //                                                 stringkey, groupName, consumer1, 1L, new
+    // GlideString[] {streamid_1})
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaimJustId(
+    //                                                 stringkey,
+    //                                                 groupName,
+    //                                                 consumer1,
+    //                                                 1L,
+    //                                                 new GlideString[] {streamid_1},
+    //                                                 claimOptions)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+    //         // Key exists, but it is not a stream
+    //         assertEquals(OK, client.set(stringkey, gs("bar")).get());
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaim(stringkey, groupName, consumer1, 1L, new
+    // GlideString[] {streamid_1})
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaim(
+    //                                                 stringkey,
+    //                                                 groupName,
+    //                                                 consumer1,
+    //                                                 1L,
+    //                                                 new GlideString[] {streamid_1},
+    //                                                 claimOptions)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaimJustId(
+    //                                                 stringkey, groupName, consumer1, 1L, new
+    // GlideString[] {streamid_1})
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class,
+    //                         () ->
+    //                                 client
+    //                                         .xclaimJustId(
+    //                                                 stringkey,
+    //                                                 groupName,
+    //                                                 consumer1,
+    //                                                 1L,
+    //                                                 new GlideString[] {streamid_1},
+    //                                                 claimOptions)
+    //                                         .get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -5998,6 +7192,34 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void brpop_binary(BaseClient client) {
+        GlideString listKey1 = gs("{listKey}-1-" + UUID.randomUUID());
+        GlideString listKey2 = gs("{listKey}-2-" + UUID.randomUUID());
+        GlideString value1 = gs("value1-" + UUID.randomUUID());
+        GlideString value2 = gs("value2-" + UUID.randomUUID());
+        assertEquals(2, client.lpush(listKey1, new GlideString[] {value1, value2}).get());
+
+        var response = client.brpop(new GlideString[] {listKey1, listKey2}, 0.5).get();
+        assertArrayEquals(new GlideString[] {listKey1, value1}, response);
+
+        // nothing popped out
+        assertNull(
+                client
+                        .brpop(new GlideString[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.brpop(new GlideString[] {gs("foo")}, .0001).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void rpushx(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -6045,6 +7267,34 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.blpop(new String[] {"foo"}, .0001).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blpop_binary(BaseClient client) {
+        GlideString listKey1 = gs("{listKey}-1-" + UUID.randomUUID());
+        GlideString listKey2 = gs("{listKey}-2-" + UUID.randomUUID());
+        GlideString value1 = gs("value1-" + UUID.randomUUID());
+        GlideString value2 = gs("value2-" + UUID.randomUUID());
+        assertEquals(2, client.lpush(listKey1, new GlideString[] {value1, value2}).get());
+
+        var response = client.blpop(new GlideString[] {listKey1, listKey2}, 0.5).get();
+        assertArrayEquals(new GlideString[] {listKey1, value2}, response);
+
+        // nothing popped out
+        assertNull(
+                client
+                        .blpop(new GlideString[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(gs("foo"), gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.blpop(new GlideString[] {gs("foo")}, .0001).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -7300,6 +8550,50 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lmpop_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString nonListKey = gs("{key}-3" + UUID.randomUUID());
+        GlideString[] singleKeyArray = {key1};
+        GlideString[] multiKeyArray = {key2, key1};
+        long count = 1L;
+        Long arraySize = 5L;
+        GlideString[] lpushArgs = {gs("one"), gs("two"), gs("three"), gs("four"), gs("five")};
+        Map<GlideString, GlideString[]> expected = Map.of(key1, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> expected2 =
+                Map.of(key2, new GlideString[] {gs("one"), gs("two")});
+
+        // nothing to be popped
+        assertNull(client.lmpop(singleKeyArray, ListDirection.LEFT).get());
+        assertNull(client.lmpop(singleKeyArray, ListDirection.LEFT, count).get());
+
+        // pushing to the arrays to be popped
+        assertEquals(arraySize, client.lpush(key1, lpushArgs).get());
+        assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
+
+        // assert correct result from popping
+        Map<GlideString, GlideString[]> result = client.lmpop(singleKeyArray, ListDirection.LEFT).get();
+        assertDeepEquals(result, expected);
+
+        // assert popping multiple elements from the right
+        Map<GlideString, GlideString[]> result2 =
+                client.lmpop(multiKeyArray, ListDirection.RIGHT, 2L).get();
+        assertDeepEquals(result2, expected2);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, gs("lmpop")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmpop(new GlideString[] {nonListKey}, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void blmpop(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         // setup
@@ -7343,6 +8637,51 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void blmpop_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString nonListKey = gs("{key}-3" + UUID.randomUUID());
+        GlideString[] singleKeyArray = {key1};
+        GlideString[] multiKeyArray = {key2, key1};
+        long count = 1L;
+        Long arraySize = 5L;
+        GlideString[] lpushArgs = {gs("one"), gs("two"), gs("three"), gs("four"), gs("five")};
+        Map<GlideString, GlideString[]> expected = Map.of(key1, new GlideString[] {gs("five")});
+        Map<GlideString, GlideString[]> expected2 =
+                Map.of(key2, new GlideString[] {gs("one"), gs("two")});
+
+        // nothing to be popped
+        assertNull(client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get());
+        assertNull(client.blmpop(singleKeyArray, ListDirection.LEFT, count, 0.1).get());
+
+        // pushing to the arrays to be popped
+        assertEquals(arraySize, client.lpush(key1, lpushArgs).get());
+        assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
+
+        // assert correct result from popping
+        Map<GlideString, GlideString[]> result =
+                client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get();
+        assertDeepEquals(result, expected);
+
+        // assert popping multiple elements from the right
+        Map<GlideString, GlideString[]> result2 =
+                client.blmpop(multiKeyArray, ListDirection.RIGHT, 2L, 0.1).get();
+        assertDeepEquals(result2, expected2);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, gs("blmpop")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.blmpop(new GlideString[] {nonListKey}, ListDirection.LEFT, 0.1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void blmpop_timeout_check(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         String key = UUID.randomUUID().toString();
@@ -7362,6 +8701,32 @@ public class SharedCommandTests {
                     () ->
                             testClient
                                     .blmpop(new String[] {key}, ListDirection.LEFT, 0)
+                                    .get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmpop_binary_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        GlideString key = gs(UUID.randomUUID().toString());
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.blmpop(new GlideString[] {key}, ListDirection.LEFT, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .blmpop(new GlideString[] {key}, ListDirection.LEFT, 0)
                                     .get(3, TimeUnit.SECONDS));
         }
     }
@@ -7864,6 +9229,48 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.spopCount(stringKey, 3).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    //     TODO: uncomment once client.sadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void spop_spopCount_binary(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString stringKey = gs(UUID.randomUUID().toString());
+    //         GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+    //         GlideString member1 = gs(UUID.randomUUID().toString());
+    //         GlideString member2 = gs(UUID.randomUUID().toString());
+    //         GlideString member3 = gs(UUID.randomUUID().toString());
+
+    //         assertEquals(1, client.sadd(key, new GlideString[] {member1}).get());
+    //         assertEquals(member1, client.spop(key).get());
+
+    //         assertEquals(3, client.sadd(key, new GlideString[] {member1, member2, member3}).get());
+    //         // Pop with count value greater than the size of the set
+    //         assertEquals(Set.of(member1, member2, member3), client.spopCount(key, 4).get());
+    //         assertEquals(0, client.scard(key).get());
+
+    //         assertEquals(3, client.sadd(key, new GlideString[] {member1, member2, member3}).get());
+    //         assertEquals(Set.of(), client.spopCount(key, 0).get());
+
+    //         assertNull(client.spop(nonExistingKey).get());
+    //         assertEquals(Set.of(), client.spopCount(nonExistingKey, 3).get());
+
+    //         // invalid argument - count must be positive
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.spopCount(key, -1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+
+    //         // key exists but is not a set
+    //         assertEquals(OK, client.set(stringKey, gs("foo")).get());
+    //         executionException = assertThrows(ExecutionException.class, () ->
+    // client.spop(stringKey).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.spopCount(stringKey,
+    // 3).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -8620,6 +10027,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lcs_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        assertEquals(gs(""), client.lcs(key1, key2).get());
+
+        // setting string values
+        client.set(key1, gs("abcd"));
+        client.set(key2, gs("bcde"));
+        client.set(key3, gs("wxyz"));
+
+        // getting the lcs
+        assertEquals(gs(""), client.lcs(key1, key3).get());
+        assertEquals(gs("bcd"), client.lcs(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(notExistingKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lcs_with_len_option(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
         // setup
@@ -8644,6 +10081,36 @@ public class SharedCommandTests {
         client.sadd(nonStringKey, new String[] {"setmember"}).get();
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcs_with_len_option_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        assertEquals(0, client.lcsLen(key1, key2).get());
+
+        // setting string values
+        client.set(key1, gs("abcd"));
+        client.set(key2, gs("bcde"));
+        client.set(key3, gs("wxyz"));
+
+        // getting the lcs
+        assertEquals(0, client.lcsLen(key1, key3).get());
+        assertEquals(3, client.lcsLen(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(notExistingKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -8996,11 +10463,95 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lcsIdx_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        Map<String, Object> result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdx(key1, key2, 10L).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+
+        // setting string values
+        client.set(key1, gs("abcdefghijk"));
+        client.set(key2, gs("defjkjuighijk"));
+
+        // LCS with only IDX
+        Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {
+                    new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L},
+                    new Object[] {new Long[] {3L, 5L}, new Long[] {0L, 2L}, 3L}
+                };
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}};
+        result = client.lcsIdx(key1, key2, 4).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and a negative MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2, -1L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L}};
+        result = client.lcsIdxWithMatchLen(key1, key2, 4L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // non-string keys are used
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(notExistingKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdx(notExistingKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdxWithMatchLen(notExistingKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lcsIdxWithMatchLen(notExistingKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void geosearch(BaseClient client) {
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
         String[] members = {"Catania", "Palermo", "edge2", "edge1"};
+        Set<String> members_set = Set.of(members);
         GeospatialData[] members_coordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
@@ -9052,6 +10603,16 @@ public class SharedCommandTests {
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
+        assertTrue(
+                members_set.containsAll(
+                        Set.of(
+                                client
+                                        .geosearch(
+                                                key1,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                                        .get())));
+
         assertArrayEquals(
                 members,
                 client
@@ -9150,6 +10711,18 @@ public class SharedCommandTests {
                                 new GeoSearchShape(meters_radius, GeoUnit.METERS),
                                 new GeoSearchResultOptions(SortOrder.DESC))
                         .get());
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {"Palermo", new Object[] {3479099956230698L}},
+                    new Object[] {"Catania", new Object[] {3479447370796909L}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                GeoSearchOptions.builder().withhash().build())
+                        .get());
 
         // Test search by radius, unit: miles, from geospatial data
         assertArrayEquals(
@@ -9238,6 +10811,287 @@ public class SharedCommandTests {
 
         // key exists but holds a non-ZSET value
         assertEquals(OK, client.set(key2, "nonZSETvalue").get());
+        ExecutionException requestException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearch(
+                                                key2,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geosearch_binary(BaseClient client) {
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString[] members = {gs("Catania"), gs("Palermo"), gs("edge2"), gs("edge1")};
+        Set<GlideString> members_set = Set.of(members);
+        GeospatialData[] members_coordinates = {
+            new GeospatialData(15.087269, 37.502669),
+            new GeospatialData(13.361389, 38.115556),
+            new GeospatialData(17.241510, 38.788135),
+            new GeospatialData(12.758489, 38.788135)
+        };
+        Object[] expectedResult = {
+            new Object[] {
+                gs("Catania"),
+                new Object[] {
+                    56.4413, 3479447370796909L, new Object[] {15.087267458438873, 37.50266842333162}
+                }
+            },
+            new Object[] {
+                gs("Palermo"),
+                new Object[] {
+                    190.4424, 3479099956230698L, new Object[] {13.361389338970184, 38.1155563954963}
+                }
+            },
+            new Object[] {
+                gs("edge2"),
+                new Object[] {
+                    279.7403, 3481342659049484L, new Object[] {17.241510450839996, 38.78813451624225}
+                }
+            },
+            new Object[] {
+                gs("edge1"),
+                new Object[] {
+                    279.7405, 3479273021651468L, new Object[] {12.75848776102066, 38.78813451624225}
+                }
+            },
+        };
+
+        // geoadd
+        assertEquals(
+                4,
+                client
+                        .geoadd(
+                                key1,
+                                Map.of(
+                                        members[0],
+                                        members_coordinates[0],
+                                        members[1],
+                                        members_coordinates[1],
+                                        members[2],
+                                        members_coordinates[2],
+                                        members[3],
+                                        members_coordinates[3]))
+                        .get());
+
+        // Search by box, unit: km, from a geospatial data point
+        assertTrue(
+                members_set.containsAll(
+                        Set.of(
+                                client
+                                        .geosearch(
+                                                key1,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                                        .get())));
+
+        assertArrayEquals(
+                members,
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        assertDeepEquals(
+                expectedResult,
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                GeoSearchOptions.builder().withcoord().withdist().withhash().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        assertDeepEquals(
+                new Object[] {new Object[] {gs("Catania"), new Object[] {56.4413, 3479447370796909L}}},
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                GeoSearchOptions.builder().withdist().withhash().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC, 1))
+                        .get());
+
+        // test search by box, unit: meters, from member, with distance
+        long meters = 400 * 1000;
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {gs("edge2"), new Object[] {236529.1799}},
+                    new Object[] {gs("Palermo"), new Object[] {166274.1516}},
+                    new Object[] {gs("Catania"), new Object[] {0.0}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(meters, meters, GeoUnit.METERS),
+                                GeoSearchOptions.builder().withdist().build(),
+                                new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+
+        // test search by box, unit: feet, from member, with limited count 2, with hash
+        double feet = 400 * 3280.8399;
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {gs("Palermo"), new Object[] {3479099956230698L}},
+                    new Object[] {gs("edge1"), new Object[] {3479273021651468L}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Palermo")),
+                                new GeoSearchShape(feet, feet, GeoUnit.FEET),
+                                GeoSearchOptions.builder().withhash().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC, 2))
+                        .get());
+
+        // test search by box, unit: miles, from geospatial position, with limited ANY count to 1
+        ArrayUtils.contains(
+                members,
+                client.geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(250, 250, GeoUnit.MILES),
+                                new GeoSearchResultOptions(1, true))
+                        .get()[0]);
+
+        // test search by radius, units: feet, from member
+        double feet_radius = 200 * 3280.8399;
+        assertArrayEquals(
+                new GlideString[] {gs("Catania"), gs("Palermo")},
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(feet_radius, GeoUnit.FEET),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        // Test search by radius, unit: meters, from member
+        double meters_radius = 200 * 1000;
+        assertArrayEquals(
+                new GlideString[] {gs("Palermo"), gs("Catania")},
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {gs("Palermo"), new Object[] {3479099956230698L}},
+                    new Object[] {gs("Catania"), new Object[] {3479447370796909L}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                GeoSearchOptions.builder().withhash().build())
+                        .get());
+        // Test search by radius, unit: miles, from geospatial data
+        assertArrayEquals(
+                new GlideString[] {gs("edge1"), gs("edge2"), gs("Palermo"), gs("Catania")},
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(175, GeoUnit.MILES),
+                                new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+
+        // Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {
+                        gs("Catania"),
+                        new Object[] {
+                            56.4413, 3479447370796909L, new Object[] {15.087267458438873, 37.50266842333162}
+                        }
+                    },
+                    new Object[] {
+                        gs("Palermo"),
+                        new Object[] {
+                            190.4424, 3479099956230698L, new Object[] {13.361389338970184, 38.1155563954963}
+                        }
+                    }
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                                GeoSearchOptions.builder().withdist().withhash().withcoord().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC, 2))
+                        .get());
+
+        // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
+        assertTrue(
+                ArrayUtils.contains(
+                        members,
+                        ((Object[])
+                                        client.geosearch(
+                                                        key1,
+                                                        new CoordOrigin(new GeospatialData(15, 37)),
+                                                        new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                                                        GeoSearchOptions.builder().withdist().withhash().withcoord().build(),
+                                                        new GeoSearchResultOptions(SortOrder.ASC, 1, true))
+                                                .get()[0])
+                                [0]));
+
+        // no members within the area
+        assertArrayEquals(
+                new GlideString[] {},
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(50, 50, GeoUnit.METERS),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        // no members within the area
+        assertArrayEquals(
+                new GlideString[] {},
+                client
+                        .geosearch(
+                                key1,
+                                new GeoSearchOrigin.CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(5, GeoUnit.METERS),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        // member does not exist
+        ExecutionException requestException1 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearch(
+                                                key1,
+                                                new MemberOriginBinary(gs("non-existing-member")),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException1.getCause());
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key2, gs("nonZSETvalue")).get());
         ExecutionException requestException2 =
                 assertThrows(
                         ExecutionException.class,
@@ -9538,6 +11392,307 @@ public class SharedCommandTests {
 
         // key exists but holds a non-ZSET value
         assertEquals(OK, client.set(key3, "nonZSETvalue").get());
+        ExecutionException requestException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearchstore(
+                                                key3,
+                                                key3,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geosearchstore_binary(BaseClient client) {
+        // setup
+        GlideString sourceKey = gs("{key}-1" + UUID.randomUUID());
+        GlideString destinationKey = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString[] members = {gs("Catania"), gs("Palermo"), gs("edge2"), gs("edge1")};
+        GeospatialData[] members_coordinates = {
+            new GeospatialData(15.087269, 37.502669),
+            new GeospatialData(13.361389, 38.115556),
+            new GeospatialData(17.241510, 38.788135),
+            new GeospatialData(12.758489, 38.788135)
+        };
+        Map<String, Double> expectedMap =
+                Map.of(
+                        "Catania", 3479447370796909.0,
+                        "Palermo", 3479099956230698.0,
+                        "edge2", 3481342659049484.0,
+                        "edge1", 3479273021651468.0);
+        Map<String, Double> expectedMap2 =
+                Map.of(
+                        "Catania", 56.4412578701582,
+                        "Palermo", 190.44242984775784,
+                        "edge2", 279.7403417843143,
+                        "edge1", 279.7404521356343);
+        Map<String, Double> expectedMap3 =
+                Map.of(
+                        "Catania", 3479447370796909.0,
+                        "Palermo", 3479099956230698.0);
+        Map<String, Double> expectedMap4 =
+                Map.of(
+                        "Catania", 56.4412578701582,
+                        "Palermo", 190.44242984775784);
+
+        // geoadd
+        assertEquals(
+                4,
+                client
+                        .geoadd(
+                                sourceKey,
+                                Map.of(
+                                        members[0],
+                                        members_coordinates[0],
+                                        members[1],
+                                        members_coordinates[1],
+                                        members[2],
+                                        members_coordinates[2],
+                                        members[3],
+                                        members_coordinates[3]))
+                        .get());
+
+        // Test storing results of a box search, unit: kilometers, from a geospatial data position
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                        .get(),
+                4L);
+
+        // Verify the stored results
+        Map<String, Double> zrange_map =
+                client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap, zrange_map);
+
+        // Test storing results of a box search, unit: kilometes, from a geospatial data position, with
+        // distance
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                GeoSearchStoreOptions.builder().storedist().build())
+                        .get(),
+                4L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap2, zrange_map);
+
+        // Test storing results of a box search, unit: kilometes, from a geospatial data, with count
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                new GeoSearchResultOptions(1))
+                        .get(),
+                1L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(Map.of("Catania", 3479447370796909.0), zrange_map);
+
+        // Test storing results of a box search, unit: meters, from a member, with distance
+        double metersValue = 400 * 1000;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(metersValue, metersValue, GeoUnit.METERS),
+                                GeoSearchStoreOptions.builder().storedist().build())
+                        .get(),
+                3L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(
+                Map.of(
+                        "Catania", 0.0,
+                        "Palermo", 166274.15156960033,
+                        "edge2", 236529.17986494553),
+                zrange_map);
+
+        // Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
+        double feetValue = 400 * 3280.8399;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOriginBinary(gs("Palermo")),
+                                new GeoSearchShape(feetValue, feetValue, GeoUnit.FEET),
+                                new GeoSearchResultOptions(2))
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        for (String memberKey : zrange_map.keySet()) {
+            assertTrue(expectedMap.containsKey(memberKey));
+        }
+
+        // Test storing results of a radius search, unit: feet, from a member
+        double feetValue2 = 200 * 3280.8399;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(feetValue2, GeoUnit.FEET))
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap3, zrange_map);
+
+        // Test search by radius, units: meters, from a member
+        double metersValue2 = 200 * 1000;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(metersValue2, GeoUnit.METERS),
+                                GeoSearchStoreOptions.builder().storedist().build())
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(
+                Map.of(
+                        "Catania", 0.0,
+                        "Palermo", 166274.15156960033),
+                zrange_map);
+
+        // Test search by radius, unit: miles, from a geospatial data
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(175, GeoUnit.MILES))
+                        .get(),
+                4L);
+
+        // Test storing results of a radius search, unit: kilometers, from a geospatial data, with
+        // limited count to 2
+        double kmValue = 200.0;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(kmValue, GeoUnit.KILOMETERS),
+                                GeoSearchStoreOptions.builder().storedist().build(),
+                                new GeoSearchResultOptions(2))
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap4, zrange_map);
+
+        // Test storing results of a radius search, unit: kilometers, from a geospatial data, with
+        // limited ANY count to 1
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(kmValue, GeoUnit.KILOMETERS),
+                                new GeoSearchResultOptions(1, true))
+                        .get(),
+                1L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey.toString(), new RangeByIndex(0, -1)).get();
+        for (String memberKey : zrange_map.keySet()) {
+            assertTrue(expectedMap.containsKey(memberKey));
+        }
+
+        // Test no members within the area
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(50, 50, GeoUnit.METERS))
+                        .get(),
+                0L);
+
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(1, GeoUnit.METERS))
+                        .get(),
+                0L);
+
+        // No members in the area (apart from the member we search from itself)
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(10, 10, GeoUnit.METERS))
+                        .get(),
+                1L);
+
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(10, GeoUnit.METERS))
+                        .get(),
+                1L);
+
+        // member does not exist
+        ExecutionException requestException1 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearchstore(
+                                                destinationKey,
+                                                sourceKey,
+                                                new MemberOriginBinary(gs("non-existing-member")),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException1.getCause());
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key3, gs("nonZSETvalue")).get());
         ExecutionException requestException2 =
                 assertThrows(
                         ExecutionException.class,

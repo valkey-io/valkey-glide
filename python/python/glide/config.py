@@ -50,11 +50,11 @@ class ProtocolVersion(Enum):
 
     RESP2 = SentProtocolVersion.RESP2
     """
-    Communicate using Redis RESP2.
+    Communicate using RESP2.
     """
     RESP3 = SentProtocolVersion.RESP3
     """
-    Communicate using Redis RESP3.
+    Communicate using RESP3.
     """
 
 
@@ -79,18 +79,18 @@ class BackoffStrategy:
         self.exponent_base = exponent_base
 
 
-class RedisCredentials:
+class ServerCredentials:
     def __init__(
         self,
         password: str,
         username: Optional[str] = None,
     ):
         """
-        Represents the credentials for connecting to a Redis server.
+        Represents the credentials for connecting to a server.
 
         Args:
-            password (str): The password that will be used for authenticating connections to the Redis servers.
-            username (Optional[str]): The username that will be used for authenticating connections to the Redis servers.
+            password (str): The password that will be used for authenticating connections to the servers.
+            username (Optional[str]): The username that will be used for authenticating connections to the servers.
                 If not supplied, "default" will be used.
         """
         self.password = password
@@ -129,7 +129,7 @@ class BaseClientConfiguration:
         self,
         addresses: List[NodeAddress],
         use_tls: bool = False,
-        credentials: Optional[RedisCredentials] = None,
+        credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
@@ -151,7 +151,7 @@ class BaseClientConfiguration:
                     ].
             use_tls (bool): True if communication with the cluster should use Transport Level Security.
                 Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
-            credentials (RedisCredentials): Credentials for authentication process.
+            credentials (ServerCredentials): Credentials for authentication process.
                     If none are set, the client will not authenticate itself with the server.
             read_from (ReadFrom): If not set, `PRIMARY` will be used.
             request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
@@ -221,7 +221,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
                     {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
                 ].
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-        credentials (RedisCredentials): Credentials for authentication process.
+        credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
@@ -272,7 +272,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         self,
         addresses: List[NodeAddress],
         use_tls: bool = False,
-        credentials: Optional[RedisCredentials] = None,
+        credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
@@ -345,7 +345,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
-class ClusterClientConfiguration(BaseClientConfiguration):
+class GlideClusterClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Cluster Glide client.
 
@@ -357,7 +357,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
                     {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
                 ].
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-        credentials (RedisCredentials): Credentials for authentication process.
+        credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
@@ -369,7 +369,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
-        pubsub_subscriptions (Optional[ClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
             Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
 
     Notes:
@@ -388,14 +388,14 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         Pattern = 1
         """ Use channel name patterns """
         Sharded = 2
-        """ Use sharded pubsub. Available since Redis version 7.0. """
+        """ Use sharded pubsub. Available since Valkey version 7.0. """
 
     @dataclass
     class PubSubSubscriptions:
         """Describes pubsub configuration for cluster mode client.
 
         Attributes:
-            channels_and_patterns (Dict[ClusterClientConfiguration.PubSubChannelModes, Set[str]]):
+            channels_and_patterns (Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]]):
                 Channels and patterns by modes.
             callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
                 Optional callback to accept the incoming messages.
@@ -404,7 +404,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         """
 
         channels_and_patterns: Dict[
-            ClusterClientConfiguration.PubSubChannelModes, Set[str]
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
         ]
         callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
         context: Any
@@ -413,7 +413,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         self,
         addresses: List[NodeAddress],
         use_tls: bool = False,
-        credentials: Optional[RedisCredentials] = None,
+        credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,

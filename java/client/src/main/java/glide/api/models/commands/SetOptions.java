@@ -8,9 +8,7 @@ import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_MILLISECONDS;
 import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringBaseCommands;
-import glide.api.models.GlideString;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,7 +18,7 @@ import redis_request.RedisRequestOuterClass.Command;
 /**
  * Optional arguments for {@link StringBaseCommands#set(String, String, SetOptions)} command.
  *
- * @see <a href="https://redis.io/commands/set/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/set/">valkey.io</a>
  */
 @Builder
 public final class SetOptions {
@@ -169,14 +167,5 @@ public final class SetOptions {
         }
 
         return optionArgs.toArray(new String[0]);
-    }
-
-    /**
-     * Converts SetOptions into a GlideString[] to add to a {@link Command} arguments.
-     *
-     * @return GlideString[]
-     */
-    public GlideString[] toGlideStringArgs() {
-        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

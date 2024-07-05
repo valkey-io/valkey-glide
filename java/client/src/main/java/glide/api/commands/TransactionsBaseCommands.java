@@ -17,7 +17,7 @@ public interface TransactionsBaseCommands {
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
      *     map to different hash slots.
-     * @see <a href="https://redis.io/docs/latest/commands/watch/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
      * @example
@@ -43,7 +43,7 @@ public interface TransactionsBaseCommands {
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
      *     map to different hash slots.
-     * @see <a href="https://redis.io/docs/latest/commands/watch/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a> for details.
      * @param keys The keys to watch.
      * @return <code>OK</code>.
      * @example

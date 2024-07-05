@@ -2,9 +2,7 @@
 package glide.api.models.commands;
 
 import glide.api.commands.ListBaseCommands;
-import glide.api.models.GlideString;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import lombok.Builder;
 
@@ -12,7 +10,7 @@ import lombok.Builder;
  * Optional arguments to {@link ListBaseCommands#lpos(String, String, LPosOptions)} and {@link
  * ListBaseCommands#lposCount(String, String, long)} command.
  *
- * @see <a href="https://redis.io/commands/lpos/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a>
  */
 @Builder
 public final class LPosOptions {
@@ -50,14 +48,5 @@ public final class LPosOptions {
         }
 
         return optionArgs.toArray(new String[0]);
-    }
-
-    /**
-     * Converts LPosOptions into a GlideString[].
-     *
-     * @return GlideString[]
-     */
-    public GlideString[] toGlideStringArgs() {
-        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

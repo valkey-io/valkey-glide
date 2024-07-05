@@ -196,6 +196,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -818,15 +820,12 @@ public class TransactionTests {
         results.add(Pair.of(XGroupCreate, buildArgs("key", "group", "id")));
 
         transaction.xgroupCreate(
-                "key",
-                "group",
-                "id",
-                StreamGroupOptions.builder().makeStream().entriesRead("entry").build());
+                "key", "group", "id", StreamGroupOptions.builder().makeStream().entriesRead(123L).build());
         results.add(
                 Pair.of(
                         XGroupCreate,
                         buildArgs(
-                                "key", "group", "id", MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, "entry")));
+                                "key", "group", "id", MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, "123")));
 
         transaction.xgroupDestroy("key", "group");
         results.add(Pair.of(XGroupDestroy, buildArgs("key", "group")));
@@ -847,8 +846,8 @@ public class TransactionTests {
         transaction.xgroupSetId("key", "group", "id");
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
 
-        transaction.xgroupSetId("key", "group", "id", "1-1");
-        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1-1")));
+        transaction.xgroupSetId("key", "group", "id", 1);
+        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1")));
 
         transaction.xreadgroup(
                 Map.of("key", "id"),
@@ -954,6 +953,12 @@ public class TransactionTests {
                                 "5",
                                 FORCE_REDIS_API,
                                 JUST_ID_REDIS_API)));
+
+        transaction.xinfoGroups("key");
+        results.add(Pair.of(XInfoGroups, buildArgs("key")));
+
+        transaction.xinfoConsumers("key", "groupName");
+        results.add(Pair.of(XInfoConsumers, buildArgs("key", "groupName")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
