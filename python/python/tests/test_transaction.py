@@ -1083,20 +1083,20 @@ class TestTransaction:
         key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))
 
         # Verify Dump
-        transaction1 = ClusterTransaction() if cluster_mode else Transaction()
-        transaction1.set(key1, "value")
-        transaction1.dump(key1)
-        result1 = await glide_client.exec(transaction1)
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.set(key1, "value")
+        transaction.dump(key1)
+        result1 = await glide_client.exec(transaction)
         assert result1 is not None
         assert isinstance(result1, list)
         assert result1[0] == OK
         assert isinstance(result1[1], bytes)
 
         # Verify Restore - use result1[1] from above
-        transaction2 = ClusterTransaction() if cluster_mode else Transaction()
-        transaction2.restore(key2, 0, result1[1])
-        transaction2.get(key2)
-        result2 = await glide_client.exec(transaction2)
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.restore(key2, 0, result1[1])
+        transaction.get(key2)
+        result2 = await glide_client.exec(transaction)
         assert result2 is not None
         assert isinstance(result2, list)
         assert result2[0] == OK
@@ -1113,29 +1113,29 @@ class TestTransaction:
             lib_name = f"mylib_{get_random_string(10)}"
             func_name = f"myfun_{get_random_string(10)}"
             code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
-            transaction1 = ClusterTransaction() if cluster_mode else Transaction()
-            transaction1.function_load(code, True)
-            transaction1.function_list(with_code=True)
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.function_load(code, True)
+            transaction.function_list(with_code=True)
 
             # Verify function_dump
-            transaction1.function_dump()
-            result1 = await glide_client.exec(transaction1)
+            transaction.function_dump()
+            result1 = await glide_client.exec(transaction)
             assert result1 is not None
             assert isinstance(result1, list)
             assert isinstance(result1[2], bytes)
 
             # Verify function_restore - use result1[2] from above
-            transaction2 = ClusterTransaction() if cluster_mode else Transaction()
-            transaction2.function_restore(result1[2], FunctionRestorePolicy.REPLACE)
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.function_restore(result1[2], FunctionRestorePolicy.REPLACE)
             # For the cluster mode, PRIMARY SlotType is required to avoid the error:
             #  "RequestError: An error was signalled by the server -
             #   ReadOnly: You can't write against a read only replica."
             if isinstance(glide_client, GlideClusterClient):
                 result2 = await glide_client.exec(
-                    transaction2, SlotIdRoute(SlotType.PRIMARY, 1)
+                    transaction, SlotIdRoute(SlotType.PRIMARY, 1)
                 )
             else:
-                result2 = await glide_client.exec(transaction2)
+                result2 = await glide_client.exec(transaction)
 
             assert result2 is not None
             assert isinstance(result2, list)

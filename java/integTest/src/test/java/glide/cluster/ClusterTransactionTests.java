@@ -354,18 +354,16 @@ public class ClusterTransactionTests {
         clusterClient.functionList(true).get();
 
         // Verify functionDump
-        ClusterTransaction transaction1 = new ClusterTransaction();
-        transaction1.withBinarySafeOutput();
-        transaction1.functionDump();
-        Object[] result = clusterClient.exec(transaction1).get();
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.withBinarySafeOutput();
+        transaction.functionDump();
+        Object[] result = clusterClient.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
         // Verify functionRestore
-        ClusterTransaction transaction2 = new ClusterTransaction();
-        transaction2.withBinarySafeOutput();
-        transaction2.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
-        Object[] response =
-                clusterClient.exec(transaction2, new SlotIdRoute(1, SlotType.PRIMARY)).get();
+        transaction = new ClusterTransaction();
+        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        Object[] response = clusterClient.exec(transaction, new SlotIdRoute(1, SlotType.PRIMARY)).get();
         assertEquals(OK, response[0]);
     }
 }

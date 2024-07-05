@@ -617,20 +617,19 @@ public class TransactionTests {
         assertEquals(OK, client.set(key1, gs(value)).get());
 
         // Verify dump
-        Transaction transaction1 = new Transaction();
-        transaction1.withBinarySafeOutput();
-        transaction1.dump(key1);
-        Object[] result = client.exec(transaction1).get();
+        Transaction transaction = new Transaction();
+        transaction.withBinarySafeOutput();
+        transaction.dump(key1);
+        Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
         // Verify restore
-        Transaction transaction2 = new Transaction();
-        transaction2.withBinarySafeOutput();
-        transaction2.restore(key2, 0, payload.getBytes());
-        transaction2.get(key2);
-        Object[] response = client.exec(transaction2).get();
+        transaction = new Transaction();
+        transaction.restore(key2, 0, payload.getBytes());
+        transaction.get(key2);
+        Object[] response = client.exec(transaction).get();
         assertEquals(OK, response[0]);
-        assertEquals(gs(value), response[1]);
+        assertEquals(value, response[1]);
     }
 
     @Test
@@ -646,17 +645,16 @@ public class TransactionTests {
         client.functionList(true).get();
 
         // Verify functionDump
-        Transaction transaction1 = new Transaction();
-        transaction1.withBinarySafeOutput();
-        transaction1.functionDump();
-        Object[] result = client.exec(transaction1).get();
+        Transaction transaction = new Transaction();
+        transaction.withBinarySafeOutput();
+        transaction.functionDump();
+        Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
         // Verify functionRestore
-        Transaction transaction2 = new Transaction();
-        transaction2.withBinarySafeOutput();
-        transaction2.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
-        Object[] response = client.exec(transaction2).get();
+        transaction = new Transaction();
+        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        Object[] response = client.exec(transaction).get();
         assertEquals(OK, response[0]);
     }
 }
