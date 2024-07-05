@@ -1437,7 +1437,11 @@ public interface StreamBaseCommands {
      *  </pre>
      */
     CompletableFuture<Object[]> xautoclaim(
-        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start);
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start);
 
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
@@ -1505,7 +1509,12 @@ public interface StreamBaseCommands {
      *  </pre>
      */
     CompletableFuture<Object[]> xautoclaim(
-        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start, long count);
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start,
+            long count);
 
     /**
      * Transfers ownership of pending stream entries that match the specified criteria. This command
@@ -1575,7 +1584,11 @@ public interface StreamBaseCommands {
      *  </pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
-        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start);
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start);
 
     /**
      * Transfers ownership of pending stream entries that match the specified criteria. This command
@@ -1647,5 +1660,10 @@ public interface StreamBaseCommands {
      *  </pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
-        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start, long count);
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start,
+            long count);
 }

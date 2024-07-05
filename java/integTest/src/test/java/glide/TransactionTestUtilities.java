@@ -942,30 +942,28 @@ public class TransactionTestUtilities {
                 };
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             result =
-                concatenateArrays(
-                    result,
-                    new Object[] {
-                        new Object[]{
-                            "0-0",
-                            Map.of("0-3", new String[][]{{"field3", "value3"}}),
-                            new Object[]{}
-                        }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
-                        new Object[] {"0-0", new String[]{"0-3"}, new Object[] {} } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
-                    }
-                );
-        }
-        else if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                new Object[] {
+                                    "0-0", Map.of("0-3", new String[][] {{"field3", "value3"}}), new Object[] {}
+                                }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
+                                new Object[] {
+                                    "0-0", new String[] {"0-3"}, new Object[] {}
+                                } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
+                            });
+        } else if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             result =
-                concatenateArrays(
-                    result,
-                    new Object[] {
-                        new Object[] {
-                            "0-0",
-                            Map.of("0-3", new String[][] {{"field3", "value3"}})
-                        },// xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
-                        new Object[] {"0-0", new String[]{"0-3"}}// xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
-                    }
-                );
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                new Object[] {
+                                    "0-0", Map.of("0-3", new String[][] {{"field3", "value3"}})
+                                }, // xautoclaim(streamKey1, groupName1, consumer1, 0L, "0-0")
+                                new Object[] {
+                                    "0-0", new String[] {"0-3"}
+                                } // xautoclaimJustId(streamKey1, groupName1, consumer1, 0L, "0-0");
+                            });
         }
         result =
                 concatenateArrays(

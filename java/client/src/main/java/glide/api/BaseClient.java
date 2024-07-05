@@ -2803,20 +2803,19 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start) {
         String[] args = new String[] {key, group, consumer, Long.toString(minIdleTime), start};
-        return commandManager.submitNewCommand(
-                XAutoClaim, args, this::handleArrayResponse);
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> xautoclaim(
-        @NonNull GlideString key,
-        @NonNull GlideString group,
-        @NonNull GlideString consumer,
-        long minIdleTime,
-        @NonNull GlideString start) {
-        GlideString[] args = new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime)), start};
-        return commandManager.submitNewCommand(
-            XAutoClaim, args, this::handleArrayResponse);
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start) {
+        GlideString[] args =
+                new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime)), start};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
@@ -2827,26 +2826,32 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start,
             long count) {
-        String[] args = new String[] {
-                            key, group, consumer, Long.toString(minIdleTime), start, "COUNT", Long.toString(count)
-                        };
-        return commandManager.submitNewCommand(
-                XAutoClaim, args, this::handleArrayResponse);
+        String[] args =
+                new String[] {
+                    key, group, consumer, Long.toString(minIdleTime), start, "COUNT", Long.toString(count)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> xautoclaim(
-        @NonNull GlideString key,
-        @NonNull GlideString group,
-        @NonNull GlideString consumer,
-        long minIdleTime,
-        @NonNull GlideString start,
-        long count) {
-        GlideString[] args = new GlideString[] {
-            key, group, consumer, gs(Long.toString(minIdleTime)), start, gs("COUNT"), gs(Long.toString(count))
-        };
-        return commandManager.submitNewCommand(
-            XAutoClaim, args, this::handleArrayResponse);
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start,
+            long count) {
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    group,
+                    consumer,
+                    gs(Long.toString(minIdleTime)),
+                    start,
+                    gs("COUNT"),
+                    gs(Long.toString(count))
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
@@ -2856,21 +2861,23 @@ public abstract class BaseClient
             @NonNull String consumer,
             long minIdleTime,
             @NonNull String start) {
-        String[] args = new String[] {key, group, consumer, Long.toString(minIdleTime), start, "JUSTID"};
-        return commandManager.submitNewCommand(
-                XAutoClaim, args, this::handleArrayResponse);
+        String[] args =
+                new String[] {key, group, consumer, Long.toString(minIdleTime), start, "JUSTID"};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> xautoclaimJustId(
-        @NonNull GlideString key,
-        @NonNull GlideString group,
-        @NonNull GlideString consumer,
-        long minIdleTime,
-        @NonNull GlideString start) {
-        GlideString[] args = new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime)), start, gs("JUSTID")};
-        return commandManager.submitNewCommand(
-            XAutoClaim, args, this::handleArrayResponse);
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start) {
+        GlideString[] args =
+                new GlideString[] {
+                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs("JUSTID")
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
@@ -2881,40 +2888,40 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start,
             long count) {
-        String[] args = new String[] {
-                            key,
-                            group,
-                            consumer,
-                            Long.toString(minIdleTime),
-                            start,
-                            "COUNT",
-                            Long.toString(count),
-                            "JUSTID"
-                        };
-        return commandManager.submitNewCommand(
-                XAutoClaim, args, this::handleArrayResponse);
+        String[] args =
+                new String[] {
+                    key,
+                    group,
+                    consumer,
+                    Long.toString(minIdleTime),
+                    start,
+                    "COUNT",
+                    Long.toString(count),
+                    "JUSTID"
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
     public CompletableFuture<Object[]> xautoclaimJustId(
-        @NonNull GlideString key,
-        @NonNull GlideString group,
-        @NonNull GlideString consumer,
-        long minIdleTime,
-        @NonNull GlideString start,
-        long count) {
-        GlideString[] args = new GlideString[] {
-            key,
-            group,
-            consumer,
-            gs(Long.toString(minIdleTime)),
-            start,
-            gs("COUNT"),
-            gs(Long.toString(count)),
-            gs("JUSTID")
-        };
-        return commandManager.submitNewCommand(
-            XAutoClaim, args, this::handleArrayResponse);
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start,
+            long count) {
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    group,
+                    consumer,
+                    gs(Long.toString(minIdleTime)),
+                    start,
+                    gs("COUNT"),
+                    gs(Long.toString(count)),
+                    gs("JUSTID")
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
