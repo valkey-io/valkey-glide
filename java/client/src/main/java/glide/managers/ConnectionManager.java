@@ -93,8 +93,6 @@ public class ConnectionManager {
                             .build());
         }
 
-        connectionRequestBuilder.setProtocolValue(configuration.getProtocol());
-
         connectionRequestBuilder
                 .setTlsMode(configuration.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls)
                 .setReadFrom(mapReadFromEnum(configuration.getReadFrom()));
@@ -117,7 +115,6 @@ public class ConnectionManager {
             connectionRequestBuilder.setClientName(configuration.getClientName());
         }
 
-        System.out.println(connectionRequestBuilder);
         return connectionRequestBuilder;
     }
 

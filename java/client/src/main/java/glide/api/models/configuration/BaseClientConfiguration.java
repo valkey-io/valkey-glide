@@ -16,10 +16,6 @@ import lombok.experimental.SuperBuilder;
 @Getter
 @SuperBuilder
 public abstract class BaseClientConfiguration {
-
-    /** 0 for RESP3, 1 for RESP2 */
-    @Builder.Default private final Integer protocol = 0;
-
     /**
      * DNS Addresses and ports of known nodes in the cluster. If the server is in cluster mode the
      * list can be partial, as the client will attempt to map out the cluster and find all nodes. If
