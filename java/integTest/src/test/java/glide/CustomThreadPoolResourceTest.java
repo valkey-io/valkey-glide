@@ -32,7 +32,7 @@ public class CustomThreadPoolResourceTest {
         }
 
         var regularClient =
-                RedisClient.CreateClient(
+                RedisClient.createClient(
                                 RedisClientConfiguration.builder()
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
