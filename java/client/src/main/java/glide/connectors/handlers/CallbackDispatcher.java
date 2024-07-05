@@ -102,15 +102,19 @@ public class CallbackDispatcher {
                     case Unspecified:
                         // Unspecified error on Redis service-side
                         future.completeExceptionally(new RequestException(msg));
+                        break;
                     case ExecAbort:
                         // Transactional error on Redis service-side
                         future.completeExceptionally(new ExecAbortException(msg));
+                        break;
                     case Timeout:
                         // Timeout from Glide to Redis service
                         future.completeExceptionally(new TimeoutException(msg));
+                        break;
                     case Disconnect:
                         // Connection problem between Glide and Redis
                         future.completeExceptionally(new ConnectionException(msg));
+                        break;
                     default:
                         // Request or command error from Redis
                         future.completeExceptionally(new RequestException(msg));
