@@ -4,7 +4,6 @@ package glide.api.models;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 
 /**
