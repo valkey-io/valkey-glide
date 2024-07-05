@@ -1690,18 +1690,18 @@ public interface StreamBaseCommands {
      *     "entries-added", 4L,
      *     "recorded-first-entry-id", "1719710679916-0",
      *     "groups", 1L,
-     *     "first-entry", Map.of(
+     *     "first-entry", new Object {
      *         "1719710679916-0",
-     *         new String[][] {
-     *             { "foo", "bar" },
-     *             { "foo", "bar2" },
-     *             { "some_field", "some_value" }
-     *         }),
-     *     "last-entry", Map.of(
+     *         new String[] {
+     *             "foo", "bar",
+     *             "foo", "bar2",
+     *             "some_field", "some_value"
+     *         }},
+     *     "last-entry", new Object {
      *         "1719877599564-0",
-     *         new String[][] {
+     *         new String[] {
      *             { "e4_f", "e4_v" }
-     *         })
+     *         }}
      * );
      * // Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `null` if stream is empty.
      * }</pre>
@@ -1731,18 +1731,18 @@ public interface StreamBaseCommands {
      *     gs("entries-added"), 4L,
      *     gs("recorded-first-entry-id"), gs("1719710679916-0"),
      *     gs("groups"), 1L,
-     *     gs("first-entry"), Map.of(
+     *     gs("first-entry"), new Object {
      *         gs("1719710679916-0"),
-     *         new GlideString[][] {
-     *             { gs("foo"), gs("bar") },
-     *             { gs("foo"), gs("bar2") },
-     *             { gs("some_field"), gs("some_value") }
-     *         }),
-     *     gs("last-entry", Map.of(
+     *         new GlideString[] {
+     *             gs("foo"), gs("bar"),
+     *             gs("foo"), gs("bar2"),
+     *             gs("some_field"), gs("some_value")
+     *         }},
+     *     gs("last-entry", Object {
      *         gs("1719877599564-0"),
-     *         new GlideString[][] {
+     *         new GlideString[] {
      *             { gs("e4_f"), gs("e4_v") }
-     *         })
+     *         }}
      * );
      * // Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `null` if stream is empty.
      * }</pre>
@@ -1771,18 +1771,18 @@ public interface StreamBaseCommands {
      *     "max-deleted-entry-id", "0-0",
      *     "entries-added", 4L,
      *     "recorded-first-entry-id", "1719710679916-0",
-     *     "entries", Map.of(
+     *     "entries", new Object {
      *         "1719710679916-0",
-     *         new String[][] {
-     *             { "foo", "bar" },
-     *             { "foo", "bar2" },
-     *             { "some_field", "some_value" }
+     *         new String[] {
+     *             "foo", "bar",
+     *             "foo", "bar2",
+     *             "some_field", "some_value"
      *         },
      *         "1719710688676-0",
-     *         new String[][] {
+     *         new String[] {
      *             { "foo", "bar2" },
      *         },
-     *     ),
+     *     },
      *     "groups", new Map[] {
      *         Map.of(
      *             "name", "mygroup",
@@ -1845,18 +1845,18 @@ public interface StreamBaseCommands {
      *     gs("max-deleted-entry-id"), gs("0-0"),
      *     gs("entries-added"), 4L,
      *     gs("recorded-first-entry-id"), gs("1719710679916-0"),
-     *     gs("entries"), Map.of(
+     *     gs("entries"), new Object {
      *         gs("1719710679916-0"),
-     *         new GlideString[][] {
-     *             { gs("foo"), gs("bar") },
-     *             { gs("foo"), gs("bar2") },
-     *             { gs("some_field"), gs("some_value") }
+     *         new GlideString[] {
+     *             gs("foo"), gs("bar"),
+     *             gs("foo"), gs("bar2"),
+     *             gs("some_field"), gs("some_value")
      *         },
      *         gs("1719710688676-0"),
-     *         new GlideString[][] {
+     *         new GlideString[] {
      *             { gs("foo"), gs("bar2") },
      *         },
-     *     ),
+     *     },
      *     gs("groups"), new Map[] {
      *         Map.of(
      *             gs("name"), gs("mygroup"),
