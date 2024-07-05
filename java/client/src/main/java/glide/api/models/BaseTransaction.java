@@ -2470,8 +2470,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
-     * @return An array containing the rank (as <code>Long</code>) and score (as <code>Double</code>)
-     *     of <code>member</code> in the sorted set.<br>
+     * @return An <code>array</code> containing the rank (as <code>Long</code>) and score (as <code>
+     *     Double</code>) of <code>member</code> in the sorted set.<br>
      *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
      *     <code>null</code> will be returned.
      */
@@ -2512,9 +2512,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param member The member whose rank is to be retrieved.
-     * @return Command Response - An array containing the rank (as <code>Long</code>) and score (as
-     *     <code>Double</code>) of <code>member</code> in the sorted set, where ranks are ordered from
-     *     high to low based on scores.<br>
+     * @return Command Response - An <code>array</code> containing the rank (as <code>Long</code>) and
+     *     score (as <code>Double</code>) of <code>member</code> in the sorted set, where ranks are
+     *     ordered from high to low based on scores.<br>
      *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
      *     <code>null</code> will be returned.
      */
@@ -4090,14 +4090,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return Command Response - An array containing the following elements:
+     * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
@@ -4128,7 +4128,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
      * @param consumer The group consumer.
@@ -4136,7 +4136,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return Command Response - An array containing the following elements:
+     * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
@@ -4177,14 +4177,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
      * @param consumer The group consumer.
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
-     * @return Command Response - An array containing the following elements:
+     * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
@@ -4221,7 +4221,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name
      * @param consumer The group consumer.
@@ -4229,7 +4229,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
-     * @return Command Response - An array containing the following elements:
+     * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
      *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
