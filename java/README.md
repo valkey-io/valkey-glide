@@ -71,7 +71,7 @@ Maven:
 
 To use Glide for Valkey in a Java project with modules, include a module-info.java in your project.
 
-For example, if your program is called `App`, you can following this path
+For example, if your program is called `App`, you can follow this path
 ```java
 app/src/main/java/module-info.java
 ```
