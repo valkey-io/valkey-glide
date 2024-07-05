@@ -16,7 +16,8 @@ public class RedisValueResolver {
     }
 
     /**
-     * Resolve a value received from Redis using given C-style pointer.
+     * Resolve a value received from Redis using given C-style pointer. String data is assumed to be
+     * UTF-8 and exposed as <code>String</code> objects.
      *
      * @param pointer A memory pointer from {@link Response}
      * @return A RESP3 value
@@ -25,7 +26,8 @@ public class RedisValueResolver {
 
     /**
      * Resolve a value received from Redis using given C-style pointer. This method does not assume
-     * that strings are valid UTF-8 encoded strings
+     * that strings are valid UTF-8 encoded strings and will expose this data as a <code>byte[]</code>
+     * .
      *
      * @param pointer A memory pointer from {@link Response}
      * @return A RESP3 value
