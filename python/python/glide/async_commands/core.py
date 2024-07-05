@@ -55,7 +55,13 @@ from glide.async_commands.stream import (
     StreamTrimOptions,
     _create_xpending_range_args,
 )
-from glide.constants import TOK, TEncodable, TResult
+from glide.constants import (
+    TOK,
+    TEncodable,
+    TResult,
+    TXInfoStreamFullResponse,
+    TXInfoStreamResponse,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -3543,6 +3549,146 @@ class CoreCommands(Protocol):
         return cast(
             List[Mapping[bytes, Union[bytes, int]]],
             await self._execute_command(RequestType.XInfoConsumers, [key, group_name]),
+        )
+
+    async def xinfo_stream(
+        self,
+        key: TEncodable,
+    ) -> TXInfoStreamResponse:
+        """
+        Returns information about the stream stored at `key`. To get more detailed information, use `xinfo_stream_full`.
+
+        See https://valkey.io/commands/xinfo-stream for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Returns:
+            TXInfoStreamResponse: A mapping of stream information for the given `key`. See the example for a sample
+                response.
+
+        Examples:
+            >>> await client.xinfo_stream("my_stream")
+                {
+                    b"length": 4,
+                    b"radix-tree-keys": 1L,
+                    b"radix-tree-nodes": 2L,
+                    b"last-generated-id": b"1719877599564-0",
+                    b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
+                    b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
+                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
+                    b"groups": 1L,
+                    b"first-entry": [
+                        b"1719710679916-0",
+                        [b"foo1", b"bar1", b"foo2", b"bar2"],
+                    ],
+                    b"last-entry": [
+                        b"1719877599564-0",
+                        [b"field1", b"value1"],
+                    ],
+                }
+                # Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `None` if
+                # the stream is empty.
+        """
+        return cast(
+            TXInfoStreamResponse,
+            await self._execute_command(RequestType.XInfoStream, [key]),
+        )
+
+    async def xinfo_stream_full(
+        self,
+        key: TEncodable,
+        count: Optional[int] = None,
+    ) -> TXInfoStreamFullResponse:
+        """
+        Returns verbose information about the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-stream for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            count (Optional[int]): The number of stream and PEL entries that are returned. A value of `0` means that all
+                entries will be returned. If not provided, defaults to `10`.
+
+        Returns:
+            TXInfoStreamFullResponse: A mapping of detailed stream information for the given `key`. See the example for
+                a sample response.
+
+        Examples:
+            >>> await client.xinfo_stream_full("my_stream")
+                {
+                    b"length": 4,
+                    b"radix-tree-keys": 1L,
+                    b"radix-tree-nodes": 2L,
+                    b"last-generated-id": b"1719877599564-0",
+                    b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
+                    b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
+                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
+                    b"entries": [
+                        [
+                            b"1719710679916-0",
+                            [b"foo1", b"bar1", b"foo2", b"bar2"],
+                        ],
+                        [
+                            b"1719877599564-0":
+                            [b"field1", b"value1"],
+                        ]
+                    ],
+                    b"groups": [
+                        {
+                            b"name": b"mygroup",
+                            b"last-delivered-id": b"1719710688676-0",
+                            b"entries-read": 2,  # This field was added in Redis version 7.0.0.
+                            b"lag": 0,  # This field was added in Redis version 7.0.0.
+                            b"pel-count": 2,
+                            b"pending": [
+                                [
+                                    b"1719710679916-0",
+                                    b"Alice",
+                                    1719710707260,
+                                    1,
+                                ],
+                                [
+                                    b"1719710688676-0",
+                                    b"Alice",
+                                    1719710718373,
+                                    1,
+                                ],
+                            ],
+                            b"consumers": [
+                                {
+                                    b"name": b"Alice",
+                                    b"seen-time": 1719710718373,
+                                    b"active-time": 1719710718373,  # This field was added in Redis version 7.2.0.
+                                    b"pel-count": 2,
+                                    b"pending": [
+                                        [
+                                            b"1719710679916-0",
+                                            1719710707260,
+                                            1
+                                        ],
+                                        [
+                                            b"1719710688676-0",
+                                            1719710718373,
+                                            1
+                                        ]
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+                # Detailed stream information for "my_stream".
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key, "FULL"]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            TXInfoStreamFullResponse,
+            await self._execute_command(RequestType.XInfoStream, args),
         )
 
     async def geoadd(
