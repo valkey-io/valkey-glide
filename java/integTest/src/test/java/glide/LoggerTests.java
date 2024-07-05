@@ -10,6 +10,7 @@ import glide.api.logging.Logger;
 import java.io.File;
 import java.util.Scanner;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 public class LoggerTests {
@@ -35,7 +36,7 @@ public class LoggerTests {
     }
 
     @SneakyThrows
-    @Test
+    @RepeatedTest(1000)
     public void log_to_file() {
         String infoIdentifier = "Info";
         String infoMessage = "foo";
