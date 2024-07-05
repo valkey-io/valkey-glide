@@ -363,7 +363,7 @@ public abstract class BaseClient
     }
 
     /**
-     * A <b>blocking</b> call to return a next pubsub message.
+     * Return a next pubsub message if it is present.
      *
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
@@ -380,16 +380,11 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        try {
-            return messageQueue.pop().get();
-        } catch (Exception unreachable) {
-            // should be never happen
-            return null;
-        }
+        return messageQueue.popSync();
     }
 
     /**
-     * Returns a promise for a next pubsub message.
+     * Async returns a promise for a next pubsub message.
      *
      * @apiNote <b>Not implemented!</b>
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
@@ -407,7 +402,7 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        return messageQueue.pop();
+        return messageQueue.popAsync();
     }
 
     /**

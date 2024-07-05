@@ -2,78 +2,54 @@
 package glide.connectors.handlers;
 
 import glide.api.models.PubSubMessage;
-import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** A FIFO message queue for {@link PubSubMessage}. */
 public class PubSubMessageQueue {
     // fields are protected to ease testing
     /** The queue itself. */
-    protected final LinkedList<PubSubMessage> messageQueue = new LinkedList<>();
+    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue = new ConcurrentLinkedDeque<>();
 
     /**
-     * The head of the queue stored aside as a {@link Future}. Stores a promise to the first message.
+     * A promise for the first incoming message. Returned to a user, if message queried in async
+     * manner, but nothing received yet.
      */
-    protected CompletableFuture<PubSubMessage> head = new CompletableFuture<>();
+    protected CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
 
-    /** An object to synchronize threads. */
-    private final Object lock = new Object();
+    /** A flag whether a user already got a {@link #firstMessagePromise}. */
+    private final AtomicBoolean headPromiseRequested = new AtomicBoolean(false);
 
-    /** State of the queue. */
-    private enum HeadState {
-        // `head` is a new CF, which was never given to a user
-        UNSET_UNREAD,
-        // `head` is a non-empty CF, which was never given to a user
-        SET_UNREAD,
-        // `head` is unset, but was given to a user
-        UNSET_READ,
-    }
-
-    private HeadState state = HeadState.UNSET_UNREAD;
+    // TODO Rework to remove or reduce `synchronized` blocks. If remove it now, some messages get
+    // reordered.
 
     /** Store a new message. */
-    public void push(PubSubMessage message) {
-        synchronized (lock) {
-            switch (state) {
-                case SET_UNREAD:
-                    messageQueue.addLast(message);
-                    break;
-                case UNSET_UNREAD:
-                    head.complete(message);
-                    state = HeadState.SET_UNREAD;
-                    break;
-                case UNSET_READ:
-                    head.complete(message);
-                    head = new CompletableFuture<>();
-                    state = HeadState.UNSET_UNREAD;
-                    break;
-            }
+    public synchronized void push(PubSubMessage message) {
+        if (headPromiseRequested.getAndSet(false)) {
+            firstMessagePromise.complete(message);
+            firstMessagePromise = new CompletableFuture<>();
+            return;
         }
+
+        messageQueue.addLast(message);
     }
 
-    /** Get a promise for the next message. */
-    public CompletableFuture<PubSubMessage> pop() {
-        synchronized (lock) {
-            CompletableFuture<PubSubMessage> result = head;
-            switch (state) {
-                case UNSET_UNREAD:
-                    state = HeadState.UNSET_READ;
-                    break;
-                case SET_UNREAD:
-                    head = new CompletableFuture<>();
-                    if (messageQueue.isEmpty()) {
-                        state = HeadState.UNSET_UNREAD;
-                        break;
-                    }
-                    head.complete(messageQueue.pop());
-                    // no state change
-                    break;
-                case UNSET_READ:
-                    // no state change
-                    break;
-            }
-            return result;
+    /** Get a promise for a next message. */
+    public synchronized CompletableFuture<PubSubMessage> popAsync() {
+        PubSubMessage message;
+        if ((message = messageQueue.poll()) != null) {
+            var future = new CompletableFuture<PubSubMessage>();
+            future.complete(message);
+            return future;
         }
+
+        headPromiseRequested.set(true);
+        return firstMessagePromise;
+    }
+
+    /** Get a new message or null if nothing stored so far. */
+    public PubSubMessage popSync() {
+        return messageQueue.poll();
     }
 }

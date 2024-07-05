@@ -3,6 +3,7 @@ package glide.connectors.handlers;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,11 +29,14 @@ public class PubSubMessageQueueTests {
 
     @Test
     @SneakyThrows
-    public void read_messages_then_add() {
+    public void async_read_messages_then_add() {
         var queue = new PubSubMessageQueue();
-        var promise1 = queue.pop();
-        var promise2 = queue.pop();
 
+        // read async - receiving promises
+        var promise1 = queue.popAsync();
+        var promise2 = queue.popAsync();
+
+        // async reading from empty queue returns the same future for the same message
         assertSame(promise1, promise2);
         checkFutureStatus(promise1, false);
         assertTrue(queue.messageQueue.isEmpty());
@@ -45,14 +49,50 @@ public class PubSubMessageQueueTests {
         queue.push(msg2);
         queue.push(msg3);
 
-        // promise should get resolved automagically
+        // promises should get resolved automagically
         checkFutureStatus(promise1, true);
         assertSame(msg1, promise1.get());
-        // and `head` too
-        checkFutureStatus(queue.head, true);
-        assertSame(msg2, queue.head.get());
-        // and the last message remains in the MQ
-        assertEquals(1, queue.messageQueue.size());
+        // `firstMessagePromise` is a new uncompleted future
+        checkFutureStatus(queue.firstMessagePromise, false);
+        // and `msg1` isn't stored in the Q
+        assertEquals(2, queue.messageQueue.size());
+        assertSame(msg2, queue.messageQueue.pop());
+        assertSame(msg3, queue.messageQueue.pop());
+        // now MQ should be empty
+        assertTrue(queue.messageQueue.isEmpty());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sync_read_messages_then_add() {
+        var queue = new PubSubMessageQueue();
+
+        // read async - receiving nulls
+        assertNull(queue.popSync());
+        assertNull(queue.popSync());
+
+        // `firstMessagePromise` remains unset and unused
+        checkFutureStatus(queue.firstMessagePromise, false);
+        // and Q is empty
+        assertTrue(queue.messageQueue.isEmpty());
+
+        // now - add
+        var msg1 = new PubSubMessage("one", "one");
+        var msg2 = new PubSubMessage("two", "two");
+        var msg3 = new PubSubMessage("three", "three");
+        queue.push(msg1);
+        queue.push(msg2);
+        queue.push(msg3);
+
+        // `firstMessagePromise` remains unset and unused
+        checkFutureStatus(queue.firstMessagePromise, false);
+        // all 3 messages are stored in the Q
+        assertEquals(3, queue.messageQueue.size());
+
+        // reading them
+        assertSame(msg1, queue.popSync());
+        assertSame(msg2, queue.popSync());
+        assertSame(msg3, queue.popSync());
     }
 
     @Test
@@ -63,38 +103,49 @@ public class PubSubMessageQueueTests {
         var msg1 = new PubSubMessage("one", "one");
         var msg2 = new PubSubMessage("two", "two");
         var msg3 = new PubSubMessage("three", "three");
+        var msg4 = new PubSubMessage("four", "four");
         queue.push(msg1);
         queue.push(msg2);
         queue.push(msg3);
+        queue.push(msg4);
 
-        checkFutureStatus(queue.head, true);
-        // MQ stores only second and third message, first is stored in `head`
+        // `firstMessagePromise` remains unset and unused
+        checkFutureStatus(queue.firstMessagePromise, false);
+        // all messages are stored in the Q
+        assertEquals(4, queue.messageQueue.size());
+
+        // now - read one async
+        assertSame(msg1, queue.popAsync().get());
+        // `firstMessagePromise` remains unset and unused
+        checkFutureStatus(queue.firstMessagePromise, false);
+        // Q stores remaining 3 messages
+        assertEquals(3, queue.messageQueue.size());
+
+        // read sync
+        assertSame(msg2, queue.popSync());
+        checkFutureStatus(queue.firstMessagePromise, false);
         assertEquals(2, queue.messageQueue.size());
-        assertSame(msg1, queue.head.get());
-        assertSame(msg2, queue.messageQueue.peek());
 
-        // now - read
-        assertSame(msg1, queue.pop().get());
-        // second messages should be shifted to `head`
-        assertEquals(1, queue.messageQueue.size());
-        checkFutureStatus(queue.head, true);
-        assertSame(msg2, queue.head.get());
         // keep reading
-        assertSame(msg2, queue.pop().get());
-        // MQ is empty, but `head` isn't
-        assertTrue(queue.messageQueue.isEmpty());
-        checkFutureStatus(queue.head, true);
-        assertSame(msg3, queue.head.get());
-        // read more
-        assertSame(msg3, queue.pop().get());
-        // MQ and `head` are both empty
-        assertTrue(queue.messageQueue.isEmpty());
-        checkFutureStatus(queue.head, false);
+        // get a future for the next message
+        var future = queue.popAsync();
+        checkFutureStatus(future, true);
+        checkFutureStatus(queue.firstMessagePromise, false);
+        assertEquals(1, queue.messageQueue.size());
+        // then read sync
+        assertSame(msg4, queue.popSync());
+        // nothing remains in the Q
+        assertEquals(0, queue.messageQueue.size());
+        // message 3 isn't lost - it is stored in `future`
+        assertSame(msg3, future.get());
     }
+
+    // Not merging `concurrent_write_async_read` and `concurrent_write_sync_read`, because
+    // concurrent sync and async read may reorder messages
 
     @Test
     @SneakyThrows
-    public void concurrent_read_write() {
+    public void concurrent_write_async_read() {
         var queue = new PubSubMessageQueue();
         var numMessages = 1000; // test takes ~0.5 sec
         // collections aren't concurrent, since we have only 1 reader and 1 writer so far
@@ -107,8 +158,8 @@ public class PubSubMessageQueueTests {
 
         Runnable writer =
                 () -> {
-                    for (int i = 0; i < numMessages; i++) {
-                        queue.push(expected.get(i));
+                    for (var message : expected) {
+                        queue.push(message);
                         try {
                             Thread.sleep(rand.nextInt(2));
                         } catch (InterruptedException ignored) {
@@ -120,15 +171,60 @@ public class PubSubMessageQueueTests {
                     PubSubMessage message = null;
                     do {
                         try {
-                            message = queue.pop().get(15, TimeUnit.MILLISECONDS);
+                            message = queue.popAsync().get(15, TimeUnit.MILLISECONDS);
                             actual.add(message);
-                            Thread.sleep(rand.nextInt(2));
+                            Thread.sleep(rand.nextInt(4));
                         } catch (TimeoutException ignored) {
                             // all messages read
                             break;
                         } catch (Exception ignored) {
                         }
                     } while (message != null);
+                };
+
+        // start reader and writer and wait for finish
+        CompletableFuture.allOf(CompletableFuture.runAsync(writer), CompletableFuture.runAsync(reader))
+                .get();
+
+        // this verifies message order
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    @SneakyThrows
+    public void concurrent_write_sync_read() {
+        var queue = new PubSubMessageQueue();
+        var numMessages = 1000; // test takes ~0.5 sec
+        // collections aren't concurrent, since we have only 1 reader and 1 writer so far
+        var expected = new LinkedList<PubSubMessage>();
+        var actual = new LinkedList<PubSubMessage>();
+        var rand = new Random();
+        for (int i = 0; i < numMessages; i++) {
+            expected.add(new PubSubMessage(i + " " + UUID.randomUUID(), UUID.randomUUID().toString()));
+        }
+
+        Runnable writer =
+                () -> {
+                    for (var message : expected) {
+                        queue.push(message);
+                        try {
+                            Thread.sleep(rand.nextInt(2));
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                };
+        Runnable reader =
+                () -> {
+                    do {
+                        try {
+                            var message = queue.popSync();
+                            if (message != null) {
+                                actual.add(message);
+                            }
+                            Thread.sleep(rand.nextInt(4));
+                        } catch (InterruptedException ignored) {
+                        }
+                    } while (actual.size() < expected.size());
                 };
         // start reader and writer and wait for finish
         CompletableFuture.allOf(CompletableFuture.runAsync(writer), CompletableFuture.runAsync(reader))

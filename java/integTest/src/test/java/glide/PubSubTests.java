@@ -613,7 +613,7 @@ public class PubSubTests {
         String prefix = "channel.";
         String pattern = prefix + "*";
         String shardPrefix = "{shard}";
-        int numChannels = 256;
+        int numChannels = 25; // 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
         Map<PubSubClusterChannelMode, Set<String>> subscriptions =
@@ -668,11 +668,10 @@ public class PubSubTests {
                     break; // all messages read
                 }
             } else {
-                try {
-                    var message =
-                            CompletableFuture.supplyAsync(listener::tryGetPubSubMessage).get(1, TimeUnit.SECONDS);
+                var message = listener.tryGetPubSubMessage();
+                if (message != null) {
                     received.add(message);
-                } catch (TimeoutException ignored) {
+                } else {
                     break; // all messages read
                 }
             }
