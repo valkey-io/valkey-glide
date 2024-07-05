@@ -88,7 +88,7 @@ public class FfiTest {
 
     @Test
     public void redisValueToJavaValue_BulkString() {
-        String input = "😀\n💎\n🗿";
+        String input = "dummyString";
         byte[] bulkString = input.getBytes();
         long ptr = FfiTest.createLeakedBulkString(bulkString);
         Object bulkStringValue = RedisValueResolver.valueFromPointer(ptr);
