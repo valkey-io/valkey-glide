@@ -15,7 +15,6 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
-import static glide.utils.ArrayTransformUtils.castMapOf2DArrayGlideString;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
@@ -704,61 +703,6 @@ public abstract class BaseClient
                         Collectors.toMap(
                                 Map.Entry::getKey,
                                 e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
-    }
-
-    /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
-    @SuppressWarnings("unchecked")
-    protected Map<String, Object> handleXInfoStreamResponse(Map<String, Object> map) {
-        // convert entries from `Object[][]` to `String[][]` inside a map
-        for (var keyName : List.of("entries", "first-entry", "last-entry")) {
-            if (!map.containsKey(keyName)) continue;
-            var entries = (Map<String, Object[][]>) map.get(keyName);
-            map.put(keyName, castMapOf2DArray(entries, String.class));
-        }
-        for (var keyName : List.of("groups", "consumers")) {
-            if (!map.containsKey(keyName)) continue;
-            var value = map.get(keyName);
-            // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
-            if (value instanceof Long) {
-                return map;
-            }
-            // convert `Object[]` to `Map[]`
-            value = castArray((Object[]) value, Map.class);
-            for (var subMap : (Map<String, Object>[]) value) {
-                // recursively inline update the map
-                handleXInfoStreamResponse(subMap);
-            }
-            map.put(keyName, value);
-        }
-        return map;
-    }
-
-    /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
-    @SuppressWarnings("unchecked")
-    protected Map<GlideString, Object> handleXInfoStreamResponseGlideString(
-            Map<GlideString, Object> map) {
-        // convert entries from `Object[][]` to `GlideString[][]` inside a map
-        for (var keyName : List.of(gs("entries"), gs("first-entry"), gs("last-entry"))) {
-            if (!map.containsKey(keyName)) continue;
-            var entries = (Map<GlideString, Object[][]>) map.get(keyName);
-            map.put(keyName, castMapOf2DArrayGlideString(entries, GlideString.class));
-        }
-        for (var keyName : List.of(gs("groups"), gs("consumers"))) {
-            if (!map.containsKey(keyName)) continue;
-            var value = map.get(keyName);
-            // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
-            if (value instanceof Long) {
-                return map;
-            }
-            // convert `Object[]` to `Map[]`
-            value = castArray((Object[]) value, Map.class);
-            for (var subMap : (Map<GlideString, Object>[]) value) {
-                // recursively inline update the map
-                handleXInfoStreamResponseGlideString(subMap);
-            }
-            map.put(keyName, value);
-        }
-        return map;
     }
 
     @Override
