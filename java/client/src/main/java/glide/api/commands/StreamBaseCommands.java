@@ -1674,7 +1674,8 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return Stream information.
+     * @return A <code>Map</code> of stream information for the given <code>key</code>. See the
+     *     example for a sample response.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -1702,7 +1703,7 @@ public interface StreamBaseCommands {
      *             { "e4_f", "e4_v" }
      *         })
      * );
-     * // "first-entry" and "last-entry" could be both `null` if stream is empty
+     * // Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `null` if stream is empty.
      * }</pre>
      */
     CompletableFuture<Map<String, Object>> xinfoStream(String key);
@@ -1714,7 +1715,8 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return Stream information.
+     * @return A <code>Map</code> of stream information for the given <code>key</code>. See the
+     *     example for a sample response.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -1742,7 +1744,7 @@ public interface StreamBaseCommands {
      *             { gs("e4_f"), gs("e4_v") }
      *         })
      * );
-     * // "first-entry" and "last-entry" could be both `null` if stream is empty
+     * // Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `null` if stream is empty.
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Object>> xinfoStream(GlideString key);
@@ -1754,7 +1756,8 @@ public interface StreamBaseCommands {
      * @since Redis 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return Detailed stream information.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
+     *     the example for a sample response.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -1815,7 +1818,7 @@ public interface StreamBaseCommands {
      *                         } }
      *                 )
      *             })
-     * });
+     * }); // Detailed stream information for "my_stream".
      * }</pre>
      */
     CompletableFuture<Map<String, Object>> xinfoStreamFull(String key);
@@ -1827,7 +1830,8 @@ public interface StreamBaseCommands {
      * @since Redis 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return Detailed stream information.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
+     *     the example for a sample response.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -1888,7 +1892,7 @@ public interface StreamBaseCommands {
      *                         } }
      *                 )
      *             })
-     * });
+     * }); // Detailed stream information for "my_stream".
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(GlideString key);
@@ -1901,7 +1905,7 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
      *     means that all entries will be returned.
-     * @return Detailed stream information.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>.
      * @example
      *     <pre>{@code
      * // example of using the API:
@@ -1919,7 +1923,7 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
      *     means that all entries will be returned.
-     * @return Detailed stream information.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>.
      * @example
      *     <pre>{@code
      * // example of using the API:

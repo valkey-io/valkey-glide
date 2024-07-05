@@ -752,9 +752,9 @@ public abstract class BaseClient
             }
             // convert `Object[]` to `Map[]`
             value = castArray((Object[]) value, Map.class);
-            for (var subMap : (Map<String, Object>[]) value) {
+            for (var subMap : (Map<GlideString, Object>[]) value) {
                 // recursively inline update the map
-                handleXInfoStreamResponse(subMap);
+                handleXInfoStreamResponseGlideString(subMap);
             }
             map.put(keyName, value);
         }
@@ -2993,9 +2993,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Object>> xinfoStream(@NonNull String key) {
         return commandManager.submitNewCommand(
-                XInfoStream,
-                new String[] {key},
-                response -> handleMapResponse(response));
+                XInfoStream, new String[] {key}, this::handleMapResponse);
     }
 
     @Override
@@ -3011,23 +3009,19 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new String[] {key, FULL, COUNT, Integer.toString(count)},
-                response -> handleMapResponse(response));
+                this::handleMapResponse);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Object>> xinfoStream(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                XInfoStream,
-                new GlideString[] {key},
-                response -> handleBinaryStringMapResponse(response));
+                XInfoStream, new GlideString[] {key}, this::handleBinaryStringMapResponse);
     }
 
     @Override
     public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                XInfoStream,
-                new GlideString[] {key, gs(FULL)},
-                response -> handleBinaryStringMapResponse(response));
+                XInfoStream, new GlideString[] {key, gs(FULL)}, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -3036,7 +3030,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoStream,
                 new GlideString[] {key, gs(FULL), gs(COUNT), gs(Integer.toString(count))},
-                response -> handleBinaryStringMapResponse(response));
+                this::handleBinaryStringMapResponse);
     }
 
     @Override
