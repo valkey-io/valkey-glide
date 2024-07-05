@@ -414,6 +414,7 @@ public class ClusterClientTests {
         }
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_all_types() {

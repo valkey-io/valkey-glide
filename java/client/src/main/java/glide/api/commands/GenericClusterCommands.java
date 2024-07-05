@@ -221,7 +221,6 @@ public interface GenericClusterCommands {
      * immediately free resources tied to the cursor. Note that this makes the cursor unusable in
      * subsequent calls to <code>SCAN</code>.
      *
-     * @see ClusterScanCursor for more details about how to use the cursor.
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
      *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
@@ -282,7 +281,6 @@ public interface GenericClusterCommands {
      * immediately free resources tied to the cursor. Note that this makes the cursor unusable in
      * subsequent calls to <code>SCAN</code>.
      *
-     * @see ClusterScanCursor for more details about how to use the cursor.
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
      *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
