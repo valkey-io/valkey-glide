@@ -407,7 +407,7 @@ public class ClusterTransactionTests {
 
         Object[] results = clusterClient.exec(transaction).get();
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedStreamInfo.put("max-deleted-entry-id", "0-0");
             expectedStreamInfo.put("entries-added", 1L);
             expectedStreamInfo.put("recorded-first-entry-id", "0-1");
