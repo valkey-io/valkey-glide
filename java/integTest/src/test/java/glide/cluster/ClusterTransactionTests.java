@@ -351,7 +351,6 @@ public class ClusterTransactionTests {
 
         // Setup
         clusterClient.functionLoad(code, true).get();
-        clusterClient.functionList(true).get();
 
         // Verify functionDump
         ClusterTransaction transaction = new ClusterTransaction();
@@ -363,6 +362,9 @@ public class ClusterTransactionTests {
         // Verify functionRestore
         transaction = new ClusterTransaction();
         transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        // For the cluster mode, PRIMARY SlotType is required to avoid the error:
+        //  "RequestError: An error was signalled by the server -
+        //   ReadOnly: You can't write against a read only replica."
         Object[] response = clusterClient.exec(transaction, new SlotIdRoute(1, SlotType.PRIMARY)).get();
         assertEquals(OK, response[0]);
     }

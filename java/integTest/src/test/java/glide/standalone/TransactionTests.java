@@ -642,7 +642,6 @@ public class TransactionTests {
 
         // Setup
         client.functionLoad(code, true).get();
-        client.functionList(true).get();
 
         // Verify functionDump
         Transaction transaction = new Transaction();

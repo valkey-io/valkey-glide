@@ -1115,18 +1115,17 @@ class TestTransaction:
             code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
             transaction = ClusterTransaction() if cluster_mode else Transaction()
             transaction.function_load(code, True)
-            transaction.function_list(with_code=True)
 
             # Verify function_dump
             transaction.function_dump()
             result1 = await glide_client.exec(transaction)
             assert result1 is not None
             assert isinstance(result1, list)
-            assert isinstance(result1[2], bytes)
+            assert isinstance(result1[1], bytes)
 
             # Verify function_restore - use result1[2] from above
             transaction = ClusterTransaction() if cluster_mode else Transaction()
-            transaction.function_restore(result1[2], FunctionRestorePolicy.REPLACE)
+            transaction.function_restore(result1[1], FunctionRestorePolicy.REPLACE)
             # For the cluster mode, PRIMARY SlotType is required to avoid the error:
             #  "RequestError: An error was signalled by the server -
             #   ReadOnly: You can't write against a read only replica."
