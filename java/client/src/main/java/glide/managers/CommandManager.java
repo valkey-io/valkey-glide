@@ -393,7 +393,7 @@ public class CommandManager {
      * @param arguments The arguments to add to the builder.
      * @param outputBuilder The builder to populate with arguments.
      */
-    private static void populateCommandWithArgs(
+    public static void populateCommandWithArgs(
             GlideString[] arguments, Command.Builder outputBuilder) {
         populateCommandWithArgs(
                 Arrays.stream(arguments).map(GlideString::getBytes).collect(Collectors.toList()),

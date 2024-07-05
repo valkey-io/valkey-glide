@@ -11,6 +11,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
@@ -891,6 +892,11 @@ public class TransactionTests {
                                 "consumer")));
 
         transaction.xinfoStream("key").xinfoStreamFull("key").xinfoStreamFull("key", 42);
+        results.add(Pair.of(XInfoStream, buildArgs("key")));
+        results.add(Pair.of(XInfoStream, buildArgs("key", FULL)));
+        results.add(Pair.of(XInfoStream, buildArgs("key", FULL, COUNT, "42")));
+
+        transaction.xinfoStream(gs("key")).xinfoStreamFull(gs("key")).xinfoStreamFull(gs("key"), 42);
         results.add(Pair.of(XInfoStream, buildArgs("key")));
         results.add(Pair.of(XInfoStream, buildArgs("key", FULL)));
         results.add(Pair.of(XInfoStream, buildArgs("key", FULL, COUNT, "42")));

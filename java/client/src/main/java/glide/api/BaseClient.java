@@ -13,6 +13,7 @@ import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
+import static glide.utils.ArrayTransformUtils.castMapOf2DArrayGlideString;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -464,6 +465,17 @@ public abstract class BaseClient
     }
 
     /**
+     * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>V</code>.
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
+    protected <V> Map<GlideString, V> handleMapResponseGlideString(Response response)
+            throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    /**
      * Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
      *
      * @param response A Protobuf response
@@ -541,16 +553,16 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked")
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-        throws RedisException {
+            throws RedisException {
         Map<String, Object> mapResponse = handleMapOrNullResponse(response);
         if (mapResponse == null) {
             return null;
         }
         return mapResponse.entrySet().stream()
-            .collect(
-                Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
     }
 
     /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
@@ -563,6 +575,34 @@ public abstract class BaseClient
             map.put(keyName, castMapOf2DArray(entries, String.class));
         }
         for (var keyName : List.of("groups", "consumers")) {
+            if (!map.containsKey(keyName)) continue;
+            var value = map.get(keyName);
+            // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
+            if (value instanceof Long) {
+                return map;
+            }
+            // convert `Object[]` to `Map[]`
+            value = castArray((Object[]) value, Map.class);
+            for (var subMap : (Map<String, Object>[]) value) {
+                // recursively inline update the map
+                handleXInfoStreamResponse(subMap);
+            }
+            map.put(keyName, value);
+        }
+        return map;
+    }
+
+    /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, Object> handleXInfoStreamResponseGlideString(
+            Map<GlideString, Object> map) {
+        // convert entries from `Object[][]` to `GlideString[][]` inside a map
+        for (var keyName : List.of(gs("entries"), gs("first-entry"), gs("last-entry"))) {
+            if (!map.containsKey(keyName)) continue;
+            var entries = (Map<GlideString, Object[][]>) map.get(keyName);
+            map.put(keyName, castMapOf2DArrayGlideString(entries, GlideString.class));
+        }
+        for (var keyName : List.of(gs("groups"), gs("consumers"))) {
             if (!map.containsKey(keyName)) continue;
             var value = map.get(keyName);
             // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
@@ -2046,17 +2086,51 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, Object>> xinfoStream(@NonNull String key) {
-        return commandManager.submitNewCommand(XInfoStream, new String[] { key }, response -> handleXInfoStreamResponse(handleMapResponse(response)));
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key},
+                response -> handleXInfoStreamResponse(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key) {
-        return commandManager.submitNewCommand(XInfoStream, new String[] { key, FULL }, response -> handleXInfoStreamResponse(handleMapResponse(response)));
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key, FULL},
+                response -> handleXInfoStreamResponse(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key, int count) {
-        return commandManager.submitNewCommand(XInfoStream, new String[] { key, FULL, COUNT, Integer.toString(count) }, response -> handleXInfoStreamResponse(handleMapResponse(response)));
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key, FULL, COUNT, Integer.toString(count)},
+                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStream(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key},
+                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key, gs(FULL)},
+                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(
+            @NonNull GlideString key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key, gs(FULL), gs(COUNT), gs(Integer.toString(count))},
+                response -> handleXInfoStreamResponseGlideString(handleMapResponseGlideString(response)));
     }
 
     @Override

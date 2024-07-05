@@ -14,6 +14,7 @@ import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
@@ -3123,8 +3124,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param consumer The consumer name.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]</code>.
-     *     Returns <code>null</code> if there is no stream that can be served.
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
@@ -3146,8 +3147,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]</code>.
-     *     Returns <code>null</code> if there is no stream that can be served.
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds,
@@ -3293,7 +3294,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns information about the stream stored at key <code>key</code>.<br>
-     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link #xinfoStreamFull(String, int)}.
+     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link
+     * #xinfoStreamFull(String, int)}.
      *
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -3301,6 +3303,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T xinfoStream(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(GlideString)} or {@link
+     * #xinfoStreamFull(GlideString, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - Stream information.
+     */
+    public T xinfoStream(@NonNull GlideString key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgsGlideString(key)));
         return getThis();
     }
 
@@ -3325,11 +3341,46 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code> means that all entries will be returned.
+     * @return Command Response - Detailed stream information.
+     */
+    public T xinfoStreamFull(@NonNull GlideString key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgsGlideString(key, gs(FULL))));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
      * @return Command Response - Detailed stream information.
      */
     public T xinfoStreamFull(@NonNull String key, int count) {
-        protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgs(key, FULL, COUNT, Integer.toString(count))));
+        protobufTransaction.addCommands(
+                buildCommand(XInfoStream, buildArgs(key, FULL, COUNT, Integer.toString(count))));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
+     * @return Command Response - Detailed stream information.
+     */
+    public T xinfoStreamFull(@NonNull GlideString key, int count) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XInfoStream,
+                        buildArgsGlideString(key, gs(FULL), gs(COUNT), gs(Integer.toString(count)))));
         return getThis();
     }
 
@@ -5685,8 +5736,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return builder.build();
     }
 
+    /** Build protobuf {@link Command} object for given command and arguments. */
+    protected Command buildCommand(RequestType requestType, GlideString... args) {
+        final Command.Builder builder = Command.newBuilder();
+        builder.setRequestType(requestType);
+        CommandManager.populateCommandWithArgs(args, builder);
+        return builder.build();
+    }
+
     /** Dummy function for taking a series of String parameters and returning an String array */
     private static String[] buildArgs(String... args) {
+        return args;
+    }
+
+    /**
+     * Dummy function for taking a series of GlideString parameters and returning an GlideString array
+     */
+    private static GlideString[] buildArgsGlideString(GlideString... args) {
         return args;
     }
 }

@@ -675,12 +675,14 @@ public interface StreamBaseCommands {
 
     /**
      * Returns information about the stream stored at key <code>key</code>.<br>
-     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link #xinfoStreamFull(String, int)}.
+     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link
+     * #xinfoStreamFull(String, int)}.
      *
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return Stream information.
-     * @example <pre>{@code
+     * @example
+     *     <pre>{@code
      * // example of using the API:
      * Map<String, Object> response = client.xinfoStream("myStream").get();
      * // the response contains data in the following format:
@@ -712,6 +714,46 @@ public interface StreamBaseCommands {
     CompletableFuture<Map<String, Object>> xinfoStream(String key);
 
     /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(GlideString)} or {@link
+     * #xinfoStreamFull(GlideString, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Stream information.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<GlideString, Object> response = client.xinfoStream(gs("myStream")).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object> data = Map.of(
+     *     gs("length"), 4L,
+     *     gs("radix-tree-keys"), 1L,
+     *     gs("radix-tree-nodes"), 2L,
+     *     gs("last-generated-id"), gs("1719877599564-0"),
+     *     gs("max-deleted-entry-id"), gs("0-0"),
+     *     gs("entries-added"), 4L,
+     *     gs("recorded-first-entry-id"), gs("1719710679916-0"),
+     *     gs("groups"), 1L,
+     *     gs("first-entry"), Map.of(
+     *         gs("1719710679916-0"),
+     *         new GlideString[][] {
+     *             { gs("foo"), gs("bar") },
+     *             { gs("foo"), gs("bar2") },
+     *             { gs("some_field"), gs("some_value") }
+     *         }),
+     *     gs("last-entry", Map.of(
+     *         gs("1719877599564-0"),
+     *         new GlideString[][] {
+     *             { gs("e4_f"), gs("e4_v") }
+     *         })
+     * );
+     * // "first-entry" and "last-entry" could be both `null` if stream is empty
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>> xinfoStream(GlideString key);
+
+    /**
      * Returns verbose information about the stream stored at key <code>key</code>.<br>
      * The output is limited by first <code>10</code> PEL entries.
      *
@@ -719,7 +761,8 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return Detailed stream information.
-     * @example <pre>{@code
+     * @example
+     *     <pre>{@code
      * // example of using the API:
      * Map<String, Object> response = client.xinfoStreamFull("myStream").get();
      * // the response contains data in the following format:
@@ -784,18 +827,111 @@ public interface StreamBaseCommands {
     CompletableFuture<Map<String, Object>> xinfoStreamFull(String key);
 
     /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Detailed stream information.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<GlideString, Object> response = client.xinfoStreamFull(gs("myStream")).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object> data = Map.of(
+     *     gs("length"), 4L,
+     *     gs("radix-tree-keys"), 1L,
+     *     gs("radix-tree-nodes"), 2L,
+     *     gs("last-generated-id"), gs("1719877599564-0"),
+     *     gs("max-deleted-entry-id"), gs("0-0"),
+     *     gs("entries-added"), 4L,
+     *     gs("recorded-first-entry-id"), gs("1719710679916-0"),
+     *     gs("entries"), Map.of(
+     *         gs("1719710679916-0"),
+     *         new GlideString[][] {
+     *             { gs("foo"), gs("bar") },
+     *             { gs("foo"), gs("bar2") },
+     *             { gs("some_field"), gs("some_value") }
+     *         },
+     *         gs("1719710688676-0"),
+     *         new GlideString[][] {
+     *             { gs("foo"), gs("bar2") },
+     *         },
+     *     ),
+     *     gs("groups"), new Map[] {
+     *         Map.of(
+     *             gs("name"), gs("mygroup"),
+     *             gs("last-delivered-id"), gs("1719710688676-0"),
+     *             gs("entries-read"), 2L,
+     *             gs("lag"), 0L,
+     *             gs("pel-count"), 2L,
+     *             gs("pending"), new Object[][] { {
+     *                     gs("1719710679916-0"),
+     *                     gs("Alice"),
+     *                     1719710707260L,
+     *                     1L,
+     *                 }, {
+     *                     gs("1719710688676-0"),
+     *                     gs("Alice"),
+     *                     1719710718373L,
+     *                     1L
+     *                 } },
+     *             gs("consumers"), new Map[] {
+     *                 Map.of(
+     *                     gs("name"), gs("Alice"),
+     *                     gs("seen-time"), 1719710718373L,
+     *                     gs("active-time"), 1719710718373L,
+     *                     gs("pel-count"), 2L,
+     *                     gs("pending"), new Object[][] { {
+     *                             gs("1719710679916-0"),
+     *                             1719710707260L,
+     *                             1L,
+     *                         }, {
+     *                             gs("1719710688676-0"),
+     *                             1719710718373L,
+     *                             1L
+     *                         } }
+     *                 )
+     *             })
+     * });
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(GlideString key);
+
+    /**
      * Returns verbose information about the stream stored at key <code>key</code>.
      *
      * @since Redis 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code> means that all entries will be returned.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
      * @return Detailed stream information.
-     * @example <pre>{@code
+     * @example
+     *     <pre>{@code
      * // example of using the API:
      * Map<String, Object> response = client.xinfoStreamFull("myStream", 42).get();
      * }</pre>
-     * The response has the same format as {@link #xinfoStreamFull(String)}.
+     *     The response has the same format as {@link #xinfoStreamFull(String)}.
      */
     CompletableFuture<Map<String, Object>> xinfoStreamFull(String key, int count);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
+     * @return Detailed stream information.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<GlideString, Object> response = client.xinfoStreamFull(gs("myStream"), 42).get();
+     * }</pre>
+     *     The response has the same format as {@link #xinfoStreamFull(GlideString)}.
+     */
+    CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(GlideString key, int count);
 }
