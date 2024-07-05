@@ -7129,6 +7129,7 @@ public class SharedCommandTests {
         String groupName = UUID.randomUUID().toString();
         String zeroStreamId = "0-0";
         String consumer = UUID.randomUUID().toString();
+        String consumer2 = UUID.randomUUID().toString();
 
         // Add 4 stream entries for consumer
         String streamid_0 = client.xadd(key, Map.of("f1", "v1" /*, "f2", "v2"*/)).get();
@@ -7177,17 +7178,17 @@ public class SharedCommandTests {
         assertEquals(1, client.xdel(key, new String[] {streamid_2}).get());
 
         // autoclaim the rest of the entries
-        Object[] xautoclaimResult2 = client.xautoclaim(key, groupName, consumer, 0L, streamid_1).get();
+        Object[] xautoclaimResult2 = client.xautoclaim(gs(key), gs(groupName), gs(consumer), 0L, gs(streamid_1)).get();
         assertEquals(
-                zeroStreamId,
+                gs(zeroStreamId),
                 xautoclaimResult2[0]); // "0-0" is returned to indicate the entire stream was scanned.
         assertDeepEquals(
                 Map.of(
-                        streamid_1, new String[][] {{"field1", "value1"}},
-                        streamid_3, new String[][] {{"field3", "value3"}}),
+                        gs(streamid_1), new GlideString[][] {{gs("field1"), gs("value1")}},
+                        gs(streamid_3), new GlideString[][] {{gs("field3"), gs("value3")}}),
                 xautoclaimResult2[1]);
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertDeepEquals(new String[] {streamid_2}, xautoclaimResult2[2]);
+            assertDeepEquals(new GlideString[] {gs(streamid_2)}, xautoclaimResult2[2]);
         }
 
         // autoclaim with JUSTID: result at index 1 does not contain fields/values of the claimed
@@ -7204,6 +7205,20 @@ public class SharedCommandTests {
             //     but are no longer in the stream still show up in the response
             assertDeepEquals(
                     new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, justIdResult[1]);
+        }
+
+        Object[] justIdResultCount =
+            client.xautoclaimJustId(gs(key), gs(groupName), gs(consumer2), 0L, gs(zeroStreamId), 1L).get();
+        assertEquals(gs(streamid_1), justIdResultCount[0]);
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertDeepEquals(new GlideString[] {gs(streamid_0)}, justIdResultCount[1]);
+            assertDeepEquals(new Object[] {}, justIdResultCount[2]);
+        } else {
+            // in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the
+            // Pending Entries List
+            //     but are no longer in the stream still show up in the response
+            assertDeepEquals(
+                new GlideString[] {gs(streamid_0), gs(streamid_2)}, justIdResultCount[1]);
         }
     }
 
