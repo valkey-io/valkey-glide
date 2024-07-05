@@ -1045,6 +1045,35 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_xinfo_stream(
+        self, glide_client: TGlideClient, cluster_mode: bool, protocol
+    ):
+        key = get_random_string(10)
+        stream_id1_0 = "1-0"
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
+        transaction.xinfo_stream(key)
+        transaction.xinfo_stream_full(key)
+
+        response = await glide_client.exec(transaction)
+        assert response is not None
+        # transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
+        assert response[0] == stream_id1_0.encode()
+        # transaction.xinfo_stream(key)
+        info = cast(dict, response[1])
+        assert info.get(b"length") == 1
+        assert info.get(b"groups") == 0
+        assert info.get(b"first-entry") == [stream_id1_0.encode(), [b"foo", b"bar"]]
+        assert info.get(b"first-entry") == info.get(b"last-entry")
+
+        # transaction.xinfo_stream_full(key)
+        info_full = cast(dict, response[2])
+        assert info_full.get(b"length") == 1
+        assert info_full.get(b"entries") == [[stream_id1_0.encode(), [b"foo", b"bar"]]]
+        assert info_full.get(b"groups") == []
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_lastsave(
         self, glide_client: TGlideClient, cluster_mode: bool
     ):
