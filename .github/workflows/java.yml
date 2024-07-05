@@ -94,7 +94,6 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  rm -rf ~/.m2 ~/.gradle
                   mvn clean
                   ./gradlew clean
                   ./gradlew :client:clean
@@ -175,7 +174,6 @@ jobs:
             - name: Build java part
               working-directory: java
               run: |
-                  rm -rf ~/.m2 ~/.gradle
                   mvn clean
                   ./gradlew clean
                   ./gradlew :client:clean 
