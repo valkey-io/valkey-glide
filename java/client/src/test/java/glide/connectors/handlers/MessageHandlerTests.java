@@ -14,12 +14,15 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+
+import lombok.SneakyThrows;
 import response.ResponseOuterClass;
 
 /** Unit tests for MessageHandler */
 public class MessageHandlerTests {
     @Test
-    public void testExactMessage() throws Exception {
+    @SneakyThrows
+    public void test_exact_message() {
         // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
@@ -43,7 +46,8 @@ public class MessageHandlerTests {
     }
 
     @Test
-    public void testExactMessageWithCallback() throws Exception {
+    @SneakyThrows
+    public void test_exact_message_with_callback() {
         // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
@@ -76,7 +80,8 @@ public class MessageHandlerTests {
     }
 
     @Test
-    public void testShardedMessage() throws Exception {
+    @SneakyThrows
+    public void test_sharded_message() {
         // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
@@ -100,7 +105,7 @@ public class MessageHandlerTests {
     }
 
     @Test
-    public void testShardedMessageWithCallback() throws Exception {
+    public void test_sharded_message_with_callback() throws Exception {
         // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
@@ -133,7 +138,8 @@ public class MessageHandlerTests {
     }
 
     @Test
-    public void testPatternMessage() throws Exception { // Arrange
+    @SneakyThrows
+    public void test_pattern_message() { // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -158,7 +164,8 @@ public class MessageHandlerTests {
     }
 
     @Test
-    public void testPatternMessageWithCallback() throws Exception {
+    @SneakyThrows
+    public void test_pattern_message_with_callback() {
         // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
@@ -193,7 +200,7 @@ public class MessageHandlerTests {
     }
 
     @Test
-    public void testExceptionFromCallbackWrapped() throws Exception {
+    public void test_exception_from_callback_wrapped() throws Exception {
         // Arrange
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
