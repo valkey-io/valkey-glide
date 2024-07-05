@@ -55,7 +55,7 @@ Other useful gradle developer commands:
 * `./gradlew :integTest:test` to run client examples
 * `./gradlew spotlessCheck` to check for codestyle issues
 * `./gradlew spotlessApply` to apply codestyle recommendations
-* `./gradlew :examples:run` to run client examples (make sure you have a running redis on port `6379`)
+* `./gradlew :examples:run` to run client examples (make sure you have a running valkey on port `6379`)
 * `./gradlew :benchmarks:run` to run performance benchmarks
 
 
@@ -197,6 +197,6 @@ The following arguments are accepted:
 * `concurrentTasks`: Number of concurrent tasks
 * `clients`: one of: all|jedis|lettuce|glide
 * `clientCount`: Client count
-* `host`: ValKey server host url
+* `host`: Valkey server host url
 * `port`: glide server port number
 * `tls`: glide TLS configured
