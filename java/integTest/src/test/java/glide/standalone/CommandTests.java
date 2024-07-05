@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -150,7 +150,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multiple_options() {
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(CPU).section(MEMORY);
         }
         InfoOptions options = builder.build();
@@ -325,7 +325,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void configGet_with_multiple_params() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         var data = regularClient.configGet(new String[] {"pidfile", "logfile"}).get();
         assertAll(
                 () -> assertEquals(2, data.size()),
@@ -404,21 +404,21 @@ public class CommandTests {
     public void lolwut_lolwut() {
         var response = regularClient.lolwut().get();
         System.out.printf("%nLOLWUT standalone client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         response = regularClient.lolwut(new int[] {30, 4, 4}).get();
         System.out.printf(
                 "%nLOLWUT standalone client standard response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         response = regularClient.lolwut(5).get();
         System.out.printf("%nLOLWUT standalone client ver 5 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         response = regularClient.lolwut(6, new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT standalone client ver 6 response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
     }
 
     @Test
@@ -443,7 +443,7 @@ public class CommandTests {
         assertEquals(1L, regularClient.dbsize().get());
 
         // flush and check again
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             assertEquals(OK, regularClient.flushdb(SYNC).get());
         } else {
             var executionException =
@@ -479,7 +479,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             assertEquals(OK, regularClient.flushall(SYNC).get());
         } else {
             var executionException =
@@ -499,7 +499,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void function_commands() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
@@ -586,7 +586,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void function_commands_binary() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
@@ -686,7 +686,8 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void copy() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         String source = "{key}-1" + UUID.randomUUID();
         String destination = "{key}-2" + UUID.randomUUID();
@@ -735,7 +736,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKill_no_write() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionKill_no_write";
         String funcName = "deadlock";
@@ -785,7 +786,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKillBinary_no_write() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionKillBinary_no_write");
         GlideString funcName = gs("binary_deadlock");
@@ -836,7 +837,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKill_write_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionKill_write_function";
         String funcName = "deadlock_write_function";
@@ -901,7 +902,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKillBinary_write_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionKill_write_function");
         GlideString funcName = gs("deadlock_write_function");
@@ -966,7 +967,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionStats() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionStats";
         String funcName = libName;
@@ -998,7 +999,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionStatsBinary() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionStats");
         GlideString funcName = libName;
@@ -1035,7 +1036,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void function_dump_and_restore() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
@@ -1215,7 +1216,7 @@ public class CommandTests {
         assertEquals(missingListKey, regularClient.lpop(listKey).get());
 
         // SORT_RO
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(
                     new String[] {"Alice", "Bob"},
                     regularClient
@@ -1407,7 +1408,7 @@ public class CommandTests {
         assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
 
         // SORT_RO
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(
                     new GlideString[] {gs("Alice"), gs("Bob")},
                     regularClient
