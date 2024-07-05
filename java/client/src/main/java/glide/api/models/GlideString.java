@@ -13,7 +13,6 @@ import lombok.Getter;
  * This class stores data <code>byte[]</code> too, but provides API to represent data as a {@link
  * String} if conversion is possible.
  */
-@EqualsAndHashCode
 public class GlideString implements Comparable<GlideString> {
 
     /** The data itself. */
@@ -24,7 +23,7 @@ public class GlideString implements Comparable<GlideString> {
      * Value is written if conversion requested via {@link #toString()} or {@link #getString()} or
      * checked with {@link #canConvertToString()} only if conversion is possible.
      */
-    @EqualsAndHashCode.Exclude private String string = null;
+    private String string = null;
 
     /** Flag whether possibility to convert to string was checked. */
     private final AtomicBoolean conversionChecked = new AtomicBoolean(false);
@@ -126,5 +125,19 @@ public class GlideString implements Comparable<GlideString> {
                 }
             }
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof GlideString)) return false;
+        GlideString that = (GlideString) o;
+
+        return Arrays.equals(bytes, that.bytes);
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.hashCode(bytes);
     }
 }
