@@ -13128,7 +13128,7 @@ public class SharedCommandTests {
         assertDeepEquals(null, result.get("last-entry"));
 
         // XINFO STREAM FULL called against empty stream. Negative count values are ignored.
-        Map<String, Object> resultFull = client.xinfoStreamFull(key, 3).get();
+        Map<String, Object> resultFull = client.xinfoStreamFull(key, -3).get();
         assertEquals(0L, resultFull.get("length"));
         assertDeepEquals(new Object[] {}, resultFull.get("entries"));
         assertDeepEquals(new Object[] {}, resultFull.get("groups"));
@@ -13139,6 +13139,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(ExecutionException.class, () -> client.xinfoStreamFull(nonExistentKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xinfoStreamFull(nonExistentKey, 1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Key exists, but it is not a stream
