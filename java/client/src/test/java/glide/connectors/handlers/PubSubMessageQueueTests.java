@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.models.PubSubMessage;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -138,6 +140,44 @@ public class PubSubMessageQueueTests {
         assertEquals(0, queue.messageQueue.size());
         // message 3 isn't lost - it is stored in `future`
         assertSame(msg3, future.get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void getting_messages_reordered_on_concurrent_async_and_sync_read() {
+        var queue = new PubSubMessageQueue();
+        var msg1 = new PubSubMessage("one", "one");
+        var msg2 = new PubSubMessage("two", "two");
+        queue.push(msg1);
+        queue.push(msg2);
+
+        var readMessages = new ArrayList<PubSubMessage>(2);
+
+        // assuming thread 1 started async read
+        var future = queue.popAsync();
+        // and got raced by thread 2 which reads sync
+        var msg = queue.popSync();
+        readMessages.add(msg);
+        // then thread 1 continues
+        msg = future.get();
+        readMessages.add(msg);
+
+        // messages get reordered since stored into a single collection (even if is a concurrent one)
+        assertEquals(List.of(msg2, msg1), readMessages);
+
+        // another example
+
+        // reading async before anything added to the queue
+        future = queue.popAsync();
+        // queue gets 2 messages
+        queue.push(msg1);
+        queue.push(msg2);
+        // but inside the queue only one is stored
+        assertEquals(1, queue.messageQueue.size());
+        // then if we read sync, we receive only second one
+        assertSame(msg2, queue.popSync());
+        // future gets resolved by the first message
+        assertSame(msg1, future.get());
     }
 
     // Not merging `concurrent_write_async_read` and `concurrent_write_sync_read`, because

@@ -39,8 +39,6 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -160,16 +158,9 @@ public class PubSubTests {
         } else { // Sync
             var received = new HashSet<PubSubMessage>(pubsubMessages.size());
             PubSubMessage message;
-            do {
-                try {
-                    message =
-                            CompletableFuture.supplyAsync(listener::tryGetPubSubMessage).get(1, TimeUnit.SECONDS);
-                    received.add(message);
-                } catch (TimeoutException ignored) {
-                    // all messages read
-                    break;
-                }
-            } while (message != null);
+            while ((message = listener.tryGetPubSubMessage()) != null) {
+                received.add(message);
+            }
             assertEquals(
                     pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
         }
