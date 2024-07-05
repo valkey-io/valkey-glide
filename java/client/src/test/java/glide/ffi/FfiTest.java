@@ -9,11 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.ffi.resolvers.RedisValueResolver;
-import lombok.SneakyThrows;
-
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
+import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -97,7 +96,7 @@ public class FfiTest {
         // warnings and errors.
 
         // This is the 'alpha' character.
-        byte[] bulkString = new byte[] { (byte)0xCE, (byte)0xB1 };
+        byte[] bulkString = new byte[] {(byte) 0xCE, (byte) 0xB1};
         long ptr = FfiTest.createLeakedBulkString(bulkString);
         final String input;
         input = new String(bulkString, StandardCharsets.UTF_8);
