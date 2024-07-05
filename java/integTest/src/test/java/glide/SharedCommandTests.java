@@ -7216,10 +7216,7 @@ public class SharedCommandTests {
             assertDeepEquals(new GlideString[] {gs(streamid_0)}, justIdResultCount[1]);
             assertDeepEquals(new Object[] {}, justIdResultCount[2]);
         } else {
-            // in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the
-            // Pending Entries List
-            //     but are no longer in the stream still show up in the response
-            assertDeepEquals(new GlideString[] {gs(streamid_0), gs(streamid_2)}, justIdResultCount[1]);
+            assertDeepEquals(new GlideString[] {gs(streamid_0)}, justIdResultCount[1]);
         }
     }
 
