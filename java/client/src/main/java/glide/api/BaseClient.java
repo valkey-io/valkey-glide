@@ -622,16 +622,16 @@ public abstract class BaseClient
      * @return A map of a map of <code>String[][]</code>
      */
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-        throws RedisException {
+            throws RedisException {
         Map<String, Object> mapResponse = handleMapOrNullResponse(response);
         if (mapResponse == null) {
             return null;
         }
         return mapResponse.entrySet().stream()
-            .collect(
-                Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
