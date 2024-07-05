@@ -2,7 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
@@ -375,7 +375,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void getex(BaseClient client) {
 
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         String key1 = "{key}" + UUID.randomUUID();
         String value1 = String.valueOf(UUID.randomUUID());
@@ -421,7 +422,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void getex_binary(BaseClient client) {
 
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         GlideString key1 = gs("{key}" + UUID.randomUUID());
         GlideString value1 = gs(String.valueOf(UUID.randomUUID()));
@@ -893,12 +895,13 @@ public class SharedCommandTests {
 
         // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
         assertEquals(
-                REDIS_VERSION.isLowerThan("8.0.0") ? "T" : "",
+                SERVER_VERSION.isLowerThan("8.0.0") ? "T" : "",
                 client.getrange(stringKey, -200, -100).get());
 
         // empty key (returning null isn't implemented)
         assertEquals(
-                REDIS_VERSION.isLowerThan("8.0.0") ? "" : null, client.getrange(nonStringKey, 0, -1).get());
+                SERVER_VERSION.isLowerThan("8.0.0") ? "" : null,
+                client.getrange(nonStringKey, 0, -1).get());
 
         // non-string key
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
@@ -929,12 +932,12 @@ public class SharedCommandTests {
 
         // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
         assertEquals(
-                gs(REDIS_VERSION.isLowerThan("8.0.0") ? "T" : ""),
+                gs(SERVER_VERSION.isLowerThan("8.0.0") ? "T" : ""),
                 client.getrange(stringKey, -200, -100).get());
 
         // empty key (returning null isn't implemented)
         assertEquals(
-                gs(REDIS_VERSION.isLowerThan("8.0.0") ? "" : null),
+                gs(SERVER_VERSION.isLowerThan("8.0.0") ? "" : null),
                 client.getrange(nonStringKey, 0, -1).get());
 
         // non-string key
@@ -2705,7 +2708,7 @@ public class SharedCommandTests {
 
         // set command clears the timeout.
         assertEquals(OK, client.set(key, "pexpire_timeout").get());
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpire(key, 10000L).get());
         } else {
             assertTrue(client.pexpire(key, 10000L, ExpireOptions.HAS_NO_EXPIRY).get());
@@ -2713,7 +2716,7 @@ public class SharedCommandTests {
         assertTrue(client.ttl(key).get() <= 10L);
 
         // TTL will be updated to the new value = 15
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.expire(key, 15L).get());
         } else {
             assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
@@ -2734,7 +2737,7 @@ public class SharedCommandTests {
 
         // set command clears the timeout.
         assertEquals(OK, client.set(key, gs("pexpire_timeout")).get());
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpire(key, 10000L).get());
         } else {
             assertTrue(client.pexpire(key, 10000L, ExpireOptions.HAS_NO_EXPIRY).get());
@@ -2742,7 +2745,7 @@ public class SharedCommandTests {
         assertTrue(client.ttl(key).get() <= 10L);
 
         // TTL will be updated to the new value = 15
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.expire(key, 15L).get());
         } else {
             assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
@@ -2762,7 +2765,7 @@ public class SharedCommandTests {
         assertTrue(client.ttl(key).get() <= 10L);
 
         // extend TTL
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 50L).get());
         } else {
             assertTrue(
@@ -2775,7 +2778,7 @@ public class SharedCommandTests {
         }
         assertTrue(client.ttl(key).get() <= 50L);
 
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
         } else {
             // set command clears the timeout.
@@ -2798,7 +2801,7 @@ public class SharedCommandTests {
         assertTrue(client.ttl(key).get() <= 10L);
 
         // extend TTL
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 50L).get());
         } else {
             assertTrue(
@@ -2811,7 +2814,7 @@ public class SharedCommandTests {
         }
         assertTrue(client.ttl(key).get() <= 50L);
 
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
         } else {
             // set command clears the timeout.
@@ -2834,7 +2837,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
         // no timeout set yet
         assertEquals(-1L, client.ttl(key).get());
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(-1L, client.expiretime(key).get());
             assertEquals(-1L, client.pexpiretime(key).get());
         }
@@ -2858,7 +2861,7 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, gs("expire_with_past_timestamp")).get());
         // no timeout set yet
         assertEquals(-1L, client.ttl(key).get());
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(-1L, client.expiretime(key).get());
             assertEquals(-1L, client.pexpiretime(key).get());
         }
@@ -2917,7 +2920,7 @@ public class SharedCommandTests {
         assertFalse(client.pexpire(key, 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(-2L, client.expiretime(key).get());
             assertEquals(-2L, client.pexpiretime(key).get());
         }
@@ -2933,7 +2936,7 @@ public class SharedCommandTests {
         assertFalse(client.pexpire(key, 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(-2L, client.expiretime(key).get());
             assertEquals(-2L, client.pexpiretime(key).get());
         }
@@ -3349,7 +3352,7 @@ public class SharedCommandTests {
         // nothing popped out - key does not exist
         assertNull(
                 client
-                        .bzpopmin(new String[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .bzpopmin(new String[] {key3}, SERVER_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
                         .get());
 
         // pops from the second key
@@ -3500,7 +3503,7 @@ public class SharedCommandTests {
         // nothing popped out - key does not exist
         assertNull(
                 client
-                        .bzpopmax(new String[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .bzpopmax(new String[] {key3}, SERVER_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
                         .get());
 
         // pops from the second key
@@ -3624,7 +3627,7 @@ public class SharedCommandTests {
         assertEquals(3, client.zadd(key, membersScores).get());
         assertEquals(0, client.zrank(key, "one").get());
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
             assertArrayEquals(new Object[] {0L, 1.5}, client.zrankWithScore(key, "one").get());
             assertNull(client.zrankWithScore(key, "nonExistingMember").get());
             assertNull(client.zrankWithScore("nonExistingKey", "nonExistingMember").get());
@@ -3648,7 +3651,7 @@ public class SharedCommandTests {
         assertEquals(3, client.zadd(key, membersScores).get());
         assertEquals(0, client.zrevrank(key, "three").get());
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
             assertArrayEquals(new Object[] {2L, 1.5}, client.zrevrankWithScore(key, "one").get());
             assertNull(client.zrevrankWithScore(key, "nonExistingMember").get());
             assertNull(client.zrevrankWithScore("nonExistingKey", "nonExistingMember").get());
@@ -3667,7 +3670,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiff(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -3743,7 +3747,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiffstore(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -4308,7 +4313,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zunion(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -4378,7 +4384,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zunion_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
         GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
@@ -4457,7 +4464,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zinter(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
 
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -4533,7 +4541,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zintercard(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String key1 = "{zintercard}-" + UUID.randomUUID();
         String key2 = "{zintercard}-" + UUID.randomUUID();
         String key3 = "{zintercard}-" + UUID.randomUUID();
@@ -4629,7 +4637,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zmpop(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key1 = "{zmpop}-1-" + UUID.randomUUID();
         String key2 = "{zmpop}-2-" + UUID.randomUUID();
         String key3 = "{zmpop}-3-" + UUID.randomUUID();
@@ -4681,7 +4689,8 @@ public class SharedCommandTests {
     //     @ParameterizedTest(autoCloseArguments = false)
     //     @MethodSource("getClients")
     //     public void zmpop_binary(BaseClient client) {
-    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis
+    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in
+    // version
     // 7");
     //         GlideString key1 = gs("{zmpop}-1-" + UUID.randomUUID());
     //         GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
@@ -4738,7 +4747,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void bzmpop(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key1 = "{bzmpop}-1-" + UUID.randomUUID();
         String key2 = "{bzmpop}-2-" + UUID.randomUUID();
         String key3 = "{bzmpop}-3-" + UUID.randomUUID();
@@ -4789,7 +4798,8 @@ public class SharedCommandTests {
     //     @ParameterizedTest(autoCloseArguments = false)
     //     @MethodSource("getClients")
     //     public void bzmpop_binary(BaseClient client) {
-    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis
+    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in
+    // version
     // 7");
     //         GlideString key1 = gs("{bzmpop}-1-" + UUID.randomUUID());
     //         GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
@@ -4843,7 +4853,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void bzmpop_timeout_check(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key = UUID.randomUUID().toString();
         // create new client with default request timeout (250 millis)
         try (var testClient =
@@ -4867,7 +4877,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void bzmpop_binary_timeout_check(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         GlideString key = gs(UUID.randomUUID().toString());
         // create new client with default request timeout (250 millis)
         try (var testClient =
@@ -5519,7 +5529,7 @@ public class SharedCommandTests {
 
         // ENTRIESREAD option was added in redis 7.0.0
         StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead(10L).build();
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
         } else {
             executionException =
@@ -5603,7 +5613,7 @@ public class SharedCommandTests {
         assertEquals(1L, consumerInfo.get("pending"));
         assertTrue((Long) consumerInfo.get("idle") > 0L);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
             assertTrue((Long) consumerInfo.get("inactive") > 0L);
         }
 
@@ -5616,7 +5626,7 @@ public class SharedCommandTests {
         assertEquals(1L, binaryConsumerInfo.get(gs("pending")));
         assertTrue((Long) binaryConsumerInfo.get(gs("idle")) > 0L);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
             assertTrue((Long) binaryConsumerInfo.get(gs("inactive")) > 0L);
         }
 
@@ -5650,7 +5660,7 @@ public class SharedCommandTests {
         assertEquals(2L, group1Info.get("consumers"));
         assertEquals(3L, group1Info.get("pending"));
         assertEquals(streamId1_2, group1Info.get("last-delivered-id"));
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(
                     3L, group1Info.get("entries-read")); // We have read stream entries 1-0, 1-1, and 1-2
             assertEquals(
@@ -5665,7 +5675,7 @@ public class SharedCommandTests {
         assertEquals(2L, binaryGroup1Info.get(gs("consumers")));
         assertEquals(3L, binaryGroup1Info.get(gs("pending")));
         assertEquals(gs(streamId1_2), binaryGroup1Info.get(gs("last-delivered-id")));
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(
                     3L,
                     binaryGroup1Info.get(
@@ -5685,7 +5695,7 @@ public class SharedCommandTests {
         assertEquals(2L, group1Info.get("consumers"));
         assertEquals(3L, group1Info.get("pending"));
         assertEquals(streamId1_1, group1Info.get("last-delivered-id"));
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertNull(
                     group1Info.get("entries-read")); // Gets set to None when we change the last delivered ID
             assertNull(group1Info.get("lag")); // Gets set to None when we change the last delivered ID
@@ -5915,7 +5925,7 @@ public class SharedCommandTests {
 
         // Reset the last delivered ID for the consumer group to "1-1".
         // ENTRIESREAD is only supported in Redis version 7.0.0 and higher.
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, 1L).get());
@@ -7345,7 +7355,7 @@ public class SharedCommandTests {
         // nothing popped out
         assertNull(
                 client
-                        .brpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .brpop(new String[] {listKey2}, SERVER_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
                         .get());
 
         // Key exists, but it is not a list
@@ -7372,7 +7382,7 @@ public class SharedCommandTests {
         // nothing popped out
         assertNull(
                 client
-                        .brpop(new GlideString[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .brpop(new GlideString[] {listKey2}, SERVER_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
                         .get());
 
         // Key exists, but it is not a list
@@ -7426,7 +7436,7 @@ public class SharedCommandTests {
         // nothing popped out
         assertNull(
                 client
-                        .blpop(new String[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .blpop(new String[] {listKey2}, SERVER_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
                         .get());
 
         // Key exists, but it is not a list
@@ -7453,7 +7463,7 @@ public class SharedCommandTests {
         // nothing popped out
         assertNull(
                 client
-                        .blpop(new GlideString[] {listKey2}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
+                        .blpop(new GlideString[] {listKey2}, SERVER_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
                         .get());
 
         // Key exists, but it is not a list
@@ -7848,7 +7858,7 @@ public class SharedCommandTests {
         // API documentation states that a ziplist should be returned for Redis versions < 7.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
+                SERVER_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
@@ -7861,7 +7871,7 @@ public class SharedCommandTests {
         // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
+                SERVER_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
@@ -7893,7 +7903,7 @@ public class SharedCommandTests {
         String setListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.sadd(setListpackKey, new String[] {"foo"}).get());
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.2.0") ? "hashtable" : "listpack",
+                SERVER_VERSION.isLowerThan("7.2.0") ? "hashtable" : "listpack",
                 client.objectEncoding(setListpackKey).get());
     }
 
@@ -7916,7 +7926,7 @@ public class SharedCommandTests {
         String hashListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.hset(hashListpackKey, Map.of("1", "2")).get());
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack",
+                SERVER_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack",
                 client.objectEncoding(hashListpackKey).get());
     }
 
@@ -7939,7 +7949,7 @@ public class SharedCommandTests {
         String zsetListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.zadd(zsetListpackKey, Map.of("1", 2d)).get());
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack",
+                SERVER_VERSION.isLowerThan("7.0.0") ? "ziplist" : "listpack",
                 client.objectEncoding(zsetListpackKey).get());
     }
 
@@ -8443,7 +8453,7 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
             assertEquals(17L, client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
             assertEquals(23, client.bitcount(key1, 5, -5, BitmapIndexType.BIT).get());
@@ -8565,7 +8575,7 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0, 1, 4).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(24, client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
             assertEquals(47, client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
             assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BYTE).get());
@@ -8676,7 +8686,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lmpop(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -8718,7 +8728,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lmpop_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -8762,7 +8772,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmpop(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -8805,7 +8815,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmpop_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -8850,7 +8860,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmpop_timeout_check(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         String key = UUID.randomUUID().toString();
         // create new client with default request timeout (250 millis)
         try (var testClient =
@@ -8876,7 +8886,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmpop_binary_timeout_check(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         GlideString key = gs(UUID.randomUUID().toString());
         // create new client with default request timeout (250 millis)
         try (var testClient =
@@ -8986,7 +8996,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lmove(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -9036,7 +9047,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lmove_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -9090,7 +9102,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmove(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -9152,7 +9165,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmove_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -9218,7 +9232,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmove_timeout_check(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
         // create new client with default request timeout (250 millis)
@@ -9245,7 +9260,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void blmove_binary_timeout_check(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         // create new client with default request timeout (250 millis)
@@ -9997,7 +10013,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void sintercard(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -10038,7 +10055,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void sintercard_gs(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -10079,7 +10097,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void copy(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         String source = "{key}-1" + UUID.randomUUID();
         String destination = "{key}-2" + UUID.randomUUID();
@@ -10110,7 +10129,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void copy_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         // setup
         GlideString source = gs("{key}-1" + UUID.randomUUID());
         GlideString destination = gs("{key}-2" + UUID.randomUUID());
@@ -10165,7 +10185,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lcs(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -10195,7 +10216,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lcs_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -10225,7 +10247,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lcs_with_len_option(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -10255,7 +10278,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lcs_with_len_option_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
@@ -10494,7 +10518,7 @@ public class SharedCommandTests {
         assertArrayEquals(key1AscendingList, client.sort(key1).get());
 
         // SORT_R0
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(new String[0], client.sortReadOnly(key3).get());
             assertArrayEquals(key1AscendingList, client.sortReadOnly(key1).get());
         }
@@ -10528,7 +10552,7 @@ public class SharedCommandTests {
         assertArrayEquals(key1AscendingList_gs, client.sort(key1).get());
 
         // SORT_R0
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(new GlideString[0], client.sortReadOnly(key3).get());
             assertArrayEquals(key1AscendingList_gs, client.sortReadOnly(key1).get());
         }
@@ -10549,7 +10573,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lcsIdx(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -10631,7 +10656,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void lcsIdx_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7.0.0");
         // setup
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
