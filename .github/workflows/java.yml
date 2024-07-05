@@ -94,7 +94,6 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  mvn clean
                   ./gradlew clean
                   ./gradlew :client:clean
                   ./gradlew --continue build
@@ -174,7 +173,6 @@ jobs:
             - name: Build java part
               working-directory: java
               run: |
-                  mvn clean
                   ./gradlew clean
                   ./gradlew :client:clean 
                   ./gradlew --continue build
