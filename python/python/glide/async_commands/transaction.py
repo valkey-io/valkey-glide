@@ -2591,6 +2591,47 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.XInfoConsumers, [key, group_name])
 
+    def xinfo_stream(
+        self: TTransaction,
+        key: TEncodable,
+    ) -> TTransaction:
+        """
+        Returns information about the stream stored at `key`. To get more detailed information, use `xinfo_stream_full`.
+
+        See https://valkey.io/commands/xinfo-stream for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Command response:
+            TXInfoStreamResponse: A mapping of stream information for the given `key`.
+        """
+        return self.append_command(RequestType.XInfoStream, [key])
+
+    def xinfo_stream_full(
+        self: TTransaction,
+        key: TEncodable,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Returns verbose information about the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-stream for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            count (Optional[int]): The number of stream and PEL entries that are returned. A value of `0` means that all
+                entries will be returned. If not provided, defaults to `10`.
+
+        Command response:
+            TXInfoStreamFullResponse: A mapping of detailed stream information for the given `key`.
+        """
+        args = [key, "FULL"]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XInfoStream, args)
+
     def geoadd(
         self: TTransaction,
         key: TEncodable,
