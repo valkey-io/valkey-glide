@@ -75,6 +75,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
@@ -85,9 +86,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
@@ -158,6 +161,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -1100,6 +1104,12 @@ public class TransactionTests {
         results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
         results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
 
+        transaction.functionDump();
+        results.add(Pair.of(FunctionDump, buildArgs()));
+
+        transaction.functionRestore("TEST".getBytes());
+        results.add(Pair.of(FunctionRestore, buildArgs("TEST")));
+
         transaction.fcall("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
         transaction.fcall("func", new String[] {"arg1", "arg2"});
@@ -1217,6 +1227,12 @@ public class TransactionTests {
 
         transaction.copy("key1", "key2", true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
+
+        transaction.dump("key1");
+        results.add(Pair.of(Dump, buildArgs("key1")));
+
+        transaction.restore("key2", 0, "TEST".getBytes());
+        results.add(Pair.of(Restore, buildArgs("key2", "0", "TEST")));
 
         transaction.lcs("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2")));
