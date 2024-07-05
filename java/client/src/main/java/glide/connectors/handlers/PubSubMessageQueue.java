@@ -11,15 +11,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * ConcurrentLinkedDeque}.
  */
 public class PubSubMessageQueue {
-    // fields are protected to ease testing
     /** The queue itself. */
-    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue = new ConcurrentLinkedDeque<>();
+    final ConcurrentLinkedDeque<PubSubMessage> messageQueue = new ConcurrentLinkedDeque<>();
 
     /**
      * A promise for the first incoming message. Returned to a user, if message queried in async
      * manner, but nothing received yet.
      */
-    protected CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
+    CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
 
     /** A flag whether a user already got a {@link #firstMessagePromise}. */
     private final AtomicBoolean firstMessagePromiseRequested = new AtomicBoolean(false);
