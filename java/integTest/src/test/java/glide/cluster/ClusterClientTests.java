@@ -207,6 +207,39 @@ public class ClusterClientTests {
 
     @Test
     @SneakyThrows
+    public void test_cluster_scan_binary_simple() {
+        try (RedisClusterClient client =
+                 RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+            assertEquals(OK, client.flushall().get());
+
+            String key = "key:test_cluster_scan_simple" + UUID.randomUUID();
+            Map<String, String> expectedData = new LinkedHashMap<>();
+            for (int i = 0; i < 100; i++) {
+                expectedData.put(key + ":" + i, "value " + i);
+            }
+
+            assertEquals(OK, client.mset(expectedData).get());
+
+            Set<String> result = new LinkedHashSet<>();
+            ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+            while (!cursor.isFinished()) {
+                final Object[] response = client.scanBinary(cursor).get();
+                cursor.releaseCursorHandle();
+
+                cursor = (ClusterScanCursor) response[0];
+                final Object[] data = (Object[]) response[1];
+                for (Object datum : data) {
+                    result.add(datum.toString());
+                }
+            }
+            cursor.releaseCursorHandle();
+
+            assertEquals(expectedData.keySet(), result);
+        }
+    }
+
+    @Test
+    @SneakyThrows
     public void test_cluster_scan_with_object_type_and_pattern() {
         try (RedisClusterClient client =
                 RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
