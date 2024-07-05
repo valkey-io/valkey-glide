@@ -121,7 +121,6 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -13040,21 +13039,22 @@ public class SharedCommandTests {
         String streamId1_1 = "1-1";
 
         // Setup: add stream entry, create consumer group and consumer, read from stream with consumer
-        final LinkedHashMap<String, String> dataToAdd = new LinkedHashMap<>() {{
-            put("a", "b");
-            put("c", "d");
-        }};
+        final LinkedHashMap<String, String> dataToAdd =
+                new LinkedHashMap<>() {
+                    {
+                        put("a", "b");
+                        put("c", "d");
+                    }
+                };
         assertEquals(
-            streamId1_0,
-                client
-                        .xadd(
-                                key, dataToAdd, StreamAddOptions.builder().id(streamId1_0).build())
-                        .get());
+                streamId1_0,
+                client.xadd(key, dataToAdd, StreamAddOptions.builder().id(streamId1_0).build()).get());
         assertEquals(OK, client.xgroupCreate(key, groupName, streamId0_0).get());
 
         Map<String, Object> result = client.xinfoStream(key).get();
         assertEquals(1L, result.get("length"));
-        final Object[] expectedFirstEntry = new Object[]{streamId1_0, new Object[] {"a", "b", "c", "d"}};
+        final Object[] expectedFirstEntry =
+                new Object[] {streamId1_0, new Object[] {"a", "b", "c", "d"}};
         assertDeepEquals(expectedFirstEntry, result.get("first-entry"));
 
         // Only one entry exists, so first and last entry should be the same
@@ -13064,25 +13064,25 @@ public class SharedCommandTests {
 
         // Add one more entry
         assertEquals(
-            streamId1_1,
-            client
-                .xadd(key, Map.of("foo", "bar"), StreamAddOptions.builder().id(streamId1_1).build())
-                .get());
+                streamId1_1,
+                client
+                        .xadd(key, Map.of("foo", "bar"), StreamAddOptions.builder().id(streamId1_1).build())
+                        .get());
 
         result = client.xinfoStreamFull(key, 1).get();
         assertEquals(2L, result.get("length"));
         Object[] entries = (Object[]) result.get("entries");
         // Only the first entry will be returned since we passed count=1
         assertEquals(1, entries.length);
-        assertDeepEquals(new Object[]{expectedFirstEntry}, entries);
+        assertDeepEquals(new Object[] {expectedFirstEntry}, entries);
 
         Object[] groups = (Object[]) result.get("groups");
         assertEquals(1, groups.length);
-        Map<String, Object> groupInfo = (Map<String, Object>)groups[0];
+        Map<String, Object> groupInfo = (Map<String, Object>) groups[0];
         assertEquals(groupName, groupInfo.get("name"));
         Object[] pending = (Object[]) groupInfo.get("pending");
         assertEquals(1, pending.length);
-//        assertEquals(true, Arrays.asList(pending[0]).contains(streamId1_0));
+        //        assertEquals(true, Arrays.asList(pending[0]).contains(streamId1_0));
 
         Object[] consumers = (Object[]) groupInfo.get("consumers");
         assertEquals(1, consumers.length);
@@ -13090,7 +13090,7 @@ public class SharedCommandTests {
         assertEquals(consumer, consumersInfo.get("name"));
         Object[] consumersPending = (Object[]) consumersInfo.get("pending");
         assertEquals(1, consumersPending.length);
-//        assertTrue(Arrays.asList(consumersPending[0]).contains(streamId1_0));
+        //        assertTrue(Arrays.asList(consumersPending[0]).contains(streamId1_0));
 
         // TODO: Call XINFO STREAM FULL with byte arg
     }
