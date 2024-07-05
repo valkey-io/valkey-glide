@@ -5937,11 +5937,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
-     * @param channel The channel to publish the message on.
      * @param message The message to publish.
+     * @param channel The channel to publish the message on.
      * @return Command response - The number of clients that received the message.
      */
-    public <ArgType> T publish(@NonNull ArgType channel, @NonNull ArgType message) {
+    public <ArgType> T publish(@NonNull ArgType message, @NonNull ArgType channel) {
         checkTypeOrThrow(channel);
         protobufTransaction.addCommands(
                 buildCommand(Publish, newArgsBuilder().add(channel).add(message)));

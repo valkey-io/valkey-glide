@@ -19,7 +19,7 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
     /** Submit responses from glide to an instance {@link CallbackDispatcher} to handle them. */
     @Override
     public void channelRead(@NonNull ChannelHandlerContext ctx, @NonNull Object msg)
-            throws RuntimeException {
+            throws MessageHandler.MessageCallbackException {
         if (msg instanceof Response) {
             Response response = (Response) msg;
             callbackDispatcher.completeRequest(response);
@@ -32,8 +32,20 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
     /** Handles uncaught exceptions from {@link #channelRead(ChannelHandlerContext, Object)}. */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        Logger.log(ERROR, "read handler", () -> "=== exceptionCaught " + ctx + " " + cause);
+        if (cause instanceof MessageHandler.MessageCallbackException) {
+            Logger.log(
+                    ERROR,
+                    "read handler",
+                    () -> "=== Exception thrown from pubsub callback " + ctx,
+                    cause.getCause());
 
+            // Mimic the behavior of if this got thrown by a user thread. Print to stderr,
+            cause.printStackTrace();
+
+            // Unwrap. Only works for Exceptions and not Errors.
+            throw ((MessageHandler.MessageCallbackException) cause).getCause();
+        }
+        Logger.log(ERROR, "read handler", () -> "=== exceptionCaught " + ctx, cause);
         callbackDispatcher.distributeClosingException(
                 "An unhandled error while reading from UDS channel: " + cause);
     }
