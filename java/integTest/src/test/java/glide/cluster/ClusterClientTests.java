@@ -209,7 +209,7 @@ public class ClusterClientTests {
     @SneakyThrows
     public void test_cluster_scan_binary_simple() {
         try (RedisClusterClient client =
-                 RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
             assertEquals(OK, client.flushall().get());
 
             String key = "key:test_cluster_scan_simple" + UUID.randomUUID();
