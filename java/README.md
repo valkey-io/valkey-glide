@@ -61,22 +61,21 @@ Other useful gradle developer commands:
 
 ### Setting up the Driver
 
-Refer to https://central.sonatype.com/search?q=glide&namespace=software.amazon.glide for your specific system.
+Refer to https://central.sonatype.com/artifact/software.amazon.glide/glide-for-redis.
 Once set up, you can run the basic examples.
+Examples shown below are for `osx-aarch_64`.
 
 Gradle:
 - Copy the snippet and paste it in the `build.gradle` dependencies section.
-Example shown below is for `glide-osx-aarch_64`.
+- **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
 dependencies {
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3'
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: `osx-aarch_64`
 }
 ```
 
-Maven (AARCH_64) specific.
-- **IMPORTANT** must include a `classifier` block. Please use this dependency block instead and add it to the pom.xml file.
+Maven:
+- **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
 ```java
 <dependency>
    <groupId>software.amazon.glide</groupId>
