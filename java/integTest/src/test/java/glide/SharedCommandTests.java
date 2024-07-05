@@ -13032,7 +13032,7 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void xinfoStream(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        String groupName = "grou1" + UUID.randomUUID();
+        String groupName = "group" + UUID.randomUUID();
         String consumer = "consumer" + UUID.randomUUID();
         String streamId0_0 = "0-0";
         String streamId1_0 = "1-0";
@@ -13050,17 +13050,19 @@ public class SharedCommandTests {
                 streamId1_0,
                 client.xadd(key, dataToAdd, StreamAddOptions.builder().id(streamId1_0).build()).get());
         assertEquals(OK, client.xgroupCreate(key, groupName, streamId0_0).get());
+        client.xreadgroup(Map.of(key, ">"), groupName, consumer).get();
 
         Map<String, Object> result = client.xinfoStream(key).get();
         assertEquals(1L, result.get("length"));
-        final Object[] expectedFirstEntry =
-                new Object[] {streamId1_0, new Object[] {"a", "b", "c", "d"}};
+        Object[] expectedFirstEntry = new Object[] {streamId1_0, new String[] {"a", "b", "c", "d"}};
         assertDeepEquals(expectedFirstEntry, result.get("first-entry"));
 
         // Only one entry exists, so first and last entry should be the same
-        //        assertDeepEquals(expectedFirstEntry, result.get("last-entry"));
+        assertDeepEquals(expectedFirstEntry, result.get("last-entry"));
 
-        // TODO: Call XINFO STREAM with a byte string arg
+        // Call XINFO STREAM with a byte string arg
+        Map<String, Object> result2 = client.xinfoStream(key).get();
+        assertDeepEquals(result2, result);
 
         // Add one more entry
         assertEquals(
@@ -13082,7 +13084,7 @@ public class SharedCommandTests {
         assertEquals(groupName, groupInfo.get("name"));
         Object[] pending = (Object[]) groupInfo.get("pending");
         assertEquals(1, pending.length);
-        //        assertEquals(true, Arrays.asList(pending[0]).contains(streamId1_0));
+        assertEquals(true, Arrays.toString((Object[]) pending[0]).contains(streamId1_0));
 
         Object[] consumers = (Object[]) groupInfo.get("consumers");
         assertEquals(1, consumers.length);
@@ -13090,8 +13092,58 @@ public class SharedCommandTests {
         assertEquals(consumer, consumersInfo.get("name"));
         Object[] consumersPending = (Object[]) consumersInfo.get("pending");
         assertEquals(1, consumersPending.length);
-        //        assertTrue(Arrays.asList(consumersPending[0]).contains(streamId1_0));
+        assertTrue(Arrays.toString((Object[]) consumersPending[0]).contains(streamId1_0));
 
-        // TODO: Call XINFO STREAM FULL with byte arg
+        // Call XINFO STREAM FULL with byte arg
+        Map<String, Object> resultFull2 = client.xinfoStreamFull(key).get();
+        // 2 entries should be returned, since we didn't pass the COUNT arg this time
+        assertEquals(2, ((Object[]) resultFull2.get("entries")).length);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xinfoStream_edge_cases_and_failures(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String nonExistentKey = UUID.randomUUID().toString();
+        String streamId1_0 = "1-0";
+
+        // Setup: create empty stream
+        assertEquals(
+                streamId1_0,
+                client
+                        .xadd(key, Map.of("field", "value"), StreamAddOptions.builder().id(streamId1_0).build())
+                        .get());
+        assertEquals(1, client.xdel(key, new String[] {streamId1_0}).get());
+
+        // XINFO STREAM called against empty stream
+        Map<String, Object> result = client.xinfoStream(key).get();
+        assertEquals(0L, result.get("length"));
+        assertDeepEquals(null, result.get("first-entry"));
+        assertDeepEquals(null, result.get("last-entry"));
+
+        // XINFO STREAM FULL called against empty stream. Negative count values are ignored.
+        Map<String, Object> resultFull = client.xinfoStreamFull(key, 3).get();
+        assertEquals(0L, resultFull.get("length"));
+        assertDeepEquals(new Object[] {}, resultFull.get("entries"));
+        assertDeepEquals(new Object[] {}, resultFull.get("groups"));
+
+        // Calling XINFO STREAM with a non-existing key raises an error
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.xinfoStream(nonExistentKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xinfoStreamFull(nonExistentKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(stringKey, "foo").get());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xinfoStream(stringKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xinfoStreamFull(stringKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

@@ -2999,9 +2999,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key) {
         return commandManager.submitNewCommand(
-                XInfoStream,
-                new String[] {key, FULL},
-                response -> handleXInfoStreamResponse(handleMapResponse(response)));
+                XInfoStream, new String[] {key, FULL}, response -> handleMapResponse(response));
     }
 
     @Override
