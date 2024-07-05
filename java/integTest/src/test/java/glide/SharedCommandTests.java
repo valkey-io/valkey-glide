@@ -54,7 +54,9 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
@@ -4219,6 +4221,92 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zunionstore_binary(BaseClient client) {
+        GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
+        GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
+        GlideString key3 = gs("{testKey}:3-" + UUID.randomUUID());
+        GlideString key4 = gs("{testKey}:4-" + UUID.randomUUID());
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 2.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1.toString(), membersScores1).get());
+        assertEquals(2, client.zadd(key2.toString(), membersScores2).get());
+
+        assertEquals(
+                3, client.zunionstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2})).get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 4.5, "three", 3.0),
+                client.zrangeWithScores(key3.toString(), query).get());
+
+        // Union results are aggregated by the max score of elements
+        assertEquals(
+                3,
+                client
+                        .zunionstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MAX)
+                        .get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.5, "three", 3.0),
+                client.zrangeWithScores(key3.toString(), query).get());
+
+        // Union results are aggregated by the min score of elements
+        assertEquals(
+                3,
+                client
+                        .zunionstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 2.0, "three", 3.0),
+                client.zrangeWithScores(key3.toString(), query).get());
+
+        // Union results are aggregated by the sum of the scores of elements
+        assertEquals(
+                3,
+                client
+                        .zunionstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.SUM)
+                        .get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 4.5, "three", 3.0),
+                client.zrangeWithScores(key3.toString(), query).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertEquals(
+                3,
+                client
+                        .zunionstore(
+                                key3, new WeightedKeysBinary(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+        assertEquals(
+                Map.of("one", 2.0, "two", 9.0, "three", 6.0),
+                client.zrangeWithScores(key3.toString(), query).get());
+
+        // Union results are aggregated by the maximum score, with scores for key1 multiplied by 1.0 and
+        // for key2 by 2.0.
+        assertEquals(
+                3,
+                client
+                        .zunionstore(
+                                key3,
+                                new WeightedKeysBinary(List.of(Pair.of(key1, 1.0), Pair.of(key2, 2.0))),
+                                Aggregate.MAX)
+                        .get());
+        assertEquals(
+                Map.of("one", 1.0, "two", 5.0, "three", 6.0),
+                client.zrangeWithScores(key3.toString(), query).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key4, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client.zunionstore(key3, new KeyArrayBinary(new GlideString[] {key4, key2})).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zunion(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
 
@@ -4283,6 +4371,85 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zunion(new KeyArray(new String[] {key1, key3})).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zunion_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
+        GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
+        GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
+        GlideString key3 = gs("{testKey}:3-" + UUID.randomUUID());
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1.toString(), membersScores1).get());
+        assertEquals(2, client.zadd(key2.toString(), membersScores2).get());
+
+        // Union results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new GlideString[] {gs("one"), gs("three"), gs("two")},
+                client.zunion(new KeyArrayBinary(new GlideString[] {key1, key2})).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("three"), 3.0, gs("two"), 5.5),
+                client.zunionWithScores(new KeyArrayBinary(new GlideString[] {key1, key2})).get());
+
+        // Union results are aggregated by the max score of elements
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("three"), 3.0, gs("two"), 3.5),
+                client
+                        .zunionWithScores(new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MAX)
+                        .get());
+
+        // Union results are aggregated by the min score of elements
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0),
+                client
+                        .zunionWithScores(new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MIN)
+                        .get());
+
+        // Union results are aggregated by the sum of the scores of elements
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("three"), 3.0, gs("two"), 5.5),
+                client
+                        .zunionWithScores(new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.SUM)
+                        .get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertEquals(
+                Map.of(gs("one"), 2.0, gs("three"), 6.0, gs("two"), 11.0),
+                client
+                        .zunionWithScores(
+                                new WeightedKeysBinary(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+
+        // Union results are aggregated by the minimum score, with scores for key1 multiplied by 1.0 and
+        // for key2 by -2.0.
+        assertEquals(
+                Map.of(gs("two"), -7.0, gs("three"), -6.0, gs("one"), 1.0),
+                client
+                        .zunionWithScores(
+                                new WeightedKeysBinary(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))),
+                                Aggregate.MIN)
+                        .get());
+
+        // Non Existing Key
+        assertArrayEquals(
+                new GlideString[] {gs("one"), gs("two")},
+                client.zunion(new KeyArrayBinary(new GlideString[] {key1, key3})).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0),
+                client.zunionWithScores(new KeyArrayBinary(new GlideString[] {key1, key3})).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zunion(new KeyArrayBinary(new GlideString[] {key1, key3})).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
