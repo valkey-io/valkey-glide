@@ -1393,19 +1393,14 @@ public interface StreamBaseCommands {
      *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
      * @example
      *     <pre>
-     *      // Redis version < 7.0.0:
-     *      Object[] results = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
-     * for (Object element: results) {
-     *     System.out.println(element);
-     *
-     *     for (String key: element.get(key)) {
-     *
-     *          for(String entry: ){
-     *             System.out.println(ke);
-     *          }
-     *     }
-     * }
-     *      // Redis version 7.0.0 and above
+     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     *      assertEquals(streamid_1, result[0]);
+     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+     *          //     Entries List because they no longer exist in the stream
+     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *          assertDeepEquals(new Object[] {},result[2]);
+     *      }
      *  </pre>
      */
     CompletableFuture<Object[]> xautoclaim(
@@ -1431,19 +1426,14 @@ public interface StreamBaseCommands {
      *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
      * @example
      *     <pre>
-     *      // Redis version < 7.0.0:
-     *      Object[] results = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
-     * for (Object element: results) {
-     *     System.out.println(element);
-     *
-     *     for (String key: element.get(key)) {
-     *
-     *          for(String entry: ){
-     *             System.out.println(ke);
-     *          }
-     *     }
-     * }
-     *      // Redis version 7.0.0 and above
+     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     *      assertEquals(streamid_1, result[0]);
+     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+     *          //     Entries List because they no longer exist in the stream
+     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *          assertDeepEquals(new Object[] {},result[2]);
+     *      }
      *  </pre>
      */
     CompletableFuture<Object[]> xautoclaim(
@@ -1468,6 +1458,17 @@ public interface StreamBaseCommands {
      *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
      *     also include a list containing the message IDs that were in the Pending Entries List but no
      *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @example
+     *     <pre>
+     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     *      assertEquals(streamid_1, result[0]);
+     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+     *          //     Entries List because they no longer exist in the stream
+     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *          assertDeepEquals(new Object[] {},result[2]);
+     *      }
+     *  </pre>
      */
     CompletableFuture<Object[]> xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count);
@@ -1491,6 +1492,17 @@ public interface StreamBaseCommands {
      *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
      *     also include a list containing the message IDs that were in the Pending Entries List but no
      *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @example
+     *     <pre>
+     *      Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     *      assertEquals(streamid_1, result[0]);
+     *      assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     *          // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+     *          //     Entries List because they no longer exist in the stream
+     *      if(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")){
+     *          assertDeepEquals(new Object[] {},result[2]);
+     *      }
+     *  </pre>
      */
     CompletableFuture<Object[]> xautoclaim(
         GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start, long count);
@@ -1514,6 +1526,18 @@ public interface StreamBaseCommands {
      *     above, the response list will also include a list containing the message IDs that were in
      *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
      *     Pending Entries List.
+     * @example
+     *     <pre>
+     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     *      assertEquals(zeroStreamId, result[0]);
+     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *             assertDeepEquals(new Object[] {}, result[2]);
+     *         }
+     *         else {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *         }
+     *  </pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             String key, String group, String consumer, long minIdleTime, String start);
@@ -1537,6 +1561,18 @@ public interface StreamBaseCommands {
      *     above, the response list will also include a list containing the message IDs that were in
      *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
      *     Pending Entries List.
+     * @example
+     *     <pre>
+     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     *      assertEquals(zeroStreamId, result[0]);
+     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *             assertDeepEquals(new Object[] {}, result[2]);
+     *         }
+     *         else {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *         }
+     *  </pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
         GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start);
@@ -1561,6 +1597,18 @@ public interface StreamBaseCommands {
      *     above, the response list will also include a list containing the message IDs that were in
      *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
      *     Pending Entries List.
+     * @example
+     *     <pre>
+     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     *      assertEquals(zeroStreamId, result[0]);
+     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *             assertDeepEquals(new Object[] {}, result[2]);
+     *         }
+     *         else {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *         }
+     *  </pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             String key, String group, String consumer, long minIdleTime, String start, long count);
@@ -1585,6 +1633,18 @@ public interface StreamBaseCommands {
      *     above, the response list will also include a list containing the message IDs that were in
      *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
      *     Pending Entries List.
+     * @example
+     *     <pre>
+     *      Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     *      assertEquals(zeroStreamId, result[0]);
+     *         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     *             assertDeepEquals(new Object[] {}, result[2]);
+     *         }
+     *         else {
+     *             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, result[1]);
+     *         }
+     *  </pre>
      */
     CompletableFuture<Object[]> xautoclaimJustId(
         GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start, long count);
