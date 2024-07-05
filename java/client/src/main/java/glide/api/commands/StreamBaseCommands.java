@@ -1421,6 +1421,44 @@ public interface StreamBaseCommands {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
+     * @return An array containing the following elements: - A stream ID to be used as the start
+     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
+     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
+     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
+     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
+     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
+     *     also include a list containing the message IDs that were in the Pending Entries List but no
+     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     * @example
+     *     <pre>
+     *      // Redis version < 7.0.0:
+     *      Object[] results = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * for (Object element: results) {
+     *     System.out.println(element);
+     *
+     *     for (String key: element.get(key)) {
+     *
+     *          for(String entry: ){
+     *             System.out.println(ke);
+     *          }
+     *     }
+     * }
+     *      // Redis version 7.0.0 and above
+     *  </pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
      * @return An array containing the following elements: - A stream ID to be used as the start
      *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
@@ -1433,6 +1471,29 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<Object[]> xautoclaim(
             String key, String group, String consumer, long minIdleTime, String start, long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An array containing the following elements: - A stream ID to be used as the start
+     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
+     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
+     *     scanned. - A mapping of the claimed entries, with the keys being the claimed entry IDs and
+     *     the values being a 2D list of the field-value pairs in the format `[[field1, value1],
+     *     [field2, value2], ...]`. - If you are using Redis 7.0.0 or above, the response list will
+     *     also include a list containing the message IDs that were in the Pending Entries List but no
+     *     longer exist in the stream. These IDs are deleted from the Pending Entries List.
+     */
+    CompletableFuture<Object[]> xautoclaim(
+        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start, long count);
 
     /**
      * Transfers ownership of pending stream entries that match the specified criteria. This command
@@ -1469,6 +1530,29 @@ public interface StreamBaseCommands {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param start Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
+     * @return An array containing the following elements: - A stream ID to be used as the start
+     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
+     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
+     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
+     *     above, the response list will also include a list containing the message IDs that were in
+     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
+     *     Pending Entries List.
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
      * @param count Limits the number of claimed entries to the specified value.
      * @return An array containing the following elements: - A stream ID to be used as the start
      *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
@@ -1480,4 +1564,28 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<Object[]> xautoclaimJustId(
             String key, String group, String consumer, long minIdleTime, String start, long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href ="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An array containing the following elements: - A stream ID to be used as the start
+     *     argument for the next call to <code>XAUTOCLAIM</code>. This ID is equivalent to the next ID
+     *     in the stream after the entries that were scanned, or "0-0" if the entire stream was
+     *     scanned. - A list of the IDs for the claimed entries. - If you are using Redis 7.0.0 or
+     *     above, the response list will also include a list containing the message IDs that were in
+     *     the Pending Entries List but no longer exist in the stream. These IDs are deleted from the
+     *     Pending Entries List.
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+        GlideString key, GlideString group, GlideString consumer, long minIdleTime, GlideString start, long count);
 }
