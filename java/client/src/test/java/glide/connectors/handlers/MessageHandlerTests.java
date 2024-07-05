@@ -42,7 +42,7 @@ public class MessageHandlerTests {
 
         // Assert.
         PubSubMessage expected = new PubSubMessage(gs("message"), gs("channel"));
-        assertEquals(expected, handler.peek());
+        assertEquals(expected, handler.getQueue().popSync());
     }
 
     @Test
@@ -101,7 +101,7 @@ public class MessageHandlerTests {
 
         // Assert.
         PubSubMessage expected = new PubSubMessage(gs("message"), gs("channel"));
-        assertEquals(expected, handler.peek());
+        assertEquals(expected, handler.getQueue().popSync());
     }
 
     @Test
@@ -161,7 +161,7 @@ public class MessageHandlerTests {
 
         // Assert.
         PubSubMessage expected = new PubSubMessage(gs("message"), gs("channel"), gs("pattern"));
-        assertEquals(expected, handler.peek());
+        assertEquals(expected, handler.getQueue().popSync());
     }
 
     @Test

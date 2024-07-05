@@ -4,6 +4,7 @@ package glide.connectors.handlers;
 import static glide.api.models.GlideString.gs;
 
 import glide.api.logging.Logger;
+import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.exceptions.RedisException;
@@ -11,6 +12,7 @@ import glide.managers.BaseResponseResolver;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
 import lombok.Getter;
@@ -49,7 +51,7 @@ public class MessageHandler {
     private final BaseResponseResolver responseResolver;
 
     /** A message queue wrapper. */
-    private final ConcurrentLinkedDeque<PubSubMessage> queue = new ConcurrentLinkedDeque<>();
+    @Getter private final PubSubMessageQueue queue = new PubSubMessageQueue();
 
     /** Process a push (PUBSUB) message received as a part of {@link Response} from GLIDE. */
     void handle(Response response) throws MessageCallbackException {
@@ -98,7 +100,7 @@ public class MessageHandler {
                                         "Received push notification of type '%s': %s",
                                         pushType,
                                         Arrays.stream(values)
-                                                .map(v -> v instanceof Number ? v.toString() : String.format("'%s'", v))
+                                                .map(v -> GlideString.of(v).toString())
                                                 .collect(Collectors.joining(" "))));
                 break;
             default:
@@ -107,11 +109,6 @@ public class MessageHandler {
                         "unknown notification",
                         () -> String.format("Unknown notification message: '%s'", pushType));
         }
-    }
-
-    /** Peek at the first available message published. TODO: For testing only - do this properly. */
-    PubSubMessage peek() {
-        return queue.peek();
     }
 
     /** Process a {@link PubSubMessage} received. */
@@ -156,5 +153,64 @@ public class MessageHandler {
         PSubscribe,
         /// `ssubscribe` is received when client subscribed to a shard channel.
         SSubscribe,
+    }
+
+    /**
+     * An asynchronous FIFO message queue for {@link PubSubMessage} backed by {@link
+     * ConcurrentLinkedDeque}.
+     */
+    public static class PubSubMessageQueue {
+        /** The queue itself. */
+        final ConcurrentLinkedDeque<PubSubMessage> messageQueue = new ConcurrentLinkedDeque<>();
+
+        /**
+         * A promise for the first incoming message. Returned to a user, if message queried in async
+         * manner, but nothing received yet.
+         */
+        CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
+
+        /** A flag whether a user already got a {@link #firstMessagePromise}. */
+        private boolean firstMessagePromiseRequested = false;
+
+        /** A private object used to synchronize {@link #push} and {@link #popAsync}. */
+        private final Object lock = new Object();
+
+        // TODO Rework to remove or reduce `synchronized` blocks.
+        //  If remove it now, some messages get reordered.
+
+        /** Store a new message. */
+        public void push(PubSubMessage message) {
+            synchronized (lock) {
+                if (firstMessagePromiseRequested) {
+                    firstMessagePromiseRequested = false;
+                    firstMessagePromise.complete(message);
+                    firstMessagePromise = new CompletableFuture<>();
+                    return;
+                }
+
+                messageQueue.addLast(message);
+            }
+        }
+
+        /** Get a promise for a next message. */
+        public CompletableFuture<PubSubMessage> popAsync() {
+            synchronized (lock) {
+                PubSubMessage message = messageQueue.poll();
+                if (message == null) {
+                    // this makes first incoming message to be delivered into `firstMessagePromise` instead of
+                    // `messageQueue`
+                    firstMessagePromiseRequested = true;
+                    return firstMessagePromise;
+                }
+                var future = new CompletableFuture<PubSubMessage>();
+                future.complete(message);
+                return future;
+            }
+        }
+
+        /** Get a new message or null if nothing stored so far. */
+        public PubSubMessage popSync() {
+            return messageQueue.poll();
+        }
     }
 }
