@@ -62,9 +62,6 @@ public class LoggerTests {
         Logger.log(Logger.Level.DEBUG, debugIdentifier, () -> debugMessage);
         Logger.log(Logger.Level.TRACE, traceIdentifier, () -> traceMessage);
 
-        // Initialize a new logger to force closing of existing files
-        Logger.setLoggerConfig(Logger.Level.DEFAULT, "dummy.txt");
-
         File logFolder = new File("glide-logs");
         File[] logFiles = logFolder.listFiles((dir, name) -> name.startsWith("log.txt."));
         assertNotNull(logFiles);
@@ -72,19 +69,18 @@ public class LoggerTests {
         logFile.deleteOnExit();
         Scanner reader = new Scanner(logFile);
         String infoLine = reader.nextLine();
+        assertTrue(infoLine.contains(infoIdentifier + " - " + infoMessage));
         String warnLine = reader.nextLine();
+        assertTrue(warnLine.contains(warnIdentifier + " - " + warnMessage));
         String errorLine = reader.nextLine();
+        assertTrue(errorLine.contains(errorIdentifier + " - " + errorMessage));
         String infoLineLazy = reader.nextLine();
+        assertTrue(infoLineLazy.contains(infoIdentifier + " - " + infoMessage));
         String warnLineLazy = reader.nextLine();
+        assertTrue(warnLineLazy.contains(warnIdentifier + " - " + warnMessage));
         String errorLineLazy = reader.nextLine();
+        assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
         assertFalse(reader.hasNextLine());
         reader.close();
-
-        assertTrue(infoLine.contains(infoIdentifier + " - " + infoMessage));
-        assertTrue(warnLine.contains(warnIdentifier + " - " + warnMessage));
-        assertTrue(errorLine.contains(errorIdentifier + " - " + errorMessage));
-        assertTrue(infoLineLazy.contains(infoIdentifier + " - " + infoMessage));
-        assertTrue(warnLineLazy.contains(warnIdentifier + " - " + warnMessage));
-        assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
     }
 }
