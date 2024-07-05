@@ -22,7 +22,8 @@ public class MessageHandlerTests {
     @Test
     @SneakyThrows
     public void test_exact_message() {
-        // Arrange
+        // Arrange.
+        // TODO: move fakeResolver creation into a test method
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -47,7 +48,7 @@ public class MessageHandlerTests {
     @Test
     @SneakyThrows
     public void test_exact_message_with_callback() {
-        // Arrange
+        // Arrange.
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -81,7 +82,7 @@ public class MessageHandlerTests {
     @Test
     @SneakyThrows
     public void test_sharded_message() {
-        // Arrange
+        // Arrange.
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -105,7 +106,7 @@ public class MessageHandlerTests {
 
     @Test
     public void test_sharded_message_with_callback() throws Exception {
-        // Arrange
+        // Arrange.
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -138,7 +139,8 @@ public class MessageHandlerTests {
 
     @Test
     @SneakyThrows
-    public void test_pattern_message() { // Arrange
+    public void test_pattern_message() {
+        // Arrange.
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -165,7 +167,7 @@ public class MessageHandlerTests {
     @Test
     @SneakyThrows
     public void test_pattern_message_with_callback() {
-        // Arrange
+        // Arrange.
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
@@ -200,7 +202,7 @@ public class MessageHandlerTests {
 
     @Test
     public void test_exception_from_callback_wrapped() throws Exception {
-        // Arrange
+        // Arrange.
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override

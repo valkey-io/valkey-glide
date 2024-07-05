@@ -109,7 +109,7 @@ public class MessageHandler {
         }
     }
 
-    /** Peek at the first available message published. Note: For testing only. */
+    /** Peek at the first available message published. TODO: For testing only - do this properly. */
     PubSubMessage peek() {
         return queue.peek();
     }
