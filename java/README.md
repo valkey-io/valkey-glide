@@ -45,25 +45,78 @@ java -version
 
 Refer to https://central.sonatype.com/artifact/software.amazon.glide/glide-for-redis.
 Once set up, you can run the basic examples.
-Examples shown below are for `osx-aarch_64`.
+
+Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
+
+## Classifiers
+There are 4 types of classifiers for GLIDE for Valkey which are
+``
+osx-aarch_64
+osx-x86_64
+linux-aarch_64
+linux-x86_64
+``
 
 Gradle:
 - Copy the snippet and paste it in the `build.gradle` dependencies section.
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
+
+osx-aarch_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-aarch_64'
+}
+
+osx-x86_64
+dependencies {
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-x86_64'
+}
+
+linux-aarch_64
+dependencies {
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-aarch_64'
+}
+
+linux-x86_64
+dependencies {
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-x86_64'
 }
 ```
 
 Maven:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
 ```xml
+
+osx-aarch_64
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>osx-aarch_64</classifier>
    <version>0.4.3</version>
+</dependency>
+
+osx-x86_64
+<dependency>
+   <groupId>software.amazon.glide</groupId>
+   <artifactId>glide-for-redis</artifactId>
+   <classifier>osx-x86_64</classifier>
+   <version><VERSION></version>
+</dependency>
+
+linux-aarch_64
+<dependency>
+   <groupId>software.amazon.glide</groupId>
+   <artifactId>glide-for-redis</artifactId>
+   <classifier>linux-aarch_64</classifier>
+   <version><VERSION></version>
+</dependency>
+
+linux-x86_64
+<dependency>
+   <groupId>software.amazon.glide</groupId>
+   <artifactId>glide-for-redis</artifactId>
+   <classifier>linux-x86_64</classifier>
+   <version><VERSION></version>
 </dependency>
 ```
 
@@ -183,6 +236,9 @@ public class Main {
     }
 }
 ```
+
+### Accessing tests
+You can access [unit tests](./java/client/src/test/java/glide/api) and [integration tests](./java/integTest/src/test/java/glide) developed for the Valkey commands here.
 
 ### Benchmarks
 
