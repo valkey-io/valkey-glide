@@ -388,12 +388,12 @@ public abstract class BaseClient
     }
 
     /**
-     * Async returns a promise for a next pubsub message.
+     * Returns a promise for a next pubsub message.<br>
+     * Message gets unrecoverable lost if future is cancelled or reference to this future is lost.
      *
-     * @apiNote <b>Not implemented!</b>
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
-     * @return A <code>Future</code> which resolved with the next incoming message.
+     * @return A {@link CompletableFuture} which will asynchronously hold the next available message.
      */
     public CompletableFuture<PubSubMessage> getPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {

@@ -6,7 +6,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** A FIFO message queue for {@link PubSubMessage}. */
+/**
+ * An asynchronous FIFO message queue for {@link PubSubMessage} backed by {@link
+ * ConcurrentLinkedDeque}.
+ */
 public class PubSubMessageQueue {
     // fields are protected to ease testing
     /** The queue itself. */
@@ -19,33 +22,41 @@ public class PubSubMessageQueue {
     protected CompletableFuture<PubSubMessage> firstMessagePromise = new CompletableFuture<>();
 
     /** A flag whether a user already got a {@link #firstMessagePromise}. */
-    private final AtomicBoolean headPromiseRequested = new AtomicBoolean(false);
+    private final AtomicBoolean firstMessagePromiseRequested = new AtomicBoolean(false);
+
+    /** A private object used to synchronize {@link #push} and {@link #popAsync}. */
+    private final Object lock = new Object();
 
     // TODO Rework to remove or reduce `synchronized` blocks. If remove it now, some messages get
     // reordered.
 
     /** Store a new message. */
-    public synchronized void push(PubSubMessage message) {
-        if (headPromiseRequested.getAndSet(false)) {
-            firstMessagePromise.complete(message);
-            firstMessagePromise = new CompletableFuture<>();
-            return;
-        }
+    public void push(PubSubMessage message) {
+        synchronized (lock) {
+            if (firstMessagePromiseRequested.getAndSet(false)) {
+                firstMessagePromise.complete(message);
+                firstMessagePromise = new CompletableFuture<>();
+                return;
+            }
 
-        messageQueue.addLast(message);
+            messageQueue.addLast(message);
+        }
     }
 
     /** Get a promise for a next message. */
     public synchronized CompletableFuture<PubSubMessage> popAsync() {
-        PubSubMessage message;
-        if ((message = messageQueue.poll()) != null) {
+        synchronized (lock) {
+            PubSubMessage message = messageQueue.poll();
+            if (message == null) {
+                // this makes first incoming message to be delivered into `firstMessagePromise` instead of
+                // `messageQueue`
+                firstMessagePromiseRequested.set(true);
+                return firstMessagePromise;
+            }
             var future = new CompletableFuture<PubSubMessage>();
             future.complete(message);
             return future;
         }
-
-        headPromiseRequested.set(true);
-        return firstMessagePromise;
     }
 
     /** Get a new message or null if nothing stored so far. */

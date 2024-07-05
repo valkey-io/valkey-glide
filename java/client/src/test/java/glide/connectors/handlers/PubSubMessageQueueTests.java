@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -208,18 +206,14 @@ public class PubSubMessageQueueTests {
                 };
         Runnable reader =
                 () -> {
-                    PubSubMessage message = null;
                     do {
                         try {
-                            message = queue.popAsync().get(15, TimeUnit.MILLISECONDS);
+                            var message = queue.popAsync().get();
                             actual.add(message);
-                            Thread.sleep(rand.nextInt(4));
-                        } catch (TimeoutException ignored) {
-                            // all messages read
-                            break;
+                            Thread.sleep(rand.nextInt(2));
                         } catch (Exception ignored) {
                         }
-                    } while (message != null);
+                    } while (actual.size() < expected.size());
                 };
 
         // start reader and writer and wait for finish
@@ -261,7 +255,7 @@ public class PubSubMessageQueueTests {
                             if (message != null) {
                                 actual.add(message);
                             }
-                            Thread.sleep(rand.nextInt(4));
+                            Thread.sleep(rand.nextInt(2));
                         } catch (InterruptedException ignored) {
                         }
                     } while (actual.size() < expected.size());
