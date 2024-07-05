@@ -4152,6 +4152,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
+                                .add("COUNT")
                                 .add(count)));
         return getThis();
     }
@@ -4232,6 +4233,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
+                                .add("COUNT")
                                 .add(count)
                                 .add(JUST_ID_REDIS_API)));
         return getThis();

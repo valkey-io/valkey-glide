@@ -969,14 +969,14 @@ public class TransactionTests {
         results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0")));
 
         transaction.xautoclaim("key", "group", "consumer", 99L, "0-0", 1234L);
-        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "1234")));
+        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "COUNT", "1234")));
 
         transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0");
         results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "JUSTID")));
 
         transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0", 1234L);
         results.add(
-                Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "1234", "JUSTID")));
+                Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "COUNT", "1234", "JUSTID")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
