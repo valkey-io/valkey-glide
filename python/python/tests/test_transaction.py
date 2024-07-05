@@ -54,7 +54,7 @@ from glide.async_commands.transaction import (
     Transaction,
 )
 from glide.config import ProtocolVersion
-from glide.constants import OK, TResult
+from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import SlotIdRoute, SlotType
 from tests.conftest import create_client
@@ -779,7 +779,10 @@ async def transaction_test(
 class TestTransaction:
 
     async def exec_transaction(
-        self, glide_client: TGlideClient, transaction: BaseTransaction
+        self,
+        glide_client: TGlideClient,
+        transaction: BaseTransaction,
+        route: Optional[TSingleNodeRoute] = None,
     ) -> Optional[List[TResult]]:
         """
         Exec a transaction on a client with proper typing. Casts are required to satisfy `mypy`.
@@ -790,7 +793,7 @@ class TestTransaction:
             )
         else:
             return await cast(GlideClusterClient, glide_client).exec(
-                cast(ClusterTransaction, transaction)
+                cast(ClusterTransaction, transaction), route
             )
 
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -1072,7 +1075,7 @@ class TestTransaction:
         transaction.xinfo_stream(key)
         transaction.xinfo_stream_full(key)
 
-        response = await glide_client.exec(transaction)
+        response = await self.exec_transaction(glide_client, transaction)
         assert response is not None
         # transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
         assert response[0] == stream_id1_0.encode()
@@ -1130,7 +1133,7 @@ class TestTransaction:
         transaction = ClusterTransaction() if cluster_mode else Transaction()
         transaction.set(key1, "value")
         transaction.dump(key1)
-        result1 = await glide_client.exec(transaction)
+        result1 = await self.exec_transaction(glide_client, transaction)
         assert result1 is not None
         assert isinstance(result1, list)
         assert result1[0] == OK
@@ -1140,7 +1143,7 @@ class TestTransaction:
         transaction = ClusterTransaction() if cluster_mode else Transaction()
         transaction.restore(key2, 0, result1[1])
         transaction.get(key2)
-        result2 = await glide_client.exec(transaction)
+        result2 = await self.exec_transaction(glide_client, transaction)
         assert result2 is not None
         assert isinstance(result2, list)
         assert result2[0] == OK
@@ -1162,7 +1165,7 @@ class TestTransaction:
 
             # Verify function_dump
             transaction.function_dump()
-            result1 = await glide_client.exec(transaction)
+            result1 = await self.exec_transaction(glide_client, transaction)
             assert result1 is not None
             assert isinstance(result1, list)
             assert isinstance(result1[1], bytes)
@@ -1173,12 +1176,9 @@ class TestTransaction:
             # For the cluster mode, PRIMARY SlotType is required to avoid the error:
             #  "RequestError: An error was signalled by the server -
             #   ReadOnly: You can't write against a read only replica."
-            if isinstance(glide_client, GlideClusterClient):
-                result2 = await glide_client.exec(
-                    transaction, SlotIdRoute(SlotType.PRIMARY, 1)
-                )
-            else:
-                result2 = await glide_client.exec(transaction)
+            result2 = await self.exec_transaction(
+                glide_client, transaction, SlotIdRoute(SlotType.PRIMARY, 1)
+            )
 
             assert result2 is not None
             assert isinstance(result2, list)
