@@ -13062,7 +13062,11 @@ public class SharedCommandTests {
 
         // Call XINFO STREAM with a byte string arg
         Map<GlideString, Object> result2 = client.xinfoStream(gs(key)).get();
-        assertDeepEquals(result2, result);
+        assertEquals(1L, result2.get(gs("length")));
+        Object[] gsFirstEntry = (Object[]) result2.get(gs("first-entry"));
+        Object[] expectedFirstEntryGs =
+                new Object[] {gs(streamId1_0), new Object[] {gs("a"), gs("b"), gs("c"), gs("d")}};
+        assertArrayEquals(expectedFirstEntryGs, gsFirstEntry);
 
         // Add one more entry
         assertEquals(
@@ -13097,7 +13101,7 @@ public class SharedCommandTests {
         // Call XINFO STREAM FULL with byte arg
         Map<GlideString, Object> resultFull2 = client.xinfoStreamFull(gs(key)).get();
         // 2 entries should be returned, since we didn't pass the COUNT arg this time
-        assertEquals(2, ((Object[]) resultFull2.get("entries")).length);
+        assertEquals(2, ((Object[]) resultFull2.get(gs("entries"))).length);
     }
 
     @SneakyThrows
