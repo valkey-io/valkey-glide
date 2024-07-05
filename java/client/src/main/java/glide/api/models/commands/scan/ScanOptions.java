@@ -5,6 +5,7 @@ import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.GenericCommands;
 import glide.ffi.resolvers.ObjectTypeResolver;
 import glide.utils.ArrayTransformUtils;
+import lombok.EqualsAndHashCode;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -13,6 +14,7 @@ import lombok.experimental.SuperBuilder;
  * @see <a href="https://valkey.io/commands/scan/">valkey.io</a>
  */
 @SuperBuilder
+@EqualsAndHashCode
 public class ScanOptions extends BaseScanOptions {
     /** <code>TYPE</code> option string to include in the <code>SCAN</code> commands. */
     public static final String TYPE_OPTION_STRING = "TYPE";
@@ -55,15 +57,6 @@ public class ScanOptions extends BaseScanOptions {
                     super.toArgs(), new String[] {TYPE_OPTION_STRING, type.name()});
         }
         return super.toArgs();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof ScanOptions)) return false;
-        if (!super.equals(o)) return false;
-        ScanOptions that = (ScanOptions) o;
-        return type == that.type;
     }
 
     /**
