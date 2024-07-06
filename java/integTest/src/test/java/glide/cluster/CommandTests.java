@@ -2761,7 +2761,7 @@ public class CommandTests {
     @SneakyThrows
     public void test_cluster_scan_cleaning_cursor() {
         // We test whether the cursor is cleaned up after it is deleted, which we expect to happen when
-        // th GC is called.
+        // the GC is called.
         assertEquals(OK, clusterClient.flushall().get());
 
         String key = "key:" + UUID.randomUUID();
