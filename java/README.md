@@ -11,14 +11,21 @@ This design ensures that updates easily propagate to each language and reduces o
 
 ## System Requirements
 
-The beta release of GLIDE for Valkey was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7 (aarch64-apple-darwin).
+The release of GLIDE for Valkey was tested on the following platforms:
+
+Linux:
+- Ubuntu 22.04.1 (x86_64)
+- Amazon Linux 2023 (AL2023) (x86_64)
+
+macOS:
+- macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
 
 ## Layout of Java code
 The Java client contains the following parts:
 
 1. `src`: Rust dynamic library FFI to integrate with [GLIDE core library](../glide-core/README.md).
 2. `client`: A Java-wrapper around the GLIDE core rust library and unit tests for it.
-3. `examples`: An examples app to test the client against a Valkey localhost.
+3. `examples`: An example app to test the client against a Valkey localhost.
 4. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Valkey and other Java clients.
 5. `integTest`: An integration test sub-project for API and E2E testing.
 
@@ -32,9 +39,9 @@ Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-
 
 For developers, please refer to Java's [DEVELOPER.md](./DEVELOPER.md) for further instruction on how to set up your development environment.
 
-**Java version check**
+**Java Requirements**
 
-Ensure that you have a minimum Java version of JDK 11 installed on your system:
+Minimum requirements: JDK 11 or later. Ensure that you have a minimum Java version of JDK 11 installed on your system:
 
 ```bash
 echo $JAVA_HOME
@@ -45,24 +52,77 @@ java -version
 
 Refer to https://central.sonatype.com/artifact/software.amazon.glide/glide-for-redis.
 Once set up, you can run the basic examples.
-Examples shown below are for `osx-aarch_64`.
+
+Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
+
+## Classifiers
+There are 4 types of classifiers for GLIDE for Valkey which are
+```
+osx-aarch_64
+osx-x86_64
+linux-aarch_64
+linux-x86_64
+```
 
 Gradle:
 - Copy the snippet and paste it in the `build.gradle` dependencies section.
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
+
+// osx-aarch_64
 dependencies {
     implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-aarch_64'
+}
+
+// osx-x86_64
+dependencies {
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-x86_64'
+}
+
+// linux-aarch_64
+dependencies {
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-aarch_64'
+}
+
+// linux-x86_64
+dependencies {
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-x86_64'
 }
 ```
 
 Maven:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
 ```xml
+
+<!--osx-aarch_64-->
 <dependency>
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>osx-aarch_64</classifier>
+   <version>0.4.3</version>
+</dependency>
+
+<!--osx-x86_64-->
+<dependency>
+   <groupId>software.amazon.glide</groupId>
+   <artifactId>glide-for-redis</artifactId>
+   <classifier>osx-x86_64</classifier>
+   <version>0.4.3</version>
+</dependency>
+
+<!--linux-aarch_64-->
+<dependency>
+   <groupId>software.amazon.glide</groupId>
+   <artifactId>glide-for-redis</artifactId>
+   <classifier>linux-aarch_64</classifier>
+   <version>0.4.3</version>
+</dependency>
+
+<!--linux-x86_64-->
+<dependency>
+   <groupId>software.amazon.glide</groupId>
+   <artifactId>glide-for-redis</artifactId>
+   <classifier>linux-x86_64</classifier>
    <version>0.4.3</version>
 </dependency>
 ```
@@ -183,6 +243,9 @@ public class Main {
     }
 }
 ```
+
+### Accessing tests
+For more examples, you can refer to the test folder [unit tests](./java/client/src/test/java/glide/api) and [integration tests](./java/integTest/src/test/java/glide).
 
 ### Benchmarks
 
