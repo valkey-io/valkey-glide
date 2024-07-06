@@ -245,7 +245,7 @@ public interface GenericClusterCommands {
      * }
      * System.out.println("\nSCAN iteration:");
      * Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scan(ClusterScanCursor cursor);
 
@@ -303,7 +303,7 @@ public interface GenericClusterCommands {
      * }
      * System.out.println("\nSCAN iteration:");
      * Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor);
 
@@ -364,7 +364,7 @@ public interface GenericClusterCommands {
      * }
      * System.out.println("\nSCAN iteration:");
      * Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options);
 
@@ -425,7 +425,7 @@ public interface GenericClusterCommands {
      * }
      * System.out.println("\nSCAN iteration:");
      * Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options);
 
