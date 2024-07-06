@@ -12,6 +12,7 @@ This design ensures that updates easily propagate to each language and reduces o
 ## System Requirements
 
 The release of GLIDE for Valkey was tested on the following platforms:
+
 Linux:
 - Ubuntu 22.04.1 (x86_64)
 - Amazon Linux 2023 (AL2023) (x86_64)
@@ -19,6 +20,7 @@ Linux:
 macOS:
 - macOS 12.7 (Apple silicon)
 
+Apple silicon is a M1/M2/etc CPUs which is referred to `aarch_64` later in the document. Additionally, `x86_64` is mac with the intel CPU.
 
 ## Layout of Java code
 The Java client contains the following parts:
@@ -57,12 +59,12 @@ Additionally, consider installing the Gradle plugin, [OS Detector](https://githu
 
 ## Classifiers
 There are 4 types of classifiers for GLIDE for Valkey which are
-``
+```
 osx-aarch_64
 osx-x86_64
 linux-aarch_64
 linux-x86_64
-``
+```
 
 Gradle:
 - Copy the snippet and paste it in the `build.gradle` dependencies section.
@@ -99,7 +101,7 @@ Maven:
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>osx-aarch_64</classifier>
-   <version><LATEST></version>
+   <version>0.4.3</version>
 </dependency>
 
 <!--osx-x86_64-->
@@ -107,7 +109,7 @@ Maven:
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>osx-x86_64</classifier>
-   <version><LATEST></version>
+   <version>0.4.3</version>
 </dependency>
 
 <!--linux-aarch_64-->
@@ -115,7 +117,7 @@ Maven:
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>linux-aarch_64</classifier>
-   <version><LATEST></version>
+   <version>0.4.3</version>
 </dependency>
 
 <!--linux-x86_64-->
@@ -123,7 +125,7 @@ Maven:
    <groupId>software.amazon.glide</groupId>
    <artifactId>glide-for-redis</artifactId>
    <classifier>linux-x86_64</classifier>
-   <version><LATEST></version>
+   <version>0.4.3</version>
 </dependency>
 ```
 
