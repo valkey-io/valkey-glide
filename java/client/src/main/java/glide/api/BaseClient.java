@@ -6,6 +6,7 @@ import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -139,6 +140,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -2792,6 +2794,141 @@ public abstract class BaseClient
                 XInfoConsumers,
                 new GlideString[] {key, groupName},
                 response -> castArray(handleArrayResponseBinary(response), Map.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start) {
+        String[] args = new String[] {key, group, consumer, Long.toString(minIdleTime), start};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start) {
+        GlideString[] args =
+                new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime)), start};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start,
+            long count) {
+        String[] args =
+                new String[] {
+                    key,
+                    group,
+                    consumer,
+                    Long.toString(minIdleTime),
+                    start,
+                    READ_COUNT_REDIS_API,
+                    Long.toString(count)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start,
+            long count) {
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    group,
+                    consumer,
+                    gs(Long.toString(minIdleTime)),
+                    start,
+                    gs(READ_COUNT_REDIS_API),
+                    gs(Long.toString(count))
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start) {
+        String[] args =
+                new String[] {key, group, consumer, Long.toString(minIdleTime), start, JUST_ID_REDIS_API};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start) {
+        GlideString[] args =
+                new GlideString[] {
+                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs(JUST_ID_REDIS_API)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start,
+            long count) {
+        String[] args =
+                new String[] {
+                    key,
+                    group,
+                    consumer,
+                    Long.toString(minIdleTime),
+                    start,
+                    READ_COUNT_REDIS_API,
+                    Long.toString(count),
+                    JUST_ID_REDIS_API
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start,
+            long count) {
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    group,
+                    consumer,
+                    gs(Long.toString(minIdleTime)),
+                    start,
+                    gs(READ_COUNT_REDIS_API),
+                    gs(Long.toString(count)),
+                    gs(JUST_ID_REDIS_API)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
 
     @Override
