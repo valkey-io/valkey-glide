@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -34,11 +34,14 @@ import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -53,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -142,27 +146,47 @@ public class PubSubTests {
         pubsubMessageQueue.clear();
     }
 
+    private enum MessageReadMethod {
+        Callback,
+        Async,
+        Sync
+    }
+
+    @SneakyThrows
     private void verifyReceivedPubsubMessages(
-            Set<Pair<Integer, PubSubMessage>> pubsubMessages, BaseClient listener, boolean callback) {
-        if (callback) {
+            Set<Pair<Integer, PubSubMessage>> pubsubMessages,
+            BaseClient listener,
+            MessageReadMethod method) {
+        if (method == MessageReadMethod.Callback) {
             assertEquals(pubsubMessages, new HashSet<>(pubsubMessageQueue));
-        } else {
+        } else if (method == MessageReadMethod.Async) {
             var received = new HashSet<PubSubMessage>(pubsubMessages.size());
-            PubSubMessage pubsubMessage;
-            while ((pubsubMessage = listener.tryGetPubSubMessage()) != null) {
-                received.add(pubsubMessage);
+            CompletableFuture<PubSubMessage> messagePromise;
+            while ((messagePromise = listener.getPubSubMessage()).isDone()) {
+                received.add(messagePromise.get());
+            }
+            assertEquals(
+                    pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
+        } else { // Sync
+            var received = new HashSet<PubSubMessage>(pubsubMessages.size());
+            PubSubMessage message;
+            while ((message = listener.tryGetPubSubMessage()) != null) {
+                received.add(message);
             }
             assertEquals(
                     pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
         }
     }
 
-    private static Stream<Arguments> getTwoBoolPermutations() {
+    /** Permute all combinations of `standalone` as bool vs {@link MessageReadMethod}. */
+    private static Stream<Arguments> getTestScenarios() {
         return Stream.of(
-                Arguments.of(true, true),
-                Arguments.of(true, false),
-                Arguments.of(false, true),
-                Arguments.of(false, false));
+                Arguments.of(true, MessageReadMethod.Callback),
+                Arguments.of(true, MessageReadMethod.Sync),
+                Arguments.of(true, MessageReadMethod.Async),
+                Arguments.of(false, MessageReadMethod.Callback),
+                Arguments.of(false, MessageReadMethod.Sync),
+                Arguments.of(false, MessageReadMethod.Async));
     }
 
     private ChannelMode exact(boolean standalone) {
@@ -176,24 +200,18 @@ public class PubSubTests {
     @SuppressWarnings("unchecked")
     private BaseClient createListener(
             boolean standalone,
-            boolean useCallback,
+            boolean withCallback,
             int clientId,
             Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
         MessageCallback callback =
                 (msg, ctx) ->
                         ((ConcurrentLinkedDeque<Pair<Integer, PubSubMessage>>) ctx)
                                 .push(Pair.of(clientId, msg));
-        return useCallback
+        return withCallback
                 ? createClientWithSubscriptions(
                         standalone, subscriptions, Optional.of(callback), Optional.of(pubsubMessageQueue))
                 : createClientWithSubscriptions(standalone, subscriptions);
     }
-
-    // TODO add following tests from https://github.com/aws/glide-for-redis/pull/1643
-    //  test_pubsub_exact_happy_path_coexistence
-    //  test_pubsub_exact_happy_path_many_channels_co_existence
-    //  test_sharded_pubsub_co_existence
-    //  test_pubsub_pattern_co_existence
 
     // TODO why `publish` returns 0 on cluster or > 1 on standalone when there is only 1 receiver???
     //  meanwhile, all pubsubMessages are delivered.
@@ -208,15 +226,16 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void exact_happy_path(boolean standalone, boolean useCallback) {
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void exact_happy_path(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
         GlideString channel = gs(UUID.randomUUID().toString());
         GlideString message = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(exact(standalone), Set.of(channel));
 
-        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var listener =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
@@ -224,14 +243,14 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
-                Set.of(Pair.of(1, new PubSubMessage(message, channel))), listener, useCallback);
+                Set.of(Pair.of(1, new PubSubMessage(message, channel))), listener, method);
     }
 
     /** Similar to `test_pubsub_exact_happy_path_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void exact_happy_path_many_channels(boolean standalone, boolean useCallback) {
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void exact_happy_path_many_channels(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
         int numChannels = 256;
         int messagesPerChannel = 256;
@@ -248,7 +267,8 @@ public class PubSubTests {
             }
         }
 
-        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var listener =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
@@ -259,24 +279,22 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         verifyReceivedPubsubMessages(
-                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()),
-                listener,
-                useCallback);
+                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()), listener, method);
     }
 
     /** Similar to `test_sharded_pubsub` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
-    @ValueSource(booleans = {true, false})
-    public void sharded_pubsub(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+    @ParameterizedTest
+    @EnumSource(MessageReadMethod.class)
+    public void sharded_pubsub(MessageReadMethod method) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         GlideString channel = gs(UUID.randomUUID().toString());
         GlideString pubsubMessage = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
-        var listener = createListener(false, useCallback, 1, subscriptions);
+        var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
@@ -284,15 +302,15 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
-                Set.of(Pair.of(1, new PubSubMessage(pubsubMessage, channel))), listener, useCallback);
+                Set.of(Pair.of(1, new PubSubMessage(pubsubMessage, channel))), listener, method);
     }
 
     /** Similar to `test_sharded_pubsub_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
-    @ValueSource(booleans = {true, false})
-    public void sharded_pubsub_many_channels(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+    @ParameterizedTest
+    @EnumSource(MessageReadMethod.class)
+    public void sharded_pubsub_many_channels(MessageReadMethod method) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         int numChannels = 256;
@@ -310,7 +328,7 @@ public class PubSubTests {
             }
         }
 
-        var listener = createListener(false, useCallback, 1, subscriptions);
+        var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
@@ -324,14 +342,14 @@ public class PubSubTests {
         verifyReceivedPubsubMessages(
                 pubsubMessages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()),
                 listener,
-                useCallback);
+                method);
     }
 
     /** Similar to `test_pubsub_pattern` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void pattern(boolean standalone, boolean useCallback) {
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void pattern(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -346,7 +364,8 @@ public class PubSubTests {
                         standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN,
                         Set.of(pattern));
 
-        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var listener =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
@@ -363,14 +382,14 @@ public class PubSubTests {
                         .map(e -> Pair.of(1, new PubSubMessage(e.getValue(), e.getKey(), pattern)))
                         .collect(Collectors.toSet());
 
-        verifyReceivedPubsubMessages(expected, listener, useCallback);
+        verifyReceivedPubsubMessages(expected, listener, method);
     }
 
     /** Similar to `test_pubsub_pattern_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void pattern_many_channels(boolean standalone, boolean useCallback) {
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void pattern_many_channels(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -388,7 +407,8 @@ public class PubSubTests {
             }
         }
 
-        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var listener =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
@@ -401,16 +421,14 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         verifyReceivedPubsubMessages(
-                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()),
-                listener,
-                useCallback);
+                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()), listener, method);
     }
 
     /** Similar to `test_pubsub_combined_exact_and_pattern_one_client` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void combined_exact_and_pattern_one_client(boolean standalone, boolean useCallback) {
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void combined_exact_and_pattern_one_client(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -440,7 +458,8 @@ public class PubSubTests {
             messages.add(new PubSubMessage(pubsubMessage, channel, pattern));
         }
 
-        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var listener =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
@@ -451,18 +470,17 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         verifyReceivedPubsubMessages(
-                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()),
-                listener,
-                useCallback);
+                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()), listener, method);
     }
 
     /**
      * Similar to `test_pubsub_combined_exact_and_pattern_multiple_clients` in python client tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void combined_exact_and_pattern_multiple_clients(boolean standalone, boolean useCallback) {
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void combined_exact_and_pattern_multiple_clients(
+            boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
         String prefix = "channel.";
         GlideString pattern = gs(prefix + "*");
@@ -484,10 +502,12 @@ public class PubSubTests {
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
-        var listenerExactSub = createListener(standalone, useCallback, 1, subscriptions);
+        var listenerExactSub =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
 
         subscriptions = Map.of(pattern(standalone), Set.of(pattern));
-        var listenerPatternSub = createListener(standalone, useCallback, 2, subscriptions);
+        var listenerPatternSub =
+                createListener(standalone, method == MessageReadMethod.Callback, 2, subscriptions);
 
         var sender = createClient(standalone);
         clients.addAll(List.of(listenerExactSub, listenerPatternSub, sender));
@@ -498,13 +518,13 @@ public class PubSubTests {
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
-        if (useCallback) {
+        if (method == MessageReadMethod.Callback) {
             verifyReceivedPubsubMessages(
                     messages.stream()
                             .map(m -> Pair.of(m.getPattern().isEmpty() ? 1 : 2, m))
                             .collect(Collectors.toSet()),
                     listenerExactSub,
-                    useCallback);
+                    method);
         } else {
             verifyReceivedPubsubMessages(
                     messages.stream()
@@ -512,14 +532,14 @@ public class PubSubTests {
                             .map(m -> Pair.of(1, m))
                             .collect(Collectors.toSet()),
                     listenerExactSub,
-                    useCallback);
+                    method);
             verifyReceivedPubsubMessages(
                     messages.stream()
                             .filter(m -> m.getPattern().isPresent())
                             .map(m -> Pair.of(2, m))
                             .collect(Collectors.toSet()),
                     listenerPatternSub,
-                    useCallback);
+                    method);
         }
     }
 
@@ -527,10 +547,10 @@ public class PubSubTests {
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_one_client` in python client tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
-    @ValueSource(booleans = {true, false})
-    public void combined_exact_pattern_and_sharded_one_client(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+    @ParameterizedTest
+    @EnumSource(MessageReadMethod.class)
+    public void combined_exact_pattern_and_sharded_one_client(MessageReadMethod method) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         String prefix = "channel.";
@@ -565,7 +585,7 @@ public class PubSubTests {
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
-        var listener = createListener(false, useCallback, 1, subscriptions);
+        var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
@@ -580,9 +600,86 @@ public class PubSubTests {
 
         messages.addAll(shardedMessages);
         verifyReceivedPubsubMessages(
-                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()),
-                listener,
-                useCallback);
+                messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()), listener, method);
+    }
+
+    /** This test fully covers all `test_pubsub_*_co_existence` tests in python client. */
+    @SneakyThrows
+    @Test
+    public void coexistense_of_sync_and_async_read() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+        skipTestsOnMac();
+
+        String prefix = "channel.";
+        String pattern = prefix + "*";
+        String shardPrefix = "{shard}";
+        int numChannels = 256;
+        var messages = new ArrayList<PubSubMessage>(numChannels * 2);
+        var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions =
+                Map.of(
+                        PubSubClusterChannelMode.EXACT, new HashSet<>(),
+                        PubSubClusterChannelMode.PATTERN, Set.of(gs(pattern)),
+                        PubSubClusterChannelMode.SHARDED, new HashSet<>());
+
+        for (var i = 0; i < numChannels; i++) {
+            var channel = gs(i + "-" + UUID.randomUUID());
+            subscriptions.get(PubSubClusterChannelMode.EXACT).add(channel);
+            var message = gs(i + "-" + UUID.randomUUID());
+            messages.add(new PubSubMessage(message, channel));
+        }
+
+        for (var i = 0; i < numChannels; i++) {
+            var channel = gs(shardPrefix + "-" + i + "-" + UUID.randomUUID());
+            subscriptions.get(PubSubClusterChannelMode.SHARDED).add(channel);
+            var message = gs(i + "-" + UUID.randomUUID());
+            shardedMessages.add(new PubSubMessage(message, channel));
+        }
+
+        for (var j = 0; j < numChannels; j++) {
+            var message = gs(j + "-" + UUID.randomUUID());
+            var channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
+            messages.add(new PubSubMessage(message, channel, gs(pattern)));
+        }
+
+        var listener = createListener(false, false, 1, subscriptions);
+        var sender = (RedisClusterClient) createClient(false);
+        clients.addAll(List.of(listener, sender));
+
+        for (var pubsubMessage : messages) {
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
+        }
+        for (var pubsubMessage : shardedMessages) {
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
+
+        messages.addAll(shardedMessages);
+
+        var received = new LinkedHashSet<PubSubMessage>(messages.size());
+        var rand = new Random();
+        while (true) {
+            if (rand.nextBoolean()) {
+                CompletableFuture<PubSubMessage> messagePromise = listener.getPubSubMessage();
+                if (messagePromise.isDone()) {
+                    received.add(messagePromise.get());
+                } else {
+                    break; // all messages read
+                }
+            } else {
+                var message = listener.tryGetPubSubMessage();
+                if (message != null) {
+                    received.add(message);
+                } else {
+                    break; // all messages read
+                }
+            }
+        }
+
+        // redis can reorder the messages, so we can't validate that the order (without big delays
+        // between sends)
+        assertEquals(new LinkedHashSet<>(messages), received);
     }
 
     /**
@@ -590,10 +687,10 @@ public class PubSubTests {
      * tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
-    @ValueSource(booleans = {true, false})
-    public void combined_exact_pattern_and_sharded_multi_client(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+    @ParameterizedTest
+    @EnumSource(MessageReadMethod.class)
+    public void combined_exact_pattern_and_sharded_multi_client(MessageReadMethod method) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         String prefix = "channel.";
@@ -632,13 +729,22 @@ public class PubSubTests {
 
         var listenerExact =
                 createListener(
-                        false, useCallback, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact);
+                        false,
+                        method == MessageReadMethod.Callback,
+                        PubSubClusterChannelMode.EXACT.ordinal(),
+                        subscriptionsExact);
         var listenerPattern =
                 createListener(
-                        false, useCallback, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern);
+                        false,
+                        method == MessageReadMethod.Callback,
+                        PubSubClusterChannelMode.PATTERN.ordinal(),
+                        subscriptionsPattern);
         var listenerSharded =
                 createListener(
-                        false, useCallback, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded);
+                        false,
+                        method == MessageReadMethod.Callback,
+                        PubSubClusterChannelMode.SHARDED.ordinal(),
+                        subscriptionsSharded);
 
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded, sender));
@@ -655,7 +761,7 @@ public class PubSubTests {
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
-        if (useCallback) {
+        if (method == MessageReadMethod.Callback) {
             var expected = new HashSet<Pair<Integer, PubSubMessage>>();
             expected.addAll(
                     exactMessages.stream()
@@ -670,26 +776,26 @@ public class PubSubTests {
                             .map(m -> Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), m))
                             .collect(Collectors.toSet()));
 
-            verifyReceivedPubsubMessages(expected, listenerExact, useCallback);
+            verifyReceivedPubsubMessages(expected, listenerExact, method);
         } else {
             verifyReceivedPubsubMessages(
                     exactMessages.stream()
                             .map(m -> Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), m))
                             .collect(Collectors.toSet()),
                     listenerExact,
-                    useCallback);
+                    method);
             verifyReceivedPubsubMessages(
                     patternMessages.stream()
                             .map(m -> Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), m))
                             .collect(Collectors.toSet()),
                     listenerPattern,
-                    useCallback);
+                    method);
             verifyReceivedPubsubMessages(
                     shardedMessages.stream()
                             .map(m -> Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), m))
                             .collect(Collectors.toSet()),
                     listenerSharded,
-                    useCallback);
+                    method);
         }
     }
 
@@ -698,10 +804,10 @@ public class PubSubTests {
      * tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
-    @ValueSource(booleans = {true, false})
-    public void three_publishing_clients_same_name_with_sharded(boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+    @ParameterizedTest
+    @EnumSource(MessageReadMethod.class)
+    public void three_publishing_clients_same_name_with_sharded(MessageReadMethod method) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
 
         GlideString channel = gs(UUID.randomUUID().toString());
@@ -716,23 +822,23 @@ public class PubSubTests {
                 Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
         var listenerExact =
-                !useCallback
-                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact)
-                        : (RedisClusterClient)
+                method == MessageReadMethod.Callback
+                        ? (RedisClusterClient)
                                 createListener(
-                                        false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact);
+                                        false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact)
+                        : (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact);
 
         var listenerPattern =
-                !useCallback
-                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern)
-                        : createListener(
-                                false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern);
+                method == MessageReadMethod.Callback
+                        ? createListener(
+                                false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern)
+                        : (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern);
 
         var listenerSharded =
-                !useCallback
-                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded)
-                        : createListener(
-                                false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded);
+                method == MessageReadMethod.Callback
+                        ? createListener(
+                                false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded)
+                        : (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
 
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
@@ -742,28 +848,7 @@ public class PubSubTests {
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
-        if (!useCallback) {
-            verifyReceivedPubsubMessages(
-                    Set.of(
-                            Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
-                            Pair.of(
-                                    PubSubClusterChannelMode.EXACT.ordinal(),
-                                    new PubSubMessage(patternMessage.getMessage(), channel))),
-                    listenerExact,
-                    false);
-            verifyReceivedPubsubMessages(
-                    Set.of(
-                            Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
-                            Pair.of(
-                                    PubSubClusterChannelMode.PATTERN.ordinal(),
-                                    new PubSubMessage(exactMessage.getMessage(), channel, channel))),
-                    listenerPattern,
-                    false);
-            verifyReceivedPubsubMessages(
-                    Set.of(Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage)),
-                    listenerSharded,
-                    false);
-        } else {
+        if (method == MessageReadMethod.Callback) {
             var expected =
                     Set.of(
                             Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
@@ -776,7 +861,28 @@ public class PubSubTests {
                                     new PubSubMessage(exactMessage.getMessage(), channel, channel)),
                             Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage));
 
-            verifyReceivedPubsubMessages(expected, listenerExact, true);
+            verifyReceivedPubsubMessages(expected, listenerExact, method);
+        } else {
+            verifyReceivedPubsubMessages(
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.EXACT.ordinal(),
+                                    new PubSubMessage(patternMessage.getMessage(), channel))),
+                    listenerExact,
+                    method);
+            verifyReceivedPubsubMessages(
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.PATTERN.ordinal(),
+                                    new PubSubMessage(exactMessage.getMessage(), channel, channel))),
+                    listenerPattern,
+                    method);
+            verifyReceivedPubsubMessages(
+                    Set.of(Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage)),
+                    listenerSharded,
+                    method);
         }
     }
 
@@ -811,11 +917,10 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
-    @MethodSource("getTwoBoolPermutations")
-    public void transaction_with_all_types_of_PubsubMessages(
-            boolean standalone, boolean useCallback) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
+    @MethodSource("getTestScenarios")
+    public void transaction_with_all_types_of_messages(boolean standalone, MessageReadMethod method) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         skipTestsOnMac();
         assumeTrue(
                 standalone, // TODO activate tests after fix
@@ -844,7 +949,8 @@ public class PubSubTests {
                                 PubSubClusterChannelMode.SHARDED,
                                 Set.of(shardPrefix));
 
-        var listener = createListener(standalone, useCallback, 1, subscriptions);
+        var listener =
+                createListener(standalone, method == MessageReadMethod.Callback, 1, subscriptions);
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
@@ -870,7 +976,7 @@ public class PubSubTests {
                         ? Set.of(Pair.of(1, exactMessage), Pair.of(1, patternMessage))
                         : Set.of(
                                 Pair.of(1, exactMessage), Pair.of(1, patternMessage), Pair.of(1, shardedMessage));
-        verifyReceivedPubsubMessages(expected, listener, useCallback);
+        verifyReceivedPubsubMessages(expected, listener, method);
     }
 
     @SneakyThrows
@@ -919,7 +1025,7 @@ public class PubSubTests {
     @Disabled(
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_sharded_max_size_message(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
@@ -957,6 +1063,7 @@ public class PubSubTests {
         assertNull(listener.tryGetPubSubMessage());
     }
 
+    @SuppressWarnings("unchecked")
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
@@ -998,13 +1105,14 @@ public class PubSubTests {
         assertTrue(callbackMessages.get(0).getPattern().isEmpty());
     }
 
+    @SuppressWarnings("unchecked")
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {false})
     @Disabled(
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_sharded_max_size_message_callback(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
@@ -1038,6 +1146,7 @@ public class PubSubTests {
     }
 
     /** Test the behavior if the callback supplied to a subscription throws an uncaught exception. */
+    @SuppressWarnings("unchecked")
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
@@ -1095,11 +1204,12 @@ public class PubSubTests {
         assertTrue(callbackMessages.get(2).getPattern().isEmpty());
     }
 
+    @SuppressWarnings("unchecked")
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
     public void pubsub_with_binary(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString channel = gs(new byte[] {(byte) 0xE2, 0x28, (byte) 0xA1});
         var message =

@@ -1158,8 +1158,8 @@ public class RedisClusterClient extends BaseClient
     private static final class NativeClusterScanCursor
             implements CommandManager.ClusterScanCursorDetail {
 
-        private String cursorHandle;
-        private boolean isFinished;
+        private final String cursorHandle;
+        private final boolean isFinished;
         private boolean isClosed = false;
 
         // This is for internal use only.

@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -33,7 +33,6 @@ import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
 import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
 import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
-import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -121,7 +120,7 @@ public class CommandTests {
                     "Cluster",
                     "Keyspace");
     public static final List<String> EVERYTHING_INFO_SECTIONS =
-            REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")
+            SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")
                     // Latencystats was added in redis 7
                     ? List.of(
                             "Server",
@@ -274,7 +273,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multiple_options() {
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLUSTER);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(CPU).section(MEMORY);
         }
         InfoOptions options = builder.build();
@@ -319,7 +318,7 @@ public class CommandTests {
                 (String) ((Object[]) ((Object[]) ((Object[]) slotData.getSingleValue())[0])[2])[2];
 
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(COMMANDSTATS).section(REPLICATION);
         }
         InfoOptions options = builder.build();
@@ -337,7 +336,7 @@ public class CommandTests {
     @SneakyThrows
     public void info_with_multi_node_route_and_options() {
         InfoOptions.InfoOptionsBuilder builder = InfoOptions.builder().section(CLIENTS);
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             builder.section(COMMANDSTATS).section(REPLICATION);
         }
         InfoOptions options = builder.build();
@@ -474,7 +473,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void configGet_with_multiple_params() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         var data = clusterClient.configGet(new String[] {"pidfile", "logfile"}).get();
         assertAll(
                 () -> assertEquals(2, data.size()),
@@ -666,42 +665,42 @@ public class CommandTests {
     public void lolwut_lolwut() {
         var response = clusterClient.lolwut().get();
         System.out.printf("%nLOLWUT cluster client standard response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         response = clusterClient.lolwut(new int[] {50, 20}).get();
         System.out.printf(
                 "%nLOLWUT cluster client standard response with params 50 20%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         response = clusterClient.lolwut(6).get();
         System.out.printf("%nLOLWUT cluster client ver 6 response%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         response = clusterClient.lolwut(5, new int[] {30, 4, 4}).get();
         System.out.printf("%nLOLWUT cluster client ver 5 response with params 30 4 4%n%s%n", response);
-        assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(response.contains("Redis ver. " + SERVER_VERSION));
 
         var clusterResponse = clusterClient.lolwut(ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + REDIS_VERSION));
+            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
         }
 
         clusterResponse = clusterClient.lolwut(new int[] {10, 20}, ALL_NODES).get();
         for (var nodeResponse : clusterResponse.getMultiValue().values()) {
-            assertTrue(nodeResponse.contains("Redis ver. " + REDIS_VERSION));
+            assertTrue(nodeResponse.contains("Redis ver. " + SERVER_VERSION));
         }
 
         clusterResponse = clusterClient.lolwut(2, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
 
         clusterResponse = clusterClient.lolwut(2, new int[] {10, 20}, RANDOM).get();
-        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + REDIS_VERSION));
+        assertTrue(clusterResponse.getSingleValue().contains("Redis ver. " + SERVER_VERSION));
     }
 
     @Test
     @SneakyThrows
     public void dbsize_and_flushdb() {
-        boolean is62orHigher = REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0");
+        boolean is62orHigher = SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0");
 
         assertEquals(OK, clusterClient.flushall().get());
         // dbsize should be 0 after flushall() because all keys have been deleted
@@ -967,7 +966,7 @@ public class CommandTests {
     public void check_throws_cross_slot_error(
             String testName, String minVer, CompletableFuture<?> future) {
         if (minVer != null) {
-            assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo(minVer));
+            assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo(minVer));
         }
         var executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -998,7 +997,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
             assertEquals(OK, clusterClient.flushall(SYNC).get());
         } else {
             var executionException =
@@ -1035,7 +1034,7 @@ public class CommandTests {
     @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
     public void function_commands_without_keys_with_route(boolean singleNodeRoute) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "mylib1c_" + singleNodeRoute;
         String funcName = "myfunc1c_" + singleNodeRoute;
@@ -1185,7 +1184,7 @@ public class CommandTests {
     @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
     public void function_commands_without_keys_with_route_binary(boolean singleNodeRoute) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("mylib1c_" + singleNodeRoute);
         GlideString funcName = gs("myfunc1c_" + singleNodeRoute);
@@ -1342,7 +1341,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void function_commands_without_keys_and_without_route() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
@@ -1425,7 +1424,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void function_commands_without_keys_and_without_route_binary() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
@@ -1519,7 +1518,7 @@ public class CommandTests {
     @ValueSource(strings = {"abc", "xyz", "kln"})
     @SneakyThrows
     public void fcall_with_keys(String prefix) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String key = "{" + prefix + "}-fcall_with_keys-";
         SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
@@ -1560,7 +1559,7 @@ public class CommandTests {
     @ValueSource(strings = {"abc", "xyz", "kln"})
     @SneakyThrows
     public void fcall_binary_with_keys(String prefix) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String key = "{" + prefix + "}-fcall_with_keys-";
         SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
@@ -1607,7 +1606,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void fcall_readonly_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
@@ -1662,7 +1661,7 @@ public class CommandTests {
     @SneakyThrows
     @Test
     public void fcall_readonly_binary_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
@@ -1718,7 +1717,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKill_no_write_without_route() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionKill_no_write_without_route";
         String funcName = "deadlock_without_route";
@@ -1772,7 +1771,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKillBinary_no_write_without_route() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionKillBinary_no_write_without_route");
         GlideString funcName = gs("deadlock_without_route");
@@ -1828,7 +1827,7 @@ public class CommandTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void functionKill_no_write_with_route(boolean singleNodeRoute) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionKill_no_write_with_route" + singleNodeRoute;
         String funcName = "deadlock_with_route_" + singleNodeRoute;
@@ -1880,7 +1879,7 @@ public class CommandTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void functionKillBinary_no_write_with_route(boolean singleNodeRoute) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionKillBinary_no_write_with_route" + singleNodeRoute);
         GlideString funcName = gs("deadlock_with_route_" + singleNodeRoute);
@@ -1933,7 +1932,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKill_key_based_write_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionKill_key_based_write_function";
         String funcName = "deadlock_write_function_with_key_based_route";
@@ -1999,7 +1998,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionKillBinary_key_based_write_function() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionKillBinary_key_based_write_function");
         GlideString funcName = gs("deadlock_write_function_with_key_based_route");
@@ -2066,7 +2065,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionStats_without_route() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         String libName = "functionStats_without_route";
         String funcName = libName;
@@ -2104,7 +2103,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void functionStatsBinary_without_route() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         GlideString libName = gs("functionStats_without_route");
         GlideString funcName = libName;
@@ -2148,7 +2147,7 @@ public class CommandTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void functionStats_with_route(boolean singleNodeRoute) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         Route route =
                 singleNodeRoute ? new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY) : ALL_PRIMARIES;
         String libName = "functionStats_with_route_" + singleNodeRoute;
@@ -2201,7 +2200,7 @@ public class CommandTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void functionStatsBinary_with_route(boolean singleNodeRoute) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
         Route route =
                 singleNodeRoute ? new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY) : ALL_PRIMARIES;
         GlideString libName = gs("functionStats_with_route_" + singleNodeRoute);
@@ -2259,7 +2258,7 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void function_dump_and_restore() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
@@ -2426,7 +2425,7 @@ public class CommandTests {
                         .get());
 
         // SORT_R0
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(
                     key1DescendingList,
                     clusterClient
@@ -2517,7 +2516,7 @@ public class CommandTests {
                         .get());
 
         // SORT_R0
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(
                     key1DescendingList,
                     clusterClient
