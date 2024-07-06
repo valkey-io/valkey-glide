@@ -560,9 +560,7 @@ public class TransactionTests {
         GlideString cursor = gs("0");
         Object[] keysFound = new Object[0];
         do {
-            Transaction transaction = new Transaction();
-            transaction.withBinarySafeOutput();
-            transaction.scan(cursor);
+            Transaction transaction = new Transaction().withBinaryOutput().scan(cursor);
             Object[] results = client.exec(transaction).get();
             cursor = (GlideString) ((Object[]) results[0])[0];
             keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
@@ -634,8 +632,7 @@ public class TransactionTests {
     @Test
     public void scan_binary_with_options_test() {
         // setup
-        Transaction setupTransaction = new Transaction();
-        setupTransaction.withBinarySafeOutput();
+        Transaction setupTransaction = new Transaction().withBinaryOutput();
 
         Map<ScanOptions.ObjectType, GlideString> typeKeys =
                 Map.of(
@@ -664,9 +661,7 @@ public class TransactionTests {
             GlideString cursor = initialCursor;
             Object[] keysFound = new Object[0];
             do {
-                Transaction transaction = new Transaction();
-                transaction.withBinarySafeOutput();
-                transaction.scan(cursor, options);
+                Transaction transaction = new Transaction().withBinaryOutput().scan(cursor, options);
                 Object[] results = client.exec(transaction).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
@@ -681,9 +676,7 @@ public class TransactionTests {
             cursor = initialCursor;
             keysFound = new Object[0];
             do {
-                Transaction transaction = new Transaction();
-                transaction.withBinarySafeOutput();
-                transaction.scan(cursor, options);
+                Transaction transaction = new Transaction().withBinaryOutput().scan(cursor, options);
                 Object[] results = client.exec(transaction).get();
                 cursor = (GlideString) ((Object[]) results[0])[0];
                 keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
@@ -706,9 +699,7 @@ public class TransactionTests {
         assertEquals(OK, client.set(key1, gs(value)).get());
 
         // Verify dump
-        Transaction transaction = new Transaction();
-        transaction.withBinarySafeOutput();
-        transaction.dump(key1);
+        Transaction transaction = new Transaction().withBinaryOutput().dump(key1);
         Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
@@ -733,9 +724,7 @@ public class TransactionTests {
         client.functionLoad(code, true).get();
 
         // Verify functionDump
-        Transaction transaction = new Transaction();
-        transaction.withBinarySafeOutput();
-        transaction.functionDump();
+        Transaction transaction = new Transaction().withBinaryOutput().functionDump();
         Object[] result = client.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
@@ -798,5 +787,24 @@ public class TransactionTests {
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
                 },
                 results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void binary_strings() {
+        String key = UUID.randomUUID().toString();
+        client.set(key, "_").get();
+        // use dump to ensure that we have non-string convertible bytes
+        var bytes = client.dump(gs(key)).get();
+
+        var transaction = new Transaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+
+        var responses = client.exec(transaction).get();
+
+        assertDeepEquals(
+                new Object[] {
+                    OK, gs(bytes),
+                },
+                responses);
     }
 }
