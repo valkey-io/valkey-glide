@@ -24,8 +24,7 @@ public class ExamplesApp {
                         .useTLS(useSsl)
                         .build();
 
-        try {
-            RedisClient client = RedisClient.createClient(config).get();
+        try (RedisClient client = RedisClient.createClient(config).get()) {
 
             System.out.println("PING: " + client.ping().get());
             System.out.println("PING(found you): " + client.ping("found you").get());
