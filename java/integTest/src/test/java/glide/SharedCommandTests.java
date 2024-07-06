@@ -143,7 +143,7 @@ public class SharedCommandTests {
     @SneakyThrows
     public static void init() {
         standaloneClient =
-                RedisClient.CreateClient(
+                RedisClient.createClient(
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
                                         .requestTimeout(5000)
@@ -151,7 +151,7 @@ public class SharedCommandTests {
                         .get();
 
         clusterClient =
-                RedisClusterClient.CreateClient(
+                RedisClusterClient.createClient(
                                 RedisClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)
@@ -3411,8 +3411,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmin(new String[] {key}, 1).get());
@@ -3433,8 +3433,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmin(new GlideString[] {key}, 1).get());
@@ -3562,8 +3562,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmax(new String[] {key}, 1).get());
@@ -3584,8 +3584,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzpopmax(new GlideString[] {key}, 1).get());
@@ -4856,8 +4856,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzmpop(new String[] {key}, MAX, 1).get());
@@ -4880,8 +4880,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.bzmpop(new GlideString[] {key}, MAX, 1).get());
@@ -5136,8 +5136,8 @@ public class SharedCommandTests {
 
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             long oneSecondInMS = 1000L;
@@ -6026,8 +6026,8 @@ public class SharedCommandTests {
 
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
             String timeoutKey = "{key}:2" + UUID.randomUUID();
             String timeoutGroupName = "group" + UUID.randomUUID();
             String timeoutConsumerName = "consumer" + UUID.randomUUID();
@@ -8967,8 +8967,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmpop(new String[] {key}, ListDirection.LEFT, 1).get());
@@ -8993,8 +8993,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmpop(new GlideString[] {key}, ListDirection.LEFT, 1).get());
@@ -9341,8 +9341,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -9369,8 +9369,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
@@ -13011,8 +13011,8 @@ public class SharedCommandTests {
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
-                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
-                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+                        ? RedisClient.createClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.createClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands do not time out, even if timeout > request timeout
             assertEquals(OK, testClient.set(key, "value").get());
