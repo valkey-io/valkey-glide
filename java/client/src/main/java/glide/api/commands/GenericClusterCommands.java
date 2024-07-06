@@ -242,11 +242,10 @@ public interface GenericClusterCommands {
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] stringResults = (Object[]) result[1];
-     *
-     *   System.out.println("\nSCAN iteration:");
-     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * }</pre>
+     * System.out.println("\nSCAN iteration:");
+     * Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * </pre>
      */
     CompletableFuture<Object[]> scan(ClusterScanCursor cursor);
 
@@ -301,11 +300,10 @@ public interface GenericClusterCommands {
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] glideStringResults = (Object[]) result[1];
-     *
-     *   System.out.println("\nSCAN iteration:");
-     *   Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * }</pre>
+     * System.out.println("\nSCAN iteration:");
+     * Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * </pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor);
 
@@ -340,7 +338,6 @@ public interface GenericClusterCommands {
      * immediately free resources tied to the cursor. Note that this makes the cursor unusable in
      * subsequent calls to <code>SCAN</code>.
      *
-     * @see ClusterScanCursor for more details about how to use the cursor.
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
      *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
@@ -356,17 +353,18 @@ public interface GenericClusterCommands {
      *     <pre>{@code
      * // Assume key contains a set with 200 keys
      * ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
+     * // Scan for keys with archived in the name
+     * ScanOptions options = ScanOptions.builder().matchPattern("*archived*").build();
      * Object[] result;
      * while (!cursor.isFinished()) {
-     *   result = client.scan(cursor).get();
+     *   result = client.scan(cursor, options).get();
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] stringResults = (Object[]) result[1];
-     *
-     *   System.out.println("\nSCAN iteration:");
-     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * }</pre>
+     * System.out.println("\nSCAN iteration:");
+     * Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * </pre>
      */
     CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options);
 
@@ -401,7 +399,6 @@ public interface GenericClusterCommands {
      * immediately free resources tied to the cursor. Note that this makes the cursor unusable in
      * subsequent calls to <code>SCAN</code>.
      *
-     * @see ClusterScanCursor for more details about how to use the cursor.
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
      * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
      *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
@@ -417,17 +414,18 @@ public interface GenericClusterCommands {
      *     <pre>{@code
      * // Assume key contains a set with 200 keys
      * ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
+     * // Scan for keys with archived in the name
+     * ScanOptions options = ScanOptions.builder().matchPattern("*archived*").build();
      * Object[] result;
      * while (!cursor.isFinished()) {
-     *   result = client.scan(cursor).get();
+     *   result = client.scan(cursor, options).get();
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] glideStringResults = (Object[]) result[1];
-     *
-     *   System.out.println("\nSCAN iteration:");
-     *   Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * }</pre>
+     * System.out.println("\nSCAN iteration:");
+     * Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * </pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options);
 

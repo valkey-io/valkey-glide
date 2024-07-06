@@ -2559,6 +2559,7 @@ public class CommandTests {
                 key2DescendingListSubset_strings, clusterClient.lrange(key3.toString(), 0, -1).get());
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_simple() {
@@ -2589,6 +2590,7 @@ public class CommandTests {
         assertEquals(expectedData.keySet(), result);
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_binary_simple() {
@@ -2619,6 +2621,7 @@ public class CommandTests {
         assertEquals(expectedData.keySet(), result);
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_with_object_type_and_pattern() {
@@ -2675,6 +2678,7 @@ public class CommandTests {
         assertFalse(new LinkedHashSet<>(result).removeAll(unexpectedPatterns.keySet()));
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_with_count() {
@@ -2723,6 +2727,7 @@ public class CommandTests {
         assertEquals(expectedData.keySet(), keys);
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_with_match() {
@@ -2756,6 +2761,7 @@ public class CommandTests {
         assertFalse(new LinkedHashSet<>(keys).removeAll(unexpectedPatterns.keySet()));
     }
 
+    @Timeout(20)
     @Test
     @SneakyThrows
     public void test_cluster_scan_cleaning_cursor() {
