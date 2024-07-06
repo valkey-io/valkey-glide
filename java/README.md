@@ -18,9 +18,7 @@ Linux:
 - Amazon Linux 2023 (AL2023) (x86_64)
 
 macOS:
-- macOS 12.7 (Apple silicon)
-
-Apple silicon is a M1/M2/etc CPUs which is referred to `aarch_64` later in the document. Additionally, `x86_64` is mac with the intel CPU.
+- macOS 12.7 (Apple silicon/aarch_64/x86_64)
 
 ## Layout of Java code
 The Java client contains the following parts:
