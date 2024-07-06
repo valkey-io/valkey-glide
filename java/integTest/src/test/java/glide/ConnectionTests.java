@@ -15,7 +15,7 @@ public class ConnectionTests {
     @SneakyThrows
     public void basic_client() {
         var regularClient =
-                RedisClient.CreateClient(
+                RedisClient.createClient(
                                 RedisClientConfiguration.builder()
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
@@ -28,7 +28,7 @@ public class ConnectionTests {
     @SneakyThrows
     public void cluster_client() {
         var regularClient =
-                RedisClient.CreateClient(
+                RedisClient.createClient(
                                 RedisClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .build())

@@ -26,7 +26,7 @@ public class ErrorHandlingTests {
                 assertThrows(
                         ExecutionException.class,
                         () ->
-                                RedisClient.CreateClient(
+                                RedisClient.createClient(
                                                 RedisClientConfiguration.builder()
                                                         .address(NodeAddress.builder().port(getFreePort()).build())
                                                         .build())
@@ -40,7 +40,7 @@ public class ErrorHandlingTests {
     @SneakyThrows
     public void basic_client_tries_wrong_command() {
         try (var regularClient =
-                RedisClient.CreateClient(
+                RedisClient.createClient(
                                 RedisClientConfiguration.builder()
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())
@@ -60,7 +60,7 @@ public class ErrorHandlingTests {
     @SneakyThrows
     public void basic_client_tries_wrong_command_arguments() {
         try (var regularClient =
-                RedisClient.CreateClient(
+                RedisClient.createClient(
                                 RedisClientConfiguration.builder()
                                         .address(
                                                 NodeAddress.builder().port(TestConfiguration.STANDALONE_PORTS[0]).build())

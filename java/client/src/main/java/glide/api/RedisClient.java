@@ -65,7 +65,7 @@ import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**
- * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
+ * Async (non-blocking) client for Redis in Standalone mode. Use {@link #createClient} to request a
  * client to Redis.
  */
 public class RedisClient extends BaseClient
@@ -76,7 +76,7 @@ public class RedisClient extends BaseClient
                 TransactionsCommands {
 
     /**
-     * A constructor. Use {@link #CreateClient} to get a client. Made protected to simplify testing.
+     * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
      */
     protected RedisClient(ClientBuilder builder) {
         super(builder);
@@ -88,9 +88,9 @@ public class RedisClient extends BaseClient
      * @param config Redis client Configuration.
      * @return A Future to connect and return a RedisClient.
      */
-    public static CompletableFuture<RedisClient> CreateClient(
+    public static CompletableFuture<RedisClient> createClient(
             @NonNull RedisClientConfiguration config) {
-        return CreateClient(config, RedisClient::new);
+        return createClient(config, RedisClient::new);
     }
 
     @Override

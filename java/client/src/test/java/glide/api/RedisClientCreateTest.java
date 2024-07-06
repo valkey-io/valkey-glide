@@ -3,9 +3,9 @@ package glide.api;
 
 import static glide.api.BaseClient.buildChannelHandler;
 import static glide.api.BaseClient.buildMessageHandler;
-import static glide.api.RedisClient.CreateClient;
 import static glide.api.RedisClient.buildCommandManager;
 import static glide.api.RedisClient.buildConnectionManager;
+import static glide.api.RedisClient.createClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,7 +53,7 @@ public class RedisClientCreateTest {
         mockedClient.when(() -> buildConnectionManager(channelHandler)).thenReturn(connectionManager);
         mockedClient.when(() -> buildCommandManager(channelHandler)).thenReturn(commandManager);
         mockedClient.when(() -> buildMessageHandler(any())).thenReturn(messageHandler);
-        mockedClient.when(() -> CreateClient(any(), any())).thenCallRealMethod();
+        mockedClient.when(() -> createClient(any(), any())).thenCallRealMethod();
 
         var threadPoolResource = ThreadPoolResourceAllocator.getOrCreate(() -> null);
         if (threadPoolResource != null) {
@@ -78,7 +78,7 @@ public class RedisClientCreateTest {
         when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
 
         // exercise
-        CompletableFuture<RedisClient> result = CreateClient(config);
+        CompletableFuture<RedisClient> result = createClient(config);
         RedisClient client = result.get();
 
         // verify
@@ -98,7 +98,7 @@ public class RedisClientCreateTest {
         when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
 
         // exercise
-        CompletableFuture<RedisClient> result = CreateClient(config);
+        CompletableFuture<RedisClient> result = createClient(config);
         RedisClient client = result.get();
 
         // verify
@@ -119,7 +119,7 @@ public class RedisClientCreateTest {
         when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
 
         // exercise
-        CompletableFuture<RedisClient> result = CreateClient(config);
+        CompletableFuture<RedisClient> result = createClient(config);
 
         ExecutionException executionException = assertThrows(ExecutionException.class, result::get);
 

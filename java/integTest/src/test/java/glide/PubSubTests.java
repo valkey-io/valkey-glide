@@ -79,7 +79,7 @@ public class PubSubTests {
             if (callback.isPresent()) {
                 subConfigBuilder.callback(callback.get(), context.get());
             }
-            return RedisClient.CreateClient(
+            return RedisClient.createClient(
                             commonClientConfig()
                                     .requestTimeout(5000)
                                     .subscriptionConfiguration(subConfigBuilder.build())
@@ -94,7 +94,7 @@ public class PubSubTests {
                 subConfigBuilder.callback(callback.get(), context.get());
             }
 
-            return RedisClusterClient.CreateClient(
+            return RedisClusterClient.createClient(
                             commonClusterClientConfig()
                                     .requestTimeout(5000)
                                     .subscriptionConfiguration(subConfigBuilder.build())
@@ -112,9 +112,9 @@ public class PubSubTests {
     @SneakyThrows
     private BaseClient createClient(boolean standalone) {
         if (standalone) {
-            return RedisClient.CreateClient(commonClientConfig().build()).get();
+            return RedisClient.createClient(commonClientConfig().build()).get();
         }
-        return RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get();
+        return RedisClusterClient.createClient(commonClusterClientConfig().build()).get();
     }
 
     /**

@@ -154,7 +154,7 @@ public class CommandTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(7000).build())
                         .get();
     }
 
@@ -1735,7 +1735,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1790,7 +1790,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1847,7 +1847,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1900,7 +1900,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1954,7 +1954,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -2022,7 +2022,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(10000).build())
+                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await

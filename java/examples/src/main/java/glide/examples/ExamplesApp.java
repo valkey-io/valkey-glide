@@ -25,7 +25,7 @@ public class ExamplesApp {
                         .build();
 
         try {
-            RedisClient client = RedisClient.CreateClient(config).get();
+            RedisClient client = RedisClient.createClient(config).get();
 
             System.out.println("PING: " + client.ping().get());
             System.out.println("PING(found you): " + client.ping("found you").get());
