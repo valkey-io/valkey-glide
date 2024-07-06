@@ -3076,6 +3076,32 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void scan_binary_existing_cursor() {
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockCursor.getCursorHandle()).thenReturn("1");
+
+        CommandManager.ClusterScanCursorDetail mockResultCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockResultCursor.getCursorHandle()).thenReturn("2");
+
+        final Object[] result =
+                new Object[] {mockResultCursor.getCursorHandle(), new Object[] {gs("foo")}};
+        final CompletableFuture<Object[]> testResponse = CompletableFuture.completedFuture(result);
+        when(commandManager.<Object[]>submitClusterScan(
+                        eq(mockCursor), eq(ScanOptions.builder().build()), any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<Object[]> actualResponse = service.scan(mockCursor);
+        Object[] payload = actualResponse.get();
+        assertEquals(
+                mockResultCursor.getCursorHandle(),
+                ((CommandManager.ClusterScanCursorDetail) payload[0]).getCursorHandle());
+        assertArrayEquals(new Object[] {gs("foo")}, (Object[]) payload[1]);
+    }
+
+    @SneakyThrows
+    @Test
     public void scan_new_cursor_options() {
         CommandManager.ClusterScanCursorDetail mockCursor =
                 Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
@@ -3143,5 +3169,45 @@ public class RedisClusterClientTest {
         assertEquals(
                 mockResultCursor.getCursorHandle(),
                 ((CommandManager.ClusterScanCursorDetail) actualResponse.get()[0]).getCursorHandle());
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_binary_existing_cursor_options() {
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockCursor.getCursorHandle()).thenReturn("1");
+
+        CommandManager.ClusterScanCursorDetail mockResultCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        when(mockResultCursor.getCursorHandle()).thenReturn("2");
+
+        final Object[] result =
+                new Object[] {mockResultCursor.getCursorHandle(), new Object[] {gs("foo")}};
+        final CompletableFuture<Object[]> testResponse = CompletableFuture.completedFuture(result);
+        when(commandManager.<Object[]>submitClusterScan(
+                        eq(mockCursor),
+                        eq(
+                                ScanOptions.builder()
+                                        .matchPattern("key:*")
+                                        .count(10L)
+                                        .type(ScanOptions.ObjectType.STRING)
+                                        .build()),
+                        any()))
+                .thenReturn(testResponse);
+
+        CompletableFuture<Object[]> actualResponse =
+                service.scan(
+                        mockCursor,
+                        ScanOptions.builder()
+                                .matchPattern("key:*")
+                                .count(10L)
+                                .type(ScanOptions.ObjectType.STRING)
+                                .build());
+        Object[] payload = actualResponse.get();
+        assertEquals(
+                mockResultCursor.getCursorHandle(),
+                ((CommandManager.ClusterScanCursorDetail) payload[0]).getCursorHandle());
+        assertArrayEquals(new Object[] {gs("foo")}, (Object[]) payload[1]);
     }
 }
