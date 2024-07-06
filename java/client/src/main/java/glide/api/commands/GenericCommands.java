@@ -384,7 +384,7 @@ public interface GenericCommands {
      *         .collect(Collectors.joining(", "));
      *     System.out.println("\nSCAN iteration: " + keyList);
      * } while (!cursor.equals("0"));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scan(String cursor);
 
@@ -412,7 +412,7 @@ public interface GenericCommands {
      *         .collect(Collectors.joining(", "));
      *     System.out.println("\nSCAN iteration: " + keyList);
      * } while (!cursor.equals(gs("0")));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scan(GlideString cursor);
 
@@ -443,7 +443,7 @@ public interface GenericCommands {
      *         .collect(Collectors.joining(", "));
      *     System.out.println("\nSCAN iteration: " + keyList);
      * } while (!cursor.equals("0"));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scan(String cursor, ScanOptions options);
 
@@ -474,7 +474,7 @@ public interface GenericCommands {
      *         .collect(Collectors.joining(", "));
      *     System.out.println("\nSCAN iteration: " + keyList);
      * } while (!cursor.equals(gs("0")));
-     * </pre>
+     * }</pre>
      */
     CompletableFuture<Object[]> scan(GlideString cursor, ScanOptions options);
 }
