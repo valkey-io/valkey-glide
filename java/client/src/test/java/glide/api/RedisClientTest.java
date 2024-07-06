@@ -71,6 +71,8 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_REDI
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -244,6 +246,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -13867,5 +13870,157 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoStream_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = {key};
+        Map<String, Object> summary = Map.of("some", "data");
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(XInfoStream), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.xinfoStream(key);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoStreamFull_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = {key, FULL};
+        Map<String, Object> summary = Map.of("some", "data");
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(XInfoStream), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.xinfoStreamFull(key);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoStreamFull_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        int count = 42;
+        String[] arguments = {key, FULL, COUNT, "42"};
+        Map<String, Object> summary = Map.of("some", "data");
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(XInfoStream), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.xinfoStreamFull(key, count);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoStream_glidestring_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = {key};
+        Map<GlideString, Object> summary = Map.of(gs("some"), gs("data"));
+
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+                        eq(XInfoStream), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>> response = service.xinfoStream(key);
+        Map<GlideString, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoStreamFull_glidestring_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = {key, gs(FULL)};
+        Map<GlideString, Object> summary = Map.of(gs("some"), gs("data"));
+
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+                        eq(XInfoStream), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>> response = service.xinfoStreamFull(key);
+        Map<GlideString, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoStreamFull_glidestring_with_count_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        int count = 42;
+        GlideString[] arguments = {key, gs(FULL), gs(COUNT), gs("42")};
+        Map<GlideString, Object> summary = Map.of(gs("some"), gs("data"));
+
+        CompletableFuture<Map<GlideString, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>>submitNewCommand(
+                        eq(XInfoStream), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>> response = service.xinfoStreamFull(key, count);
+        Map<GlideString, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
     }
 }

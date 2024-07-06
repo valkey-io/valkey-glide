@@ -7,6 +7,8 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArg
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -150,6 +152,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -2929,6 +2932,47 @@ public abstract class BaseClient
                     gs(JUST_ID_REDIS_API)
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStream(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new String[] {key, FULL}, response -> handleMapResponse(response));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key, FULL, COUNT, Integer.toString(count)},
+                this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStream(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new GlideString[] {key}, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new GlideString[] {key, gs(FULL)}, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(
+            @NonNull GlideString key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key, gs(FULL), gs(COUNT), gs(Integer.toString(count))},
+                this::handleBinaryStringMapResponse);
     }
 
     @Override

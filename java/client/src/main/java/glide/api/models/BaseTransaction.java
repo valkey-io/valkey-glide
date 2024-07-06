@@ -21,6 +21,8 @@ import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_R
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
@@ -178,6 +180,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -3917,6 +3920,59 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(
                 buildCommand(
                         XPending, newArgsBuilder().add(key).add(group).add(options.toArgs(start, end, count))));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(ArgType)} or {@link
+     * #xinfoStreamFull(ArgType, int)}.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - A <code>Map</code> of stream information for the given <code>key
+     *     </code>.
+     */
+    public <ArgType> T xinfoStream(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - A <code>Map</code> of detailed stream information for the given
+     *     <code>key</code>.
+     */
+    public <ArgType> T xinfoStreamFull(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, newArgsBuilder().add(key).add(FULL)));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
+     * @return Command Response - A <code>Map</code> of detailed stream information for the given
+     *     <code>key</code>.
+     */
+    public <ArgType> T xinfoStreamFull(@NonNull ArgType key, int count) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XInfoStream,
+                        newArgsBuilder().add(key).add(FULL).add(COUNT).add(Integer.toString(count))));
         return getThis();
     }
 

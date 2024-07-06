@@ -32,9 +32,11 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -655,5 +657,59 @@ public class TransactionTests {
         transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
         Object[] response = client.exec(transaction).get();
         assertEquals(OK, response[0]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_xinfoStream() {
+        Transaction transaction = new Transaction();
+        final String streamKey = "{streamKey}-" + UUID.randomUUID();
+        LinkedHashMap<String, Object> expectedStreamInfo =
+                new LinkedHashMap<>() {
+                    {
+                        put("radix-tree-keys", 1L);
+                        put("radix-tree-nodes", 2L);
+                        put("length", 1L);
+                        put("groups", 0L);
+                        put("first-entry", new Object[] {"0-1", new Object[] {"field1", "value1"}});
+                        put("last-generated-id", "0-1");
+                        put("last-entry", new Object[] {"0-1", new Object[] {"field1", "value1"}});
+                    }
+                };
+        LinkedHashMap<String, Object> expectedStreamFullInfo =
+                new LinkedHashMap<>() {
+                    {
+                        put("radix-tree-keys", 1L);
+                        put("radix-tree-nodes", 2L);
+                        put("entries", new Object[][] {{"0-1", new Object[] {"field1", "value1"}}});
+                        put("length", 1L);
+                        put("groups", new Object[0]);
+                        put("last-generated-id", "0-1");
+                    }
+                };
+
+        transaction
+                .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xinfoStream(streamKey)
+                .xinfoStreamFull(streamKey);
+
+        Object[] results = client.exec(transaction).get();
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedStreamInfo.put("max-deleted-entry-id", "0-0");
+            expectedStreamInfo.put("entries-added", 1L);
+            expectedStreamInfo.put("recorded-first-entry-id", "0-1");
+            expectedStreamFullInfo.put("max-deleted-entry-id", "0-0");
+            expectedStreamFullInfo.put("entries-added", 1L);
+            expectedStreamFullInfo.put("recorded-first-entry-id", "0-1");
+        }
+
+        assertDeepEquals(
+                new Object[] {
+                    "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
+                    expectedStreamInfo, // xinfoStream(streamKey)
+                    expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
+                },
+                results);
     }
 }
