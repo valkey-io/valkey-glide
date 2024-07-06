@@ -242,9 +242,9 @@ public interface GenericClusterCommands {
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] stringResults = (Object[]) result[1];
+     *   System.out.println("\nSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * System.out.println("\nSCAN iteration:");
-     * Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }</pre>
      */
     CompletableFuture<Object[]> scan(ClusterScanCursor cursor);
@@ -300,9 +300,9 @@ public interface GenericClusterCommands {
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] glideStringResults = (Object[]) result[1];
+     *   System.out.println("\nSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * System.out.println("\nSCAN iteration:");
-     * Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }</pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor);
@@ -361,9 +361,9 @@ public interface GenericClusterCommands {
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] stringResults = (Object[]) result[1];
+     *   System.out.println("\nSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * System.out.println("\nSCAN iteration:");
-     * Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }</pre>
      */
     CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options);
@@ -422,9 +422,9 @@ public interface GenericClusterCommands {
      *   cursor.releaseCursorHandle();
      *   cursor = (ClusterScanCursor) result[0];
      *   Object[] glideStringResults = (Object[]) result[1];
+     *   System.out.println("\nSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }
-     * System.out.println("\nSCAN iteration:");
-     * Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
      * }</pre>
      */
     CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options);
