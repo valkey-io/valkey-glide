@@ -176,8 +176,7 @@ public class Main {
                         .useTLS(useSsl)
                         .build();
 
-        try {
-            Glide client = GlideClient.CreateClient(config).get();
+        try (GlideClient client = GlideClient.createClient(config).get()) {
 
             System.out.println("PING: " + client.ping(gs("PING")).get());
             System.out.println("PING(found you): " + client.ping( gs("found you")).get());
@@ -227,8 +226,7 @@ public class Main {
                         .useTLS(useSsl)
                         .build();
 
-        try {
-            GlideClusterClient client = GlideClusterClient.CreateClient(config).get();
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
 
             System.out.println("PING: " + client.ping(gs("PING")).get());
             System.out.println("PING(found you): " + client.ping( gs("found you")).get());
