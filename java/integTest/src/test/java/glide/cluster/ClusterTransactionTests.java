@@ -50,7 +50,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                RedisClusterClient.CreateClient(
+                RedisClusterClient.createClient(
                                 RedisClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)

@@ -75,7 +75,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
 
 /**
- * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
+ * Async (non-blocking) client for Redis in Cluster mode. Use {@link #createClient} to request a
  * client to Redis.
  */
 public class RedisClusterClient extends BaseClient
@@ -86,7 +86,7 @@ public class RedisClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
-    /** A private constructor. Use {@link #CreateClient} to get a client. */
+    /** A private constructor. Use {@link #createClient} to get a client. */
     RedisClusterClient(ClientBuilder builder) {
         super(builder);
     }
@@ -97,9 +97,9 @@ public class RedisClusterClient extends BaseClient
      * @param config Redis cluster client Configuration.
      * @return A Future to connect and return a RedisClusterClient.
      */
-    public static CompletableFuture<RedisClusterClient> CreateClient(
+    public static CompletableFuture<RedisClusterClient> createClient(
             @NonNull RedisClusterClientConfiguration config) {
-        return CreateClient(config, RedisClusterClient::new);
+        return createClient(config, RedisClusterClient::new);
     }
 
     @Override
