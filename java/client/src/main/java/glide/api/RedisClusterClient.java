@@ -1065,9 +1065,25 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
+        return commandManager
+                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary)
+                .thenApply(
+                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+    }
+
+    @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
                 .submitClusterScan(cursor, options, this::handleArrayResponse)
+                .thenApply(
+                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+    }
+
+    @Override
+    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
+        return commandManager
+                .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
     }

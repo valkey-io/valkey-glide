@@ -41,6 +41,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SlotTyp
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -64,6 +65,8 @@ import glide.api.models.commands.geospatial.GeoSearchResultOptions;
 import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
+import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -72,8 +75,11 @@ import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,6 +87,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
@@ -2550,5 +2557,420 @@ public class CommandTests {
                         .get());
         assertArrayEquals(
                 key2DescendingListSubset_strings, clusterClient.lrange(key3.toString(), 0, -1).get());
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_simple() {
+        assertEquals(OK, clusterClient.flushall().get());
+
+        String key = "key:test_cluster_scan_simple" + UUID.randomUUID();
+        Map<String, String> expectedData = new LinkedHashMap<>();
+        for (int i = 0; i < 100; i++) {
+            expectedData.put(key + ":" + i, "value " + i);
+        }
+
+        assertEquals(OK, clusterClient.mset(expectedData).get());
+
+        Set<String> result = new LinkedHashSet<>();
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        while (!cursor.isFinished()) {
+            final Object[] response = clusterClient.scan(cursor).get();
+            cursor.releaseCursorHandle();
+
+            cursor = (ClusterScanCursor) response[0];
+            final Object[] data = (Object[]) response[1];
+            for (Object datum : data) {
+                result.add(datum.toString());
+            }
+        }
+        cursor.releaseCursorHandle();
+
+        assertEquals(expectedData.keySet(), result);
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_binary_simple() {
+        assertEquals(OK, clusterClient.flushall().get());
+
+        String key = "key:test_cluster_scan_simple" + UUID.randomUUID();
+        Map<String, String> expectedData = new LinkedHashMap<>();
+        for (int i = 0; i < 100; i++) {
+            expectedData.put(key + ":" + i, "value " + i);
+        }
+
+        assertEquals(OK, clusterClient.mset(expectedData).get());
+
+        Set<String> result = new LinkedHashSet<>();
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        while (!cursor.isFinished()) {
+            final Object[] response = clusterClient.scanBinary(cursor).get();
+            cursor.releaseCursorHandle();
+
+            cursor = (ClusterScanCursor) response[0];
+            final Object[] data = (Object[]) response[1];
+            for (Object datum : data) {
+                result.add(datum.toString());
+            }
+        }
+        cursor.releaseCursorHandle();
+
+        assertEquals(expectedData.keySet(), result);
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_with_object_type_and_pattern() {
+        assertEquals(OK, clusterClient.flushall().get());
+        String key = "key:" + UUID.randomUUID();
+        Map<String, String> expectedData = new LinkedHashMap<>();
+        final int baseNumberOfEntries = 100;
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            expectedData.put(key + ":" + i, "value " + i);
+        }
+
+        assertEquals(OK, clusterClient.mset(expectedData).get());
+
+        ArrayList<String> unexpectedTypeKeys = new ArrayList<>();
+        for (int i = baseNumberOfEntries; i < baseNumberOfEntries + 100; i++) {
+            unexpectedTypeKeys.add(key + ":" + i);
+        }
+
+        for (String keyStr : unexpectedTypeKeys) {
+            assertEquals(1L, clusterClient.sadd(keyStr, new String[] {"value"}).get());
+        }
+
+        Map<String, String> unexpectedPatterns = new LinkedHashMap<>();
+        for (int i = baseNumberOfEntries + 100; i < baseNumberOfEntries + 200; i++) {
+            unexpectedPatterns.put("foo:" + i, "value " + i);
+        }
+        assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
+
+        Set<String> result = new LinkedHashSet<>();
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        while (!cursor.isFinished()) {
+            final Object[] response =
+                    clusterClient
+                            .scan(
+                                    cursor,
+                                    ScanOptions.builder()
+                                            .matchPattern("key:*")
+                                            .type(ScanOptions.ObjectType.STRING)
+                                            .build())
+                            .get();
+            cursor.releaseCursorHandle();
+
+            cursor = (ClusterScanCursor) response[0];
+            final Object[] data = (Object[]) response[1];
+            for (Object datum : data) {
+                result.add(datum.toString());
+            }
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(expectedData.keySet(), result);
+
+        // Ensure that no unexpected types were in the result.
+        assertFalse(new LinkedHashSet<>(result).removeAll(new LinkedHashSet<>(unexpectedTypeKeys)));
+        assertFalse(new LinkedHashSet<>(result).removeAll(unexpectedPatterns.keySet()));
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_with_count() {
+        assertEquals(OK, clusterClient.flushall().get());
+        String key = "key:" + UUID.randomUUID();
+        Map<String, String> expectedData = new LinkedHashMap<>();
+        final int baseNumberOfEntries = 2000;
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            expectedData.put(key + ":" + i, "value " + i);
+        }
+
+        assertEquals(OK, clusterClient.mset(expectedData).get());
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> keys = new LinkedHashSet<>();
+        int successfulComparedScans = 0;
+        while (!cursor.isFinished()) {
+            Object[] resultOf1 =
+                    clusterClient.scan(cursor, ScanOptions.builder().count(1L).build()).get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) resultOf1[0];
+            keys.addAll(
+                    Arrays.stream((Object[]) resultOf1[1])
+                            .map(Object::toString)
+                            .collect(Collectors.toList()));
+            if (cursor.isFinished()) {
+                break;
+            }
+
+            Object[] resultOf100 =
+                    clusterClient.scan(cursor, ScanOptions.builder().count(100L).build()).get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) resultOf100[0];
+            keys.addAll(
+                    Arrays.stream((Object[]) resultOf100[1])
+                            .map(Object::toString)
+                            .collect(Collectors.toList()));
+
+            // Note: count is only an optimization hint. It does not have to return the size specified.
+            if (resultOf1.length <= resultOf100.length) {
+                successfulComparedScans++;
+            }
+        }
+        cursor.releaseCursorHandle();
+        assertTrue(successfulComparedScans > 0);
+        assertEquals(expectedData.keySet(), keys);
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_with_match() {
+        assertEquals(OK, clusterClient.flushall().get());
+        String key = "key:" + UUID.randomUUID();
+        Map<String, String> expectedData = new LinkedHashMap<>();
+        final int baseNumberOfEntries = 2000;
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            expectedData.put(key + ":" + i, "value " + i);
+        }
+        assertEquals(OK, clusterClient.mset(expectedData).get());
+
+        Map<String, String> unexpectedPatterns = new LinkedHashMap<>();
+        for (int i = baseNumberOfEntries + 100; i < baseNumberOfEntries + 200; i++) {
+            unexpectedPatterns.put("foo:" + i, "value " + i);
+        }
+        assertEquals(OK, clusterClient.mset(unexpectedPatterns).get());
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> keys = new LinkedHashSet<>();
+        while (!cursor.isFinished()) {
+            Object[] result =
+                    clusterClient.scan(cursor, ScanOptions.builder().matchPattern("key:*").build()).get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) result[0];
+            keys.addAll(
+                    Arrays.stream((Object[]) result[1]).map(Object::toString).collect(Collectors.toList()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(expectedData.keySet(), keys);
+        assertFalse(new LinkedHashSet<>(keys).removeAll(unexpectedPatterns.keySet()));
+    }
+
+    @Timeout(20)
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_cleaning_cursor() {
+        // We test whether the cursor is cleaned up after it is deleted, which we expect to happen when
+        // the GC is called.
+        assertEquals(OK, clusterClient.flushall().get());
+
+        String key = "key:" + UUID.randomUUID();
+        Map<String, String> expectedData = new LinkedHashMap<>();
+        final int baseNumberOfEntries = 100;
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            expectedData.put(key + ":" + i, "value " + i);
+        }
+        assertEquals(OK, clusterClient.mset(expectedData).get());
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        final Object[] response = clusterClient.scan(cursor).get();
+        cursor = (ClusterScanCursor) (response[0]);
+        cursor.releaseCursorHandle();
+        final ClusterScanCursor brokenCursor = cursor;
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> clusterClient.scan(brokenCursor).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getCause().getMessage().contains("Invalid scan_state_cursor id"));
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_all_strings() {
+        assertEquals(OK, clusterClient.flushall().get());
+
+        String key = "key:" + UUID.randomUUID();
+        Map<String, String> stringData = new LinkedHashMap<>();
+        final int baseNumberOfEntries = 5;
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            stringData.put(key + ":" + i, "value " + i);
+        }
+        assertEquals(OK, clusterClient.mset(stringData).get());
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> results = new LinkedHashSet<>();
+        while (!cursor.isFinished()) {
+            Object[] response =
+                    clusterClient
+                            .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.STRING).build())
+                            .get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) response[0];
+            results.addAll(
+                    Arrays.stream((Object[]) response[1]).map(Object::toString).collect(Collectors.toSet()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(stringData.keySet(), results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_all_set() {
+        assertEquals(OK, clusterClient.flushall().get());
+        final int baseNumberOfEntries = 5;
+
+        String setKey = "setKey:" + UUID.randomUUID();
+        Map<String, String> setData = new LinkedHashMap<>();
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            setData.put(setKey + ":" + i, "value " + i);
+        }
+        for (String k : setData.keySet()) {
+            assertEquals(1L, clusterClient.sadd(k, new String[] {"value" + k}).get());
+        }
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> results = new LinkedHashSet<>();
+        while (!cursor.isFinished()) {
+            Object[] response =
+                    clusterClient
+                            .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.SET).build())
+                            .get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) response[0];
+            results.addAll(
+                    Arrays.stream((Object[]) response[1]).map(Object::toString).collect(Collectors.toSet()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(setData.keySet(), results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_all_hash() {
+        assertEquals(OK, clusterClient.flushall().get());
+        final int baseNumberOfEntries = 5;
+
+        String hashKey = "hashKey:" + UUID.randomUUID();
+        Map<String, String> hashData = new LinkedHashMap<>();
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            hashData.put(hashKey + ":" + i, "value " + i);
+        }
+        for (String k : hashData.keySet()) {
+            assertEquals(1L, clusterClient.hset(k, Map.of("field" + k, "value" + k)).get());
+        }
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> results = new LinkedHashSet<>();
+        while (!cursor.isFinished()) {
+            Object[] response =
+                    clusterClient
+                            .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.HASH).build())
+                            .get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) response[0];
+            results.addAll(
+                    Arrays.stream((Object[]) response[1]).map(Object::toString).collect(Collectors.toSet()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(hashData.keySet(), results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_all_list() {
+        assertEquals(OK, clusterClient.flushall().get());
+        final int baseNumberOfEntries = 5;
+
+        String listKey = "listKey:" + UUID.randomUUID();
+        Map<String, String> listData = new LinkedHashMap<>();
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            listData.put(listKey + ":" + i, "value " + i);
+        }
+        for (String k : listData.keySet()) {
+            assertEquals(1L, clusterClient.lpush(k, new String[] {"value" + k}).get());
+        }
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> results = new LinkedHashSet<>();
+        while (!cursor.isFinished()) {
+            Object[] response =
+                    clusterClient
+                            .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.LIST).build())
+                            .get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) response[0];
+            results.addAll(
+                    Arrays.stream((Object[]) response[1]).map(Object::toString).collect(Collectors.toSet()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(listData.keySet(), results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_all_sorted_set() {
+        assertEquals(OK, clusterClient.flushall().get());
+        final int baseNumberOfEntries = 5;
+
+        String zSetKey = "zSetKey:" + UUID.randomUUID();
+        Map<String, String> zSetData = new LinkedHashMap<>();
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            zSetData.put(zSetKey + ":" + i, "value " + i);
+        }
+        for (String k : zSetData.keySet()) {
+            assertEquals(1L, clusterClient.zadd(k, Map.of(k, 1.0)).get());
+        }
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> results = new LinkedHashSet<>();
+
+        while (!cursor.isFinished()) {
+            Object[] response =
+                    clusterClient
+                            .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.ZSET).build())
+                            .get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) response[0];
+            results.addAll(
+                    Arrays.stream((Object[]) response[1]).map(Object::toString).collect(Collectors.toSet()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(zSetData.keySet(), results);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_cluster_scan_all_stream() {
+        assertEquals(OK, clusterClient.flushall().get());
+        final int baseNumberOfEntries = 5;
+
+        String streamKey = "streamKey:" + UUID.randomUUID();
+        Map<String, String> streamData = new LinkedHashMap<>();
+        for (int i = 0; i < baseNumberOfEntries; i++) {
+            streamData.put(streamKey + ":" + i, "value " + i);
+        }
+        for (String k : streamData.keySet()) {
+            assertNotNull(clusterClient.xadd(k, Map.of(k, "value " + k)).get());
+        }
+
+        ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
+        Set<String> results = new LinkedHashSet<>();
+
+        while (!cursor.isFinished()) {
+            Object[] response =
+                    clusterClient
+                            .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.STREAM).build())
+                            .get();
+            cursor.releaseCursorHandle();
+            cursor = (ClusterScanCursor) response[0];
+            results.addAll(
+                    Arrays.stream((Object[]) response[1]).map(Object::toString).collect(Collectors.toSet()));
+        }
+        cursor.releaseCursorHandle();
+        assertEquals(streamData.keySet(), results);
     }
 }
