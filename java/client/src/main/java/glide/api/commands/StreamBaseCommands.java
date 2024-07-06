@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Stream Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=stream">Stream Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=stream">Stream Commands</a>
  */
 public interface StreamBaseCommands {
 
@@ -676,7 +676,7 @@ public interface StreamBaseCommands {
     /**
      * Sets the last delivered ID for a consumer group.
      *
-     * @since Redis 7.0 and above
+     * @since Valkey 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -1168,7 +1168,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1193,7 +1193,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1222,7 +1222,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1251,7 +1251,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1372,4 +1372,298 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<Map<GlideString, Object>[]> xinfoConsumers(
             GlideString key, GlideString groupName);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0")).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new GlideString[][] {{gs("f1"), gs("v1")}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start, long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0"), 1L).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new GlideString[][] {{gs("f1"), gs("v1")}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start,
+            long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            String key, String group, String consumer, long minIdleTime, String start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0")).get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            String key, String group, String consumer, long minIdleTime, String start, long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0"), 1L).get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start,
+            long count);
 }

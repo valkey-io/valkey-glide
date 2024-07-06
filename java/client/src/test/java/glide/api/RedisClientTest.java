@@ -234,6 +234,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -7707,6 +7708,330 @@ public class RedisClientTest {
         CompletableFuture<GlideString[]> response =
                 service.xclaimJustId(key, groupName, consumer, minIdleTime, ids, options);
         GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaim_return_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String start = "0-0";
+
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
+
+        String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18", start});
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaim(key, groupName, consumer, minIdleTime, start);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaim_binary_return_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString start = gs("0-0");
+
+        GlideString[][] fieldValuesResult = {
+            {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
+        };
+        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
+
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {key, groupName, consumer, gs("18"), start});
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaim(key, groupName, consumer, minIdleTime, start);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaim_with_count_return_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String start = "0-0";
+        long count = 1234;
+
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
+
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, groupName, consumer, "18", start, "COUNT", Long.toString(count)});
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaim(key, groupName, consumer, minIdleTime, start, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaim_binary_with_count_return_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString start = gs("0-0");
+        long count = 1234;
+
+        GlideString[][] fieldValuesResult = {
+            {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
+        };
+        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
+
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {
+                            key, groupName, consumer, gs("18"), start, gs("COUNT"), gs(Long.toString(count))
+                        });
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaim(key, groupName, consumer, minIdleTime, start, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaimJustId_return_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String start = "0-0";
+
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
+
+        String[] arguments =
+                concatenateArrays(new String[] {key, groupName, consumer, "18", start, "JUSTID"});
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaimJustId_binary_return_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString start = gs("0-0");
+
+        GlideString[][] fieldValuesResult = {
+            {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
+        };
+        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
+
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key, groupName, consumer, gs("18"), start, gs("JUSTID")});
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaimJustId_with_count_return_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String start = "0-0";
+        long count = 1234;
+
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        String[] deletedMessageIds = new String[] {"13-1", "46-2", "89-3"};
+
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {
+                            key,
+                            groupName,
+                            consumer,
+                            Long.toString(minIdleTime),
+                            start,
+                            "COUNT",
+                            Long.toString(count),
+                            "JUSTID"
+                        });
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xautoclaimJustId_binary_with_count_return_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString start = gs("0-0");
+        long count = 1234;
+
+        GlideString[][] fieldValuesResult = {
+            {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
+        };
+        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        GlideString[] deletedMessageIds = new GlideString[] {gs("13-1"), gs("46-2"), gs("89-3")};
+
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {
+                            key,
+                            groupName,
+                            consumer,
+                            gs(Long.toString(minIdleTime)),
+                            start,
+                            gs("COUNT"),
+                            gs(Long.toString(count)),
+                            gs("JUSTID")
+                        });
+        Object[] mockResult = new Object[] {start, completedResult, deletedMessageIds};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XAutoClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.xautoclaimJustId(key, groupName, consumer, minIdleTime, start, count);
+        Object[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
