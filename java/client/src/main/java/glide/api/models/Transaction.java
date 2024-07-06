@@ -127,7 +127,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String, SortOptions)}.
+     * To store the result into a new key, see {@link #sortStore(ArgType, ArgType, SortOptions)}.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
@@ -167,7 +167,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String, SortOptions)}.
+     * To get the sort result without storing it into a key, see {@link #sort(ArgType, SortOptions)}.
      *
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
@@ -202,7 +202,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      *     the <code>cursor</code> returned on the last iteration of the scan.<br>
      *     The second element is always an <code>Array</code> of matched keys from the database.
      */
-    public Transaction scan(@NonNull String cursor) {
+    public <ArgType> Transaction scan(@NonNull ArgType cursor) {
+        checkTypeOrThrow(cursor);
         protobufTransaction.addCommands(buildCommand(Scan, newArgsBuilder().add(cursor)));
         return this;
     }
@@ -219,7 +220,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      *     the <code>cursor</code> returned on the last iteration of the scan.<br>
      *     The second element is always an <code>Array</code> of matched keys from the database.
      */
-    public Transaction scan(@NonNull String cursor, @NonNull ScanOptions options) {
+    public <ArgType> Transaction scan(@NonNull ArgType cursor, @NonNull ScanOptions options) {
+        checkTypeOrThrow(cursor);
         protobufTransaction.addCommands(
                 buildCommand(Scan, newArgsBuilder().add(cursor).add(options.toArgs())));
         return this;

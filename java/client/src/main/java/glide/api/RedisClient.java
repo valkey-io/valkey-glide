@@ -538,8 +538,21 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> scan(@NonNull GlideString cursor) {
+        return commandManager.submitNewCommand(
+                Scan, new GlideString[] {cursor}, this::handleArrayResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[]> scan(@NonNull String cursor, @NonNull ScanOptions options) {
         String[] arguments = ArrayUtils.addFirst(options.toArgs(), cursor);
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> scan(
+            @NonNull GlideString cursor, @NonNull ScanOptions options) {
+        GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
+        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
     }
 }
