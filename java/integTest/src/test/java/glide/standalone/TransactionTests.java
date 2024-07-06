@@ -57,7 +57,7 @@ public class TransactionTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        client = RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get();
+        client = RedisClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll

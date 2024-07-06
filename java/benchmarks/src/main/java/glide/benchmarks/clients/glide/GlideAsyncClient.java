@@ -33,7 +33,7 @@ public class GlideAsyncClient implements AsyncClient<String> {
                             .useTLS(connectionSettings.useSsl)
                             .build();
             try {
-                redisClient = RedisClusterClient.CreateClient(config).get(10, SECONDS);
+                redisClient = RedisClusterClient.createClient(config).get(10, SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
             }
@@ -50,7 +50,7 @@ public class GlideAsyncClient implements AsyncClient<String> {
                             .build();
 
             try {
-                redisClient = RedisClient.CreateClient(config).get(10, SECONDS);
+                redisClient = RedisClient.createClient(config).get(10, SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 throw new RuntimeException(e);
             }

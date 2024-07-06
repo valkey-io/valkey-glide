@@ -341,7 +341,7 @@ public abstract class BaseClient
      * @param <T> Client type.
      * @return a Future to connect and return a RedisClient.
      */
-    protected static <T extends BaseClient> CompletableFuture<T> CreateClient(
+    protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
             ThreadPoolResource threadPoolResource = config.getThreadPoolResource();

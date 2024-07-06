@@ -31,7 +31,7 @@ public class ClusterClientTests {
                 "Redis version required >= " + minVersion);
 
         RedisClusterClient client =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get();
+                RedisClusterClient.createClient(commonClusterClientConfig().build()).get();
 
         String info =
                 (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get().getSingleValue();
@@ -45,7 +45,7 @@ public class ClusterClientTests {
     @Test
     public void can_connect_with_auth_requirepass() {
         RedisClusterClient client =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get();
+                RedisClusterClient.createClient(commonClusterClientConfig().build()).get();
 
         String password = "TEST_AUTH";
         client.customCommand(new String[] {"CONFIG", "SET", "requirepass", password}).get();
@@ -54,12 +54,12 @@ public class ClusterClientTests {
         ExecutionException exception =
                 assertThrows(
                         ExecutionException.class,
-                        () -> RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get());
+                        () -> RedisClusterClient.createClient(commonClusterClientConfig().build()).get());
         assertTrue(exception.getCause() instanceof ClosingException);
 
         // Creation of a new client with credentials
         RedisClusterClient auth_client =
-                RedisClusterClient.CreateClient(
+                RedisClusterClient.createClient(
                                 commonClusterClientConfig()
                                         .credentials(RedisCredentials.builder().password(password).build())
                                         .build())
@@ -82,7 +82,7 @@ public class ClusterClientTests {
     @Test
     public void can_connect_with_auth_acl() {
         RedisClusterClient client =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get();
+                RedisClusterClient.createClient(commonClusterClientConfig().build()).get();
 
         String username = "testuser";
         String password = "TEST_AUTH";
@@ -113,7 +113,7 @@ public class ClusterClientTests {
 
         // Creation of a new cluster client with credentials
         RedisClusterClient testUserClient =
-                RedisClusterClient.CreateClient(
+                RedisClusterClient.createClient(
                                 commonClusterClientConfig()
                                         .credentials(
                                                 RedisCredentials.builder().username(username).password(password).build())
@@ -136,7 +136,7 @@ public class ClusterClientTests {
     @Test
     public void client_name() {
         RedisClusterClient client =
-                RedisClusterClient.CreateClient(
+                RedisClusterClient.createClient(
                                 commonClusterClientConfig().clientName("TEST_CLIENT_NAME").build())
                         .get();
 
@@ -151,7 +151,7 @@ public class ClusterClientTests {
     @SneakyThrows
     public void closed_client_throws_ExecutionException_with_ClosingException_as_cause() {
         RedisClusterClient client =
-                RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get();
+                RedisClusterClient.createClient(commonClusterClientConfig().build()).get();
 
         client.close();
         ExecutionException executionException =

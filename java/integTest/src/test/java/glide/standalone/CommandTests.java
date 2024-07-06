@@ -83,7 +83,7 @@ public class CommandTests {
     @SneakyThrows
     public static void init() {
         regularClient =
-                RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get();
+                RedisClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll
@@ -754,7 +754,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName);
@@ -805,7 +805,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName);
@@ -858,7 +858,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
@@ -924,7 +924,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.CreateClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
