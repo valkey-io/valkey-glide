@@ -292,7 +292,6 @@ import glide.utils.ArgsBuilder;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass.Command;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 import redis_request.RedisRequestOuterClass.RequestType;
@@ -310,16 +309,22 @@ import redis_request.RedisRequestOuterClass.Transaction;
  * @param <T> child typing for chaining method calls.
  */
 @Getter
-@RequiredArgsConstructor
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Command class to send a single request to Redis. */
     protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
 
     /**
      * Flag whether transaction commands may return binary data.<br>
-     * If set to <code>true</code>, all commands return {@link GlideString} instead of {@link String}.
+     * If set to <code>true</code>, all commands in this transaction return {@link GlideString}
+     * instead of {@link String}.
      */
-    protected final boolean binaryOutput;
+    protected boolean binaryOutput = false;
+
+    /** Sets {@link #binaryOutput} to <code>true</code>. */
+    public T withBinaryOutput() {
+        binaryOutput = true;
+        return getThis();
+    }
 
     protected abstract T getThis();
 

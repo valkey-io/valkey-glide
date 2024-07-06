@@ -37,24 +37,6 @@ import lombok.NonNull;
  * }</pre>
  */
 public class Transaction extends BaseTransaction<Transaction> {
-    /**
-     * Create a transaction for standalone client.
-     *
-     * @param binaryOutput Flag whether transaction commands may return binary data.<br>
-     *     If set to <code>true</code>, all commands return {@link GlideString} instead of {@link
-     *     String}.
-     */
-    public Transaction(boolean binaryOutput) {
-        super(binaryOutput);
-    }
-
-    /**
-     * Create a transaction for standalone client assuming {@link #binaryOutput} set to <code>false
-     * </code>.
-     */
-    public Transaction() {
-        this(false);
-    }
 
     @Override
     protected Transaction getThis() {

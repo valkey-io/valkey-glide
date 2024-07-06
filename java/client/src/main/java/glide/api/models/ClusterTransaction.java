@@ -30,24 +30,6 @@ import lombok.NonNull;
  * }</pre>
  */
 public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
-    /**
-     * Create a transaction for cluster client.
-     *
-     * @param binaryOutput Flag whether transaction commands may return binary data.<br>
-     *     If set to <code>true</code>, all commands return {@link GlideString} instead of {@link
-     *     String}.
-     */
-    public ClusterTransaction(boolean binaryOutput) {
-        super(binaryOutput);
-    }
-
-    /**
-     * Create a transaction for cluster client assuming {@link #binaryOutput} set to <code>false
-     * </code>.
-     */
-    public ClusterTransaction() {
-        this(false);
-    }
 
     @Override
     protected ClusterTransaction getThis() {

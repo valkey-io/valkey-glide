@@ -356,8 +356,7 @@ public class ClusterTransactionTests {
         clusterClient.functionLoad(code, true).get();
 
         // Verify functionDump
-        ClusterTransaction transaction = new ClusterTransaction(true);
-        transaction.functionDump();
+        ClusterTransaction transaction = new ClusterTransaction().withBinaryOutput().functionDump();
         Object[] result = clusterClient.exec(transaction).get();
         GlideString payload = (GlideString) (result[0]);
 
@@ -433,7 +432,8 @@ public class ClusterTransactionTests {
         // use dump to ensure that we have non-string convertible bytes
         var bytes = clusterClient.dump(gs(key)).get();
 
-        var transaction = new ClusterTransaction(true).set(gs(key), gs(bytes)).get(gs(key));
+        var transaction =
+                new ClusterTransaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
         var responses = clusterClient.exec(transaction).get();
 
