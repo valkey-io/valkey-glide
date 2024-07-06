@@ -50,7 +50,6 @@ import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.logging.Logger;
-import glide.api.models.ArgsBuilder;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -65,6 +64,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
+import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -128,7 +128,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
-        if (transaction.isBinarySafeOutput()) {
+        if (transaction.isBinaryOutput()) {
             return commandManager.submitNewTransaction(
                     transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
@@ -140,7 +140,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> exec(
             @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
-        if (transaction.isBinarySafeOutput()) {
+        if (transaction.isBinaryOutput()) {
             return commandManager.submitNewTransaction(
                     transaction, Optional.of(route), this::handleArrayOrNullResponseBinary);
         } else {
