@@ -18,7 +18,7 @@ Linux:
 - Amazon Linux 2023 (AL2023) (x86_64)
 
 macOS:
-- macOS 12.7 (Apple silicon/aarch_64/x86_64)
+- macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
 
 ## Layout of Java code
 The Java client contains the following parts:
@@ -245,7 +245,7 @@ public class Main {
 ```
 
 ### Accessing tests
-You can access [unit tests](./java/client/src/test/java/glide/api) and [integration tests](./java/integTest/src/test/java/glide) developed for the Valkey commands here.
+For more examples, you can refer to the test folder [unit tests](./java/client/src/test/java/glide/api) and [integration tests](./java/integTest/src/test/java/glide).
 
 ### Benchmarks
 
