@@ -188,13 +188,13 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScan;
 import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
@@ -210,33 +210,33 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
-import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
+import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_VALKEY_API;
+import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_VALKEY_API;
 import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
-import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
+import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -430,7 +430,7 @@ public class TransactionTests {
                 .hrandfieldWithCountWithValues("key", 3);
         results.add(Pair.of(HRandField, buildArgs("key")));
         results.add(Pair.of(HRandField, buildArgs("key", "2")));
-        results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_REDIS_API)));
+        results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_VALKEY_API)));
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
@@ -615,13 +615,13 @@ public class TransactionTests {
         results.add(Pair.of(ZRank, buildArgs("key", "member")));
 
         transaction.zrankWithScore("key", "member");
-        results.add(Pair.of(ZRank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
+        results.add(Pair.of(ZRank, buildArgs("key", "member", WITH_SCORE_VALKEY_API)));
 
         transaction.zrevrank("key", "member");
         results.add(Pair.of(ZRevRank, buildArgs("key", "member")));
 
         transaction.zrevrankWithScore("key", "member");
-        results.add(Pair.of(ZRevRank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
+        results.add(Pair.of(ZRevRank, buildArgs("key", "member", WITH_SCORE_VALKEY_API)));
 
         transaction.zmscore("key", new String[] {"member1", "member2"});
         results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
@@ -630,7 +630,7 @@ public class TransactionTests {
         results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
 
         transaction.zdiffWithScores(new String[] {"key1", "key2"});
-        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
@@ -686,7 +686,7 @@ public class TransactionTests {
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
 
         transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
-        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         List<Pair<String, Double>> weightedKeys = new ArrayList<>();
         weightedKeys.add(Pair.of("key1", 10.0));
@@ -701,10 +701,10 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString())));
 
         transaction.zunionstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
@@ -716,10 +716,10 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString())));
 
         transaction.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
@@ -730,14 +730,14 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString(),
-                                WITH_SCORES_REDIS_API)));
+                                WITH_SCORES_VALKEY_API)));
         transaction.zintercard(new String[] {"key1", "key2"}, 5);
-        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_REDIS_API, "5")));
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_VALKEY_API, "5")));
 
         transaction.zintercard(new String[] {"key1", "key2"});
         results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2")));
@@ -746,7 +746,7 @@ public class TransactionTests {
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2")));
 
         transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
-        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
@@ -756,12 +756,12 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString(),
-                                WITH_SCORES_REDIS_API)));
+                                WITH_SCORES_VALKEY_API)));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
@@ -770,21 +770,22 @@ public class TransactionTests {
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
         transaction.xtrim("key", new MinId(true, "id"));
-        results.add(Pair.of(XTrim, buildArgs("key", TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id")));
+        results.add(
+                Pair.of(XTrim, buildArgs("key", TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id")));
 
         transaction.xread(Map.of("key", "id"));
-        results.add(Pair.of(XRead, buildArgs(READ_STREAMS_REDIS_API, "key", "id")));
+        results.add(Pair.of(XRead, buildArgs(READ_STREAMS_VALKEY_API, "key", "id")));
 
         transaction.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
         results.add(
                 Pair.of(
                         XRead,
                         buildArgs(
-                                READ_COUNT_REDIS_API,
+                                READ_COUNT_VALKEY_API,
                                 "2",
-                                READ_BLOCK_REDIS_API,
+                                READ_BLOCK_VALKEY_API,
                                 "1",
-                                READ_STREAMS_REDIS_API,
+                                READ_STREAMS_VALKEY_API,
                                 "key",
                                 "id")));
 
@@ -796,7 +797,7 @@ public class TransactionTests {
 
         transaction.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX);
         results.add(
-                Pair.of(XRange, buildArgs("key", MINIMUM_RANGE_REDIS_API, MAXIMUM_RANGE_REDIS_API)));
+                Pair.of(XRange, buildArgs("key", MINIMUM_RANGE_VALKEY_API, MAXIMUM_RANGE_VALKEY_API)));
 
         transaction.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 99L);
         results.add(
@@ -804,14 +805,14 @@ public class TransactionTests {
                         XRange,
                         buildArgs(
                                 "key",
-                                MINIMUM_RANGE_REDIS_API,
-                                MAXIMUM_RANGE_REDIS_API,
-                                RANGE_COUNT_REDIS_API,
+                                MINIMUM_RANGE_VALKEY_API,
+                                MAXIMUM_RANGE_VALKEY_API,
+                                RANGE_COUNT_VALKEY_API,
                                 "99")));
 
         transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN);
         results.add(
-                Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API)));
+                Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_VALKEY_API, MINIMUM_RANGE_VALKEY_API)));
 
         transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
         results.add(
@@ -819,9 +820,9 @@ public class TransactionTests {
                         XRevRange,
                         buildArgs(
                                 "key",
-                                MAXIMUM_RANGE_REDIS_API,
-                                MINIMUM_RANGE_REDIS_API,
-                                RANGE_COUNT_REDIS_API,
+                                MAXIMUM_RANGE_VALKEY_API,
+                                MINIMUM_RANGE_VALKEY_API,
+                                RANGE_COUNT_VALKEY_API,
                                 "99")));
 
         transaction.xgroupCreate("key", "group", "id");
@@ -849,7 +850,7 @@ public class TransactionTests {
                 Pair.of(
                         XReadGroup,
                         buildArgs(
-                                READ_GROUP_REDIS_API, "group", "consumer", READ_STREAMS_REDIS_API, "key", "id")));
+                                READ_GROUP_VALKEY_API, "group", "consumer", READ_STREAMS_VALKEY_API, "key", "id")));
 
         transaction.xgroupSetId("key", "group", "id");
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
@@ -866,15 +867,15 @@ public class TransactionTests {
                 Pair.of(
                         XReadGroup,
                         buildArgs(
-                                READ_GROUP_REDIS_API,
+                                READ_GROUP_VALKEY_API,
                                 "group",
                                 "consumer",
-                                READ_COUNT_REDIS_API,
+                                READ_COUNT_VALKEY_API,
                                 "2",
-                                READ_BLOCK_REDIS_API,
+                                READ_BLOCK_VALKEY_API,
                                 "1",
-                                READ_NOACK_REDIS_API,
-                                READ_STREAMS_REDIS_API,
+                                READ_NOACK_VALKEY_API,
+                                READ_STREAMS_VALKEY_API,
                                 "key",
                                 "id")));
 
@@ -888,7 +889,7 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         XPending,
-                        buildArgs("key", "group", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API, "99")));
+                        buildArgs("key", "group", MAXIMUM_RANGE_VALKEY_API, MINIMUM_RANGE_VALKEY_API, "99")));
 
         transaction.xpending(
                 "key",
@@ -903,10 +904,10 @@ public class TransactionTests {
                         buildArgs(
                                 "key",
                                 "group",
-                                IDLE_TIME_REDIS_API,
+                                IDLE_TIME_VALKEY_API,
                                 "5",
-                                EXCLUSIVE_RANGE_REDIS_API + "11",
-                                EXCLUSIVE_RANGE_REDIS_API + "1234-0",
+                                EXCLUSIVE_RANGE_VALKEY_API + "11",
+                                EXCLUSIVE_RANGE_VALKEY_API + "1234-0",
                                 "99",
                                 "consumer")));
 
@@ -932,19 +933,19 @@ public class TransactionTests {
                                 "99",
                                 "12345-1",
                                 "98765-4",
-                                IDLE_REDIS_API,
+                                IDLE_VALKEY_API,
                                 "11",
-                                TIME_REDIS_API,
+                                TIME_VALKEY_API,
                                 "12",
-                                RETRY_COUNT_REDIS_API,
+                                RETRY_COUNT_VALKEY_API,
                                 "5",
-                                FORCE_REDIS_API)));
+                                FORCE_VALKEY_API)));
 
         transaction.xclaimJustId("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
         results.add(
                 Pair.of(
                         XClaim,
-                        buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_REDIS_API)));
+                        buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_VALKEY_API)));
 
         transaction.xclaimJustId(
                 "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
@@ -958,14 +959,14 @@ public class TransactionTests {
                                 "99",
                                 "12345-1",
                                 "98765-4",
-                                IDLE_REDIS_API,
+                                IDLE_VALKEY_API,
                                 "11",
-                                TIME_REDIS_API,
+                                TIME_VALKEY_API,
                                 "12",
-                                RETRY_COUNT_REDIS_API,
+                                RETRY_COUNT_VALKEY_API,
                                 "5",
-                                FORCE_REDIS_API,
-                                JUST_ID_REDIS_API)));
+                                FORCE_VALKEY_API,
+                                JUST_ID_VALKEY_API)));
 
         transaction.xinfoGroups("key");
         results.add(Pair.of(XInfoGroups, buildArgs("key")));
@@ -1005,9 +1006,9 @@ public class TransactionTests {
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
-        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "5")));
+        results.add(Pair.of(Lolwut, buildArgs(VERSION_VALKEY_API, "5")));
         results.add(Pair.of(Lolwut, buildArgs("1", "2")));
-        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "6", "42")));
+        results.add(Pair.of(Lolwut, buildArgs(VERSION_VALKEY_API, "6", "42")));
 
         transaction.dbsize();
         results.add(Pair.of(DBSize, buildArgs()));
@@ -1022,7 +1023,7 @@ public class TransactionTests {
         results.add(Pair.of(ZRandMember, buildArgs("key", "5")));
 
         transaction.zrandmemberWithCountWithScores("key", 5);
-        results.add(Pair.of(ZRandMember, buildArgs("key", "5", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZRandMember, buildArgs("key", "5", WITH_SCORES_VALKEY_API)));
 
         transaction.zincrby("key", 3.14, "value");
         results.add(Pair.of(ZIncrBy, buildArgs("key", "3.14", "value")));
@@ -1067,7 +1068,7 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         ZRange,
-                        buildArgs("key", "5.0", "+inf", "BYSCORE", "LIMIT", "1", "2", WITH_SCORES_REDIS_API)));
+                        buildArgs("key", "5.0", "+inf", "BYSCORE", "LIMIT", "1", "2", WITH_SCORES_VALKEY_API)));
 
         transaction.pfadd("hll", new String[] {"a", "b", "c"});
         results.add(Pair.of(PfAdd, buildArgs("hll", "a", "b", "c")));
@@ -1113,8 +1114,8 @@ public class TransactionTests {
                         GeoAdd,
                         buildArgs(
                                 "key",
-                                ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
-                                CHANGED_REDIS_API,
+                                ConditionalChange.ONLY_IF_EXISTS.getValkeyApi(),
+                                CHANGED_VALKEY_API,
                                 "10.0",
                                 "20.0",
                                 "Place")));
@@ -1126,8 +1127,8 @@ public class TransactionTests {
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
 
         transaction.functionList(true).functionList("*", false);
-        results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
-        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
+        results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_VALKEY_API)));
+        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_VALKEY_API, "*")));
 
         transaction.functionDump();
         results.add(Pair.of(FunctionDump, buildArgs()));
@@ -1251,7 +1252,7 @@ public class TransactionTests {
         results.add(Pair.of(FunctionDelete, buildArgs("LIB")));
 
         transaction.copy("key1", "key2", true);
-        results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
+        results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_VALKEY_API)));
 
         transaction.dump("key1");
         results.add(Pair.of(Dump, buildArgs("key1")));
@@ -1327,7 +1328,7 @@ public class TransactionTests {
                                 "1.0",
                                 "1.0",
                                 "km",
-                                COUNT_REDIS_API,
+                                COUNT_VALKEY_API,
                                 "2",
                                 "ASC")));
 
@@ -1412,7 +1413,7 @@ public class TransactionTests {
                                 "1.0",
                                 "1.0",
                                 "km",
-                                COUNT_REDIS_API,
+                                COUNT_VALKEY_API,
                                 "2",
                                 "ASC")));
 
