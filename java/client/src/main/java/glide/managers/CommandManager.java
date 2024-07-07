@@ -361,8 +361,9 @@ public class CommandManager {
             }
         }
 
+        // Use the binary match pattern first
         if (options.getMatchPattern() != null) {
-            clusterScanBuilder.setMatchPattern(options.getMatchPattern());
+            clusterScanBuilder.setMatchPattern(ByteString.copyFrom(options.getMatchPattern().getBytes()));
         }
 
         if (options.getCount() != null) {

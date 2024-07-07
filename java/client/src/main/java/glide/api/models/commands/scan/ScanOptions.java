@@ -3,6 +3,7 @@ package glide.api.models.commands.scan;
 
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.GenericCommands;
+import glide.api.models.GlideString;
 import glide.ffi.resolvers.ObjectTypeResolver;
 import glide.utils.ArrayTransformUtils;
 import lombok.EqualsAndHashCode;
@@ -62,8 +63,14 @@ public class ScanOptions extends BaseScanOptions {
     /**
      * @return the pattern used for the <code>MATCH</code> filter.
      */
-    public String getMatchPattern() {
-        return matchPattern;
+    public GlideString getMatchPattern() {
+        if (matchPatternBinary != null) {
+            return matchPatternBinary;
+        } else if (matchPattern != null) {
+            return GlideString.of(matchPattern);
+        } else {
+            return null;
+        }
     }
 
     /**
