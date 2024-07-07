@@ -1,6 +1,6 @@
 # The cross platform build was created based on the [Packaging Rust Applications for the NPM Registry blog](https://blog.orhun.dev/packaging-rust-for-npm/).
 
-name: Continuous Deployment
+name: NPM - Continuous Deployment
 
 on:
     pull_request:
@@ -14,6 +14,11 @@ on:
     push:
         tags:
             - "v*.*"
+    workflow_dispatch:
+      inputs:
+        version:
+          description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
+          required: true
 
 concurrency:
     group: npm-${{ github.head_ref || github.ref }}
@@ -99,8 +104,17 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
-                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Setup node
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -153,7 +167,7 @@ jobs:
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
 
             - name: Check that the release version dont have typo init
-              if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
+              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
                 echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
                 echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
