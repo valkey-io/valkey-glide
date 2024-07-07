@@ -1,8 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
+
 import static glide.api.models.GlideString.gs;
-import glide.api.models.GlideString;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
