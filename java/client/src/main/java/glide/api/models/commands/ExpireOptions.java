@@ -32,7 +32,7 @@ public enum ExpireOptions {
      */
     NEW_EXPIRY_LESS_THAN_CURRENT("LT");
 
-    private final String redisApi;
+    private final String valkeyApi;
 
     /**
      * Converts ExpireOptions into a String[].
@@ -40,6 +40,6 @@ public enum ExpireOptions {
      * @return String[]
      */
     public String[] toArgs() {
-        return new String[] {this.redisApi};
+        return new String[] {this.valkeyApi};
     }
 }

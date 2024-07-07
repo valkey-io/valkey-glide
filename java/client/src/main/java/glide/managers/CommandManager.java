@@ -72,7 +72,7 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
@@ -89,7 +89,7 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             GlideString[] arguments,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
@@ -108,7 +108,7 @@ public class CommandManager {
             RequestType requestType,
             String[] arguments,
             Route route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToChannel(command, responseHandler);
@@ -127,7 +127,7 @@ public class CommandManager {
             RequestType requestType,
             GlideString[] arguments,
             Route route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToChannel(command, responseHandler);
@@ -141,7 +141,7 @@ public class CommandManager {
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewTransaction(
-            Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            Transaction transaction, GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(transaction);
         return submitCommandToChannel(command, responseHandler);
@@ -160,7 +160,7 @@ public class CommandManager {
             Script script,
             List<GlideString> keys,
             List<GlideString> args,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareScript(script, keys, args);
         return submitCommandToChannel(command, responseHandler);
@@ -177,7 +177,7 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewTransaction(
             ClusterTransaction transaction,
             Optional<Route> route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         CommandRequest.Builder command = prepareCommandRequest(transaction, route);
         return submitCommandToChannel(command, responseHandler);
@@ -194,7 +194,7 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitClusterScan(
             ClusterScanCursor cursor,
             @NonNull ScanOptions options,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
         final CommandRequest.Builder command = prepareCursorRequest(cursor, options);
         return submitCommandToChannel(command, responseHandler);
@@ -208,7 +208,7 @@ public class CommandManager {
      * @return A result promise of type T
      */
     protected <T> CompletableFuture<T> submitCommandToChannel(
-            CommandRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (channel.isClosed()) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
@@ -464,7 +464,7 @@ public class CommandManager {
             channel.close();
         }
         if (e instanceof RuntimeException) {
-            // RedisException also goes here
+            // GlideException also goes here
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);

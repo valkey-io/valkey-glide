@@ -25,5 +25,5 @@ public enum ConditionalChange {
      */
     ONLY_IF_DOES_NOT_EXIST("NX");
 
-    private final String redisApi;
+    private final String valkeyApi;
 }

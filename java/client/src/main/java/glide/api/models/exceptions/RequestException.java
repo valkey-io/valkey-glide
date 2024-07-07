@@ -2,7 +2,7 @@
 package glide.api.models.exceptions;
 
 /** Redis client error: Errors that were reported during a request. */
-public class RequestException extends RedisException {
+public class RequestException extends GlideException {
     public RequestException(String message) {
         super(message);
     }

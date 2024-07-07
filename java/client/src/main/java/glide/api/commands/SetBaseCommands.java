@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface SetBaseCommands {
     /** Redis API keyword used to limit calculation of intersection of sorted sets. */
-    String SET_LIMIT_REDIS_API = "LIMIT";
+    String SET_LIMIT_VALKEY_API = "LIMIT";
 
     /**
      * Adds specified members to the set stored at <code>key</code>. Specified members that are
@@ -370,7 +370,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -390,7 +390,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -410,7 +410,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.
@@ -436,7 +436,7 @@ public interface SetBaseCommands {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/sintercard/">valkey.io</a> for details.
      * @param keys The keys of the sets.

@@ -14,7 +14,7 @@ public interface PubSubClusterCommands {
     /**
      * Publishes message on pubsub channel.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
@@ -32,7 +32,7 @@ public interface PubSubClusterCommands {
     /**
      * Publishes message on pubsub channel.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param message The message to publish.
      * @param channel The channel to publish the message on.

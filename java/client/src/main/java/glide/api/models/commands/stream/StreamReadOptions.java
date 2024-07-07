@@ -21,9 +21,9 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public class StreamReadOptions {
 
-    public static final String READ_COUNT_REDIS_API = "COUNT";
-    public static final String READ_BLOCK_REDIS_API = "BLOCK";
-    public static final String READ_STREAMS_REDIS_API = "STREAMS";
+    public static final String READ_COUNT_VALKEY_API = "COUNT";
+    public static final String READ_BLOCK_VALKEY_API = "BLOCK";
+    public static final String READ_STREAMS_VALKEY_API = "STREAMS";
 
     /**
      * If set, the request will be blocked for the set amount of milliseconds or until the server has
@@ -46,16 +46,16 @@ public class StreamReadOptions {
         List<String> optionArgs = new ArrayList<>();
 
         if (this.count != null) {
-            optionArgs.add(READ_COUNT_REDIS_API);
+            optionArgs.add(READ_COUNT_VALKEY_API);
             optionArgs.add(count.toString());
         }
 
         if (this.block != null) {
-            optionArgs.add(READ_BLOCK_REDIS_API);
+            optionArgs.add(READ_BLOCK_VALKEY_API);
             optionArgs.add(block.toString());
         }
 
-        optionArgs.add(READ_STREAMS_REDIS_API);
+        optionArgs.add(READ_STREAMS_VALKEY_API);
         Set<Map.Entry<String, String>> entrySet = streams.entrySet();
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
@@ -73,16 +73,16 @@ public class StreamReadOptions {
         List<GlideString> optionArgs = new ArrayList<>();
 
         if (this.count != null) {
-            optionArgs.add(gs(READ_COUNT_REDIS_API));
+            optionArgs.add(gs(READ_COUNT_VALKEY_API));
             optionArgs.add(gs(count.toString()));
         }
 
         if (this.block != null) {
-            optionArgs.add(gs(READ_BLOCK_REDIS_API));
+            optionArgs.add(gs(READ_BLOCK_VALKEY_API));
             optionArgs.add(gs(block.toString()));
         }
 
-        optionArgs.add(gs(READ_STREAMS_REDIS_API));
+        optionArgs.add(gs(READ_STREAMS_VALKEY_API));
         Set<Map.Entry<GlideString, GlideString>> entrySet = streams.entrySet();
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));

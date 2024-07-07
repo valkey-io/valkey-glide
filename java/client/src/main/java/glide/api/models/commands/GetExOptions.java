@@ -92,7 +92,7 @@ public class GetExOptions {
         UNIX_MILLISECONDS("PXAT"),
         PERSIST("PERSIST");
 
-        private final String redisApi;
+        private final String valkeyApi;
     }
 
     /**
@@ -103,7 +103,7 @@ public class GetExOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
 
-        optionArgs.add(type.redisApi);
+        optionArgs.add(type.valkeyApi);
         if (count != null) {
             optionArgs.add(String.valueOf(count));
         }

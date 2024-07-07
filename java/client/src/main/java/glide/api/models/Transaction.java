@@ -7,8 +7,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.GenericCommands.DB_REDIS_API;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.GenericCommands.DB_VALKEY_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 
 import glide.api.GlideClient;
@@ -119,9 +119,9 @@ public class Transaction extends BaseTransaction<Transaction> {
                         newArgsBuilder()
                                 .add(source)
                                 .add(destination)
-                                .add(DB_REDIS_API)
+                                .add(DB_VALKEY_API)
                                 .add(destinationDB)
-                                .addIf(REPLACE_REDIS_API, replace)));
+                                .addIf(REPLACE_VALKEY_API, replace)));
         return this;
     }
 

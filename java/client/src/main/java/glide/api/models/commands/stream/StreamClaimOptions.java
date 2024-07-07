@@ -16,19 +16,19 @@ import lombok.Builder;
 public class StreamClaimOptions {
 
     /** ValKey API string to designate IDLE time in milliseconds */
-    public static final String IDLE_REDIS_API = "IDLE";
+    public static final String IDLE_VALKEY_API = "IDLE";
 
     /** ValKey API string to designate TIME time in unix-milliseconds */
-    public static final String TIME_REDIS_API = "TIME";
+    public static final String TIME_VALKEY_API = "TIME";
 
     /** ValKey API string to designate RETRYCOUNT */
-    public static final String RETRY_COUNT_REDIS_API = "RETRYCOUNT";
+    public static final String RETRY_COUNT_VALKEY_API = "RETRYCOUNT";
 
     /** ValKey API string to designate FORCE */
-    public static final String FORCE_REDIS_API = "FORCE";
+    public static final String FORCE_VALKEY_API = "FORCE";
 
     /** ValKey API string to designate JUSTID */
-    public static final String JUST_ID_REDIS_API = "JUSTID";
+    public static final String JUST_ID_VALKEY_API = "JUSTID";
 
     /**
      * Set the idle time (last time it was delivered) of the message in milliseconds. If <code>idle
@@ -81,22 +81,22 @@ public class StreamClaimOptions {
         List<String> optionArgs = new ArrayList<>();
 
         if (idle != null) {
-            optionArgs.add(IDLE_REDIS_API);
+            optionArgs.add(IDLE_VALKEY_API);
             optionArgs.add(Long.toString(idle));
         }
 
         if (idleUnixTime != null) {
-            optionArgs.add(TIME_REDIS_API);
+            optionArgs.add(TIME_VALKEY_API);
             optionArgs.add(Long.toString(idleUnixTime));
         }
 
         if (retryCount != null) {
-            optionArgs.add(RETRY_COUNT_REDIS_API);
+            optionArgs.add(RETRY_COUNT_VALKEY_API);
             optionArgs.add(Long.toString(retryCount));
         }
 
         if (isForce) {
-            optionArgs.add(FORCE_REDIS_API);
+            optionArgs.add(FORCE_VALKEY_API);
         }
 
         return optionArgs.toArray(new String[0]);

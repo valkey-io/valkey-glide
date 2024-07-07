@@ -55,7 +55,7 @@ public class ConnectionManager {
     private Response exceptionHandler(Throwable e) {
         channel.close();
         if (e instanceof RuntimeException) {
-            // RedisException also goes here
+            // GlideException also goes here
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);

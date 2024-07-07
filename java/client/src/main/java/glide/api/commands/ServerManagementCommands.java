@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
 public interface ServerManagementCommands {
 
     /** A keyword for {@link #lolwut(int)} and {@link #lolwut(int, int[])}. */
-    String VERSION_REDIS_API = "VERSION";
+    String VERSION_VALKEY_API = "VERSION";
 
     /**
      * Gets information and statistics about the Redis server using the {@link Section#DEFAULT}

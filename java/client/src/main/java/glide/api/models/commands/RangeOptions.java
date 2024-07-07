@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.commands.SortedSetBaseCommands;
@@ -44,10 +44,10 @@ public class RangeOptions {
         POSITIVE_INFINITY("+inf"),
         NEGATIVE_INFINITY("-inf");
 
-        private final String redisApi;
+        private final String valkeyApi;
 
         public String toArgs() {
-            return redisApi;
+            return valkeyApi;
         }
     }
 
@@ -102,11 +102,11 @@ public class RangeOptions {
         POSITIVE_INFINITY("+"),
         NEGATIVE_INFINITY("-");
 
-        private final String redisApi;
+        private final String valkeyApi;
 
         @Override
         public String toArgs() {
-            return redisApi;
+            return valkeyApi;
         }
     }
 
@@ -339,7 +339,7 @@ public class RangeOptions {
         }
 
         if (withScores) {
-            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_REDIS_API});
+            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_VALKEY_API});
         }
 
         return arguments;

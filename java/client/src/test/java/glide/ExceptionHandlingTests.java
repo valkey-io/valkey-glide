@@ -20,7 +20,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.CallbackDispatcher;
@@ -134,7 +134,7 @@ public class ExceptionHandlingTests {
 
     @Test
     @SneakyThrows
-    public void command_manager_rethrows_non_RedisException_too() {
+    public void command_manager_rethrows_non_GlideException_too() {
         var callbackDispatcher = new TestCallbackDispatcher(new IOException("TEST"));
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var commandManager = new CommandManager(channelHandler);
@@ -152,7 +152,7 @@ public class ExceptionHandlingTests {
 
     @Test
     @SneakyThrows
-    public void connection_manager_rethrows_non_RedisException_too() {
+    public void connection_manager_rethrows_non_GlideException_too() {
         var callbackDispatcher = new TestCallbackDispatcher(new IOException("TEST"));
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
@@ -215,7 +215,7 @@ public class ExceptionHandlingTests {
     public void dont_close_connection_when_callback_dispatcher_receives_response_with_closing_error(
             // CallbackDispatcher throws a corresponding exception which should not cause
             // ConnectionManager and CommandManager to close the channel
-            RequestErrorType errorType, Class<? extends RedisException> exceptionType) {
+            RequestErrorType errorType, Class<? extends GlideException> exceptionType) {
         var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var commandManager = new CommandManager(channelHandler);
@@ -229,7 +229,7 @@ public class ExceptionHandlingTests {
         callbackDispatcher.completeRequest(response);
 
         var exception = assertThrows(ExecutionException.class, future::get);
-        // a RedisException thrown from CallbackDispatcher::completeRequest and then
+        // a GlideException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by CommandManager::exceptionHandler
         assertEquals(exceptionType, exception.getCause().getClass());
         assertEquals("TEST", exception.getCause().getMessage());

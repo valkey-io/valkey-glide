@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface HashBaseCommands {
     /** Redis API keyword used to query hash members with their values. */
-    String WITH_VALUES_REDIS_API = "WITHVALUES";
+    String WITH_VALUES_VALKEY_API = "WITHVALUES";
 
     /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.
@@ -500,7 +500,7 @@ public interface HashBaseCommands {
     /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
@@ -516,7 +516,7 @@ public interface HashBaseCommands {
     /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
@@ -533,7 +533,7 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
      * </code>.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -553,7 +553,7 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
      * </code>.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -573,7 +573,7 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names along with their values from the hash
      * value stored at <code>key</code>.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
@@ -595,7 +595,7 @@ public interface HashBaseCommands {
      * Retrieves up to <code>count</code> random field names along with their values from the hash
      * value stored at <code>key</code>.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>

@@ -3,7 +3,7 @@ package glide.managers;
 
 import static glide.api.BaseClient.OK;
 
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
 
@@ -11,16 +11,16 @@ import response.ResponseOuterClass.Response;
  * Response resolver responsible for evaluating the Redis response object with a success or failure.
  */
 @AllArgsConstructor
-public class BaseResponseResolver implements RedisExceptionCheckedFunction<Response, Object> {
+public class BaseResponseResolver implements GlideExceptionCheckedFunction<Response, Object> {
 
-    private RedisExceptionCheckedFunction<Long, Object> respPointerResolver;
+    private GlideExceptionCheckedFunction<Long, Object> respPointerResolver;
 
     /**
      * Extracts value from the RESP pointer.
      *
      * @return A generic Object with the Response or null if the response is empty
      */
-    public Object apply(Response response) throws RedisException {
+    public Object apply(Response response) throws GlideException {
         // Note: errors are already handled before in CallbackDispatcher
         assert !response.hasClosingError() : "Unhandled response closing error";
         assert !response.hasRequestError() : "Unhandled response request error";

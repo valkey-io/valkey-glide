@@ -41,7 +41,7 @@ public final class ZAddOptions {
          */
         ONLY_IF_DOES_NOT_EXIST("NX");
 
-        private final String redisApi;
+        private final String valkeyApi;
     }
 
     @RequiredArgsConstructor
@@ -57,7 +57,7 @@ public final class ZAddOptions {
          */
         SCORE_GREATER_THAN_CURRENT("GT");
 
-        private final String redisApi;
+        private final String valkeyApi;
     }
 
     /**
@@ -69,18 +69,18 @@ public final class ZAddOptions {
         if (conditionalChange == ConditionalChange.ONLY_IF_DOES_NOT_EXIST && updateOptions != null) {
             throw new IllegalArgumentException(
                     "The GT, LT, and NX options are mutually exclusive. Cannot choose both "
-                            + updateOptions.redisApi
+                            + updateOptions.valkeyApi
                             + " and NX.");
         }
 
         List<String> optionArgs = new ArrayList<>();
 
         if (conditionalChange != null) {
-            optionArgs.add(conditionalChange.redisApi);
+            optionArgs.add(conditionalChange.valkeyApi);
         }
 
         if (updateOptions != null) {
-            optionArgs.add(updateOptions.redisApi);
+            optionArgs.add(updateOptions.valkeyApi);
         }
 
         return optionArgs.toArray(new String[0]);

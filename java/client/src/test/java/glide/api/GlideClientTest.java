@@ -195,19 +195,19 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
 import static glide.api.BaseClient.OK;
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.GenericCommands.DB_REDIS_API;
-import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
-import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.GenericCommands.DB_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.LCS_MATCHES_RESULT_KEY;
-import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.commands.StringBaseCommands.LEN_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.GlideString.gs;
@@ -230,9 +230,9 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRIN
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.OVERFLOW_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.SET_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
@@ -241,29 +241,29 @@ import static glide.api.models.commands.scan.BaseScanOptionsBinary.COUNT_OPTION_
 import static glide.api.models.commands.scan.BaseScanOptionsBinary.MATCH_OPTION_GLIDE_STRING;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.api.models.commands.scan.ScanOptions.TYPE_OPTION_STRING;
-import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
-import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_REDIS_API;
+import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -874,7 +874,7 @@ public class GlideClientTest {
                         .returnOldValue(false)
                         .expiry(Expiry.KeepExisting())
                         .build();
-        String[] arguments = new String[] {key, value, ONLY_IF_EXISTS.getRedisApi(), "KEEPTTL"};
+        String[] arguments = new String[] {key, value, ONLY_IF_EXISTS.getValkeyApi(), "KEEPTTL"};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
@@ -903,7 +903,7 @@ public class GlideClientTest {
                         .build();
         String[] arguments =
                 new String[] {
-                    key, value, ONLY_IF_DOES_NOT_EXIST.getRedisApi(), RETURN_OLD_VALUE, "EXAT", "60"
+                    key, value, ONLY_IF_DOES_NOT_EXIST.getValkeyApi(), RETURN_OLD_VALUE, "EXAT", "60"
                 };
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -2846,7 +2846,7 @@ public class GlideClientTest {
     public void hrandfieldWithCountWithValues_returns_success() {
         // setup
         String key = "testKey";
-        String[] args = {key, "2", WITH_VALUES_REDIS_API};
+        String[] args = {key, "2", WITH_VALUES_VALKEY_API};
         String[][] fields = new String[][] {{"field_1", "value_1"}, {"field_2", "value_2"}};
 
         CompletableFuture<String[][]> testResponse = new CompletableFuture<>();
@@ -5149,7 +5149,7 @@ public class GlideClientTest {
         String key = "testKey";
         RangeByIndex rangeByIndex = new RangeByIndex(0, 4);
         String[] arguments =
-                new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd(), WITH_SCORES_REDIS_API};
+                new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd(), WITH_SCORES_VALKEY_API};
         Map<String, Double> value = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5187,7 +5187,7 @@ public class GlideClientTest {
                     "LIMIT",
                     "1",
                     "2",
-                    WITH_SCORES_REDIS_API
+                    WITH_SCORES_VALKEY_API
                 };
         Map<String, Double> value = Map.of("two", 2.0, "three", 3.0);
 
@@ -5264,7 +5264,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String member = "testMember";
-        String[] arguments = new String[] {key, member, WITH_SCORE_REDIS_API};
+        String[] arguments = new String[] {key, member, WITH_SCORE_VALKEY_API};
         Object[] value = new Object[] {1, 6.0};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -5314,7 +5314,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String member = "testMember";
-        String[] arguments = new String[] {key, member, WITH_SCORE_REDIS_API};
+        String[] arguments = new String[] {key, member, WITH_SCORE_VALKEY_API};
         Object[] value = new Object[] {1, 6.0};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -5467,7 +5467,7 @@ public class GlideClientTest {
         // setup
         String key1 = "testKey1";
         String key2 = "testKey2";
-        String[] arguments = new String[] {"2", key1, key2, WITH_SCORES_REDIS_API};
+        String[] arguments = new String[] {"2", key1, key2, WITH_SCORES_VALKEY_API};
         Map<String, Double> value = Map.of("element1", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5903,7 +5903,8 @@ public class GlideClientTest {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         KeyArray keyArray = new KeyArray(keys);
-        String[] arguments = concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        String[] arguments =
+                concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5929,7 +5930,7 @@ public class GlideClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         KeyArrayBinary keyArray = new KeyArrayBinary(keys);
         GlideString[] arguments =
-                concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_REDIS_API)});
+                concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
         Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
@@ -5960,7 +5961,7 @@ public class GlideClientTest {
         Aggregate aggregate = Aggregate.MIN;
         String[] arguments =
                 concatenateArrays(
-                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5993,7 +5994,7 @@ public class GlideClientTest {
                 new ArgsBuilder()
                         .add(weightedKeys.toArgs())
                         .add(aggregate.toArgs())
-                        .add(WITH_SCORES_REDIS_API)
+                        .add(WITH_SCORES_VALKEY_API)
                         .toArray();
         Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
@@ -6046,7 +6047,8 @@ public class GlideClientTest {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         KeyArray keyArray = new KeyArray(keys);
-        String[] arguments = concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        String[] arguments =
+                concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -6076,7 +6078,7 @@ public class GlideClientTest {
         Aggregate aggregate = Aggregate.MIN;
         String[] arguments =
                 concatenateArrays(
-                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -6158,7 +6160,7 @@ public class GlideClientTest {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         long limit = 3L;
-        String[] arguments = new String[] {"2", "key1", "key2", LIMIT_REDIS_API, "3"};
+        String[] arguments = new String[] {"2", "key1", "key2", LIMIT_VALKEY_API, "3"};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6184,7 +6186,7 @@ public class GlideClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         long limit = 3L;
         GlideString[] arguments =
-                new GlideString[] {gs("2"), gs("key1"), gs("key2"), gs(LIMIT_REDIS_API), gs("3")};
+                new GlideString[] {gs("2"), gs("key1"), gs("key2"), gs(LIMIT_VALKEY_API), gs("3")};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6306,7 +6308,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         long count = 2L;
-        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_REDIS_API};
+        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_VALKEY_API};
         Object[][] value = new Object[][] {{"member1", 2.0}, {"member2", 3.0}};
 
         CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
@@ -6439,7 +6441,7 @@ public class GlideClientTest {
                         // no TRIM option
                         "test_xadd_no_trim",
                         StreamAddOptions.builder().id("id").makeStream(Boolean.FALSE).build(),
-                        new String[] {NO_MAKE_STREAM_REDIS_API, "id"}),
+                        new String[] {NO_MAKE_STREAM_VALKEY_API, "id"}),
                 Arguments.of(
                         // MAXLEN with LIMIT
                         "test_xadd_maxlen_with_limit",
@@ -6449,10 +6451,10 @@ public class GlideClientTest {
                                 .trim(new MaxLen(5L, 10L))
                                 .build(),
                         new String[] {
-                            TRIM_MAXLEN_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            TRIM_MAXLEN_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             Long.toString(5L),
-                            TRIM_LIMIT_REDIS_API,
+                            TRIM_LIMIT_VALKEY_API,
                             Long.toString(10L),
                             "id"
                         }),
@@ -6464,9 +6466,9 @@ public class GlideClientTest {
                                 .trim(new MaxLen(false, 2L))
                                 .build(),
                         new String[] {
-                            NO_MAKE_STREAM_REDIS_API,
-                            TRIM_MAXLEN_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            NO_MAKE_STREAM_VALKEY_API,
+                            TRIM_MAXLEN_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             Long.toString(2L),
                             "*"
                         }),
@@ -6479,10 +6481,10 @@ public class GlideClientTest {
                                 .trim(new MinId("testKey", 10L))
                                 .build(),
                         new String[] {
-                            TRIM_MINID_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            TRIM_MINID_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             "testKey",
-                            TRIM_LIMIT_REDIS_API,
+                            TRIM_LIMIT_VALKEY_API,
                             Long.toString(10L),
                             "id"
                         }),
@@ -6494,9 +6496,9 @@ public class GlideClientTest {
                                 .trim(new MinId(false, "testKey"))
                                 .build(),
                         new String[] {
-                            NO_MAKE_STREAM_REDIS_API,
-                            TRIM_MINID_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            NO_MAKE_STREAM_VALKEY_API,
+                            TRIM_MINID_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             "testKey",
                             "*"
                         }));
@@ -6525,9 +6527,9 @@ public class GlideClientTest {
         String[] arguments =
                 new String[] {
                     key,
-                    NO_MAKE_STREAM_REDIS_API,
-                    TRIM_MAXLEN_REDIS_API,
-                    TRIM_EXACT_REDIS_API,
+                    NO_MAKE_STREAM_VALKEY_API,
+                    TRIM_MAXLEN_VALKEY_API,
+                    TRIM_EXACT_VALKEY_API,
                     Long.toString(5L),
                     "id"
                 };
@@ -6568,9 +6570,9 @@ public class GlideClientTest {
         GlideString[] arguments =
                 new GlideString[] {
                     key,
-                    gs(NO_MAKE_STREAM_REDIS_API),
-                    gs(TRIM_MAXLEN_REDIS_API),
-                    gs(TRIM_EXACT_REDIS_API),
+                    gs(NO_MAKE_STREAM_VALKEY_API),
+                    gs(TRIM_MAXLEN_VALKEY_API),
+                    gs(TRIM_EXACT_VALKEY_API),
                     gs(Long.toString(5L)),
                     gs("id")
                 };
@@ -6599,7 +6601,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         StreamTrimOptions limit = new MinId(true, "id");
-        String[] arguments = new String[] {key, TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id"};
+        String[] arguments = new String[] {key, TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id"};
         Long completedResult = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6625,7 +6627,7 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         StreamTrimOptions limit = new MinId(true, "id");
         GlideString[] arguments =
-                new GlideString[] {key, gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("id")};
+                new GlideString[] {key, gs(TRIM_MINID_VALKEY_API), gs(TRIM_EXACT_VALKEY_API), gs("id")};
         Long completedResult = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6648,33 +6650,33 @@ public class GlideClientTest {
         return List.of(
                 Arguments.of(
                         // MAXLEN just THRESHOLD
-                        "test_xtrim_maxlen", new MaxLen(5L), new String[] {TRIM_MAXLEN_REDIS_API, "5"}),
+                        "test_xtrim_maxlen", new MaxLen(5L), new String[] {TRIM_MAXLEN_VALKEY_API, "5"}),
                 Arguments.of(
                         // MAXLEN with LIMIT
                         "test_xtrim_maxlen_with_limit",
                         new MaxLen(5L, 10L),
                         new String[] {
-                            TRIM_MAXLEN_REDIS_API, TRIM_NOT_EXACT_REDIS_API, "5", TRIM_LIMIT_REDIS_API, "10"
+                            TRIM_MAXLEN_VALKEY_API, TRIM_NOT_EXACT_VALKEY_API, "5", TRIM_LIMIT_VALKEY_API, "10"
                         }),
                 Arguments.of(
                         // MAXLEN with exact
                         "test_xtrim_exact_maxlen",
                         new MaxLen(true, 10L),
-                        new String[] {TRIM_MAXLEN_REDIS_API, TRIM_EXACT_REDIS_API, "10"}),
+                        new String[] {TRIM_MAXLEN_VALKEY_API, TRIM_EXACT_VALKEY_API, "10"}),
                 Arguments.of(
                         // MINID just THRESHOLD
-                        "test_xtrim_minid", new MinId("0-1"), new String[] {TRIM_MINID_REDIS_API, "0-1"}),
+                        "test_xtrim_minid", new MinId("0-1"), new String[] {TRIM_MINID_VALKEY_API, "0-1"}),
                 Arguments.of(
                         // MINID with exact
                         "test_xtrim_exact_minid",
                         new MinId(true, "0-2"),
-                        new String[] {TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "0-2"}),
+                        new String[] {TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "0-2"}),
                 Arguments.of(
                         // MINID with LIMIT
                         "test_xtrim_minid_with_limit",
                         new MinId("0-3", 10L),
                         new String[] {
-                            TRIM_MINID_REDIS_API, TRIM_NOT_EXACT_REDIS_API, "0-3", TRIM_LIMIT_REDIS_API, "10"
+                            TRIM_MINID_VALKEY_API, TRIM_NOT_EXACT_VALKEY_API, "0-3", TRIM_LIMIT_VALKEY_API, "10"
                         }));
     }
 
@@ -6684,42 +6686,42 @@ public class GlideClientTest {
                         // MAXLEN just THRESHOLD
                         "test_xtrim_maxlen",
                         new MaxLen(5L),
-                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs("5")}),
+                        new GlideString[] {gs(TRIM_MAXLEN_VALKEY_API), gs("5")}),
                 Arguments.of(
                         // MAXLEN with LIMIT
                         "test_xtrim_maxlen_with_limit",
                         new MaxLen(5L, 10L),
                         new GlideString[] {
-                            gs(TRIM_MAXLEN_REDIS_API),
-                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs(TRIM_MAXLEN_VALKEY_API),
+                            gs(TRIM_NOT_EXACT_VALKEY_API),
                             gs("5"),
-                            gs(TRIM_LIMIT_REDIS_API),
+                            gs(TRIM_LIMIT_VALKEY_API),
                             gs("10")
                         }),
                 Arguments.of(
                         // MAXLEN with exact
                         "test_xtrim_exact_maxlen",
                         new MaxLen(true, 10L),
-                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("10")}),
+                        new GlideString[] {gs(TRIM_MAXLEN_VALKEY_API), gs(TRIM_EXACT_VALKEY_API), gs("10")}),
                 Arguments.of(
                         // MINID just THRESHOLD
                         "test_xtrim_minid",
                         new MinId("0-1"),
-                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs("0-1")}),
+                        new GlideString[] {gs(TRIM_MINID_VALKEY_API), gs("0-1")}),
                 Arguments.of(
                         // MINID with exact
                         "test_xtrim_exact_minid",
                         new MinId(true, "0-2"),
-                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("0-2")}),
+                        new GlideString[] {gs(TRIM_MINID_VALKEY_API), gs(TRIM_EXACT_VALKEY_API), gs("0-2")}),
                 Arguments.of(
                         // MINID with LIMIT
                         "test_xtrim_minid_with_limit",
                         new MinId("0-3", 10L),
                         new GlideString[] {
-                            gs(TRIM_MINID_REDIS_API),
-                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs(TRIM_MINID_VALKEY_API),
+                            gs(TRIM_NOT_EXACT_VALKEY_API),
                             gs("0-3"),
-                            gs(TRIM_LIMIT_REDIS_API),
+                            gs(TRIM_LIMIT_VALKEY_API),
                             gs("10")
                         }));
     }
@@ -6775,7 +6777,7 @@ public class GlideClientTest {
         Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
-        String[] arguments = {READ_STREAMS_REDIS_API, keyOne, keyTwo, streamIdOne, streamIdTwo};
+        String[] arguments = {READ_STREAMS_VALKEY_API, keyOne, keyTwo, streamIdOne, streamIdTwo};
 
         CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
                 new CompletableFuture<>();
@@ -6811,7 +6813,7 @@ public class GlideClientTest {
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
         GlideString[] arguments = {
-            gs(READ_STREAMS_REDIS_API), keyOne, keyTwo, streamIdOne, streamIdTwo
+            gs(READ_STREAMS_VALKEY_API), keyOne, keyTwo, streamIdOne, streamIdTwo
         };
 
         CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
@@ -6848,11 +6850,11 @@ public class GlideClientTest {
         Map<String, Map<String, String[][]>> completedResult =
                 Map.of(keyOne, Map.of(streamIdOne, fieldValues));
         String[] arguments = {
-            READ_COUNT_REDIS_API,
+            READ_COUNT_VALKEY_API,
             count.toString(),
-            READ_BLOCK_REDIS_API,
+            READ_BLOCK_VALKEY_API,
             block.toString(),
-            READ_STREAMS_REDIS_API,
+            READ_STREAMS_VALKEY_API,
             keyOne,
             streamIdOne
         };
@@ -6890,11 +6892,11 @@ public class GlideClientTest {
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
                 Map.of(keyOne, Map.of(streamIdOne, fieldValues));
         GlideString[] arguments = {
-            gs(READ_COUNT_REDIS_API),
+            gs(READ_COUNT_VALKEY_API),
             gs(count.toString()),
-            gs(READ_BLOCK_REDIS_API),
+            gs(READ_BLOCK_VALKEY_API),
             gs(block.toString()),
-            gs(READ_STREAMS_REDIS_API),
+            gs(READ_STREAMS_VALKEY_API),
             keyOne,
             streamIdOne
         };
@@ -7046,9 +7048,9 @@ public class GlideClientTest {
                         eq(
                                 new String[] {
                                     key,
-                                    MINIMUM_RANGE_REDIS_API,
-                                    MAXIMUM_RANGE_REDIS_API,
-                                    RANGE_COUNT_REDIS_API,
+                                    MINIMUM_RANGE_VALKEY_API,
+                                    MAXIMUM_RANGE_VALKEY_API,
+                                    RANGE_COUNT_VALKEY_API,
                                     Long.toString(count)
                                 }),
                         any()))
@@ -7085,9 +7087,9 @@ public class GlideClientTest {
                         eq(
                                 new GlideString[] {
                                     key,
-                                    gs(MINIMUM_RANGE_REDIS_API),
-                                    gs(MAXIMUM_RANGE_REDIS_API),
-                                    gs(RANGE_COUNT_REDIS_API),
+                                    gs(MINIMUM_RANGE_VALKEY_API),
+                                    gs(MAXIMUM_RANGE_VALKEY_API),
+                                    gs(RANGE_COUNT_VALKEY_API),
                                     gs(Long.toString(count))
                                 }),
                         any()))
@@ -7180,9 +7182,9 @@ public class GlideClientTest {
                         eq(
                                 new String[] {
                                     key,
-                                    MAXIMUM_RANGE_REDIS_API,
-                                    MINIMUM_RANGE_REDIS_API,
-                                    RANGE_COUNT_REDIS_API,
+                                    MAXIMUM_RANGE_VALKEY_API,
+                                    MINIMUM_RANGE_VALKEY_API,
+                                    RANGE_COUNT_VALKEY_API,
                                     Long.toString(count)
                                 }),
                         any()))
@@ -7219,9 +7221,9 @@ public class GlideClientTest {
                         eq(
                                 new GlideString[] {
                                     key,
-                                    gs(MAXIMUM_RANGE_REDIS_API),
-                                    gs(MINIMUM_RANGE_REDIS_API),
-                                    gs(RANGE_COUNT_REDIS_API),
+                                    gs(MAXIMUM_RANGE_VALKEY_API),
+                                    gs(MINIMUM_RANGE_VALKEY_API),
+                                    gs(RANGE_COUNT_VALKEY_API),
                                     gs(Long.toString(count))
                                 }),
                         any()))
@@ -7636,10 +7638,10 @@ public class GlideClientTest {
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
         String[] arguments = {
-            READ_GROUP_REDIS_API,
+            READ_GROUP_VALKEY_API,
             groupName,
             consumerName,
-            READ_STREAMS_REDIS_API,
+            READ_STREAMS_VALKEY_API,
             keyOne,
             keyTwo,
             streamIdOne,
@@ -7683,10 +7685,10 @@ public class GlideClientTest {
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
         GlideString[] arguments = {
-            gs(READ_GROUP_REDIS_API),
+            gs(READ_GROUP_VALKEY_API),
             groupName,
             consumerName,
-            gs(READ_STREAMS_REDIS_API),
+            gs(READ_STREAMS_VALKEY_API),
             keyOne,
             keyTwo,
             streamIdOne,
@@ -7729,15 +7731,15 @@ public class GlideClientTest {
         Map<String, Map<String, String[][]>> completedResult =
                 Map.of(keyOne, Map.of(streamIdOne, fieldValues));
         String[] arguments = {
-            READ_GROUP_REDIS_API,
+            READ_GROUP_VALKEY_API,
             groupName,
             consumerName,
-            READ_COUNT_REDIS_API,
+            READ_COUNT_VALKEY_API,
             count.toString(),
-            READ_BLOCK_REDIS_API,
+            READ_BLOCK_VALKEY_API,
             block.toString(),
-            READ_NOACK_REDIS_API,
-            READ_STREAMS_REDIS_API,
+            READ_NOACK_VALKEY_API,
+            READ_STREAMS_VALKEY_API,
             keyOne,
             streamIdOne
         };
@@ -7779,15 +7781,15 @@ public class GlideClientTest {
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
                 Map.of(keyOne, Map.of(streamIdOne, fieldValues));
         GlideString[] arguments = {
-            gs(READ_GROUP_REDIS_API),
+            gs(READ_GROUP_VALKEY_API),
             groupName,
             consumerName,
-            gs(READ_COUNT_REDIS_API),
+            gs(READ_COUNT_VALKEY_API),
             gs(count.toString()),
-            gs(READ_BLOCK_REDIS_API),
+            gs(READ_BLOCK_VALKEY_API),
             gs(block.toString()),
-            gs(READ_NOACK_REDIS_API),
-            gs(READ_STREAMS_REDIS_API),
+            gs(READ_NOACK_VALKEY_API),
+            gs(READ_STREAMS_VALKEY_API),
             keyOne,
             streamIdOne
         };
@@ -7920,13 +7922,13 @@ public class GlideClientTest {
                     consumer,
                     "18",
                     "testId",
-                    IDLE_REDIS_API,
+                    IDLE_VALKEY_API,
                     "11",
-                    TIME_REDIS_API,
+                    TIME_VALKEY_API,
                     "12",
-                    RETRY_COUNT_REDIS_API,
+                    RETRY_COUNT_VALKEY_API,
                     "5",
-                    FORCE_REDIS_API
+                    FORCE_VALKEY_API
                 };
         Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
 
@@ -7965,13 +7967,13 @@ public class GlideClientTest {
                     consumer,
                     gs("18"),
                     gs("testId"),
-                    gs(IDLE_REDIS_API),
+                    gs(IDLE_VALKEY_API),
                     gs("11"),
-                    gs(TIME_REDIS_API),
+                    gs(TIME_VALKEY_API),
                     gs("12"),
-                    gs(RETRY_COUNT_REDIS_API),
+                    gs(RETRY_COUNT_VALKEY_API),
                     gs("5"),
-                    gs(FORCE_REDIS_API)
+                    gs(FORCE_VALKEY_API)
                 };
         Map<GlideString, GlideString[][]> mockResult =
                 Map.of(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
@@ -8003,7 +8005,8 @@ public class GlideClientTest {
         String consumer = "testConsumer";
         Long minIdleTime = 18L;
         String[] ids = new String[] {"testId"};
-        String[] arguments = new String[] {key, groupName, consumer, "18", "testId", JUST_ID_REDIS_API};
+        String[] arguments =
+                new String[] {key, groupName, consumer, "18", "testId", JUST_ID_VALKEY_API};
         String[] mockResult = {"message", "log"};
 
         CompletableFuture<String[]> testResponse = new CompletableFuture<>();
@@ -8033,7 +8036,9 @@ public class GlideClientTest {
         Long minIdleTime = 18L;
         GlideString[] ids = new GlideString[] {gs("testId")};
         GlideString[] arguments =
-                new GlideString[] {key, groupName, consumer, gs("18"), gs("testId"), gs(JUST_ID_REDIS_API)};
+                new GlideString[] {
+                    key, groupName, consumer, gs("18"), gs("testId"), gs(JUST_ID_VALKEY_API)
+                };
         GlideString[] mockResult = {gs("message"), gs("log")};
 
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
@@ -8071,14 +8076,14 @@ public class GlideClientTest {
                     consumer,
                     "18",
                     "testId",
-                    IDLE_REDIS_API,
+                    IDLE_VALKEY_API,
                     "11",
-                    TIME_REDIS_API,
+                    TIME_VALKEY_API,
                     "12",
-                    RETRY_COUNT_REDIS_API,
+                    RETRY_COUNT_VALKEY_API,
                     "5",
-                    FORCE_REDIS_API,
-                    JUST_ID_REDIS_API
+                    FORCE_VALKEY_API,
+                    JUST_ID_VALKEY_API
                 };
         String[] mockResult = {"message", "log"};
 
@@ -8117,14 +8122,14 @@ public class GlideClientTest {
                     consumer,
                     gs("18"),
                     gs("testId"),
-                    gs(IDLE_REDIS_API),
+                    gs(IDLE_VALKEY_API),
                     gs("11"),
-                    gs(TIME_REDIS_API),
+                    gs(TIME_VALKEY_API),
                     gs("12"),
-                    gs(RETRY_COUNT_REDIS_API),
+                    gs(RETRY_COUNT_VALKEY_API),
                     gs("5"),
-                    gs(FORCE_REDIS_API),
-                    gs(JUST_ID_REDIS_API)
+                    gs(FORCE_VALKEY_API),
+                    gs(JUST_ID_VALKEY_API)
                 };
         GlideString[] mockResult = {gs("message"), gs("log")};
 
@@ -8551,7 +8556,7 @@ public class GlideClientTest {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
-        String[] arguments = {key, groupName, EXCLUSIVE_RANGE_REDIS_API + "1234-0", "2345-5", "4"};
+        String[] arguments = {key, groupName, EXCLUSIVE_RANGE_VALKEY_API + "1234-0", "2345-5", "4"};
         StreamRange start = IdBound.ofExclusive("1234-0");
         StreamRange end = IdBound.of("2345-5");
         Long count = 4L;
@@ -8580,7 +8585,7 @@ public class GlideClientTest {
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
         GlideString[] arguments = {
-            key, groupName, gs(EXCLUSIVE_RANGE_REDIS_API + "1234-0"), gs("2345-5"), gs("4")
+            key, groupName, gs(EXCLUSIVE_RANGE_VALKEY_API + "1234-0"), gs("2345-5"), gs("4")
         };
         StreamRange start = IdBound.ofExclusive("1234-0");
         StreamRange end = IdBound.of("2345-5");
@@ -8613,10 +8618,10 @@ public class GlideClientTest {
         String[] arguments = {
             key,
             groupName,
-            IDLE_TIME_REDIS_API,
+            IDLE_TIME_VALKEY_API,
             "100",
-            MINIMUM_RANGE_REDIS_API,
-            MAXIMUM_RANGE_REDIS_API,
+            MINIMUM_RANGE_VALKEY_API,
+            MAXIMUM_RANGE_VALKEY_API,
             "4",
             consumer
         };
@@ -8658,10 +8663,10 @@ public class GlideClientTest {
         GlideString[] arguments = {
             key,
             groupName,
-            gs(IDLE_TIME_REDIS_API),
+            gs(IDLE_TIME_VALKEY_API),
             gs("100"),
-            gs(MINIMUM_RANGE_REDIS_API),
-            gs(MAXIMUM_RANGE_REDIS_API),
+            gs(MINIMUM_RANGE_VALKEY_API),
+            gs(MAXIMUM_RANGE_VALKEY_API),
             gs("4"),
             gs(consumer)
         };
@@ -9037,7 +9042,7 @@ public class GlideClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_VALKEY_API, "42"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -9053,7 +9058,7 @@ public class GlideClientTest {
     public void lolwut_with_version_and_params_returns_success() {
         // setup
         String value = "pewpew";
-        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        String[] arguments = new String[] {VERSION_VALKEY_API, "42", "1", "2"};
         int[] params = new int[] {1, 2};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -9787,8 +9792,8 @@ public class GlideClientTest {
         String[] arguments =
                 new String[] {
                     key,
-                    ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
-                    CHANGED_REDIS_API,
+                    ConditionalChange.ONLY_IF_EXISTS.getValkeyApi(),
+                    CHANGED_VALKEY_API,
                     "15.087269",
                     "40.0",
                     "Catania",
@@ -9826,8 +9831,8 @@ public class GlideClientTest {
         GlideString[] arguments =
                 new GlideString[] {
                     key,
-                    gs(ConditionalChange.ONLY_IF_EXISTS.getRedisApi()),
-                    gs(CHANGED_REDIS_API),
+                    gs(ConditionalChange.ONLY_IF_EXISTS.getValkeyApi()),
+                    gs(CHANGED_VALKEY_API),
                     gs("15.087269"),
                     gs("40.0"),
                     gs("Catania"),
@@ -10225,7 +10230,7 @@ public class GlideClientTest {
     public void functionList_with_pattern_returns_success() {
         // setup
         String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
+        String[] args = new String[] {LIBRARY_NAME_VALKEY_API, pattern, WITH_CODE_VALKEY_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -10250,7 +10255,7 @@ public class GlideClientTest {
         // setup
         GlideString pattern = gs("*");
         GlideString[] args =
-                new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern, gs(WITH_CODE_REDIS_API)};
+                new GlideString[] {gs(LIBRARY_NAME_VALKEY_API), pattern, gs(WITH_CODE_VALKEY_API)};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -10945,7 +10950,7 @@ public class GlideClientTest {
                     key,
                     key2,
                     listDirection.toString(),
-                    COUNT_FOR_LIST_REDIS_API,
+                    COUNT_FOR_LIST_VALKEY_API,
                     Long.toString(count)
                 };
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
@@ -10984,7 +10989,7 @@ public class GlideClientTest {
                     key,
                     key2,
                     gs(listDirection.toString()),
-                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
@@ -11312,7 +11317,7 @@ public class GlideClientTest {
         long count = 1L;
         String[] arguments =
                 new String[] {
-                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_VALKEY_API, Long.toString(count)
                 };
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
@@ -11347,7 +11352,7 @@ public class GlideClientTest {
                     key,
                     key2,
                     gs(listDirection.toString()),
-                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
@@ -11583,7 +11588,7 @@ public class GlideClientTest {
         String key1 = "testKey";
         String key2 = "testKey2";
         long limit = 1L;
-        String[] arguments = new String[] {"2", key1, key2, SET_LIMIT_REDIS_API, "1"};
+        String[] arguments = new String[] {"2", key1, key2, SET_LIMIT_VALKEY_API, "1"};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -11610,7 +11615,7 @@ public class GlideClientTest {
         GlideString key2 = gs("testKey2");
         long limit = 1L;
         GlideString[] arguments =
-                new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_REDIS_API), gs("1")};
+                new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_VALKEY_API), gs("1")};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -12109,7 +12114,7 @@ public class GlideClientTest {
         // setup
         String source = "testKey1";
         String destination = "testKey2";
-        String[] arguments = new String[] {source, destination, REPLACE_REDIS_API};
+        String[] arguments = new String[] {source, destination, REPLACE_VALKEY_API};
         Boolean value = true;
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
@@ -12135,7 +12140,7 @@ public class GlideClientTest {
         String source = "testKey1";
         String destination = "testKey2";
         long destinationDB = 1;
-        String[] arguments = new String[] {source, destination, DB_REDIS_API, "1", REPLACE_REDIS_API};
+        String[] arguments = new String[] {source, destination, DB_VALKEY_API, "1", REPLACE_VALKEY_API};
         Boolean value = true;
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
@@ -12210,7 +12215,7 @@ public class GlideClientTest {
         // setup
         String key1 = "testKey1";
         String key2 = "testKey2";
-        String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
+        String[] arguments = new String[] {key1, key2, LEN_VALKEY_API};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -12235,7 +12240,7 @@ public class GlideClientTest {
         // setup
         GlideString key1 = gs("testKey1");
         GlideString key2 = gs("testKey2");
-        GlideString[] arguments = new GlideString[] {key1, key2, gs(LEN_REDIS_API)};
+        GlideString[] arguments = new GlideString[] {key1, key2, gs(LEN_VALKEY_API)};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -13503,7 +13508,7 @@ public class GlideClientTest {
                             "BYRADIUS",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2"
                         },
                         new String[] {"place3", "place4"}),
@@ -13521,7 +13526,7 @@ public class GlideClientTest {
                             "1.0",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2",
                             "ANY",
                             "DESC"
@@ -13574,7 +13579,7 @@ public class GlideClientTest {
                             gs("BYRADIUS"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2")
                         },
                         new GlideString[] {gs("place3"), gs("place4")}),
@@ -13592,7 +13597,7 @@ public class GlideClientTest {
                             gs("1.0"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2"),
                             gs("ANY"),
                             gs("DESC")
@@ -13900,7 +13905,7 @@ public class GlideClientTest {
                             "BYRADIUS",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2"
                         },
                         3L),
@@ -13919,7 +13924,7 @@ public class GlideClientTest {
                             "1.0",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2",
                             "ANY",
                             "DESC"
@@ -13975,7 +13980,7 @@ public class GlideClientTest {
                             gs("BYRADIUS"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2")
                         },
                         3L),
@@ -13994,7 +13999,7 @@ public class GlideClientTest {
                             gs("1.0"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2"),
                             gs("ANY"),
                             gs("DESC")

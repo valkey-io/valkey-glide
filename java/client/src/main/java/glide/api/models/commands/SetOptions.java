@@ -51,7 +51,7 @@ public final class SetOptions {
          */
         ONLY_IF_DOES_NOT_EXIST("NX");
 
-        private final String redisApi;
+        private final String valkeyApi;
     }
 
     /** Configuration of value lifetime. */
@@ -136,7 +136,7 @@ public final class SetOptions {
         UNIX_SECONDS("EXAT"),
         UNIX_MILLISECONDS("PXAT");
 
-        private final String redisApi;
+        private final String valkeyApi;
     }
 
     /** String representation of {@link #returnOldValue} when set. */
@@ -150,7 +150,7 @@ public final class SetOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
         if (conditionalSet != null) {
-            optionArgs.add(conditionalSet.redisApi);
+            optionArgs.add(conditionalSet.valkeyApi);
         }
 
         if (returnOldValue) {
@@ -158,7 +158,7 @@ public final class SetOptions {
         }
 
         if (expiry != null) {
-            optionArgs.add(expiry.type.redisApi);
+            optionArgs.add(expiry.type.valkeyApi);
             if (expiry.type != KEEP_EXISTING) {
                 assert expiry.count != null
                         : "Set command received expiry type " + expiry.type + ", but count was not set.";

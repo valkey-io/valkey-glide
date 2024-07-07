@@ -30,7 +30,7 @@ public enum FlushMode {
     /**
      * Flushes synchronously.
      *
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      */
     SYNC,
     /** Flushes asynchronously. */

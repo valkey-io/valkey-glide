@@ -18,8 +18,8 @@ import lombok.Builder;
  */
 @Builder
 public final class StreamAddOptionsBinary {
-    public static final GlideString NO_MAKE_STREAM_REDIS_API_GLIDE_STRING = gs("NOMKSTREAM");
-    public static final GlideString ID_WILDCARD_REDIS_API_GLIDE_STRING = gs("*");
+    public static final GlideString NO_MAKE_STREAM_VALKEY_API_GLIDE_STRING = gs("NOMKSTREAM");
+    public static final GlideString ID_WILDCARD_VALKEY_API_GLIDE_STRING = gs("*");
 
     /** If set, the new entry will be added with this <code>id</code>. */
     private final GlideString id;
@@ -43,18 +43,18 @@ public final class StreamAddOptionsBinary {
         List<GlideString> optionArgs = new ArrayList<>();
 
         if (makeStream != null && !makeStream) {
-            optionArgs.add(NO_MAKE_STREAM_REDIS_API_GLIDE_STRING);
+            optionArgs.add(NO_MAKE_STREAM_VALKEY_API_GLIDE_STRING);
         }
 
         if (trim != null) {
             optionArgs.addAll(
-                    trim.getRedisApi().stream().map(GlideString::gs).collect(Collectors.toList()));
+                    trim.getValkeyApi().stream().map(GlideString::gs).collect(Collectors.toList()));
         }
 
         if (id != null) {
             optionArgs.add(id);
         } else {
-            optionArgs.add(ID_WILDCARD_REDIS_API_GLIDE_STRING);
+            optionArgs.add(ID_WILDCARD_VALKEY_API_GLIDE_STRING);
         }
 
         return optionArgs.toArray(new GlideString[0]);

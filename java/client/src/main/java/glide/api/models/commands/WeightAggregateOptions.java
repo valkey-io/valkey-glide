@@ -22,8 +22,8 @@ import org.apache.commons.lang3.tuple.Pair;
  * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
  */
 public abstract class WeightAggregateOptions {
-    public static final String WEIGHTS_REDIS_API = "WEIGHTS";
-    public static final String AGGREGATE_REDIS_API = "AGGREGATE";
+    public static final String WEIGHTS_VALKEY_API = "WEIGHTS";
+    public static final String AGGREGATE_VALKEY_API = "AGGREGATE";
 
     /**
      * Option for the method of aggregating scores from multiple sets. This option defaults to SUM if
@@ -38,7 +38,7 @@ public abstract class WeightAggregateOptions {
         MAX;
 
         public String[] toArgs() {
-            return new String[] {AGGREGATE_REDIS_API, toString()};
+            return new String[] {AGGREGATE_VALKEY_API, toString()};
         }
     }
 
@@ -87,7 +87,7 @@ public abstract class WeightAggregateOptions {
             }
             argumentsList.add(Integer.toString(keys.size()));
             argumentsList.addAll(keys);
-            argumentsList.add(WEIGHTS_REDIS_API);
+            argumentsList.add(WEIGHTS_VALKEY_API);
             for (Double weight : weights) {
                 argumentsList.add(weight.toString());
             }
@@ -141,7 +141,7 @@ public abstract class WeightAggregateOptions {
             }
             argumentsList.add(GlideString.of(keys.size()));
             argumentsList.addAll(keys);
-            argumentsList.add(GlideString.of(WEIGHTS_REDIS_API));
+            argumentsList.add(GlideString.of(WEIGHTS_VALKEY_API));
             for (Double weight : weights) {
                 argumentsList.add(GlideString.of(weight));
             }
