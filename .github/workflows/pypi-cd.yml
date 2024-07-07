@@ -164,14 +164,23 @@ jobs:
                   before-script-linux: |
                       # Install protobuf compiler
                       if [[ $(`which apt`) != '' ]]
-                      then 
-                        apt install protobuf-compiler -y
-                      else
-                        PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-                        curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip
-                        unzip protoc-3.15.8-linux-x86_64.zip -d $HOME/.local
-                        export PATH="$PATH:$HOME/.local/bin"
+                      then
+                        echo "installing unzip and curl"
+                        apt install unzip curl -y
                       fi
+                      PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                      ARCH=`uname -p`
+                      if [[ $ARCH == 'x86_64' ]]; then 
+                        PROTOC_ARCH="x86_64"
+                      elif [[ $ARCH == 'aarch64' ]]; then 
+                        PROTOC_ARCH="aarch_64"
+                      else 
+                        echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                        exit 1 
+                      fi
+                      curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
+                      unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+                      export PATH="$PATH:$HOME/.local/bin"
 
             - name: Build Python wheels (macos)
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
