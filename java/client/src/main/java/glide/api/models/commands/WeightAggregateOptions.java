@@ -51,7 +51,7 @@ public abstract class WeightAggregateOptions {
      * </ul>
      */
     public interface KeysOrWeightedKeys {
-        /** Convert to command arguments according to the Redis API. */
+        /** Convert to command arguments according to the Valkey API. */
         String[] toArgs();
     }
 
@@ -105,7 +105,7 @@ public abstract class WeightAggregateOptions {
      * </ul>
      */
     public interface KeysOrWeightedKeysBinary {
-        /** Convert to command arguments according to the Redis API. */
+        /** Convert to command arguments according to the Valkey API. */
         GlideString[] toArgs();
     }
 

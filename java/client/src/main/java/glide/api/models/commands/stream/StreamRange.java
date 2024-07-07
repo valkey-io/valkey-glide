@@ -17,16 +17,16 @@ public interface StreamRange {
 
     String getValkeyApi();
 
-    /** Redis API string for MINIMUM entry ID range bounds */
+    /** Valkey API string for MINIMUM entry ID range bounds */
     String MINIMUM_RANGE_VALKEY_API = "-";
 
-    /** Redis API string for MAXIMUM entry ID range bounds */
+    /** Valkey API string for MAXIMUM entry ID range bounds */
     String MAXIMUM_RANGE_VALKEY_API = "+";
 
-    /** Redis API string to designate COUNT */
+    /** Valkey API string to designate COUNT */
     String RANGE_COUNT_VALKEY_API = "COUNT";
 
-    /** Redis API character to designate exclusive range bounds */
+    /** Valkey API character to designate exclusive range bounds */
     String EXCLUSIVE_RANGE_VALKEY_API = "(";
 
     /**
@@ -48,7 +48,7 @@ public interface StreamRange {
      * "1526985054069-0"</code>.<br>
      * Stream ID bounds can also be incomplete, with just a timestamp.<br>
      * Stream ID bounds are inclusive by default. When <code>isInclusive==false</code>, a <code>"("
-     * </code> is prepended for the Redis API.
+     * </code> is prepended for the Valkey API.
      */
     @Getter
     class IdBound implements StreamRange {
@@ -104,7 +104,7 @@ public interface StreamRange {
     /**
      * Convert StreamRange arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Redis
+     * @return arguments converted to an array to be consumed by Valkey.
      */
     static String[] toArgs(StreamRange start, StreamRange end) {
         return new String[] {start.getValkeyApi(), end.getValkeyApi()};
@@ -113,7 +113,7 @@ public interface StreamRange {
     /**
      * Convert StreamRange arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Redis
+     * @return arguments converted to an array to be consumed by Valkey.
      */
     static String[] toArgs(StreamRange start, StreamRange end, long count) {
         return ArrayTransformUtils.concatenateArrays(

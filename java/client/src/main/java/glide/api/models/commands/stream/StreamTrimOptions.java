@@ -23,8 +23,8 @@ public abstract class StreamTrimOptions {
 
     /**
      * If <code>true</code>, the stream will be trimmed exactly. Equivalent to <code>=</code> in the
-     * Redis API. Otherwise, the stream will be trimmed in a near-exact manner, which is more
-     * efficient, equivalent to <code>~</code> in the Redis API.
+     * Valkey API. Otherwise, the stream will be trimmed in a near-exact manner, which is more
+     * efficient, equivalent to <code>~</code> in the Valkey API.
      */
     protected Boolean exact;
 
@@ -79,7 +79,9 @@ public abstract class StreamTrimOptions {
 
     /** Option to trim the stream according to minimum ID. */
     public static class MinId extends StreamTrimOptions {
-        /** Trim the stream according to entry ID. Equivalent to <code>MINID</code> in the Redis API. */
+        /**
+         * Trim the stream according to entry ID. Equivalent to <code>MINID</code> in the Valkey API.
+         */
         private final String threshold;
 
         /**
@@ -161,7 +163,7 @@ public abstract class StreamTrimOptions {
     public static class MaxLen extends StreamTrimOptions {
         /**
          * Trim the stream according to length.<br>
-         * Equivalent to <code>MAXLEN</code> in the Redis API.
+         * Equivalent to <code>MAXLEN</code> in the Valkey API.
          */
         private final Long threshold;
 

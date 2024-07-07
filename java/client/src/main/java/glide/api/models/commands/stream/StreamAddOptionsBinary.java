@@ -27,7 +27,7 @@ public final class StreamAddOptionsBinary {
     /**
      * If set to <code>false</code>, a new stream won't be created if no stream matches the given key.
      * <br>
-     * Equivalent to <code>NOMKSTREAM</code> in the Redis API.
+     * Equivalent to <code>NOMKSTREAM</code> in the Valkey API.
      */
     private final Boolean makeStream;
 

@@ -14,6 +14,6 @@ public class FunctionListOptions {
     /** Causes the server to include the libraries source implementation in the reply. */
     public static final String WITH_CODE_VALKEY_API = "WITHCODE";
 
-    /** REDIS API keyword followed by library name pattern. */
+    /** Valkey API keyword followed by library name pattern. */
     public static final String LIBRARY_NAME_VALKEY_API = "LIBRARYNAME";
 }

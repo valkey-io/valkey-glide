@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Represents the configuration settings for a Cluster Redis client {@link GlideClusterClient}.
+ * Represents the configuration settings for a Cluster mode client {@link GlideClusterClient}.
  *
  * @apiNote Currently, the reconnection strategy in cluster mode is not configurable, and
  *     exponential backoff with fixed values is used.

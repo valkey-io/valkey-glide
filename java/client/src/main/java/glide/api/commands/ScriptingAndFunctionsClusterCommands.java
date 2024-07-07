@@ -13,12 +13,12 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands and transactions for the "Scripting and Function" group for a cluster client.
  *
- * @see <a href="https://redis.io/commands/?group=scripting">Scripting and Function Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsClusterCommands {
 
     /**
-     * Loads a library to Redis.<br>
+     * Loads a library to Valkey.<br>
      * The command will be routed to all primary nodes.
      *
      * @since Valkey 7.0 and above.
@@ -37,7 +37,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionLoad(String libraryCode, boolean replace);
 
     /**
-     * Loads a library to Redis.<br>
+     * Loads a library to Valkey.<br>
      * The command will be routed to all primary nodes.
      *
      * @since Valkey 7.0 and above.
@@ -56,7 +56,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<GlideString> functionLoad(GlideString libraryCode, boolean replace);
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
@@ -77,7 +77,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionLoad(String libraryCode, boolean replace, Route route);
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
@@ -469,7 +469,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * byte[] data = client.functionDump().get();
-     * // data can be used to restore loaded functions on any Redis instance
+     * // data can be used to restore loaded functions on any Valkey instance
      * }</pre>
      */
     CompletableFuture<byte[]> functionDump();
@@ -485,7 +485,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * byte[] data = client.functionDump(RANDOM).get().getSingleValue();
-     * // data can be used to restore loaded functions on any Redis instance
+     * // data can be used to restore loaded functions on any Valkey instance
      * }</pre>
      */
     CompletableFuture<ClusterValue<byte[]>> functionDump(Route route);
@@ -935,7 +935,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> with two keys:
      *     <ul>
      *       <li><code>running_script</code> with information about the running script.
@@ -1001,7 +1001,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * available execution engines.
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return A <code>Map</code> with two keys:
