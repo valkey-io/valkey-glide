@@ -310,7 +310,7 @@ public interface StringBaseCommands {
      * @return Always <code>OK</code>.
      * @example
      *     <pre>{@code
-     * String result = client.mset(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
+     * String result = client.msetBinary(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
      * assert result.equals("OK"));
      * }</pre>
      */
@@ -344,7 +344,7 @@ public interface StringBaseCommands {
      * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
      * @example
      *     <pre>{@code
-     * Boolean result = client.msetnx(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
+     * Boolean result = client.msetnxBinary(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
      * assert result;
      * }</pre>
      */
