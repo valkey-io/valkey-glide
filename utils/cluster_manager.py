@@ -295,6 +295,11 @@ def start_redis_server(
         "yes",
         "--logfile",
         f"{node_folder}/redis.log",
+        "--client-output-buffer-limit",
+        "pubsub",
+        "0",
+        "0",
+        "0",
     ]
     if load_module:
         if len(load_module) == 0:
