@@ -2813,8 +2813,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2829,11 +2827,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination,
+    public T zunionstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore,
@@ -2849,8 +2846,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2862,9 +2890,32 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        checkTypeOrThrow(destination);
+    public T zunionstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
@@ -2876,8 +2927,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2892,11 +2941,43 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zinterstore(
-            @NonNull ArgType destination,
+    public T zinterstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZInterStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zinterstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZInterStore,
