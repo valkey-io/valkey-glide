@@ -1,9 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -18,7 +20,10 @@ import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -26,6 +31,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.SneakyThrows;
@@ -45,7 +51,7 @@ public class ClusterTransactionTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                RedisClusterClient.CreateClient(
+                RedisClusterClient.createClient(
                                 RedisClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().port(TestConfiguration.CLUSTER_PORTS[0]).build())
                                         .requestTimeout(5000)
@@ -178,7 +184,7 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void zrank_zrevrank_withscores() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
         ClusterTransaction transaction = new ClusterTransaction();
         transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -276,8 +282,8 @@ public class ClusterTransactionTests {
     @Test
     @SneakyThrows
     public void spublish() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        ClusterTransaction transaction = new ClusterTransaction().spublish("Schannel", "message");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+        ClusterTransaction transaction = new ClusterTransaction().publish("messagae", "Schannel", true);
 
         assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
     }
@@ -295,7 +301,7 @@ public class ClusterTransactionTests {
                 .sortStore(key1, key2, SortClusterOptions.builder().orderBy(DESC).build())
                 .lrange(key2, 0, -1);
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build());
         }
 
@@ -308,7 +314,7 @@ public class ClusterTransactionTests {
                     descendingList, // lrange(key2, 0, -1)
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResult =
                     concatenateArrays(
                             expectedResult, new Object[] {descendingList} // sortReadOnly(key1, DESC)
@@ -336,5 +342,105 @@ public class ClusterTransactionTests {
                 };
         assertEquals(expectedResult[0], results[0]);
         assertTrue((Long) expectedResult[1] <= (Long) results[1]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_function_dump_restore() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String libName = "mylib";
+        String funcName = "myfun";
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+
+        // Setup
+        clusterClient.functionLoad(code, true).get();
+
+        // Verify functionDump
+        ClusterTransaction transaction = new ClusterTransaction().withBinaryOutput().functionDump();
+        Object[] result = clusterClient.exec(transaction).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify functionRestore
+        transaction = new ClusterTransaction();
+        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        // For the cluster mode, PRIMARY SlotType is required to avoid the error:
+        //  "RequestError: An error was signalled by the server -
+        //   ReadOnly: You can't write against a read only replica."
+        Object[] response = clusterClient.exec(transaction, new SlotIdRoute(1, SlotType.PRIMARY)).get();
+        assertEquals(OK, response[0]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_xinfoStream() {
+        ClusterTransaction transaction = new ClusterTransaction();
+        final String streamKey = "{streamKey}-" + UUID.randomUUID();
+        LinkedHashMap<String, Object> expectedStreamInfo =
+                new LinkedHashMap<>() {
+                    {
+                        put("radix-tree-keys", 1L);
+                        put("radix-tree-nodes", 2L);
+                        put("length", 1L);
+                        put("groups", 0L);
+                        put("first-entry", new Object[] {"0-1", new Object[] {"field1", "value1"}});
+                        put("last-generated-id", "0-1");
+                        put("last-entry", new Object[] {"0-1", new Object[] {"field1", "value1"}});
+                    }
+                };
+        LinkedHashMap<String, Object> expectedStreamFullInfo =
+                new LinkedHashMap<>() {
+                    {
+                        put("radix-tree-keys", 1L);
+                        put("radix-tree-nodes", 2L);
+                        put("entries", new Object[][] {{"0-1", new Object[] {"field1", "value1"}}});
+                        put("length", 1L);
+                        put("groups", new Object[0]);
+                        put("last-generated-id", "0-1");
+                    }
+                };
+
+        transaction
+                .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xinfoStream(streamKey)
+                .xinfoStreamFull(streamKey);
+
+        Object[] results = clusterClient.exec(transaction).get();
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedStreamInfo.put("max-deleted-entry-id", "0-0");
+            expectedStreamInfo.put("entries-added", 1L);
+            expectedStreamInfo.put("recorded-first-entry-id", "0-1");
+            expectedStreamFullInfo.put("max-deleted-entry-id", "0-0");
+            expectedStreamFullInfo.put("entries-added", 1L);
+            expectedStreamFullInfo.put("recorded-first-entry-id", "0-1");
+        }
+
+        assertDeepEquals(
+                new Object[] {
+                    "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
+                    expectedStreamInfo, // xinfoStream(streamKey)
+                    expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
+                },
+                results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void binary_strings() {
+        String key = UUID.randomUUID().toString();
+        clusterClient.set(key, "_").get();
+        // use dump to ensure that we have non-string convertible bytes
+        var bytes = clusterClient.dump(gs(key)).get();
+
+        var transaction =
+                new ClusterTransaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+
+        var responses = clusterClient.exec(transaction).get();
+
+        assertDeepEquals(
+                new Object[] {
+                    OK, gs(bytes),
+                },
+                responses);
     }
 }

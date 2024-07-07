@@ -2,7 +2,7 @@
 
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Union, cast
+from typing import List, Optional, Union, cast
 
 import pytest
 from glide import RequestError
@@ -22,6 +22,7 @@ from glide.async_commands.core import (
     ExpiryGetEx,
     ExpiryTypeGetEx,
     FlushMode,
+    FunctionRestorePolicy,
     InsertPosition,
 )
 from glide.async_commands.sorted_set import (
@@ -53,8 +54,9 @@ from glide.async_commands.transaction import (
     Transaction,
 )
 from glide.config import ProtocolVersion
-from glide.constants import OK, TResult
+from glide.constants import OK, TResult, TSingleNodeRoute
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.routes import SlotIdRoute, SlotType
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
@@ -775,14 +777,31 @@ async def transaction_test(
 
 @pytest.mark.asyncio
 class TestTransaction:
+
+    async def exec_transaction(
+        self,
+        glide_client: TGlideClient,
+        transaction: BaseTransaction,
+        route: Optional[TSingleNodeRoute] = None,
+    ) -> Optional[List[TResult]]:
+        """
+        Exec a transaction on a client with proper typing. Casts are required to satisfy `mypy`.
+        """
+        if isinstance(glide_client, GlideClient):
+            return await cast(GlideClient, glide_client).exec(
+                cast(Transaction, transaction)
+            )
+        else:
+            return await cast(GlideClusterClient, glide_client).exec(
+                cast(ClusterTransaction, transaction), route
+            )
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_with_different_slots(self, glide_client: TGlideClient):
-        transaction = (
-            Transaction()
-            if isinstance(glide_client, GlideClient)
-            else ClusterTransaction()
-        )
+    async def test_transaction_with_different_slots(
+        self, glide_client: GlideClusterClient
+    ):
+        transaction = ClusterTransaction()
         transaction.set("key1", "value1")
         transaction.set("key2", "value2")
         with pytest.raises(RequestError, match="CrossSlot"):
@@ -799,7 +818,7 @@ class TestTransaction:
         )
         transaction.custom_command(["HSET", key, "foo", "bar"])
         transaction.custom_command(["HGET", key, "foo"])
-        result = await glide_client.exec(transaction)
+        result = await self.exec_transaction(glide_client, transaction)
         assert result == [1, b"bar"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -815,7 +834,7 @@ class TestTransaction:
         )
         transaction.custom_command(["WATCH", key])
         with pytest.raises(RequestError) as e:
-            await glide_client.exec(transaction)
+            await self.exec_transaction(glide_client, transaction)
         assert "WATCH inside MULTI is not allowed" in str(
             e
         )  # TODO : add an assert on EXEC ABORT
@@ -834,7 +853,7 @@ class TestTransaction:
         transaction.custom_command(["INCR", key])
         transaction.custom_command(["DISCARD"])
         with pytest.raises(RequestError) as e:
-            await glide_client.exec(transaction)
+            await self.exec_transaction(glide_client, transaction)
         assert "EXEC without MULTI" in str(e)  # TODO : add an assert on EXEC ABORT
         value = await glide_client.get(key)
         assert value == b"1"
@@ -846,7 +865,7 @@ class TestTransaction:
         transaction = BaseTransaction()
         transaction.custom_command(["INCR", key, key, key])
         with pytest.raises(RequestError) as e:
-            await glide_client.exec(transaction)
+            await self.exec_transaction(glide_client, transaction)
         assert "wrong number of arguments" in str(
             e
         )  # TODO : add an assert on EXEC ABORT
@@ -892,7 +911,7 @@ class TestTransaction:
         result2 = await client2.set(keyslot, "foo")
         assert result2 == OK
 
-        result3 = await glide_client.exec(transaction)
+        result3 = await self.exec_transaction(glide_client, transaction)
         assert result3 is None
 
         await client2.close()
@@ -997,7 +1016,8 @@ class TestTransaction:
         transaction = ClusterTransaction() if cluster_mode else Transaction()
         transaction.set(key, "value").get(key).delete([key])
 
-        assert await glide_client.exec(transaction) == [OK, b"value", 1]
+        result = await self.exec_transaction(glide_client, transaction)
+        assert result == [OK, b"value", 1]
 
     # The object commands are tested here instead of transaction_test because they have special requirements:
     # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config
@@ -1027,7 +1047,7 @@ class TestTransaction:
             transaction.config_set({maxmemory_policy_key: "allkeys-random"})
             transaction.object_idletime(string_key)
 
-            response = await glide_client.exec(transaction)
+            response = await self.exec_transaction(glide_client, transaction)
             assert response is not None
             assert response[0] == OK  # transaction.set(string_key, "foo")
             assert response[1] == b"embstr"  # transaction.object_encoding(string_key)
@@ -1055,7 +1075,7 @@ class TestTransaction:
         transaction.xinfo_stream(key)
         transaction.xinfo_stream_full(key)
 
-        response = await glide_client.exec(transaction)
+        response = await self.exec_transaction(glide_client, transaction)
         assert response is not None
         # transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
         assert response[0] == stream_id1_0.encode()
@@ -1081,7 +1101,7 @@ class TestTransaction:
         yesterday_unix_time = time.mktime(yesterday.timetuple())
         transaction = ClusterTransaction() if cluster_mode else Transaction()
         transaction.lastsave()
-        response = await glide_client.exec(transaction)
+        response = await self.exec_transaction(glide_client, transaction)
         assert isinstance(response, list)
         lastsave_time = response[0]
         assert isinstance(lastsave_time, int)
@@ -1090,7 +1110,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut_transaction(self, glide_client: GlideClusterClient):
-        transaction = Transaction()
+        transaction = ClusterTransaction()
         transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
         results = await glide_client.exec(transaction)
         assert results is not None
@@ -1098,3 +1118,71 @@ class TestTransaction:
         for element in results:
             assert isinstance(element, bytes)
             assert b"Redis ver. " in element
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_dump_restore(
+        self, glide_client: TGlideClient, cluster_mode, protocol
+    ):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        keyslot = get_random_string(3)
+        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+
+        # Verify Dump
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.set(key1, "value")
+        transaction.dump(key1)
+        result1 = await self.exec_transaction(glide_client, transaction)
+        assert result1 is not None
+        assert isinstance(result1, list)
+        assert result1[0] == OK
+        assert isinstance(result1[1], bytes)
+
+        # Verify Restore - use result1[1] from above
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.restore(key2, 0, result1[1])
+        transaction.get(key2)
+        result2 = await self.exec_transaction(glide_client, transaction)
+        assert result2 is not None
+        assert isinstance(result2, list)
+        assert result2[0] == OK
+        assert result2[1] == b"value"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_function_dump_restore(
+        self, glide_client: TGlideClient, cluster_mode, protocol
+    ):
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            # Setup (will not verify)
+            assert await glide_client.function_flush() == OK
+            lib_name = f"mylib_{get_random_string(10)}"
+            func_name = f"myfun_{get_random_string(10)}"
+            code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.function_load(code, True)
+
+            # Verify function_dump
+            transaction.function_dump()
+            result1 = await self.exec_transaction(glide_client, transaction)
+            assert result1 is not None
+            assert isinstance(result1, list)
+            assert isinstance(result1[1], bytes)
+
+            # Verify function_restore - use result1[2] from above
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.function_restore(result1[1], FunctionRestorePolicy.REPLACE)
+            # For the cluster mode, PRIMARY SlotType is required to avoid the error:
+            #  "RequestError: An error was signalled by the server -
+            #   ReadOnly: You can't write against a read only replica."
+            result2 = await self.exec_transaction(
+                glide_client, transaction, SlotIdRoute(SlotType.PRIMARY, 1)
+            )
+
+            assert result2 is not None
+            assert isinstance(result2, list)
+            assert result2[0] == OK
+
+            # Test clean up
+            await glide_client.function_flush()

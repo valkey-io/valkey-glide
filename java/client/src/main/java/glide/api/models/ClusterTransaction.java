@@ -6,28 +6,31 @@ import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
+import glide.api.RedisClusterClient;
 import glide.api.models.commands.SortClusterOptions;
 import lombok.NonNull;
 
 /**
- * Extends BaseTransaction class for cluster mode commands. Transactions allow the execution of a
- * group of commands in a single step.
+ * Transaction implementation for cluster {@link RedisClusterClient}. Transactions allow the
+ * execution of a group of commands in a single step.
  *
- * <p>Command Response: An array of command responses is returned by the client <code>exec</code>
- * command, in the order they were given. Each element in the array represents a command given to
- * the <code>Transaction</code>. The response for each command depends on the executed Redis
- * command. Specific response types are documented alongside each method.
+ * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
+ * {@link RedisClusterClient#exec} command, in the order they were given. Each element in the array
+ * represents a command given to the {@link ClusterTransaction}. The response for each command
+ * depends on the executed Redis command. Specific response types are documented alongside each
+ * method.
  *
  * @example
- *     <pre>
- *  ClusterTransaction transaction = new ClusterTransaction();
- *    .set("key", "value");
- *    .get("key");
- *  ClusterValue[] result = client.exec(transaction, route).get();
- *  // result contains: OK and "value"
- *  </pre>
+ *     <pre>{@code
+ * ClusterTransaction transaction = new ClusterTransaction();
+ *   .set("key", "value");
+ *   .get("key");
+ * Object[] result = client.exec(transaction).get();
+ * // result contains: OK and "value"
+ * }</pre>
  */
 public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
+
     @Override
     protected ClusterTransaction getThis() {
         return this;
@@ -36,15 +39,21 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /**
      * Publishes message on pubsub channel in sharded mode.
      *
-     * @since Redis 7.0 and above.
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @since Valkey 7.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
-     * @param channel The channel to publish the message on.
      * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
+     *     to <code>true</code> is only applicable with Redis 7.0+.
      * @return Command response - The number of clients that received the message.
      */
-    public <ArgType> ClusterTransaction spublish(@NonNull ArgType channel, @NonNull ArgType message) {
+    public <ArgType> ClusterTransaction publish(
+            @NonNull ArgType message, @NonNull ArgType channel, boolean sharded) {
+        if (!sharded) {
+            return super.publish(message, channel);
+        }
         checkTypeOrThrow(channel);
         protobufTransaction.addCommands(
                 buildCommand(SPublish, newArgsBuilder().add(channel).add(message)));
@@ -56,10 +65,12 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * <br>
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String, SortClusterOptions)}.
+     * To store the result into a new key, see {@link #sortStore(ArgType, ArgType,
+     * SortClusterOptions)}.
      *
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
@@ -78,9 +89,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.<br>
      *
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort_ro">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
@@ -98,11 +110,12 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String,
-     * SortClusterOptions)} or {@link #sortReadOnly(String, SortClusterOptions)}.
+     * To get the sort result without storing it into a key, see {@link #sort(ArgType,
+     * SortClusterOptions)} or {@link #sortReadOnly(ArgType, SortClusterOptions)}.
      *
-     * @implNote ArgType is limited to String or GlideString, any other type will throw
-     *     IllegalArgumentException
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param destination The key where the sorted result will be stored.
      * @param sortClusterOptions The {@link SortClusterOptions}.

@@ -10,21 +10,21 @@ import lombok.Getter;
 @EqualsAndHashCode
 public class PubSubMessage {
     /** An incoming message received. */
-    private final String message;
+    private final GlideString message;
 
     /** A name of the originating channel. */
-    private final String channel;
+    private final GlideString channel;
 
     /** A pattern matched to the channel name. */
-    private final Optional<String> pattern;
+    private final Optional<GlideString> pattern;
 
-    public PubSubMessage(String message, String channel, String pattern) {
+    public PubSubMessage(GlideString message, GlideString channel, GlideString pattern) {
         this.message = message;
         this.channel = channel;
         this.pattern = Optional.ofNullable(pattern);
     }
 
-    public PubSubMessage(String message, String channel) {
+    public PubSubMessage(GlideString message, GlideString channel) {
         this.message = message;
         this.channel = channel;
         this.pattern = Optional.empty();
@@ -32,10 +32,10 @@ public class PubSubMessage {
 
     @Override
     public String toString() {
-        String res = String.format("%s, channel = %s", message, channel);
+        String res = String.format("(%s, channel = %s", message, channel);
         if (pattern.isPresent()) {
             res += ", pattern = " + pattern.get();
         }
-        return res;
+        return res + ")";
     }
 }

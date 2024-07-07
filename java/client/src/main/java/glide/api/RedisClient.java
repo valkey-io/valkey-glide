@@ -3,7 +3,6 @@ package glide.api;
 
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
@@ -48,7 +47,6 @@ import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
-import glide.api.models.ArgsBuilder;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
@@ -58,6 +56,7 @@ import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
+import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -65,7 +64,7 @@ import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**
- * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
+ * Async (non-blocking) client for Redis in Standalone mode. Use {@link #createClient} to request a
  * client to Redis.
  */
 public class RedisClient extends BaseClient
@@ -76,7 +75,7 @@ public class RedisClient extends BaseClient
                 TransactionsCommands {
 
     /**
-     * A constructor. Use {@link #CreateClient} to get a client. Made protected to simplify testing.
+     * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
      */
     protected RedisClient(ClientBuilder builder) {
         super(builder);
@@ -88,9 +87,9 @@ public class RedisClient extends BaseClient
      * @param config Redis client Configuration.
      * @return A Future to connect and return a RedisClient.
      */
-    public static CompletableFuture<RedisClient> CreateClient(
+    public static CompletableFuture<RedisClient> createClient(
             @NonNull RedisClientConfiguration config) {
-        return CreateClient(config, RedisClient::new);
+        return createClient(config, RedisClient::new);
     }
 
     @Override
@@ -100,7 +99,7 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
-        if (transaction.isBinarySafeOutput()) {
+        if (transaction.isBinaryOutput()) {
             return commandManager.submitNewTransaction(
                     transaction, this::handleArrayOrNullResponseBinary);
         } else {
@@ -538,8 +537,21 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> scan(@NonNull GlideString cursor) {
+        return commandManager.submitNewCommand(
+                Scan, new GlideString[] {cursor}, this::handleArrayResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[]> scan(@NonNull String cursor, @NonNull ScanOptions options) {
         String[] arguments = ArrayUtils.addFirst(options.toArgs(), cursor);
         return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> scan(
+            @NonNull GlideString cursor, @NonNull ScanOptions options) {
+        GlideString[] arguments = new ArgsBuilder().add(cursor).add(options.toArgs()).toArray();
+        return commandManager.submitNewCommand(Scan, arguments, this::handleArrayResponseBinary);
     }
 }

@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
@@ -51,7 +50,6 @@ import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.logging.Logger;
-import glide.api.models.ArgsBuilder;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -66,6 +64,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
+import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -76,7 +75,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
 
 /**
- * Async (non-blocking) client for Redis in Cluster mode. Use {@link #CreateClient} to request a
+ * Async (non-blocking) client for Redis in Cluster mode. Use {@link #createClient} to request a
  * client to Redis.
  */
 public class RedisClusterClient extends BaseClient
@@ -87,7 +86,7 @@ public class RedisClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
-    /** A private constructor. Use {@link #CreateClient} to get a client. */
+    /** A private constructor. Use {@link #createClient} to get a client. */
     RedisClusterClient(ClientBuilder builder) {
         super(builder);
     }
@@ -98,9 +97,9 @@ public class RedisClusterClient extends BaseClient
      * @param config Redis cluster client Configuration.
      * @return A Future to connect and return a RedisClusterClient.
      */
-    public static CompletableFuture<RedisClusterClient> CreateClient(
+    public static CompletableFuture<RedisClusterClient> createClient(
             @NonNull RedisClusterClientConfiguration config) {
-        return CreateClient(config, RedisClusterClient::new);
+        return createClient(config, RedisClusterClient::new);
     }
 
     @Override
@@ -129,7 +128,7 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
-        if (transaction.isBinarySafeOutput()) {
+        if (transaction.isBinaryOutput()) {
             return commandManager.submitNewTransaction(
                     transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
         } else {
@@ -141,7 +140,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<Object[]> exec(
             @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
-        if (transaction.isBinarySafeOutput()) {
+        if (transaction.isBinaryOutput()) {
             return commandManager.submitNewTransaction(
                     transaction, Optional.of(route), this::handleArrayOrNullResponseBinary);
         } else {
@@ -989,6 +988,39 @@ public class RedisClusterClient extends BaseClient
                 response -> handleFunctionStatsBinaryResponse(response, route instanceof SingleNodeRoute));
     }
 
+    public CompletableFuture<String> publish(
+            @NonNull String message, @NonNull String channel, boolean sharded) {
+        if (!sharded) {
+            return publish(message, channel);
+        }
+
+        return commandManager.submitNewCommand(
+                SPublish,
+                new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
+    }
+
+    @Override
+    public CompletableFuture<String> publish(
+            @NonNull GlideString message, @NonNull GlideString channel, boolean sharded) {
+        if (!sharded) {
+            return publish(message, channel);
+        }
+
+        return commandManager.submitNewCommand(
+                SPublish,
+                new GlideString[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
+    }
+
     @Override
     public CompletableFuture<String> unwatch(@NonNull Route route) {
         return commandManager.submitNewCommand(
@@ -1033,6 +1065,14 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor) {
+        return commandManager
+                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponseBinary)
+                .thenApply(
+                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+    }
+
+    @Override
     public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
         return commandManager
                 .submitClusterScan(cursor, options, this::handleArrayResponse)
@@ -1041,15 +1081,11 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> spublish(@NonNull String channel, @NonNull String message) {
-        return commandManager.submitNewCommand(
-                SPublish,
-                new String[] {channel, message},
-                response -> {
-                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
-                    handleLongResponse(response);
-                    return OK;
-                });
+    public CompletableFuture<Object[]> scanBinary(ClusterScanCursor cursor, ScanOptions options) {
+        return commandManager
+                .submitClusterScan(cursor, options, this::handleArrayResponseBinary)
+                .thenApply(
+                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
     }
 
     @Override
@@ -1122,8 +1158,8 @@ public class RedisClusterClient extends BaseClient
     private static final class NativeClusterScanCursor
             implements CommandManager.ClusterScanCursorDetail {
 
-        private String cursorHandle;
-        private boolean isFinished;
+        private final String cursorHandle;
+        private final boolean isFinished;
         private boolean isClosed = false;
 
         // This is for internal use only.
@@ -1165,8 +1201,8 @@ public class RedisClusterClient extends BaseClient
                     Logger.log(
                             Logger.Level.ERROR,
                             "ClusterScanCursor",
-                            () -> "Error releasing cursor " + cursorHandle + ": " + ex.getMessage());
-                    Logger.log(Logger.Level.ERROR, "ClusterScanCursor", ex);
+                            () -> "Error releasing cursor " + cursorHandle,
+                            ex);
                 } finally {
                     // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
                     isClosed = true;

@@ -7,6 +7,9 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArg
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -140,6 +143,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -149,6 +153,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
 import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -197,7 +202,6 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
-import glide.api.models.ArgsBuilder;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
@@ -263,6 +267,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -271,14 +276,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.NotImplementedException;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -304,7 +307,7 @@ public abstract class BaseClient
 
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
-    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+    protected final MessageHandler messageHandler;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
@@ -319,7 +322,7 @@ public abstract class BaseClient
     protected BaseClient(ClientBuilder builder) {
         this.connectionManager = builder.connectionManager;
         this.commandManager = builder.commandManager;
-        this.messageQueue = builder.messageQueue;
+        this.messageHandler = builder.messageHandler;
         this.subscriptionConfiguration = builder.subscriptionConfiguration;
     }
 
@@ -328,7 +331,7 @@ public abstract class BaseClient
     protected static class ClientBuilder {
         private final ConnectionManager connectionManager;
         private final CommandManager commandManager;
-        private final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+        private final MessageHandler messageHandler;
         private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
     }
 
@@ -340,7 +343,7 @@ public abstract class BaseClient
      * @param <T> Client type.
      * @return a Future to connect and return a RedisClient.
      */
-    protected static <T extends BaseClient> CompletableFuture<T> CreateClient(
+    protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
             ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
@@ -361,7 +364,7 @@ public abstract class BaseClient
                                             new ClientBuilder(
                                                     connectionManager,
                                                     commandManager,
-                                                    messageHandler.getQueue(),
+                                                    messageHandler,
                                                     Optional.ofNullable(config.getSubscriptionConfiguration()))));
         } catch (InterruptedException e) {
             // Something bad happened while we were establishing netty connection to UDS
@@ -372,7 +375,7 @@ public abstract class BaseClient
     }
 
     /**
-     * Tries to return a next pubsub message.
+     * Return a next pubsub message if it is present.
      *
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
@@ -389,16 +392,16 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        return messageQueue.poll();
+        return messageHandler.getQueue().popSync();
     }
 
     /**
-     * Returns a promise for a next pubsub message.
+     * Returns a promise for a next pubsub message.<br>
+     * Message gets unrecoverable lost if future is cancelled or reference to this future is lost.
      *
-     * @apiNote <b>Not implemented!</b>
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
-     * @return A <code>Future</code> which resolved with the next incoming message.
+     * @return A {@link CompletableFuture} which will asynchronously hold the next available message.
      */
     public CompletableFuture<PubSubMessage> getPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {
@@ -411,8 +414,7 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        throw new NotImplementedException(
-                "This feature will be supported in a future release of the GLIDE java client");
+        return messageHandler.getQueue().popAsync();
     }
 
     /**
@@ -434,12 +436,12 @@ public abstract class BaseClient
 
     protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
         if (config.getSubscriptionConfiguration() == null) {
-            return new MessageHandler(Optional.empty(), Optional.empty(), responseResolver);
+            return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
         }
         return new MessageHandler(
                 config.getSubscriptionConfiguration().getCallback(),
                 config.getSubscriptionConfiguration().getContext(),
-                responseResolver);
+                binaryResponseResolver);
     }
 
     protected static ChannelHandler buildChannelHandler(
@@ -2866,6 +2868,182 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start) {
+        String[] args = new String[] {key, group, consumer, Long.toString(minIdleTime), start};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start) {
+        GlideString[] args =
+                new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime)), start};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start,
+            long count) {
+        String[] args =
+                new String[] {
+                    key,
+                    group,
+                    consumer,
+                    Long.toString(minIdleTime),
+                    start,
+                    READ_COUNT_REDIS_API,
+                    Long.toString(count)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaim(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start,
+            long count) {
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    group,
+                    consumer,
+                    gs(Long.toString(minIdleTime)),
+                    start,
+                    gs(READ_COUNT_REDIS_API),
+                    gs(Long.toString(count))
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start) {
+        String[] args =
+                new String[] {key, group, consumer, Long.toString(minIdleTime), start, JUST_ID_REDIS_API};
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start) {
+        GlideString[] args =
+                new GlideString[] {
+                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs(JUST_ID_REDIS_API)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String start,
+            long count) {
+        String[] args =
+                new String[] {
+                    key,
+                    group,
+                    consumer,
+                    Long.toString(minIdleTime),
+                    start,
+                    READ_COUNT_REDIS_API,
+                    Long.toString(count),
+                    JUST_ID_REDIS_API
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xautoclaimJustId(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString start,
+            long count) {
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    group,
+                    consumer,
+                    gs(Long.toString(minIdleTime)),
+                    start,
+                    gs(READ_COUNT_REDIS_API),
+                    gs(Long.toString(count)),
+                    gs(JUST_ID_REDIS_API)
+                };
+        return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStream(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new String[] {key, FULL}, response -> handleMapResponse(response));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new String[] {key, FULL, COUNT, Integer.toString(count)},
+                this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStream(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new GlideString[] {key}, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoStream, new GlideString[] {key, gs(FULL)}, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(
+            @NonNull GlideString key, int count) {
+        return commandManager.submitNewCommand(
+                XInfoStream,
+                new GlideString[] {key, gs(FULL), gs(COUNT), gs(Integer.toString(count))},
+                this::handleBinaryStringMapResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -3914,10 +4092,23 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> publish(@NonNull String channel, @NonNull String message) {
+    public CompletableFuture<String> publish(@NonNull String message, @NonNull String channel) {
         return commandManager.submitNewCommand(
                 Publish,
                 new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
+    }
+
+    @Override
+    public CompletableFuture<String> publish(
+            @NonNull GlideString message, @NonNull GlideString channel) {
+        return commandManager.submitNewCommand(
+                Publish,
+                new GlideString[] {channel, message},
                 response -> {
                     // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
                     handleLongResponse(response);

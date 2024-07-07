@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Stream Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=stream">Stream Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=stream">Stream Commands</a>
  */
 public interface StreamBaseCommands {
 
@@ -576,7 +576,7 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param groupname The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @return <code>OK</code>.
      * @example
@@ -614,7 +614,7 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @param options The group options {@link StreamGroupOptions}.
      * @return <code>OK</code>.
@@ -787,7 +787,7 @@ public interface StreamBaseCommands {
     /**
      * Sets the last delivered ID for a consumer group.
      *
-     * @since Redis 7.0 and above
+     * @since Valkey 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -806,7 +806,7 @@ public interface StreamBaseCommands {
     /**
      * Sets the last delivered ID for a consumer group.
      *
-     * @since Redis 7.0 and above
+     * @since Valkey 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
@@ -835,7 +835,7 @@ public interface StreamBaseCommands {
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
-     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      *      Returns <code>null</code> if there is no stream that can be served.
      * @example
      *     <pre>{@code
@@ -871,7 +871,7 @@ public interface StreamBaseCommands {
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
+     *      Returns <code>null</code> if there is no stream that can be served.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
@@ -1299,7 +1299,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1324,7 +1324,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1353,7 +1353,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1382,7 +1382,7 @@ public interface StreamBaseCommands {
 
     /**
      * Changes the ownership of a pending message. This function returns an <code>array</code> with
-     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Valkey API.
      *
      * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -1503,4 +1503,564 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<Map<GlideString, Object>[]> xinfoConsumers(
             GlideString key, GlideString groupName);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0")).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new GlideString[][] {{gs("f1"), gs("v1")}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start, long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
+     *           values being a 2D list of the field-value pairs in the format <code>
+     *           [[field1, value1], [field2, value2], ...]</code>.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaim(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0"), 1L).get();
+     * assertEquals(streamid_1, result[0]);
+     * assertDeepEquals(Map.of(streamid_0, new GlideString[][] {{gs("f1"), gs("v1")}}),result[1]);
+     * assertDeepEquals(new Object[] {},result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaim(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start,
+            long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0").get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            String key, String group, String consumer, long minIdleTime, String start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0")).get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId("my_stream", "my_group", "my_consumer", 3_600_000L, "0-0", 1L).get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            String key, String group, String consumer, long minIdleTime, String start, long count);
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria. This command
+     * uses the <code>JUSTID</code> argument to further specify that the return value should contain a
+     * list of claimed IDs without their field-value info.
+     *
+     * @see <a href="https://valkey.io/commands/xautoclaim">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param start Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count Limits the number of claimed entries to the specified value.
+     * @return An <code>array</code> containing the following elements:
+     *     <ul>
+     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *           </code>. This ID is equivalent to the next ID in the stream after the entries that
+     *           were scanned, or "0-0" if the entire stream was scanned.
+     *       <li>A list of the IDs for the claimed entries.
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
+     *           containing the message IDs that were in the Pending Entries List but no longer exist
+     *           in the stream. These IDs are deleted from the Pending Entries List.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.xautoclaimJustId(gs("my_stream"), gs("my_group"), gs("my_consumer"), 3_600_000L, gs("0-0"), 1L).get();
+     * assertEquals(zeroStreamId, result[0]);
+     * assertDeepEquals(new GlideString[] {streamid_0, streamid_1, streamid_3}, result[1]);
+     * assertDeepEquals(new Object[] {}, result[2]); // version 7.0.0 or above
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xautoclaimJustId(
+            GlideString key,
+            GlideString group,
+            GlideString consumer,
+            long minIdleTime,
+            GlideString start,
+            long count);
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link
+     * #xinfoStreamFull(String, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return A <code>Map</code> of stream information for the given <code>key</code>. See the
+     *     example for a sample response.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.xinfoStream("myStream").get();
+     * // the response contains data in the following format:
+     * Map<String, Object> data = Map.of(
+     *     "length", 4L,
+     *     "radix-tree-keys", 1L,
+     *     "radix-tree-nodes", 2L,
+     *     "last-generated-id", "1719877599564-0",
+     *     "max-deleted-entry-id", "0-0",
+     *     "entries-added", 4L,
+     *     "recorded-first-entry-id", "1719710679916-0",
+     *     "groups", 1L,
+     *     "first-entry", new Object {
+     *         "1719710679916-0",
+     *         new String[] {
+     *             "foo", "bar",
+     *             "foo", "bar2",
+     *             "some_field", "some_value"
+     *         }},
+     *     "last-entry", new Object {
+     *         "1719877599564-0",
+     *         new String[] {
+     *             { "e4_f", "e4_v" }
+     *         }}
+     * );
+     * // Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `null` if stream is empty.
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> xinfoStream(String key);
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(GlideString)} or {@link
+     * #xinfoStreamFull(GlideString, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return A <code>Map</code> of stream information for the given <code>key</code>. See the
+     *     example for a sample response.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<GlideString, Object> response = client.xinfoStream(gs("myStream")).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object> data = Map.of(
+     *     gs("length"), 4L,
+     *     gs("radix-tree-keys"), 1L,
+     *     gs("radix-tree-nodes"), 2L,
+     *     gs("last-generated-id"), gs("1719877599564-0"),
+     *     gs("max-deleted-entry-id"), gs("0-0"),
+     *     gs("entries-added"), 4L,
+     *     gs("recorded-first-entry-id"), gs("1719710679916-0"),
+     *     gs("groups"), 1L,
+     *     gs("first-entry"), new Object {
+     *         gs("1719710679916-0"),
+     *         new GlideString[] {
+     *             gs("foo"), gs("bar"),
+     *             gs("foo"), gs("bar2"),
+     *             gs("some_field"), gs("some_value")
+     *         }},
+     *     gs("last-entry", Object {
+     *         gs("1719877599564-0"),
+     *         new GlideString[] {
+     *             { gs("e4_f"), gs("e4_v") }
+     *         }}
+     * );
+     * // Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `null` if stream is empty.
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>> xinfoStream(GlideString key);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
+     *     the example for a sample response.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.xinfoStreamFull("myStream").get();
+     * // the response contains data in the following format:
+     * Map<String, Object> data = Map.of(
+     *     "length", 4L,
+     *     "radix-tree-keys", 1L,
+     *     "radix-tree-nodes", 2L,
+     *     "last-generated-id", "1719877599564-0",
+     *     "max-deleted-entry-id", "0-0",
+     *     "entries-added", 4L,
+     *     "recorded-first-entry-id", "1719710679916-0",
+     *     "entries", new Object {
+     *         "1719710679916-0",
+     *         new String[] {
+     *             "foo", "bar",
+     *             "foo", "bar2",
+     *             "some_field", "some_value"
+     *         },
+     *         "1719710688676-0",
+     *         new String[] {
+     *             { "foo", "bar2" },
+     *         },
+     *     },
+     *     "groups", new Map[] {
+     *         Map.of(
+     *             "name", "mygroup",
+     *             "last-delivered-id", "1719710688676-0",
+     *             "entries-read", 2L,
+     *             "lag", 0L,
+     *             "pel-count", 2L,
+     *             "pending", new Object[][] { {
+     *                     "1719710679916-0",
+     *                     "Alice",
+     *                     1719710707260L,
+     *                     1L,
+     *                 }, {
+     *                     "1719710688676-0",
+     *                     "Alice",
+     *                     1719710718373L,
+     *                     1L
+     *                 } },
+     *             "consumers", new Map[] {
+     *                 Map.of(
+     *                     "name", "Alice",
+     *                     "seen-time", 1719710718373L,
+     *                     "active-time", 1719710718373L,
+     *                     "pel-count", 2L,
+     *                     "pending", new Object[][] { {
+     *                             "1719710679916-0",
+     *                             1719710707260L,
+     *                             1L,
+     *                         }, {
+     *                             "1719710688676-0",
+     *                             1719710718373L,
+     *                             1L
+     *                         } }
+     *                 )
+     *             })
+     * }); // Detailed stream information for "my_stream".
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> xinfoStreamFull(String key);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
+     *     the example for a sample response.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<GlideString, Object> response = client.xinfoStreamFull(gs("myStream")).get();
+     * // the response contains data in the following format:
+     * Map<GlideString, Object> data = Map.of(
+     *     gs("length"), 4L,
+     *     gs("radix-tree-keys"), 1L,
+     *     gs("radix-tree-nodes"), 2L,
+     *     gs("last-generated-id"), gs("1719877599564-0"),
+     *     gs("max-deleted-entry-id"), gs("0-0"),
+     *     gs("entries-added"), 4L,
+     *     gs("recorded-first-entry-id"), gs("1719710679916-0"),
+     *     gs("entries"), new Object {
+     *         gs("1719710679916-0"),
+     *         new GlideString[] {
+     *             gs("foo"), gs("bar"),
+     *             gs("foo"), gs("bar2"),
+     *             gs("some_field"), gs("some_value")
+     *         },
+     *         gs("1719710688676-0"),
+     *         new GlideString[] {
+     *             { gs("foo"), gs("bar2") },
+     *         },
+     *     },
+     *     gs("groups"), new Map[] {
+     *         Map.of(
+     *             gs("name"), gs("mygroup"),
+     *             gs("last-delivered-id"), gs("1719710688676-0"),
+     *             gs("entries-read"), 2L,
+     *             gs("lag"), 0L,
+     *             gs("pel-count"), 2L,
+     *             gs("pending"), new Object[][] { {
+     *                     gs("1719710679916-0"),
+     *                     gs("Alice"),
+     *                     1719710707260L,
+     *                     1L,
+     *                 }, {
+     *                     gs("1719710688676-0"),
+     *                     gs("Alice"),
+     *                     1719710718373L,
+     *                     1L
+     *                 } },
+     *             gs("consumers"), new Map[] {
+     *                 Map.of(
+     *                     gs("name"), gs("Alice"),
+     *                     gs("seen-time"), 1719710718373L,
+     *                     gs("active-time"), 1719710718373L,
+     *                     gs("pel-count"), 2L,
+     *                     gs("pending"), new Object[][] { {
+     *                             gs("1719710679916-0"),
+     *                             1719710707260L,
+     *                             1L,
+     *                         }, {
+     *                             gs("1719710688676-0"),
+     *                             1719710718373L,
+     *                             1L
+     *                         } }
+     *                 )
+     *             })
+     * }); // Detailed stream information for "my_stream".
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(GlideString key);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.xinfoStreamFull("myStream", 42).get();
+     * }</pre>
+     *     The response has the same format as {@link #xinfoStreamFull(String)}.
+     */
+    CompletableFuture<Map<String, Object>> xinfoStreamFull(String key, int count);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
+     *     means that all entries will be returned.
+     * @return A <code>Map</code> of detailed stream information for the given <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // example of using the API:
+     * Map<GlideString, Object> response = client.xinfoStreamFull(gs("myStream"), 42).get();
+     * }</pre>
+     *     The response has the same format as {@link #xinfoStreamFull(GlideString)}.
+     */
+    CompletableFuture<Map<GlideString, Object>> xinfoStreamFull(GlideString key, int count);
 }

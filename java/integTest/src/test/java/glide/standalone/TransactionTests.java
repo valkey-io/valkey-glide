@@ -1,9 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
@@ -29,10 +30,13 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -53,7 +57,7 @@ public class TransactionTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        client = RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get();
+        client = RedisClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll
@@ -235,7 +239,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void zrank_zrevrank_withscores() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
         Transaction transaction = new Transaction();
         transaction.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
@@ -251,7 +255,7 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void copy() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"));
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"));
         // setup
         String copyKey1 = "{CopyKey}-1-" + UUID.randomUUID();
         String copyKey2 = "{CopyKey}-2-" + UUID.randomUUID();
@@ -479,7 +483,7 @@ public class TransactionTests {
 
         assertArrayEquals(expectedResults, client.exec(transaction1).get());
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction2
                     .sortReadOnly(
                             genericKey1,
@@ -547,6 +551,26 @@ public class TransactionTests {
 
     @SneakyThrows
     @Test
+    public void scan_binary_test() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
+        assertEquals(OK, client.mset(msetMap).get());
+
+        GlideString cursor = gs("0");
+        Object[] keysFound = new Object[0];
+        do {
+            Transaction transaction = new Transaction().withBinaryOutput().scan(cursor);
+            Object[] results = client.exec(transaction).get();
+            cursor = (GlideString) ((Object[]) results[0])[0];
+            keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
+        } while (!cursor.equals(gs("0")));
+
+        assertTrue(ArrayUtils.contains(keysFound, gs(key)));
+    }
+
+    @SneakyThrows
+    @Test
     public void scan_with_options_test() {
         // setup
         Transaction setupTransaction = new Transaction();
@@ -602,5 +626,185 @@ public class TransactionTests {
                     ArrayUtils.contains(keysFound, typeKeys.get(type)),
                     "Unable to find " + typeKeys.get(type) + " in a scan by match pattern");
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void scan_binary_with_options_test() {
+        // setup
+        Transaction setupTransaction = new Transaction().withBinaryOutput();
+
+        Map<ScanOptions.ObjectType, GlideString> typeKeys =
+                Map.of(
+                        STRING, gs("{string}-" + UUID.randomUUID()),
+                        LIST, gs("{list}-" + UUID.randomUUID()),
+                        SET, gs("{set}-" + UUID.randomUUID()),
+                        ZSET, gs("{zset}-" + UUID.randomUUID()),
+                        HASH, gs("{hash}-" + UUID.randomUUID()),
+                        STREAM, gs("{stream}-" + UUID.randomUUID()));
+
+        setupTransaction.set(typeKeys.get(STRING), UUID.randomUUID().toString());
+        setupTransaction.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
+        setupTransaction.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
+        setupTransaction.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
+        setupTransaction.hset(
+                typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        setupTransaction.xadd(
+                typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        assertNotNull(client.exec(setupTransaction).get());
+
+        final GlideString initialCursor = gs("0");
+
+        for (var type : ScanOptions.ObjectType.values()) {
+            ScanOptions options = ScanOptions.builder().type(type).count(99L).build();
+
+            GlideString cursor = initialCursor;
+            Object[] keysFound = new Object[0];
+            do {
+                Transaction transaction = new Transaction().withBinaryOutput().scan(cursor, options);
+                Object[] results = client.exec(transaction).get();
+                cursor = (GlideString) ((Object[]) results[0])[0];
+                keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
+            } while (!cursor.equals(initialCursor));
+
+            assertTrue(
+                    ArrayUtils.contains(keysFound, typeKeys.get(type)),
+                    "Unable to find " + typeKeys.get(type) + " in a scan by type");
+
+            options =
+                    ScanOptions.builder().matchPattern(typeKeys.get(type).toString()).count(42L).build();
+            cursor = initialCursor;
+            keysFound = new Object[0];
+            do {
+                Transaction transaction = new Transaction().withBinaryOutput().scan(cursor, options);
+                Object[] results = client.exec(transaction).get();
+                cursor = (GlideString) ((Object[]) results[0])[0];
+                keysFound = ArrayUtils.addAll(keysFound, (Object[]) ((Object[]) results[0])[1]);
+            } while (!cursor.equals(initialCursor));
+
+            assertTrue(
+                    ArrayUtils.contains(keysFound, typeKeys.get(type)),
+                    "Unable to find " + typeKeys.get(type) + " in a scan by match pattern");
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_dump_restore() {
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        String value = UUID.randomUUID().toString();
+
+        // Setup
+        assertEquals(OK, client.set(key1, gs(value)).get());
+
+        // Verify dump
+        Transaction transaction = new Transaction().withBinaryOutput().dump(key1);
+        Object[] result = client.exec(transaction).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify restore
+        transaction = new Transaction();
+        transaction.restore(key2, 0, payload.getBytes());
+        transaction.get(key2);
+        Object[] response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertEquals(value, response[1]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_function_dump_restore() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String libName = "mylib";
+        String funcName = "myfun";
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+
+        // Setup
+        client.functionLoad(code, true).get();
+
+        // Verify functionDump
+        Transaction transaction = new Transaction().withBinaryOutput().functionDump();
+        Object[] result = client.exec(transaction).get();
+        GlideString payload = (GlideString) (result[0]);
+
+        // Verify functionRestore
+        transaction = new Transaction();
+        transaction.functionRestore(payload.getBytes(), FunctionRestorePolicy.REPLACE);
+        Object[] response = client.exec(transaction).get();
+        assertEquals(OK, response[0]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_transaction_xinfoStream() {
+        Transaction transaction = new Transaction();
+        final String streamKey = "{streamKey}-" + UUID.randomUUID();
+        LinkedHashMap<String, Object> expectedStreamInfo =
+                new LinkedHashMap<>() {
+                    {
+                        put("radix-tree-keys", 1L);
+                        put("radix-tree-nodes", 2L);
+                        put("length", 1L);
+                        put("groups", 0L);
+                        put("first-entry", new Object[] {"0-1", new Object[] {"field1", "value1"}});
+                        put("last-generated-id", "0-1");
+                        put("last-entry", new Object[] {"0-1", new Object[] {"field1", "value1"}});
+                    }
+                };
+        LinkedHashMap<String, Object> expectedStreamFullInfo =
+                new LinkedHashMap<>() {
+                    {
+                        put("radix-tree-keys", 1L);
+                        put("radix-tree-nodes", 2L);
+                        put("entries", new Object[][] {{"0-1", new Object[] {"field1", "value1"}}});
+                        put("length", 1L);
+                        put("groups", new Object[0]);
+                        put("last-generated-id", "0-1");
+                    }
+                };
+
+        transaction
+                .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xinfoStream(streamKey)
+                .xinfoStreamFull(streamKey);
+
+        Object[] results = client.exec(transaction).get();
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedStreamInfo.put("max-deleted-entry-id", "0-0");
+            expectedStreamInfo.put("entries-added", 1L);
+            expectedStreamInfo.put("recorded-first-entry-id", "0-1");
+            expectedStreamFullInfo.put("max-deleted-entry-id", "0-0");
+            expectedStreamFullInfo.put("entries-added", 1L);
+            expectedStreamFullInfo.put("recorded-first-entry-id", "0-1");
+        }
+
+        assertDeepEquals(
+                new Object[] {
+                    "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
+                    expectedStreamInfo, // xinfoStream(streamKey)
+                    expectedStreamFullInfo, // xinfoStreamFull(streamKey1)
+                },
+                results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void binary_strings() {
+        String key = UUID.randomUUID().toString();
+        client.set(key, "_").get();
+        // use dump to ensure that we have non-string convertible bytes
+        var bytes = client.dump(gs(key)).get();
+
+        var transaction = new Transaction().withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+
+        var responses = client.exec(transaction).get();
+
+        assertDeepEquals(
+                new Object[] {
+                    OK, gs(bytes),
+                },
+                responses);
     }
 }
