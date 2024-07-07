@@ -4865,7 +4865,7 @@ class Transaction(BaseTransaction):
             message (TEncodable): Message to publish
             channel (TEncodable): Channel to publish the message on.
 
-        Returns:
+        Command Respose:
             int: Number of subscriptions in that shard that received the message.
 
         """
