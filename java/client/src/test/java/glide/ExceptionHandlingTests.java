@@ -16,7 +16,7 @@ import static response.ResponseOuterClass.RequestErrorType.Unspecified;
 import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass;
 import glide.api.logging.Logger;
-import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
@@ -288,8 +288,8 @@ public class ExceptionHandlingTests {
     // TODO add tests for error handling in MessageHandler
 
     /** Create a config which causes connection failure. */
-    private static RedisClientConfiguration createDummyConfig() {
-        return RedisClientConfiguration.builder().build();
+    private static GlideClientConfiguration createDummyConfig() {
+        return GlideClientConfiguration.builder().build();
     }
 
     /** Test ChannelHandler extension which allows to validate whether the channel was closed. */

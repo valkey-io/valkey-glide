@@ -17,8 +17,8 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
-import glide.api.RedisClient;
-import glide.api.RedisClusterClient;
+import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
@@ -79,7 +79,7 @@ public class PubSubTests {
             if (callback.isPresent()) {
                 subConfigBuilder.callback(callback.get(), context.get());
             }
-            return RedisClient.createClient(
+            return GlideClient.createClient(
                             commonClientConfig()
                                     .requestTimeout(5000)
                                     .subscriptionConfiguration(subConfigBuilder.build())
@@ -94,7 +94,7 @@ public class PubSubTests {
                 subConfigBuilder.callback(callback.get(), context.get());
             }
 
-            return RedisClusterClient.createClient(
+            return GlideClusterClient.createClient(
                             commonClusterClientConfig()
                                     .requestTimeout(5000)
                                     .subscriptionConfiguration(subConfigBuilder.build())
@@ -112,9 +112,9 @@ public class PubSubTests {
     @SneakyThrows
     private BaseClient createClient(boolean standalone) {
         if (standalone) {
-            return RedisClient.createClient(commonClientConfig().build()).get();
+            return GlideClient.createClient(commonClientConfig().build()).get();
         }
-        return RedisClusterClient.createClient(commonClusterClientConfig().build()).get();
+        return GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
     }
 
     /**
@@ -132,13 +132,13 @@ public class PubSubTests {
     @SneakyThrows
     public void cleanup() {
         for (var client : clients) {
-            if (client instanceof RedisClusterClient) {
-                ((RedisClusterClient) client).customCommand(new String[] {"unsubscribe"}, ALL_NODES).get();
-                ((RedisClusterClient) client).customCommand(new String[] {"punsubscribe"}, ALL_NODES).get();
-                ((RedisClusterClient) client).customCommand(new String[] {"sunsubscribe"}, ALL_NODES).get();
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client).customCommand(new String[] {"unsubscribe"}, ALL_NODES).get();
+                ((GlideClusterClient) client).customCommand(new String[] {"punsubscribe"}, ALL_NODES).get();
+                ((GlideClusterClient) client).customCommand(new String[] {"sunsubscribe"}, ALL_NODES).get();
             } else {
-                ((RedisClient) client).customCommand(new String[] {"unsubscribe"}).get();
-                ((RedisClient) client).customCommand(new String[] {"punsubscribe"}).get();
+                ((GlideClient) client).customCommand(new String[] {"unsubscribe"}).get();
+                ((GlideClient) client).customCommand(new String[] {"punsubscribe"}).get();
             }
             client.close();
         }
@@ -295,7 +295,7 @@ public class PubSubTests {
         var subscriptions = Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
         var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
-        var sender = (RedisClusterClient) createClient(false);
+        var sender = (GlideClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
         sender.publish(pubsubMessage, channel, true).get();
@@ -329,7 +329,7 @@ public class PubSubTests {
         }
 
         var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
-        var sender = (RedisClusterClient) createClient(false);
+        var sender = (GlideClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : pubsubMessages) {
@@ -586,7 +586,7 @@ public class PubSubTests {
         }
 
         var listener = createListener(false, method == MessageReadMethod.Callback, 1, subscriptions);
-        var sender = (RedisClusterClient) createClient(false);
+        var sender = (GlideClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
@@ -643,7 +643,7 @@ public class PubSubTests {
         }
 
         var listener = createListener(false, false, 1, subscriptions);
-        var sender = (RedisClusterClient) createClient(false);
+        var sender = (GlideClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
@@ -746,7 +746,7 @@ public class PubSubTests {
                         PubSubClusterChannelMode.SHARDED.ordinal(),
                         subscriptionsSharded);
 
-        var sender = (RedisClusterClient) createClient(false);
+        var sender = (GlideClusterClient) createClient(false);
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded, sender));
 
         for (var pubsubMessage : exactMessages) {
@@ -823,22 +823,22 @@ public class PubSubTests {
 
         var listenerExact =
                 method == MessageReadMethod.Callback
-                        ? (RedisClusterClient)
+                        ? (GlideClusterClient)
                                 createListener(
                                         false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact)
-                        : (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact);
+                        : (GlideClusterClient) createClientWithSubscriptions(false, subscriptionsExact);
 
         var listenerPattern =
                 method == MessageReadMethod.Callback
                         ? createListener(
                                 false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern)
-                        : (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern);
+                        : (GlideClusterClient) createClientWithSubscriptions(false, subscriptionsPattern);
 
         var listenerSharded =
                 method == MessageReadMethod.Callback
                         ? createListener(
                                 false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded)
-                        : (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
+                        : (GlideClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
 
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
@@ -904,7 +904,7 @@ public class PubSubTests {
         client.close();
 
         // using sharded channels from different slots in a transaction causes a cross slot error
-        var clusterClient = (RedisClusterClient) createClient(false);
+        var clusterClient = (GlideClusterClient) createClient(false);
         var transaction =
                 new ClusterTransaction()
                         .publish("one", "abc", true)
@@ -959,14 +959,14 @@ public class PubSubTests {
                     new Transaction()
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
-            ((RedisClient) sender).exec(transaction).get();
+            ((GlideClient) sender).exec(transaction).get();
         } else {
             var transaction =
                     new ClusterTransaction()
                             .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
                             .publish(exactMessage.getMessage(), exactMessage.getChannel())
                             .publish(patternMessage.getMessage(), patternMessage.getChannel());
-            ((RedisClusterClient) sender).exec(transaction).get();
+            ((GlideClusterClient) sender).exec(transaction).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -1038,7 +1038,7 @@ public class PubSubTests {
         clients.addAll(Arrays.asList(listener, sender));
 
         assertEquals(OK, sender.publish(message, channel).get());
-        assertEquals(OK, ((RedisClusterClient) sender).publish(message2, channel, true).get());
+        assertEquals(OK, ((GlideClusterClient) sender).publish(message2, channel, true).get());
 
         // Allow the message to propagate.
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
@@ -1136,7 +1136,7 @@ public class PubSubTests {
         var sender = createClient(standalone);
         clients.addAll(Arrays.asList(listener, sender));
 
-        assertEquals(OK, ((RedisClusterClient) sender).publish(message, channel, true).get());
+        assertEquals(OK, ((GlideClusterClient) sender).publish(message, channel, true).get());
 
         // Allow the message to propagate.
         Thread.sleep(MESSAGE_DELIVERY_DELAY);

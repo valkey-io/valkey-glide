@@ -376,19 +376,19 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-public class RedisClientTest {
+public class GlideClientTest {
 
     // bypass import conflict between Set (collection) and Set (enum variant)
     private static final RequestType pSet = RequestType.Set;
 
-    RedisClient service;
+    GlideClient service;
 
     CommandManager commandManager;
 
     @BeforeEach
     public void setUp() {
         commandManager = mock(CommandManager.class);
-        service = new RedisClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
+        service = new GlideClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @SneakyThrows

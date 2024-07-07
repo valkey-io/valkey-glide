@@ -1,19 +1,19 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
-import glide.api.RedisClusterClient;
+import glide.api.GlideClusterClient;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Represents the configuration settings for a Cluster Redis client {@link RedisClusterClient}.
+ * Represents the configuration settings for a Cluster Redis client {@link GlideClusterClient}.
  *
  * @apiNote Currently, the reconnection strategy in cluster mode is not configurable, and
  *     exponential backoff with fixed values is used.
  * @example
  *     <pre>{@code
- * RedisClientConfiguration redisClientConfiguration =
- *     RedisClientConfiguration.builder()
+ * GlideClientConfiguration glideClientConfiguration =
+ *     GlideClientConfiguration.builder()
  *         .address(node1address)
  *         .address(node2address)
  *         .useTLS(true)
@@ -27,7 +27,7 @@ import lombok.experimental.SuperBuilder;
  */
 @SuperBuilder
 @Getter
-public class RedisClusterClientConfiguration extends BaseClientConfiguration {
+public class GlideClusterClientConfiguration extends BaseClientConfiguration {
 
     /** Subscription configuration for the current client. */
     private final ClusterSubscriptionConfiguration subscriptionConfiguration;

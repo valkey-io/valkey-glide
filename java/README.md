@@ -220,8 +220,8 @@ public class Main {
         Integer port6 = 7006;
         boolean useSsl = false;
 
-        RedisClusterClientConfiguration config =
-                RedisClusterClientConfiguration.builder()
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port1).port(port2).port(port3).port(port4).port(port5).port(port6).build())
                         .useTLS(useSsl)
                         .build();

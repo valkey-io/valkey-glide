@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.NodeAddress;
-import glide.api.RedisClient;
+import glide.api.GlideClient;
 import glide.api.logging.Logger;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.CallbackDispatcher;
@@ -187,7 +187,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
         }
     }
 
-    private static class TestClient extends RedisClient {
+    private static class TestClient extends GlideClient {
 
         public TestClient(ChannelHandler channelHandler) {
             super(

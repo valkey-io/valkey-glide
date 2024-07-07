@@ -11,17 +11,17 @@ import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 
-import glide.api.RedisClient;
+import glide.api.GlideClient;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import lombok.NonNull;
 
 /**
- * Transaction implementation for standalone {@link RedisClient}. Transactions allow the execution
+ * Transaction implementation for standalone {@link GlideClient}. Transactions allow the execution
  * of a group of commands in a single step.
  *
  * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
- * {@link RedisClient#exec} API, in the order they were given. Each element in the array represents
+ * {@link GlideClient#exec} API, in the order they were given. Each element in the array represents
  * a command given to the {@link Transaction}. The response for each command depends on the executed
  * Valkey command. Specific response types are documented alongside each method.
  *

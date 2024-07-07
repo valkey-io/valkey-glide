@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TransactionTestUtilities.TransactionBuilder;
-import glide.api.RedisClient;
+import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
@@ -52,12 +52,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Timeout(10) // seconds
 public class TransactionTests {
 
-    private static RedisClient client = null;
+    private static GlideClient client = null;
 
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        client = RedisClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
+        client = GlideClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll

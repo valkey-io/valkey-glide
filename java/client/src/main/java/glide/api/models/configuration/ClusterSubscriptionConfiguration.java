@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
-import glide.api.RedisClusterClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,7 +10,7 @@ import java.util.Set;
 import lombok.Getter;
 
 /**
- * Subscription configuration for {@link RedisClusterClient}.
+ * Subscription configuration for {@link GlideClusterClient}.
  *
  * @example
  *     <pre>{@code
@@ -22,9 +22,9 @@ import lombok.Getter;
  *         .subscription(SHARDED, "data")
  *         .callback(callback)
  *         .build();
- * // Now it could be supplied to `RedisClusterClientConfiguration`:
- * RedisClusterClientConfiguration clientConfiguration =
- *     RedisClusterClientConfiguration.builder()
+ * // Now it could be supplied to `GlideClusterClientConfiguration`:
+ * GlideClusterClientConfiguration clientConfiguration =
+ *     GlideClusterClientConfiguration.builder()
  *         .address(NodeAddress.builder().port(6379).build())
  *         .subscriptionConfiguration(subscriptionConfiguration)
  *         .build();

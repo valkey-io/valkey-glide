@@ -55,7 +55,7 @@ import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
-import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
@@ -64,10 +64,9 @@ import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**
- * Async (non-blocking) client for Redis in Standalone mode. Use {@link #createClient} to request a
- * client to Redis.
+ * Async (non-blocking) client for Standalone mode. Use {@link #createClient} to request a client.
  */
-public class RedisClient extends BaseClient
+public class GlideClient extends BaseClient
         implements GenericCommands,
                 ServerManagementCommands,
                 ConnectionManagementCommands,
@@ -77,19 +76,19 @@ public class RedisClient extends BaseClient
     /**
      * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
      */
-    protected RedisClient(ClientBuilder builder) {
+    protected GlideClient(ClientBuilder builder) {
         super(builder);
     }
 
     /**
-     * Async request for an async (non-blocking) Redis client in Standalone mode.
+     * Async request for an async (non-blocking) client in Standalone mode.
      *
-     * @param config Redis client Configuration.
-     * @return A Future to connect and return a RedisClient.
+     * @param config Glide client Configuration.
+     * @return A Future to connect and return a GlideClient.
      */
-    public static CompletableFuture<RedisClient> createClient(
-            @NonNull RedisClientConfiguration config) {
-        return createClient(config, RedisClient::new);
+    public static CompletableFuture<GlideClient> createClient(
+            @NonNull GlideClientConfiguration config) {
+        return createClient(config, GlideClient::new);
     }
 
     @Override
