@@ -2,6 +2,16 @@
 package glide.managers;
 
 import com.google.protobuf.ByteString;
+import command_request.CommandRequestOuterClass;
+import command_request.CommandRequestOuterClass.Command;
+import command_request.CommandRequestOuterClass.Command.ArgsArray;
+import command_request.CommandRequestOuterClass.CommandRequest;
+import command_request.CommandRequestOuterClass.RequestType;
+import command_request.CommandRequestOuterClass.Routes;
+import command_request.CommandRequestOuterClass.ScriptInvocation;
+import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
+import command_request.CommandRequestOuterClass.SimpleRoutes;
+import command_request.CommandRequestOuterClass.SlotTypes;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -26,16 +36,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import redis_request.RedisRequestOuterClass;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
-import redis_request.RedisRequestOuterClass.RedisRequest;
-import redis_request.RedisRequestOuterClass.RequestType;
-import redis_request.RedisRequestOuterClass.Routes;
-import redis_request.RedisRequestOuterClass.ScriptInvocation;
-import redis_request.RedisRequestOuterClass.ScriptInvocationPointers;
-import redis_request.RedisRequestOuterClass.SimpleRoutes;
-import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -74,7 +74,7 @@ public class CommandManager {
             String[] arguments,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -91,7 +91,7 @@ public class CommandManager {
             GlideString[] arguments,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -110,7 +110,7 @@ public class CommandManager {
             Route route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -129,7 +129,7 @@ public class CommandManager {
             Route route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -143,7 +143,7 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewTransaction(
             Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(transaction);
+        CommandRequest.Builder command = prepareCommandRequest(transaction);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -162,7 +162,7 @@ public class CommandManager {
             List<GlideString> args,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareScript(script, keys, args);
+        CommandRequest.Builder command = prepareScript(script, keys, args);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -179,7 +179,7 @@ public class CommandManager {
             Optional<Route> route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(transaction, route);
+        CommandRequest.Builder command = prepareCommandRequest(transaction, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -196,7 +196,7 @@ public class CommandManager {
             @NonNull ScanOptions options,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        final RedisRequest.Builder command = prepareCursorRequest(cursor, options);
+        final CommandRequest.Builder command = prepareCursorRequest(cursor, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -208,7 +208,7 @@ public class CommandManager {
      * @return A result promise of type T
      */
     protected <T> CompletableFuture<T> submitCommandToChannel(
-            RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            CommandRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
         if (channel.isClosed()) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
@@ -233,16 +233,16 @@ public class CommandManager {
      * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, String[] arguments, Route route) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
         var builder =
-                RedisRequest.newBuilder()
+                CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return prepareCommandRequestRoute(builder, route);
     }
 
     /**
@@ -254,16 +254,16 @@ public class CommandManager {
      * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, GlideString[] arguments, Route route) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
         var builder =
-                RedisRequest.newBuilder()
+                CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return prepareCommandRequestRoute(builder, route);
     }
 
     /**
@@ -273,8 +273,8 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
-        return RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+    protected CommandRequest.Builder prepareCommandRequest(Transaction transaction) {
+        return CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
     }
 
     /**
@@ -286,13 +286,13 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareScript(
+    protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
 
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
                         + args.stream().mapToLong(key -> key.getBytes().length).sum()
                 > RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
-            return RedisRequest.newBuilder()
+            return CommandRequest.newBuilder()
                     .setScriptInvocationPointers(
                             ScriptInvocationPointers.newBuilder()
                                     .setHash(script.getHash())
@@ -305,7 +305,7 @@ public class CommandManager {
                                     .build());
         }
 
-        return RedisRequest.newBuilder()
+        return CommandRequest.newBuilder()
                 .setScriptInvocation(
                         ScriptInvocation.newBuilder()
                                 .setHash(script.getHash())
@@ -330,13 +330,13 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             ClusterTransaction transaction, Optional<Route> route) {
 
-        RedisRequest.Builder builder =
-                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
-        return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
+        return route.isPresent() ? prepareCommandRequestRoute(builder, route.get()) : builder;
     }
 
     /**
@@ -347,11 +347,11 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareCursorRequest(
+    protected CommandRequest.Builder prepareCursorRequest(
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
-        RedisRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
-                RedisRequestOuterClass.ClusterScan.newBuilder();
+        CommandRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
+                CommandRequestOuterClass.ClusterScan.newBuilder();
 
         if (cursor != ClusterScanCursor.INITIAL_CURSOR_INSTANCE) {
             if (cursor instanceof ClusterScanCursorDetail) {
@@ -373,7 +373,7 @@ public class CommandManager {
             clusterScanBuilder.setObjectType(options.getType().getNativeName());
         }
 
-        return RedisRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
+        return CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
     }
 
     /**
@@ -384,11 +384,12 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(RequestType requestType, String[] arguments) {
+    protected CommandRequest.Builder prepareCommandRequest(
+            RequestType requestType, String[] arguments) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        return RedisRequest.newBuilder()
+        return CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
     }
 
@@ -400,16 +401,17 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, GlideString[] arguments) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        return RedisRequest.newBuilder()
+        return CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
     }
 
-    private RedisRequest.Builder prepareRedisRequestRoute(RedisRequest.Builder builder, Route route) {
+    private CommandRequest.Builder prepareCommandRequestRoute(
+            CommandRequest.Builder builder, Route route) {
 
         if (route instanceof SimpleMultiNodeRoute) {
             builder.setRoute(
@@ -425,7 +427,7 @@ public class CommandManager {
             builder.setRoute(
                     Routes.newBuilder()
                             .setSlotIdRoute(
-                                    RedisRequestOuterClass.SlotIdRoute.newBuilder()
+                                    CommandRequestOuterClass.SlotIdRoute.newBuilder()
                                             .setSlotId(((SlotIdRoute) route).getSlotId())
                                             .setSlotType(
                                                     SlotTypes.forNumber(((SlotIdRoute) route).getSlotType().ordinal()))));
@@ -433,7 +435,7 @@ public class CommandManager {
             builder.setRoute(
                     Routes.newBuilder()
                             .setSlotKeyRoute(
-                                    RedisRequestOuterClass.SlotKeyRoute.newBuilder()
+                                    CommandRequestOuterClass.SlotKeyRoute.newBuilder()
                                             .setSlotKey(((SlotKeyRoute) route).getSlotKey())
                                             .setSlotType(
                                                     SlotTypes.forNumber(((SlotKeyRoute) route).getSlotType().ordinal()))));
@@ -441,7 +443,7 @@ public class CommandManager {
             builder.setRoute(
                     Routes.newBuilder()
                             .setByAddressRoute(
-                                    RedisRequestOuterClass.ByAddressRoute.newBuilder()
+                                    CommandRequestOuterClass.ByAddressRoute.newBuilder()
                                             .setHost(((ByAddressRoute) route).getHost())
                                             .setPort(((ByAddressRoute) route).getPort())));
         } else {

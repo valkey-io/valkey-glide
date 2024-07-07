@@ -1,5 +1,5 @@
 syntax = "proto3";
-package redis_request;
+package command_request;
 
 enum SimpleRoutes {
     AllNodes=0;
@@ -286,7 +286,7 @@ message ClusterScan {
     optional string object_type = 4;
 }
 
-message RedisRequest {
+message CommandRequest {
     uint32 callback_idx = 1;
 
     oneof command {

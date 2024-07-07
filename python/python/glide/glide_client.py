@@ -22,8 +22,8 @@ from glide.exceptions import (
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
+from glide.protobuf.command_request_pb2 import Command, CommandRequest, RequestType
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
@@ -248,7 +248,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = [
@@ -274,7 +274,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         transaction_commands = []
         for requst_type, args in commands:
@@ -303,7 +303,7 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         (encoded_keys, keys_size) = self._encode_and_sum_size(keys)
         (encoded_args, args_size) = self._encode_and_sum_size(args)
@@ -438,7 +438,7 @@ class BaseClient(CoreCommands):
             if pubsub_message:
                 self._pubsub_futures.pop(0).set_result(pubsub_message)
 
-    async def _write_request_await_response(self, request: RedisRequest):
+    async def _write_request_await_response(self, request: CommandRequest):
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)
@@ -546,7 +546,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = CommandRequest()
         request.callback_idx = self._get_callback_index()
         # Take out the id string from the wrapping object
         cursor_string = cursor.get_cursor()

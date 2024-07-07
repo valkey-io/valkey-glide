@@ -22,7 +22,7 @@ from glide.constants import (
     TResult,
     TSingleNodeRoute,
 )
-from glide.protobuf.redis_request_pb2 import RequestType
+from glide.protobuf.command_request_pb2 import RequestType
 from glide.routes import Route
 
 from ..glide import ClusterScanCursor

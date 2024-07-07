@@ -213,7 +213,7 @@ A redis command can either have a standalone or cluster implementation which is 
 - A cluster command will require a note to indicate a node will follow a specific routing.
 Refer to https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec for more details on how hash slots work for cluster commands.
 
-When you start implementing a new command, check the [redis_request.proto](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/protobuf/redis_request.proto) and [request_type.rs](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
+When you start implementing a new command, check the [command_request.proto](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/protobuf/command_request.proto) and [request_type.rs](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
 
 Standalone and cluster clients both extend [BaseClient.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/BaseClient.java) and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
 The return types of these methods are in the form of a `CompletableFuture`, which fulfill the purpose of the asynchronous features of the program.

@@ -1,25 +1,25 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.models.TransactionTests.buildArgs;
 import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
+import command_request.CommandRequestOuterClass.Command;
+import command_request.CommandRequestOuterClass.Command.ArgsArray;
+import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortClusterOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
-import redis_request.RedisRequestOuterClass.RequestType;
 
 public class ClusterTransactionTests {
 

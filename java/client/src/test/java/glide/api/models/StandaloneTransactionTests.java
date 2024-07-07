@@ -1,6 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
+import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.Select;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.TransactionTests.buildArgs;
@@ -16,25 +22,19 @@ import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.ZSET;
 import static glide.api.models.commands.scan.ScanOptions.TYPE_OPTION_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.Move;
-import static redis_request.RedisRequestOuterClass.RequestType.Scan;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
+import command_request.CommandRequestOuterClass;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass;
 
 public class StandaloneTransactionTests {
     @Test
     public void standalone_transaction_commands() {
-        List<Pair<RedisRequestOuterClass.RequestType, RedisRequestOuterClass.Command.ArgsArray>>
+        List<Pair<CommandRequestOuterClass.RequestType, CommandRequestOuterClass.Command.ArgsArray>>
                 results = new LinkedList<>();
         Transaction transaction = new Transaction();
 
@@ -198,7 +198,7 @@ public class StandaloneTransactionTests {
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            RedisRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
+            CommandRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(
