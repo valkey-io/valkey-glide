@@ -5594,7 +5594,7 @@ public class SharedCommandTests {
 
         // ENTRIESREAD option was added in redis 7.0.0
         StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead(10L).build();
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
         } else {
             executionException =
@@ -6192,7 +6192,7 @@ public class SharedCommandTests {
 
         // Reset the last delivered ID for the consumer group to "1-1".
         // ENTRIESREAD is only supported in Redis version 7.0.0 and higher.
-        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+        if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, 1L).get());
