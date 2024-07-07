@@ -58,7 +58,7 @@ jobs:
             matrix:
                 engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 python:
-                  - "3.12"
+                  - "3.10"
 
         steps:
             - uses: actions/checkout@v4
