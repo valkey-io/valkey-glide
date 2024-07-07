@@ -32,11 +32,11 @@ import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
@@ -442,7 +442,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
                 Lolwut,
-                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
 
@@ -450,7 +450,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> lolwut(int version, int @NonNull [] parameters) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
@@ -486,7 +486,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<ClusterValue<String>> lolwut(int version, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Lolwut,
-                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -499,7 +499,7 @@ public class GlideClusterClient extends BaseClient
             int version, int @NonNull [] parameters, @NonNull Route route) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(
                 Lolwut,
@@ -599,7 +599,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -607,7 +607,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
@@ -617,8 +617,8 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode
-                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
-                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                        ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -628,9 +628,9 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 new ArgsBuilder()
-                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
-                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
@@ -640,7 +640,7 @@ public class GlideClusterClient extends BaseClient
             boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
                 route,
                 response -> handleFunctionListResponse(response, route));
     }
@@ -649,7 +649,7 @@ public class GlideClusterClient extends BaseClient
             boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
                 route,
                 response -> handleFunctionListResponseBinary(response, route));
     }
@@ -660,8 +660,8 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode
-                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
-                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                        ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
                 route,
                 response -> handleFunctionListResponse(response, route));
     }
@@ -671,9 +671,9 @@ public class GlideClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 new ArgsBuilder()
-                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
-                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
                 route,
                 response -> handleFunctionListResponseBinary(response, route));

@@ -15,11 +15,11 @@ import lombok.NonNull;
  */
 public abstract class StreamTrimOptions {
 
-    public static final String TRIM_MAXLEN_REDIS_API = "MAXLEN";
-    public static final String TRIM_MINID_REDIS_API = "MINID";
-    public static final String TRIM_EXACT_REDIS_API = "=";
-    public static final String TRIM_NOT_EXACT_REDIS_API = "~";
-    public static final String TRIM_LIMIT_REDIS_API = "LIMIT";
+    public static final String TRIM_MAXLEN_VALKEY_API = "MAXLEN";
+    public static final String TRIM_MINID_VALKEY_API = "MINID";
+    public static final String TRIM_EXACT_VALKEY_API = "=";
+    public static final String TRIM_NOT_EXACT_VALKEY_API = "~";
+    public static final String TRIM_LIMIT_VALKEY_API = "LIMIT";
 
     /**
      * If <code>true</code>, the stream will be trimmed exactly. Equivalent to <code>=</code> in the
@@ -35,16 +35,16 @@ public abstract class StreamTrimOptions {
 
     protected abstract String getThreshold();
 
-    protected List<String> getRedisApi() {
+    protected List<String> getValkeyApi() {
         List<String> optionArgs = new ArrayList<>();
 
         optionArgs.add(this.getMethod());
         if (this.exact != null) {
-            optionArgs.add(this.exact ? TRIM_EXACT_REDIS_API : TRIM_NOT_EXACT_REDIS_API);
+            optionArgs.add(this.exact ? TRIM_EXACT_VALKEY_API : TRIM_NOT_EXACT_VALKEY_API);
         }
         optionArgs.add(this.getThreshold());
         if (this.limit != null) {
-            optionArgs.add(TRIM_LIMIT_REDIS_API);
+            optionArgs.add(TRIM_LIMIT_VALKEY_API);
             optionArgs.add(this.limit.toString());
         }
 
@@ -60,8 +60,8 @@ public abstract class StreamTrimOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
 
-        if (this.getRedisApi() != null) {
-            optionArgs.addAll(this.getRedisApi());
+        if (this.getValkeyApi() != null) {
+            optionArgs.addAll(this.getValkeyApi());
         }
 
         return optionArgs.toArray(new String[0]);
@@ -148,7 +148,7 @@ public abstract class StreamTrimOptions {
 
         @Override
         protected String getMethod() {
-            return TRIM_MINID_REDIS_API;
+            return TRIM_MINID_VALKEY_API;
         }
 
         @Override
@@ -199,7 +199,7 @@ public abstract class StreamTrimOptions {
 
         @Override
         protected String getMethod() {
-            return TRIM_MAXLEN_REDIS_API;
+            return TRIM_MAXLEN_VALKEY_API;
         }
 
         @Override

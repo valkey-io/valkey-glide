@@ -32,7 +32,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.BaseClient.OK;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
@@ -40,8 +40,8 @@ import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -69,7 +69,7 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
-import glide.managers.RedisExceptionCheckedFunction;
+import glide.managers.GlideExceptionCheckedFunction;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -191,7 +191,7 @@ public class GlideClusterClientTest {
         @Override
         public <T> CompletableFuture<T> submitCommandToChannel(
                 CommandRequest.Builder command,
-                RedisExceptionCheckedFunction<Response, T> responseHandler) {
+                GlideExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }
@@ -427,7 +427,7 @@ public class GlideClusterClientTest {
     @Test
     public void echo_with_route_returns_success() {
         // setup
-        String message = "GLIDE FOR REDIS";
+        String message = "Valkey GLIDE";
         String[] arguments = new String[] {message};
         CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.ofSingleValue(message));
@@ -450,7 +450,7 @@ public class GlideClusterClientTest {
     @Test
     public void echo_binary_with_route_returns_success() {
         // setup
-        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString message = gs("Valkey GLIDE");
         GlideString[] arguments = new GlideString[] {message};
         CompletableFuture<ClusterValue<GlideString>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.ofSingleValue(message));
@@ -1162,7 +1162,7 @@ public class GlideClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_VALKEY_API, "42"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1178,7 +1178,7 @@ public class GlideClusterClientTest {
     public void lolwut_with_version_and_params_returns_success() {
         // setup
         String value = "pewpew";
-        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        String[] arguments = new String[] {VERSION_VALKEY_API, "42", "1", "2"};
         int[] params = new int[] {1, 2};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1249,7 +1249,7 @@ public class GlideClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_VALKEY_API, "42"}), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1265,7 +1265,7 @@ public class GlideClusterClientTest {
     public void lolwut_with_version_and_params_and_route_returns_success() {
         // setup
         ClusterValue<String> value = ClusterValue.ofSingleValue("pewpew");
-        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        String[] arguments = new String[] {VERSION_VALKEY_API, "42", "1", "2"};
         int[] params = new int[] {1, 2};
         CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1562,7 +1562,7 @@ public class GlideClusterClientTest {
     public void functionList_with_pattern_returns_success() {
         // setup
         String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
+        String[] args = new String[] {LIBRARY_NAME_VALKEY_API, pattern, WITH_CODE_VALKEY_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -1587,7 +1587,7 @@ public class GlideClusterClientTest {
         // setup
         GlideString pattern = gs("*");
         GlideString[] args =
-                new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern, gs(WITH_CODE_REDIS_API)};
+                new GlideString[] {gs(LIBRARY_NAME_VALKEY_API), pattern, gs(WITH_CODE_VALKEY_API)};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -1612,7 +1612,7 @@ public class GlideClusterClientTest {
     @Test
     public void functionList_with_route_returns_success() {
         // setup
-        String[] args = new String[] {WITH_CODE_REDIS_API};
+        String[] args = new String[] {WITH_CODE_VALKEY_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
@@ -1637,7 +1637,7 @@ public class GlideClusterClientTest {
     @Test
     public void functionList_binary_with_route_returns_success() {
         // setup
-        GlideString[] args = new GlideString[] {gs(WITH_CODE_REDIS_API)};
+        GlideString[] args = new GlideString[] {gs(WITH_CODE_VALKEY_API)};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> testResponse =
@@ -1664,7 +1664,7 @@ public class GlideClusterClientTest {
     public void functionList_with_pattern_and_route_returns_success() {
         // setup
         String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern};
+        String[] args = new String[] {LIBRARY_NAME_VALKEY_API, pattern};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
@@ -1690,7 +1690,7 @@ public class GlideClusterClientTest {
     public void functionList_binary_with_pattern_and_route_returns_success() {
         // setup
         GlideString pattern = gs("*");
-        GlideString[] args = new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern};
+        GlideString[] args = new GlideString[] {gs(LIBRARY_NAME_VALKEY_API), pattern};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> testResponse =

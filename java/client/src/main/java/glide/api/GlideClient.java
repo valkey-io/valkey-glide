@@ -35,8 +35,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Time;
 import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -234,7 +234,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
                 Lolwut,
-                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
 
@@ -242,7 +242,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> lolwut(int version, int @NonNull [] parameters) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
@@ -286,7 +286,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -294,7 +294,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
@@ -304,8 +304,8 @@ public class GlideClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode
-                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
-                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                        ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -315,9 +315,9 @@ public class GlideClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 new ArgsBuilder()
-                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
-                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
@@ -391,7 +391,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB) {
         String[] arguments =
-                new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
@@ -399,7 +399,9 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
         GlideString[] arguments =
-                new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
@@ -407,9 +409,9 @@ public class GlideClient extends BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
         String[] arguments =
-                new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
         if (replace) {
-            arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
@@ -421,9 +423,11 @@ public class GlideClient extends BaseClient
             long destinationDB,
             boolean replace) {
         GlideString[] arguments =
-                new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
         if (replace) {
-            arguments = ArrayUtils.add(arguments, gs(REPLACE_REDIS_API));
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }

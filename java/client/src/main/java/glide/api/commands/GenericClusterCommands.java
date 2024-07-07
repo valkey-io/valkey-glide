@@ -27,9 +27,8 @@ public interface GenericClusterCommands {
      * <p>The command will be routed to all primaries.
      *
      * @apiNote See <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
-     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
-     *     API.
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
+     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name.
      * @return Response from Redis containing an <code>Object</code>.
      * @example
@@ -476,7 +475,7 @@ public interface GenericClusterCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return An <code>Array</code> of sorted elements.
@@ -497,7 +496,7 @@ public interface GenericClusterCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return An <code>Array</code> of sorted elements.
