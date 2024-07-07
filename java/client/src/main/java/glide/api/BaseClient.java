@@ -249,6 +249,7 @@ import glide.api.models.commands.stream.StreamAddOptionsBinary;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamPendingOptionsBinary;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -1947,7 +1948,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmin(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(BZPopMin, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZPopMin, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -1984,7 +1986,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmax(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZPopMax, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -2730,7 +2733,7 @@ public abstract class BaseClient
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count) {
-        return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
+        return xpending(key, group, start, end, count, StreamPendingOptionsBinary.builder().build());
     }
 
     @Override
@@ -2753,13 +2756,11 @@ public abstract class BaseClient
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count,
-            @NonNull StreamPendingOptions options) {
-        String[] toArgsString = options.toArgs(start, end, count);
-        GlideString[] toArgs =
-                Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
-        GlideString[] args = concatenateArrays(new GlideString[] {key, group}, toArgs);
+            @NonNull StreamPendingOptionsBinary options) {
+        GlideString[] args =
+                concatenateArrays(new GlideString[] {key, group}, options.toArgs(start, end, count));
         return commandManager.submitNewCommand(
-                XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+                XPending, args, response -> castArray(handleArrayResponseBinary(response), Object[].class));
     }
 
     @Override
@@ -2784,7 +2785,10 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))}, ids);
-        return commandManager.submitNewCommand(XClaim, args, this::handleBinaryStringMapResponse);
+        return commandManager.submitNewCommand(
+                XClaim,
+                args,
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -2815,7 +2819,10 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))}, ids, toArgs);
-        return commandManager.submitNewCommand(XClaim, args, this::handleBinaryStringMapResponse);
+        return commandManager.submitNewCommand(
+                XClaim,
+                args,
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -2847,7 +2854,9 @@ public abstract class BaseClient
                         ids,
                         new GlideString[] {gs(JUST_ID_REDIS_API)});
         return commandManager.submitNewCommand(
-                XClaim, args, response -> castArray(handleArrayResponse(response), GlideString.class));
+                XClaim,
+                args,
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -2886,7 +2895,9 @@ public abstract class BaseClient
                         toArgs,
                         new GlideString[] {gs(JUST_ID_REDIS_API)});
         return commandManager.submitNewCommand(
-                XClaim, args, response -> castArray(handleArrayResponse(response), GlideString.class));
+                XClaim,
+                args,
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -3256,7 +3267,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(modifier.toString())});
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3280,7 +3291,7 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3302,7 +3313,8 @@ public abstract class BaseClient
                         new GlideString[] {gs(Double.toString(timeout)), gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(modifier.toString())});
-        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3326,7 +3338,8 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override

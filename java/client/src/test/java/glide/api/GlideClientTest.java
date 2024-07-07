@@ -350,6 +350,7 @@ import glide.api.models.commands.stream.StreamAddOptionsBinary;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamPendingOptionsBinary;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -8654,7 +8655,7 @@ public class GlideClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
-        String consumer = "testConsumer";
+        GlideString consumer = gs("testConsumer");
         GlideString[] arguments = {
             key,
             groupName,
@@ -8663,7 +8664,7 @@ public class GlideClientTest {
             gs(MINIMUM_RANGE_REDIS_API),
             gs(MAXIMUM_RANGE_REDIS_API),
             gs("4"),
-            gs(consumer)
+            consumer
         };
         StreamRange start = InfRangeBound.MIN;
         StreamRange end = InfRangeBound.MAX;
@@ -8685,7 +8686,7 @@ public class GlideClientTest {
                         start,
                         end,
                         count,
-                        StreamPendingOptions.builder().minIdleTime(100L).consumer(consumer).build());
+                        StreamPendingOptionsBinary.builder().minIdleTime(100L).consumer(consumer).build());
         Object[][] payload = response.get();
 
         // verify
