@@ -310,7 +310,7 @@ import lombok.NonNull;
  */
 @Getter
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
-    /** Command class to send a single request to Redis. */
+    /** Command class to send a single request to Valkey. */
     protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
 
     /**
@@ -4144,7 +4144,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
      *           values being a 2D list of the field-value pairs in the format <code>
      *           [[field1, value1], [field2, value2], ...]</code>.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4183,7 +4183,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
      *           values being a 2D list of the field-value pairs in the format <code>
      *           [[field1, value1], [field2, value2], ...]</code>.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4229,7 +4229,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4274,7 +4274,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4413,7 +4413,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Displays a piece of generative computer art and the server version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut() {
@@ -4434,7 +4434,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int @NonNull [] parameters) {
@@ -4448,7 +4448,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int version) {
@@ -4470,7 +4470,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>For version <code>6</code>, those are number of columns and number of lines.
      *     </ul>
      *
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int version, int @NonNull [] parameters) {
@@ -5366,7 +5366,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
