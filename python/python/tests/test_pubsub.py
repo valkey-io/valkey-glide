@@ -1957,7 +1957,9 @@ class TestPubSub:
                 == publish_response
             )
             assert (
-                await publishing_client.publish(message2, channel, sharded=True)
+                await cast(GlideClusterClient, publishing_client).publish(
+                    message2, channel, sharded=True
+                )
                 == publish_response
             )
 
