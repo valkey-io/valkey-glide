@@ -71,7 +71,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -458,7 +458,7 @@ public class CommandTests {
         var exception =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
-        assertTrue(exception.getCause() instanceof RedisException);
+        assertTrue(exception.getCause() instanceof GlideException);
     }
 
     @Test

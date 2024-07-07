@@ -2,7 +2,7 @@
 package glide.api.models.exceptions;
 
 /** Errors that are thrown when a request cannot be completed in current configuration settings. */
-public class ConfigurationError extends RedisException {
+public class ConfigurationError extends GlideException {
     public ConfigurationError(String message) {
         super(message);
     }

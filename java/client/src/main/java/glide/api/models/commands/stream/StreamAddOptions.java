@@ -14,8 +14,8 @@ import lombok.Builder;
  */
 @Builder
 public final class StreamAddOptions {
-    public static final String NO_MAKE_STREAM_REDIS_API = "NOMKSTREAM";
-    public static final String ID_WILDCARD_REDIS_API = "*";
+    public static final String NO_MAKE_STREAM_VALKEY_API = "NOMKSTREAM";
+    public static final String ID_WILDCARD_VALKEY_API = "*";
 
     /** If set, the new entry will be added with this <code>id</code>. */
     private final String id;
@@ -39,17 +39,17 @@ public final class StreamAddOptions {
         List<String> optionArgs = new ArrayList<>();
 
         if (makeStream != null && !makeStream) {
-            optionArgs.add(NO_MAKE_STREAM_REDIS_API);
+            optionArgs.add(NO_MAKE_STREAM_VALKEY_API);
         }
 
         if (trim != null) {
-            optionArgs.addAll(trim.getRedisApi());
+            optionArgs.addAll(trim.getValkeyApi());
         }
 
         if (id != null) {
             optionArgs.add(id);
         } else {
-            optionArgs.add(ID_WILDCARD_REDIS_API);
+            optionArgs.add(ID_WILDCARD_VALKEY_API);
         }
 
         return optionArgs.toArray(new String[0]);

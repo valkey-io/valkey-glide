@@ -46,7 +46,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
         /**
          * Use sharded pubsub.
          *
-         * @since Redis 7.0 and above.
+         * @since Valkey 7.0 and above.
          */
         SHARDED,
     }

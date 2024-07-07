@@ -7,8 +7,8 @@ import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.GenericCommands.DB_REDIS_API;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.GenericCommands.DB_VALKEY_API;
 import static glide.api.models.TransactionTests.buildArgs;
 import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
@@ -43,7 +43,7 @@ public class StandaloneTransactionTests {
         transaction.move("testKey", 2L);
         results.add(Pair.of(Move, buildArgs("testKey", "2")));
         transaction.copy("key1", "key2", 1, true);
-        results.add(Pair.of(Copy, buildArgs("key1", "key2", DB_REDIS_API, "1", REPLACE_REDIS_API)));
+        results.add(Pair.of(Copy, buildArgs("key1", "key2", DB_VALKEY_API, "1", REPLACE_VALKEY_API)));
 
         transaction.sort(
                 "key1",

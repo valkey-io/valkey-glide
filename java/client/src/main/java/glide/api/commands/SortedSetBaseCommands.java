@@ -34,16 +34,16 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface SortedSetBaseCommands {
     /** Redis API keyword used to query sorted set members with their scores. */
-    String WITH_SCORES_REDIS_API = "WITHSCORES";
+    String WITH_SCORES_VALKEY_API = "WITHSCORES";
 
     /** Redis API keyword used to query a sorted set member with its score. */
-    String WITH_SCORE_REDIS_API = "WITHSCORE";
+    String WITH_SCORE_VALKEY_API = "WITHSCORE";
 
     /** Redis API keyword used to extract specific count of members from a sorted set. */
-    String COUNT_REDIS_API = "COUNT";
+    String COUNT_VALKEY_API = "COUNT";
 
     /** Redis API keyword used to limit calculation of intersection of sorted sets. */
-    String LIMIT_REDIS_API = "LIMIT";
+    String LIMIT_VALKEY_API = "LIMIT";
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -914,7 +914,7 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -933,7 +933,7 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -955,7 +955,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -975,7 +975,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -1315,7 +1315,7 @@ public interface SortedSetBaseCommands {
      * being checked in the order they are provided.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1338,7 +1338,7 @@ public interface SortedSetBaseCommands {
      * being checked in the order they are provided.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1361,7 +1361,7 @@ public interface SortedSetBaseCommands {
      * </code> being checked in the order they are provided.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1386,7 +1386,7 @@ public interface SortedSetBaseCommands {
      * </code> being checked in the order they are provided.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1419,7 +1419,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1452,7 +1452,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1486,7 +1486,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1523,7 +1523,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1551,7 +1551,7 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the union.
@@ -1573,7 +1573,7 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the union.
@@ -1596,7 +1596,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1627,7 +1627,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1660,7 +1660,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1690,7 +1690,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1719,7 +1719,7 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the intersection.
@@ -1743,7 +1743,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1771,7 +1771,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
-     * @since Redis 6.2 and above.
+     * @since Valkey 6.2 and above.
      * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1904,7 +1904,7 @@ public interface SortedSetBaseCommands {
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @return The cardinality of the intersection of the given sorted sets.
@@ -1920,7 +1920,7 @@ public interface SortedSetBaseCommands {
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @return The cardinality of the intersection of the given sorted sets.
@@ -1938,7 +1938,7 @@ public interface SortedSetBaseCommands {
      * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
@@ -1959,7 +1959,7 @@ public interface SortedSetBaseCommands {
      * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets to intersect.
      * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
