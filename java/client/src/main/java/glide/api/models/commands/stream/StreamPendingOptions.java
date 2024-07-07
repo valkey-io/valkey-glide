@@ -15,7 +15,7 @@ import lombok.Builder;
 @Builder
 public class StreamPendingOptions {
 
-    /** Redis api string to designate IDLE or minimum idle time */
+    /** Valkey api string to designate IDLE or minimum idle time */
     public static final String IDLE_TIME_VALKEY_API = "IDLE";
 
     /** Filters pending entries by their idle time - in Milliseconds */
@@ -27,7 +27,7 @@ public class StreamPendingOptions {
     /**
      * Convert StreamPendingOptions arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Redis
+     * @return arguments converted to an array to be consumed by Valkey.
      */
     public String[] toArgs(StreamRange start, StreamRange end, long count) {
         List<String> optionArgs = new ArrayList<>();

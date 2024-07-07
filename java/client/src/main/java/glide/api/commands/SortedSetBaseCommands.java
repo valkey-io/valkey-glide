@@ -30,19 +30,19 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Sorted Set Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted Set Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
-    /** Redis API keyword used to query sorted set members with their scores. */
+    /** Valkey API keyword used to query sorted set members with their scores. */
     String WITH_SCORES_VALKEY_API = "WITHSCORES";
 
-    /** Redis API keyword used to query a sorted set member with its score. */
+    /** Valkey API keyword used to query a sorted set member with its score. */
     String WITH_SCORE_VALKEY_API = "WITHSCORE";
 
-    /** Redis API keyword used to extract specific count of members from a sorted set. */
+    /** Valkey API keyword used to extract specific count of members from a sorted set. */
     String COUNT_VALKEY_API = "COUNT";
 
-    /** Redis API keyword used to limit calculation of intersection of sorted sets. */
+    /** Valkey API keyword used to limit calculation of intersection of sorted sets. */
     String LIMIT_VALKEY_API = "LIMIT";
 
     /**
@@ -288,7 +288,7 @@ public interface SortedSetBaseCommands {
      * Removes and returns up to <code>count</code> members with the lowest scores from the sorted set
      * stored at the specified <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count Specifies the quantity of members to pop.<br>
      *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
@@ -326,7 +326,7 @@ public interface SortedSetBaseCommands {
      * Removes and returns the member with the lowest score from the sorted set stored at the
      * specified <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return A map containing the removed member and its corresponding score.<br>
      *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
@@ -383,7 +383,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
-     * @see <a href="https://redis.io/commands/bzpopmin/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/bzpopmin/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -424,7 +424,7 @@ public interface SortedSetBaseCommands {
      * Removes and returns up to <code>count</code> members with the highest scores from the sorted
      * set stored at the specified <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zpopmax/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param count Specifies the quantity of members to pop.<br>
      *     If <code>count</code> is higher than the sorted set's cardinality, returns all members and
@@ -462,7 +462,7 @@ public interface SortedSetBaseCommands {
      * Removes and returns the member with the highest score from the sorted set stored at the
      * specified <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/zpopmax/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @return A map containing the removed member and its corresponding score.<br>
      *     If <code>key</code> doesn't exist, it will be treated as an empty sorted set and the
@@ -519,7 +519,7 @@ public interface SortedSetBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
-     * @see <a href="https://redis.io/commands/bzpopmax/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/bzpopmax/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -1339,7 +1339,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
@@ -1387,7 +1387,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -1453,7 +1453,7 @@ public interface SortedSetBaseCommands {
      *     </ol>
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
@@ -1524,7 +1524,7 @@ public interface SortedSetBaseCommands {
      *     </ol>
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
      *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.

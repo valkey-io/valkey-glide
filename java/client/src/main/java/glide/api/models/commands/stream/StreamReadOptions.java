@@ -27,12 +27,12 @@ public class StreamReadOptions {
 
     /**
      * If set, the request will be blocked for the set amount of milliseconds or until the server has
-     * the required number of entries. Equivalent to <code>BLOCK</code> in the Redis API.
+     * the required number of entries. Equivalent to <code>BLOCK</code> in the Valkey API.
      */
     protected Long block;
 
     /**
-     * The maximal number of elements requested. Equivalent to <code>COUNT</code> in the Redis API.
+     * The maximal number of elements requested. Equivalent to <code>COUNT</code> in the Valkey API.
      */
     protected Long count;
 

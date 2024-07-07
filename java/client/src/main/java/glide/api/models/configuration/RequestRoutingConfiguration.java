@@ -73,7 +73,7 @@ public class RequestRoutingConfiguration {
     @Getter
     public static class SlotIdRoute implements SingleNodeRoute {
         /**
-         * Slot number. There are 16384 slots in a redis cluster, and each shard manages a slot range.
+         * Slot number. There are 16384 slots in a Valkey cluster, and each shard manages a slot range.
          * Unless the slot is known, it's better to route using {@link SlotType#PRIMARY}.
          */
         private final int slotId;
