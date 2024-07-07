@@ -171,6 +171,7 @@ import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
@@ -244,6 +245,7 @@ import glide.api.models.commands.scan.SScanOptionsBinary;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamAddOptionsBinary;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -632,6 +634,25 @@ public abstract class BaseClient
                         Collectors.toMap(
                                 Map.Entry::getKey,
                                 e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>GlideString[][]</code>
+     */
+    protected Map<GlideString, Map<GlideString, GlideString[][]>> handleXReadResponseBinary(
+            Response response) throws RedisException {
+        Map<GlideString, Object> mapResponse = handleBinaryStringMapOrNullResponse(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e ->
+                                        castMapOf2DArray(
+                                                (Map<GlideString, Object[][]>) e.getValue(), GlideString.class)));
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
@@ -2331,7 +2352,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> xadd(
             @NonNull GlideString key, @NonNull Map<GlideString, GlideString> values) {
-        return xadd(key, values, StreamAddOptions.builder().build());
+        return xadd(key, values, StreamAddOptionsBinary.builder().build());
     }
 
     @Override
@@ -2347,13 +2368,14 @@ public abstract class BaseClient
     public CompletableFuture<GlideString> xadd(
             @NonNull GlideString key,
             @NonNull Map<GlideString, GlideString> values,
-            @NonNull StreamAddOptions options) {
-        String[] toArgsString = options.toArgs();
-        GlideString[] toArgs =
-                Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
+            @NonNull StreamAddOptionsBinary options) {
         GlideString[] arguments =
-                ArrayUtils.addAll(
-                        ArrayUtils.addFirst(toArgs, key), convertMapToKeyValueGlideStringArray(values));
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add(convertMapToKeyValueGlideStringArray(values))
+                        .toArray();
+
         return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
     }
 
@@ -2364,10 +2386,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            @NonNull Map<GlideString, GlideString> keysAndIds) {
+        return xreadBinary(keysAndIds, StreamReadOptions.builder().build());
+    }
+
+    @Override
     public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
         return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            @NonNull Map<GlideString, GlideString> keysAndIds, @NonNull StreamReadOptions options) {
+        GlideString[] arguments = options.toArgsBinary(keysAndIds);
+        return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponseBinary);
     }
 
     @Override
@@ -2503,11 +2538,29 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupCreate(
+            @NonNull GlideString key, @NonNull GlideString groupName, @NonNull GlideString id) {
+        return commandManager.submitNewCommand(
+                XGroupCreate, new GlideString[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
             @NonNull String key,
             @NonNull String groupName,
             @NonNull String id,
             @NonNull StreamGroupOptions options) {
         String[] arguments = concatenateArrays(new String[] {key, groupName, id}, options.toArgs());
+        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull GlideString key,
+            @NonNull GlideString groupName,
+            @NonNull GlideString id,
+            @NonNull StreamGroupOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
     }
 
@@ -2518,6 +2571,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> xgroupDestroy(
+            @NonNull GlideString key, @NonNull GlideString groupname) {
+        return commandManager.submitNewCommand(
+                XGroupDestroy, new GlideString[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> xgroupCreateConsumer(
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
@@ -2525,10 +2585,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> xgroupCreateConsumer(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return commandManager.submitNewCommand(
+                XGroupCreateConsumer,
+                new GlideString[] {key, group, consumer},
+                this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> xgroupDelConsumer(
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
                 XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xgroupDelConsumer(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return commandManager.submitNewCommand(
+                XGroupDelConsumer, new GlideString[] {key, group, consumer}, this::handleLongResponse);
     }
 
     @Override
@@ -2540,15 +2616,47 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupSetId(
+            @NonNull GlideString key, @NonNull GlideString groupName, @NonNull GlideString id) {
+        return commandManager.submitNewCommand(
+                XGroupSetId, new GlideString[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
             @NonNull String key, @NonNull String groupName, @NonNull String id, long entriesRead) {
         String[] arguments =
-                new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
+                new String[] {key, groupName, id, ENTRIES_READ_VALKEY_API, Long.toString(entriesRead)};
+        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull GlideString key,
+            @NonNull GlideString groupName,
+            @NonNull GlideString id,
+            long entriesRead) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(groupName)
+                        .add(id)
+                        .add(ENTRIES_READ_VALKEY_API)
+                        .add(entriesRead)
+                        .toArray();
         return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
             @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+        return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroup(
+            @NonNull Map<GlideString, GlideString> keysAndIds,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer) {
         return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
     }
 
@@ -2560,6 +2668,16 @@ public abstract class BaseClient
             @NonNull StreamReadGroupOptions options) {
         String[] arguments = options.toArgs(group, consumer, keysAndIds);
         return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroup(
+            @NonNull Map<GlideString, GlideString> keysAndIds,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            @NonNull StreamReadGroupOptions options) {
+        GlideString[] arguments = options.toArgsBinary(group, consumer, keysAndIds);
+        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponseBinary);
     }
 
     @Override

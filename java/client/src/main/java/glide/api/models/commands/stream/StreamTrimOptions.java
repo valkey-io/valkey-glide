@@ -94,11 +94,31 @@ public abstract class StreamTrimOptions {
         /**
          * Create a trim option to trim stream based on stream ID.
          *
+         * @param threshold Comparison id.
+         */
+        public MinId(@NonNull GlideString threshold) {
+            this.threshold = threshold.getString();
+        }
+
+        /**
+         * Create a trim option to trim stream based on stream ID.
+         *
          * @param exact Whether to match exactly on the threshold.
          * @param threshold Comparison id.
          */
         public MinId(boolean exact, @NonNull String threshold) {
             this.threshold = threshold;
+            this.exact = exact;
+        }
+
+        /**
+         * Create a trim option to trim stream based on stream ID.
+         *
+         * @param exact Whether to match exactly on the threshold.
+         * @param threshold Comparison id.
+         */
+        public MinId(boolean exact, @NonNull GlideString threshold) {
+            this.threshold = threshold.getString();
             this.exact = exact;
         }
 
@@ -111,6 +131,18 @@ public abstract class StreamTrimOptions {
         public MinId(@NonNull String threshold, long limit) {
             this.exact = false;
             this.threshold = threshold;
+            this.limit = limit;
+        }
+
+        /**
+         * Create a trim option to trim stream based on stream ID.
+         *
+         * @param threshold Comparison id.
+         * @param limit Max number of stream entries to be trimmed for non-exact match.
+         */
+        public MinId(@NonNull GlideString threshold, long limit) {
+            this.exact = false;
+            this.threshold = threshold.getString();
             this.limit = limit;
         }
 
