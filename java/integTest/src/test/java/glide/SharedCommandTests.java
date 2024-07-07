@@ -5688,7 +5688,7 @@ public class SharedCommandTests {
         // ...and again results in: false
         assertEquals(false, client.xgroupDestroy(key, groupName).get());
 
-        // ENTRIESREAD option was added in redis 7.0.0
+        // ENTRIESREAD option was added in valkey 7.0.0
         StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead(10L).build();
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
@@ -5757,7 +5757,7 @@ public class SharedCommandTests {
         // ...and again results in: false
         assertEquals(false, client.xgroupDestroy(key, groupName).get());
 
-        // ENTRIESREAD option was added in redis 7.0.0
+        // ENTRIESREAD option was added in valkey 7.0.0
         StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead(10L).build();
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
@@ -6245,7 +6245,7 @@ public class SharedCommandTests {
         assertNull(client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get());
 
         // Reset the last delivered ID for the consumer group to "1-1".
-        // ENTRIESREAD is only supported in Redis version 7.0.0 and higher.
+        // ENTRIESREAD is only supported in Valkey version 7.0.0 and higher.
         if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
@@ -6340,7 +6340,7 @@ public class SharedCommandTests {
         assertNull(client.xreadgroup(Map.of(key, gs(">")), groupName, consumerName).get());
 
         // Reset the last delivered ID for the consumer group to "1-1".
-        // ENTRIESREAD is only supported in Redis version 7.0.0 and higher.
+        // ENTRIESREAD is only supported in Valkey version 7.0.0 and higher.
         if (SERVER_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
@@ -7679,7 +7679,7 @@ public class SharedCommandTests {
         String minVersion = "6.2.0";
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
-                "This feature added in redis " + minVersion);
+                "This feature added in valkey " + minVersion);
         String key = UUID.randomUUID().toString();
         String groupName = UUID.randomUUID().toString();
         String zeroStreamId = "0-0";
@@ -7722,7 +7722,7 @@ public class SharedCommandTests {
         assertDeepEquals(
                 Map.of(streamid_0, new String[][] {{"f1", "v1"} /*, {"f2", "v2"}*/}), xautoclaimResult1[1]);
 
-        // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed
+        // if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed
         // from the Pending
         //     Entries List because they no longer exist in the stream
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -7756,7 +7756,7 @@ public class SharedCommandTests {
             assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, justIdResult[1]);
             assertDeepEquals(new Object[] {}, justIdResult[2]);
         } else {
-            // in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the
+            // in valkey < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the
             // Pending Entries List
             //     but are no longer in the stream still show up in the response
             assertDeepEquals(
@@ -8513,7 +8513,7 @@ public class SharedCommandTests {
     public void objectEncoding_returns_list_listpack(BaseClient client) {
         String listListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
-        // API documentation states that a ziplist should be returned for Redis versions < 7.2, but
+        // API documentation states that a ziplist should be returned for Valkey versions < 7.2, but
         // actual behavior returns a quicklist.
         assertEquals(
                 SERVER_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
@@ -8526,7 +8526,7 @@ public class SharedCommandTests {
     public void objectEncoding_binary_returns_list_listpack(BaseClient client) {
         GlideString listListpackKey = gs(UUID.randomUUID().toString());
         assertEquals(1, client.lpush(listListpackKey, new GlideString[] {gs("1")}).get());
-        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
+        // API documentation states that a ziplist should be returned for Valkey versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
                 SERVER_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",

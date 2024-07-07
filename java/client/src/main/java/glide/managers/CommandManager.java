@@ -28,7 +28,7 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
-import glide.ffi.resolvers.RedisValueResolver;
+import glide.ffi.resolvers.GlideValueResolver;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -64,8 +64,8 @@ public class CommandManager {
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
@@ -81,8 +81,8 @@ public class CommandManager {
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
@@ -98,8 +98,8 @@ public class CommandManager {
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -117,8 +117,8 @@ public class CommandManager {
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -136,7 +136,7 @@ public class CommandManager {
     /**
      * Build a Transaction and send.
      *
-     * @param transaction Redis Transaction request with multiple commands
+     * @param transaction Transaction request with multiple commands
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
@@ -148,7 +148,7 @@ public class CommandManager {
     }
 
     /**
-     * Build a Script (by hash) request to send to Redis.
+     * Build a Script (by hash) request to send to Valkey.
      *
      * @param script Lua script hash object
      * @param keys The keys that are used in the script
@@ -169,7 +169,7 @@ public class CommandManager {
     /**
      * Build a Cluster Transaction and send.
      *
-     * @param transaction Redis Transaction request with multiple commands
+     * @param transaction Transaction request with multiple commands
      * @param route Transaction routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -201,9 +201,9 @@ public class CommandManager {
     }
 
     /**
-     * Take a redis request and send to channel.
+     * Take a command request and send to channel.
      *
-     * @param command The Redis command request as a builder to execute
+     * @param command The command request as a builder to execute
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
@@ -227,8 +227,8 @@ public class CommandManager {
     /**
      * Build a protobuf command request object with routing options.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
@@ -248,8 +248,8 @@ public class CommandManager {
     /**
      * Build a protobuf command request object with routing options.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
@@ -269,7 +269,7 @@ public class CommandManager {
     /**
      * Build a protobuf transaction request object with routing options.
      *
-     * @param transaction Redis transaction with commands
+     * @param transaction Valkey transaction with commands
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
@@ -280,7 +280,7 @@ public class CommandManager {
     /**
      * Build a protobuf Script Invoke request.
      *
-     * @param script Redis Script
+     * @param script Valkey Script
      * @param keys keys for the Script
      * @param args args for the Script
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
@@ -291,16 +291,16 @@ public class CommandManager {
 
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
                         + args.stream().mapToLong(key -> key.getBytes().length).sum()
-                > RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
+                > GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
             return CommandRequest.newBuilder()
                     .setScriptInvocationPointers(
                             ScriptInvocationPointers.newBuilder()
                                     .setHash(script.getHash())
                                     .setArgsPointer(
-                                            RedisValueResolver.createLeakedBytesVec(
+                                            GlideValueResolver.createLeakedBytesVec(
                                                     args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
                                     .setKeysPointer(
-                                            RedisValueResolver.createLeakedBytesVec(
+                                            GlideValueResolver.createLeakedBytesVec(
                                                     keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
                                     .build());
         }
@@ -325,7 +325,7 @@ public class CommandManager {
     /**
      * Build a protobuf transaction request object with routing options.
      *
-     * @param transaction Redis transaction with commands
+     * @param transaction Valkey transaction with commands
      * @param route Command routing parameters
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
@@ -379,8 +379,8 @@ public class CommandManager {
     /**
      * Build a protobuf command request object.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
@@ -396,8 +396,8 @@ public class CommandManager {
     /**
      * Build a protobuf command request object.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
@@ -502,7 +502,7 @@ public class CommandManager {
      * Add the given set of arguments to the output Command.Builder.
      *
      * <p>Implementation note: When the length in bytes of all arguments supplied to the given command
-     * exceed {@link RedisValueResolver#MAX_REQUEST_ARGS_LENGTH_IN_BYTES}, the Command will hold a
+     * exceed {@link GlideValueResolver#MAX_REQUEST_ARGS_LENGTH_IN_BYTES}, the Command will hold a
      * handle to leaked vector of byte arrays in the native layer in the <code>ArgsVecPointer</code>
      * field. In the normal case where the command arguments are small, they'll be serialized as to an
      * {@link ArgsArray} message.
@@ -513,13 +513,13 @@ public class CommandManager {
     private static void populateCommandWithArgs(
             List<byte[]> arguments, Command.Builder outputBuilder) {
         final long totalArgSize = arguments.stream().mapToLong(arg -> arg.length).sum();
-        if (totalArgSize < RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
+        if (totalArgSize < GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
             ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
             arguments.forEach(arg -> commandArgs.addArgs(ByteString.copyFrom(arg)));
             outputBuilder.setArgsArray(commandArgs);
         } else {
             outputBuilder.setArgsVecPointer(
-                    RedisValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
+                    GlideValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
         }
     }
 }
