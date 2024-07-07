@@ -553,9 +553,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         request.cluster_scan.cursor = cursor_string
         if match is not None:
             request.cluster_scan.match_pattern = (
-                match
-                if isinstance(match, str)
-                else match.decode() if isinstance(match, bytes) else match
+                self._encode_arg(match) if isinstance(match, str) else match
             )
         if count is not None:
             request.cluster_scan.count = count
