@@ -189,27 +189,27 @@ import static command_request.CommandRequestOuterClass.RequestType.ZScan;
 import static command_request.CommandRequestOuterClass.RequestType.ZScore;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
 import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
-import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
-import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.commands.StringBaseCommands.LEN_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
@@ -1051,7 +1051,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T hrandfieldWithCountWithValues(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(HRandField, newArgsBuilder().add(key).add(count).add(WITH_VALUES_REDIS_API)));
+                buildCommand(HRandField, newArgsBuilder().add(key).add(count).add(WITH_VALUES_VALKEY_API)));
         return getThis();
     }
 
@@ -1148,7 +1148,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lposCount(@NonNull ArgType key, @NonNull ArgType element, long count) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(LPos, newArgsBuilder().add(key).add(element).add(COUNT_REDIS_API).add(count)));
+                buildCommand(
+                        LPos, newArgsBuilder().add(key).add(element).add(COUNT_VALKEY_API).add(count)));
         return getThis();
     }
 
@@ -1176,7 +1177,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(key)
                                 .add(element)
-                                .add(COUNT_REDIS_API)
+                                .add(COUNT_VALKEY_API)
                                 .add(count)
                                 .add(options.toArgs())));
         return getThis();
@@ -1614,7 +1615,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(
                 buildCommand(
                         SInterCard,
-                        newArgsBuilder().add(keys.length).add(keys).add(SET_LIMIT_REDIS_API).add(limit)));
+                        newArgsBuilder().add(keys.length).add(keys).add(SET_LIMIT_VALKEY_API).add(limit)));
         return getThis();
     }
 
@@ -2301,7 +2302,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrandmemberWithCountWithScores(ArgType key, long count) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(ZRandMember, newArgsBuilder().add(key).add(count).add(WITH_SCORES_REDIS_API)));
+                buildCommand(
+                        ZRandMember, newArgsBuilder().add(key).add(count).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -2476,7 +2478,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrankWithScore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(ZRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_REDIS_API)));
+                buildCommand(ZRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_VALKEY_API)));
         return getThis();
     }
 
@@ -2519,7 +2521,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrevrankWithScore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(ZRevRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_REDIS_API)));
+                buildCommand(ZRevRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_VALKEY_API)));
         return getThis();
     }
 
@@ -2580,7 +2582,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         checkTypeOrThrow(keys);
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZDiff, newArgsBuilder().add(keys.length).add(keys).add(WITH_SCORES_REDIS_API)));
+                        ZDiff, newArgsBuilder().add(keys.length).add(keys).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -2811,8 +2813,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2827,11 +2827,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination,
+    public T zunionstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore,
@@ -2847,8 +2846,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2860,9 +2890,32 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        checkTypeOrThrow(destination);
+    public T zunionstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
@@ -2874,8 +2927,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2890,11 +2941,43 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zinterstore(
-            @NonNull ArgType destination,
+    public T zinterstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZInterStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zinterstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZInterStore,
@@ -2942,7 +3025,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZInterCard,
-                        newArgsBuilder().add(keys.length).add(keys).add(LIMIT_REDIS_API).add(limit)));
+                        newArgsBuilder().add(keys.length).add(keys).add(LIMIT_VALKEY_API).add(limit)));
         return getThis();
     }
 
@@ -3050,7 +3133,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3078,7 +3161,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3101,7 +3184,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zunionWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3124,7 +3207,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zunionWithScores(@NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3176,7 +3259,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zinterWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3198,7 +3281,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zinterWithScores(@NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3226,7 +3309,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3254,7 +3337,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3925,7 +4008,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * The output is limited by first <code>10</code> PEL entries.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return Command Response - A <code>Map</code> of detailed stream information for the given
@@ -3941,7 +4024,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * The output is limited by first <code>10</code> PEL entries.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
@@ -4050,7 +4133,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(ids)
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4087,7 +4170,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(minIdleTime)
                                 .add(ids)
                                 .add(options.toArgs())
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4202,7 +4285,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add(READ_COUNT_REDIS_API)
+                                .add(READ_COUNT_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -4247,7 +4330,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4293,9 +4376,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add(READ_COUNT_REDIS_API)
+                                .add(READ_COUNT_VALKEY_API)
                                 .add(count)
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4451,7 +4534,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lolwut(int version) {
         protobufTransaction.addCommands(
-                buildCommand(Lolwut, newArgsBuilder().add(VERSION_REDIS_API).add(version)));
+                buildCommand(Lolwut, newArgsBuilder().add(VERSION_VALKEY_API).add(version)));
         return getThis();
     }
 
@@ -4473,7 +4556,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T lolwut(int version, int @NonNull [] parameters) {
         protobufTransaction.addCommands(
-                buildCommand(Lolwut, newArgsBuilder().add(VERSION_REDIS_API).add(version).add(parameters)));
+                buildCommand(
+                        Lolwut, newArgsBuilder().add(VERSION_VALKEY_API).add(version).add(parameters)));
         return getThis();
     }
 
@@ -4825,7 +4909,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(modifier)
-                                .add(COUNT_REDIS_API)
+                                .add(COUNT_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -4896,7 +4980,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(modifier)
-                                .add(COUNT_REDIS_API)
+                                .add(COUNT_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -5066,7 +5150,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         checkTypeOrThrow(source);
         protobufTransaction.addCommands(
                 buildCommand(
-                        Copy, newArgsBuilder().add(source).add(destination).addIf(REPLACE_REDIS_API, replace)));
+                        Copy,
+                        newArgsBuilder().add(source).add(destination).addIf(REPLACE_VALKEY_API, replace)));
         return getThis();
     }
 
@@ -5390,7 +5475,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T functionList(boolean withCode) {
         protobufTransaction.addCommands(
-                buildCommand(FunctionList, newArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode)));
+                buildCommand(FunctionList, newArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode)));
         return getThis();
     }
 
@@ -5411,9 +5496,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildCommand(
                         FunctionList,
                         newArgsBuilder()
-                                .add(LIBRARY_NAME_REDIS_API)
+                                .add(LIBRARY_NAME_VALKEY_API)
                                 .add(libNamePattern)
-                                .addIf(WITH_CODE_REDIS_API, withCode)));
+                                .addIf(WITH_CODE_VALKEY_API, withCode)));
         return getThis();
     }
 
@@ -5519,7 +5604,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the serialized payload of all loaded libraries. The command will be routed to a random
      * node.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @return Command Response - The serialized payload of all loaded libraries.
      */
@@ -5532,7 +5617,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
      * will be routed to all primary nodes.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return Command Response - <code>OK</code>.
@@ -5546,7 +5631,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
      * will be routed to all primary nodes.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
@@ -5636,7 +5721,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(direction)
-                                .add(COUNT_FOR_LIST_REDIS_API)
+                                .add(COUNT_FOR_LIST_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -5818,7 +5903,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(direction)
-                                .add(COUNT_FOR_LIST_REDIS_API)
+                                .add(COUNT_FOR_LIST_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -6142,7 +6227,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lcsLen(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
         protobufTransaction.addCommands(
-                buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(LEN_REDIS_API)));
+                buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(LEN_VALKEY_API)));
         return getThis();
     }
 

@@ -170,9 +170,9 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
@@ -257,7 +257,7 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.exceptions.ConfigurationError;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.handlers.MessageHandler;
@@ -286,7 +286,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
-/** Base Client class for Redis */
+/** Base Client class */
 public abstract class BaseClient
         implements AutoCloseable,
                 BitmapBaseCommands,
@@ -303,7 +303,7 @@ public abstract class BaseClient
                 TransactionsBaseCommands,
                 PubSubBaseCommands {
 
-    /** Redis simple string response with "OK" */
+    /** Valkey simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
     protected final CommandManager commandManager;
@@ -337,10 +337,10 @@ public abstract class BaseClient
     }
 
     /**
-     * Async request for an async (non-blocking) Redis client.
+     * Async request for an async (non-blocking) client.
      *
-     * @param config Redis client Configuration.
-     * @param constructor Redis client constructor reference.
+     * @param config client Configuration.
+     * @param constructor client constructor reference.
      * @param <T> Client type.
      * @return a Future to connect and return a client.
      */
@@ -464,7 +464,7 @@ public abstract class BaseClient
      * Extracts the value from a <code>GLIDE core</code> response message and either throws an
      * exception or returns the value as an object of type <code>T</code>.
      *
-     * @param response Redis protobuf message.
+     * @param response protobuf message.
      * @param classType Parameter <code>T</code> class type.
      * @param flags A set of parameters which describes how to handle the response. Could be empty or
      *     any combination of
@@ -476,11 +476,11 @@ public abstract class BaseClient
      *
      * @return Response as an object of type <code>T</code> or <code>null</code>.
      * @param <T> The return value type.
-     * @throws RedisException On a type mismatch.
+     * @throws GlideException On a type mismatch.
      */
     @SuppressWarnings("unchecked")
     protected <T> T handleRedisResponse(
-            Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
+            Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws GlideException {
         boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
@@ -495,32 +495,32 @@ public abstract class BaseClient
             return (T) value;
         }
         String className = value == null ? "null" : value.getClass().getSimpleName();
-        throw new RedisException(
-                "Unexpected return type from Redis: got "
+        throw new GlideException(
+                "Unexpected return type from Glide: got "
                         + className
                         + " expected "
                         + classType.getSimpleName());
     }
 
-    protected Object handleObjectOrNullResponse(Response response) throws RedisException {
+    protected Object handleObjectOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(
                 Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected Object handleBinaryObjectOrNullResponse(Response response) throws RedisException {
+    protected Object handleBinaryObjectOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
-    protected String handleStringResponse(Response response) throws RedisException {
+    protected String handleStringResponse(Response response) throws GlideException {
         return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected String handleStringOrNullResponse(Response response) throws RedisException {
+    protected String handleStringOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(
                 String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
+    protected byte[] handleBytesOrNullResponse(Response response) throws GlideException {
         var result =
                 handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
         if (result == null) return null;
@@ -528,50 +528,50 @@ public abstract class BaseClient
         return result.getBytes();
     }
 
-    protected GlideString handleGlideStringOrNullResponse(Response response) throws RedisException {
+    protected GlideString handleGlideStringOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
-    protected GlideString handleGlideStringResponse(Response response) throws RedisException {
+    protected GlideString handleGlideStringResponse(Response response) throws GlideException {
         return handleRedisResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
-    protected Boolean handleBooleanResponse(Response response) throws RedisException {
+    protected Boolean handleBooleanResponse(Response response) throws GlideException {
         return handleRedisResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
-    protected Long handleLongResponse(Response response) throws RedisException {
+    protected Long handleLongResponse(Response response) throws GlideException {
         return handleRedisResponse(Long.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
-    protected Long handleLongOrNullResponse(Response response) throws RedisException {
+    protected Long handleLongOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(Long.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
-    protected Double handleDoubleResponse(Response response) throws RedisException {
+    protected Double handleDoubleResponse(Response response) throws GlideException {
         return handleRedisResponse(Double.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
-    protected Double handleDoubleOrNullResponse(Response response) throws RedisException {
+    protected Double handleDoubleOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(Double.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
-    protected Object[] handleArrayResponse(Response response) throws RedisException {
+    protected Object[] handleArrayResponse(Response response) throws GlideException {
         return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected Object[] handleArrayResponseBinary(Response response) throws RedisException {
+    protected Object[] handleArrayResponseBinary(Response response) throws GlideException {
         return handleRedisResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
-    protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
+    protected Object[] handleArrayOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(
                 Object[].class,
                 EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
                 response);
     }
 
-    protected Object[] handleArrayOrNullResponseBinary(Response response) throws RedisException {
+    protected Object[] handleArrayOrNullResponseBinary(Response response) throws GlideException {
         return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
@@ -581,7 +581,7 @@ public abstract class BaseClient
      * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
+    protected <V> Map<String, V> handleMapResponse(Response response) throws GlideException {
         return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
@@ -594,7 +594,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
     protected <V> Map<GlideString, V> handleBinaryStringMapResponse(Response response)
-            throws RedisException {
+            throws GlideException {
         return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
@@ -604,7 +604,7 @@ public abstract class BaseClient
      * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
+    protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws GlideException {
         return handleRedisResponse(
                 Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
@@ -616,7 +616,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
-            throws RedisException {
+            throws GlideException {
         return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
@@ -625,7 +625,7 @@ public abstract class BaseClient
      * @return A map of a map of <code>String[][]</code>
      */
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-            throws RedisException {
+            throws GlideException {
         Map<String, Object> mapResponse = handleMapOrNullResponse(response);
         if (mapResponse == null) {
             return null;
@@ -642,7 +642,7 @@ public abstract class BaseClient
      * @return A map of a map of <code>GlideString[][]</code>
      */
     protected Map<GlideString, Map<GlideString, GlideString[][]>> handleXReadResponseBinary(
-            Response response) throws RedisException {
+            Response response) throws GlideException {
         Map<GlideString, Object> mapResponse = handleBinaryStringMapOrNullResponse(response);
         if (mapResponse == null) {
             return null;
@@ -657,12 +657,12 @@ public abstract class BaseClient
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
-    protected Set<String> handleSetResponse(Response response) throws RedisException {
+    protected Set<String> handleSetResponse(Response response) throws GlideException {
         return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     @SuppressWarnings("unchecked")
-    protected Set<GlideString> handleSetBinaryResponse(Response response) throws RedisException {
+    protected Set<GlideString> handleSetBinaryResponse(Response response) throws GlideException {
         return handleRedisResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
@@ -714,7 +714,7 @@ public abstract class BaseClient
 
     /** Process a <code>LCS key1 key2 IDX</code> response */
     protected Map<String, Object> handleLcsIdxResponse(Map<String, Object> response)
-            throws RedisException {
+            throws GlideException {
         Long[][][] convertedMatchesObject =
                 cast3DArray((Object[]) (response.get(LCS_MATCHES_RESULT_KEY)), Long.class);
 
@@ -1232,7 +1232,7 @@ public abstract class BaseClient
             @NonNull String key, long count) {
         return commandManager.submitNewCommand(
                 HRandField,
-                new String[] {key, Long.toString(count), WITH_VALUES_REDIS_API},
+                new String[] {key, Long.toString(count), WITH_VALUES_VALKEY_API},
                 response -> castArrayofArrays(handleArrayResponse(response), String.class));
     }
 
@@ -1241,7 +1241,7 @@ public abstract class BaseClient
             @NonNull GlideString key, long count) {
         return commandManager.submitNewCommand(
                 HRandField,
-                new GlideString[] {key, GlideString.of(count), GlideString.of(WITH_VALUES_REDIS_API)},
+                new GlideString[] {key, GlideString.of(count), GlideString.of(WITH_VALUES_VALKEY_API)},
                 response -> castArrayofArrays(handleArrayResponseBinary(response), GlideString.class));
     }
 
@@ -1317,7 +1317,7 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String element, long count) {
         return commandManager.submitNewCommand(
                 LPos,
-                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                new String[] {key, element, COUNT_VALKEY_API, Long.toString(count)},
                 response -> castArray(handleArrayResponse(response), Long.class));
     }
 
@@ -1326,7 +1326,7 @@ public abstract class BaseClient
             @NonNull GlideString key, @NonNull GlideString element, long count) {
         return commandManager.submitNewCommand(
                 LPos,
-                new GlideString[] {key, element, gs(COUNT_REDIS_API), gs(Long.toString(count))},
+                new GlideString[] {key, element, gs(COUNT_VALKEY_API), gs(Long.toString(count))},
                 response -> castArray(handleArrayResponse(response), Long.class));
     }
 
@@ -1335,7 +1335,7 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {key, element, COUNT_REDIS_API, Long.toString(count)}, options.toArgs());
+                        new String[] {key, element, COUNT_VALKEY_API, Long.toString(count)}, options.toArgs());
 
         return commandManager.submitNewCommand(
                 LPos, arguments, response -> castArray(handleArrayResponse(response), Long.class));
@@ -1351,7 +1351,7 @@ public abstract class BaseClient
                 new ArgsBuilder()
                         .add(key)
                         .add(element)
-                        .add(COUNT_REDIS_API)
+                        .add(COUNT_VALKEY_API)
                         .add(count)
                         .add(options.toArgs())
                         .toArray();
@@ -2017,7 +2017,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> zrankWithScore(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
-                ZRank, new String[] {key, member, WITH_SCORE_REDIS_API}, this::handleArrayOrNullResponse);
+                ZRank, new String[] {key, member, WITH_SCORE_VALKEY_API}, this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -2031,7 +2031,7 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZRevRank,
-                new String[] {key, member, WITH_SCORE_REDIS_API},
+                new String[] {key, member, WITH_SCORE_VALKEY_API},
                 this::handleArrayOrNullResponse);
     }
 
@@ -2064,7 +2064,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, Double>> zdiffWithScores(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
-        arguments = ArrayUtils.add(arguments, WITH_SCORES_REDIS_API);
+        arguments = ArrayUtils.add(arguments, WITH_SCORES_VALKEY_API);
         return commandManager.submitNewCommand(ZDiff, arguments, this::handleMapResponse);
     }
 
@@ -2227,7 +2227,7 @@ public abstract class BaseClient
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
         String[] arguments =
                 concatenateArrays(
-                        keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                        keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
     }
 
@@ -2238,7 +2238,7 @@ public abstract class BaseClient
                 new ArgsBuilder()
                         .add(keysOrWeightedKeys.toArgs())
                         .add(aggregate.toArgs())
-                        .add(WITH_SCORES_REDIS_API)
+                        .add(WITH_SCORES_VALKEY_API)
                         .toArray();
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleBinaryStringMapResponse);
     }
@@ -2247,7 +2247,7 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Double>> zunionWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments =
-                concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
     }
 
@@ -2255,7 +2255,7 @@ public abstract class BaseClient
     public CompletableFuture<Map<GlideString, Double>> zunionWithScores(
             @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         GlideString[] arguments =
-                new ArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API).toArray();
+                new ArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API).toArray();
 
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleBinaryStringMapResponse);
     }
@@ -2271,7 +2271,7 @@ public abstract class BaseClient
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
         String[] arguments =
                 concatenateArrays(
-                        keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                        keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
     }
 
@@ -2279,7 +2279,7 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Double>> zinterWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments =
-                concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
     }
 
@@ -2300,7 +2300,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
             @NonNull String key, long count) {
-        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_REDIS_API};
+        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_VALKEY_API};
         return commandManager.submitNewCommand(
                 ZRandMember,
                 arguments,
@@ -2339,7 +2339,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {Integer.toString(keys.length)},
                         keys,
-                        new String[] {LIMIT_REDIS_API, Long.toString(limit)});
+                        new String[] {LIMIT_VALKEY_API, Long.toString(limit)});
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
     }
 
@@ -2349,7 +2349,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new GlideString[] {gs(Integer.toString(keys.length))},
                         keys,
-                        new GlideString[] {gs(LIMIT_REDIS_API), gs(Long.toString(limit))});
+                        new GlideString[] {gs(LIMIT_VALKEY_API), gs(Long.toString(limit))});
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
     }
 
@@ -2836,7 +2836,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {key, group, consumer, Long.toString(minIdleTime)},
                         ids,
-                        new String[] {JUST_ID_REDIS_API});
+                        new String[] {JUST_ID_VALKEY_API});
         return commandManager.submitNewCommand(
                 XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
     }
@@ -2852,7 +2852,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))},
                         ids,
-                        new GlideString[] {gs(JUST_ID_REDIS_API)});
+                        new GlideString[] {gs(JUST_ID_VALKEY_API)});
         return commandManager.submitNewCommand(
                 XClaim,
                 args,
@@ -2872,7 +2872,7 @@ public abstract class BaseClient
                         new String[] {key, group, consumer, Long.toString(minIdleTime)},
                         ids,
                         options.toArgs(),
-                        new String[] {JUST_ID_REDIS_API});
+                        new String[] {JUST_ID_VALKEY_API});
         return commandManager.submitNewCommand(
                 XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
     }
@@ -2893,7 +2893,7 @@ public abstract class BaseClient
                         new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))},
                         ids,
                         toArgs,
-                        new GlideString[] {gs(JUST_ID_REDIS_API)});
+                        new GlideString[] {gs(JUST_ID_VALKEY_API)});
         return commandManager.submitNewCommand(
                 XClaim,
                 args,
@@ -2972,7 +2972,7 @@ public abstract class BaseClient
                     consumer,
                     Long.toString(minIdleTime),
                     start,
-                    READ_COUNT_REDIS_API,
+                    READ_COUNT_VALKEY_API,
                     Long.toString(count)
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
@@ -2993,7 +2993,7 @@ public abstract class BaseClient
                     consumer,
                     gs(Long.toString(minIdleTime)),
                     start,
-                    gs(READ_COUNT_REDIS_API),
+                    gs(READ_COUNT_VALKEY_API),
                     gs(Long.toString(count))
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
@@ -3007,7 +3007,7 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start) {
         String[] args =
-                new String[] {key, group, consumer, Long.toString(minIdleTime), start, JUST_ID_REDIS_API};
+                new String[] {key, group, consumer, Long.toString(minIdleTime), start, JUST_ID_VALKEY_API};
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
 
@@ -3020,7 +3020,7 @@ public abstract class BaseClient
             @NonNull GlideString start) {
         GlideString[] args =
                 new GlideString[] {
-                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs(JUST_ID_REDIS_API)
+                    key, group, consumer, gs(Long.toString(minIdleTime)), start, gs(JUST_ID_VALKEY_API)
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
@@ -3040,9 +3040,9 @@ public abstract class BaseClient
                     consumer,
                     Long.toString(minIdleTime),
                     start,
-                    READ_COUNT_REDIS_API,
+                    READ_COUNT_VALKEY_API,
                     Long.toString(count),
-                    JUST_ID_REDIS_API
+                    JUST_ID_VALKEY_API
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponse);
     }
@@ -3062,9 +3062,9 @@ public abstract class BaseClient
                     consumer,
                     gs(Long.toString(minIdleTime)),
                     start,
-                    gs(READ_COUNT_REDIS_API),
+                    gs(READ_COUNT_VALKEY_API),
                     gs(Long.toString(count)),
-                    gs(JUST_ID_REDIS_API)
+                    gs(JUST_ID_VALKEY_API)
                 };
         return commandManager.submitNewCommand(XAutoClaim, args, this::handleArrayResponseBinary);
     }
@@ -3277,7 +3277,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {Integer.toString(keys.length)},
                         keys,
-                        new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)});
+                        new String[] {modifier.toString(), COUNT_VALKEY_API, Long.toString(count)});
         return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
@@ -3289,7 +3289,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {
-                            gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))
+                            gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
         return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
@@ -3324,7 +3324,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Integer.toString(keys.length)},
                         keys,
-                        new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)});
+                        new String[] {modifier.toString(), COUNT_VALKEY_API, Long.toString(count)});
         return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
@@ -3336,7 +3336,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Double.toString(timeout)), gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {
-                            gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))
+                            gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
         return commandManager.submitNewCommand(
                 BZMPop, arguments, this::handleArrayOrNullResponseBinary);
@@ -3658,7 +3658,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {Long.toString(keys.length)},
                         keys,
-                        new String[] {direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)});
+                        new String[] {direction.toString(), COUNT_FOR_LIST_VALKEY_API, Long.toString(count)});
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
@@ -3673,7 +3673,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Long.toString(keys.length))},
                         keys,
                         new GlideString[] {
-                            gs(direction.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))
+                            gs(direction.toString()), gs(COUNT_FOR_LIST_VALKEY_API), gs(Long.toString(count))
                         });
         return commandManager.submitNewCommand(
                 LMPop,
@@ -3718,7 +3718,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
                         keys,
-                        new String[] {direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)});
+                        new String[] {direction.toString(), COUNT_FOR_LIST_VALKEY_API, Long.toString(count)});
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
@@ -3733,7 +3733,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Double.toString(timeout)), gs(Long.toString(keys.length))},
                         keys,
                         new GlideString[] {
-                            gs(direction.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))
+                            gs(direction.toString()), gs(COUNT_FOR_LIST_VALKEY_API), gs(Long.toString(count))
                         });
         return commandManager.submitNewCommand(
                 BLMPop,
@@ -3949,7 +3949,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {Long.toString(keys.length)},
                         keys,
-                        new String[] {SET_LIMIT_REDIS_API, Long.toString(limit)});
+                        new String[] {SET_LIMIT_VALKEY_API, Long.toString(limit)});
         return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
     }
 
@@ -3959,7 +3959,7 @@ public abstract class BaseClient
                 concatenateArrays(
                         new GlideString[] {gs(Long.toString(keys.length))},
                         keys,
-                        new GlideString[] {gs(SET_LIMIT_REDIS_API), gs(Long.toString(limit))});
+                        new GlideString[] {gs(SET_LIMIT_VALKEY_API), gs(Long.toString(limit))});
         return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
     }
 
@@ -4007,7 +4007,7 @@ public abstract class BaseClient
             @NonNull String source, @NonNull String destination, boolean replace) {
         String[] arguments = new String[] {source, destination};
         if (replace) {
-            arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
@@ -4017,7 +4017,7 @@ public abstract class BaseClient
             @NonNull GlideString source, @NonNull GlideString destination, boolean replace) {
         GlideString[] arguments = new GlideString[] {source, destination};
         if (replace) {
-            arguments = ArrayUtils.add(arguments, gs(REPLACE_REDIS_API));
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
@@ -4062,13 +4062,13 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
-        String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
+        String[] arguments = new String[] {key1, key2, LEN_VALKEY_API};
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Long> lcsLen(@NonNull GlideString key1, @NonNull GlideString key2) {
-        GlideString[] arguments = new ArgsBuilder().add(key1).add(key2).add(LEN_REDIS_API).toArray();
+        GlideString[] arguments = new ArgsBuilder().add(key1).add(key2).add(LEN_VALKEY_API).toArray();
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
     }
 

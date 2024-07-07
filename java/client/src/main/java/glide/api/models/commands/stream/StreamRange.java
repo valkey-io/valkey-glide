@@ -16,19 +16,19 @@ import lombok.RequiredArgsConstructor;
  */
 public interface StreamRange {
 
-    String getRedisApi();
+    String getValkeyApi();
 
     /** Redis API string for MINIMUM entry ID range bounds */
-    String MINIMUM_RANGE_REDIS_API = "-";
+    String MINIMUM_RANGE_VALKEY_API = "-";
 
     /** Redis API string for MAXIMUM entry ID range bounds */
-    String MAXIMUM_RANGE_REDIS_API = "+";
+    String MAXIMUM_RANGE_VALKEY_API = "+";
 
     /** Redis API string to designate COUNT */
-    String RANGE_COUNT_REDIS_API = "COUNT";
+    String RANGE_COUNT_VALKEY_API = "COUNT";
 
     /** Redis API character to designate exclusive range bounds */
-    String EXCLUSIVE_RANGE_REDIS_API = "(";
+    String EXCLUSIVE_RANGE_VALKEY_API = "(";
 
     /**
      * Enumeration representing minimum or maximum stream entry bounds for the range search, to get
@@ -37,10 +37,10 @@ public interface StreamRange {
     @RequiredArgsConstructor
     @Getter
     enum InfRangeBound implements StreamRange {
-        MIN(MINIMUM_RANGE_REDIS_API),
-        MAX(MAXIMUM_RANGE_REDIS_API);
+        MIN(MINIMUM_RANGE_VALKEY_API),
+        MAX(MAXIMUM_RANGE_VALKEY_API);
 
-        private final String redisApi;
+        private final String valkeyApi;
     };
 
     /**
@@ -53,7 +53,7 @@ public interface StreamRange {
      */
     @Getter
     class IdBound implements StreamRange {
-        private final String redisApi;
+        private final String valkeyApi;
 
         /**
          * Default constructor
@@ -61,7 +61,7 @@ public interface StreamRange {
          * @param id The stream id.
          */
         private IdBound(String id) {
-            redisApi = id;
+            valkeyApi = id;
         }
 
         /**
@@ -107,7 +107,7 @@ public interface StreamRange {
          * @param timestamp The stream timestamp as ID.
          */
         public static IdBound ofExclusive(long timestamp) {
-            return new IdBound(EXCLUSIVE_RANGE_REDIS_API + timestamp);
+            return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + timestamp);
         }
 
         /**
@@ -116,7 +116,7 @@ public interface StreamRange {
          * @param id The stream id.
          */
         public static IdBound ofExclusive(String id) {
-            return new IdBound(EXCLUSIVE_RANGE_REDIS_API + id);
+            return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + id);
         }
 
         /**
@@ -135,7 +135,7 @@ public interface StreamRange {
      * @return arguments converted to an array to be consumed by Redis
      */
     static String[] toArgs(StreamRange start, StreamRange end) {
-        return new String[] {start.getRedisApi(), end.getRedisApi()};
+        return new String[] {start.getValkeyApi(), end.getValkeyApi()};
     }
 
     /**
@@ -145,6 +145,6 @@ public interface StreamRange {
      */
     static String[] toArgs(StreamRange start, StreamRange end, long count) {
         return ArrayTransformUtils.concatenateArrays(
-                toArgs(start, end), new String[] {RANGE_COUNT_REDIS_API, Long.toString(count)});
+                toArgs(start, end), new String[] {RANGE_COUNT_VALKEY_API, Long.toString(count)});
     }
 }
