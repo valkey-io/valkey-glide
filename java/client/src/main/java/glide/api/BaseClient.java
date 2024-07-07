@@ -1281,7 +1281,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LPop,
                 new GlideString[] {key, gs(Long.toString(count))},
-                response -> castArray(handleArrayResponse(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override

@@ -296,10 +296,10 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void del_multiple_keys_binary(BaseClient client) {
-        String key1 = "{key}" + UUID.randomUUID();
-        String key2 = "{key}" + UUID.randomUUID();
-        String key3 = "{key}" + UUID.randomUUID();
-        String value = UUID.randomUUID().toString();
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+        GlideString key3 = gs("{key}" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
         String setResult = client.set(key1, value).get();
         assertEquals(OK, setResult);
         setResult = client.set(key2, value).get();
@@ -307,7 +307,7 @@ public class SharedCommandTests {
         setResult = client.set(key3, value).get();
         assertEquals(OK, setResult);
 
-        Long deletedKeysNum = client.del(new GlideString[] {gs(key1), gs(key2), gs(key3)}).get();
+        Long deletedKeysNum = client.del(new GlideString[] {key1, key2, key3}).get();
         assertEquals(3L, deletedKeysNum);
     }
 
@@ -773,15 +773,15 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void decr_and_decrBy_existing_key_binary(BaseClient client) {
-        String key = UUID.randomUUID().toString();
+        GlideString key = gs(UUID.randomUUID().toString());
 
-        assertEquals(OK, client.set(key, "10").get());
+        assertEquals(OK, client.set(key, gs("10")).get());
 
-        assertEquals(9, client.decr(gs(key)).get());
-        assertEquals("9", client.get(key).get());
+        assertEquals(9, client.decr(key).get());
+        assertEquals(gs("9"), client.get(key).get());
 
-        assertEquals(5, client.decrBy(gs(key), 4).get());
-        assertEquals("5", client.get(key).get());
+        assertEquals(5, client.decrBy(key, 4).get());
+        assertEquals(gs("5"), client.get(key).get());
     }
 
     @SneakyThrows
@@ -823,16 +823,16 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void decr_and_decrBy_non_existing_key_binary(BaseClient client) {
-        String key1 = UUID.randomUUID().toString();
-        String key2 = UUID.randomUUID().toString();
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
 
         assertNull(client.get(key1).get());
-        assertEquals(-1, client.decr(gs(key1)).get());
-        assertEquals("-1", client.get(key1).get());
+        assertEquals(-1, client.decr(key1).get());
+        assertEquals(gs("-1"), client.get(key1).get());
 
         assertNull(client.get(key2).get());
-        assertEquals(-3, client.decrBy(gs(key2), 3).get());
-        assertEquals("-3", client.get(key2).get());
+        assertEquals(-3, client.decrBy(key2, 3).get());
+        assertEquals(gs("-3"), client.get(key2).get());
     }
 
     @SneakyThrows
@@ -1027,7 +1027,7 @@ public class SharedCommandTests {
 
         assertTrue(client.hsetnx(key1, field, gs("value")).get());
         assertFalse(client.hsetnx(key1, field, gs("newValue")).get());
-        assertEquals("value", client.hget(key1.toString(), field.toString()).get());
+        assertEquals(gs("value"), client.hget(key1, field).get());
 
         // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, gs("value")).get());
@@ -1058,17 +1058,18 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void hdel_multiple_existing_fields_non_existing_field_non_existing_key_binary(
             BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        String field1 = UUID.randomUUID().toString();
-        String field2 = UUID.randomUUID().toString();
-        String field3 = UUID.randomUUID().toString();
-        String value = UUID.randomUUID().toString();
-        Map<String, String> fieldValueMap = Map.of(field1, value, field2, value, field3, value);
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString field3 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> fieldValueMap =
+                Map.of(field1, value, field2, value, field3, value);
 
         assertEquals(3, client.hset(key, fieldValueMap).get());
-        assertEquals(2, client.hdel(gs(key), new GlideString[] {gs(field1), gs(field2)}).get());
-        assertEquals(0, client.hdel(gs(key), new GlideString[] {gs("non_existing_field")}).get());
-        assertEquals(0, client.hdel(gs("non_existing_key"), new GlideString[] {gs(field3)}).get());
+        assertEquals(2, client.hdel(key, new GlideString[] {field1, field2}).get());
+        assertEquals(0, client.hdel(key, new GlideString[] {gs("non_existing_field")}).get());
+        assertEquals(0, client.hdel(gs("non_existing_key"), new GlideString[] {field3}).get());
     }
 
     @SneakyThrows
@@ -1108,7 +1109,7 @@ public class SharedCommandTests {
 
         assertEquals(2, client.hset(key1, fieldValueMap).get());
         assertEquals(2, client.hlen(key1).get());
-        assertEquals(1, client.hdel(key1.toString(), new String[] {field1.toString()}).get());
+        assertEquals(1, client.hdel(key1, new GlideString[] {field1}).get());
         assertEquals(1, client.hlen(key1).get());
         assertEquals(0, client.hlen(gs("nonExistingHash")).get());
 
@@ -1151,17 +1152,18 @@ public class SharedCommandTests {
     public void hvals_binary(BaseClient client) {
         GlideString key1 = gs(UUID.randomUUID().toString());
         GlideString key2 = gs(UUID.randomUUID().toString());
-        String field1 = UUID.randomUUID().toString();
-        String field2 = UUID.randomUUID().toString();
-        Map<String, String> fieldValueMap = Map.of(field1, "value1", field2, "value2");
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> fieldValueMap =
+                Map.of(field1, gs("value1"), field2, gs("value2"));
 
-        assertEquals(2, client.hset(key1.toString(), fieldValueMap).get());
+        assertEquals(2, client.hset(key1, fieldValueMap).get());
 
         GlideString[] hvalsPayload = client.hvals(key1).get();
         Arrays.sort(hvalsPayload); // ordering for values by hvals is not guaranteed
         assertArrayEquals(new GlideString[] {gs("value1"), gs("value2")}, hvalsPayload);
 
-        assertEquals(1, client.hdel(key1.toString(), new String[] {field1}).get());
+        assertEquals(1, client.hdel(key1, new GlideString[] {field1}).get());
         assertArrayEquals(new GlideString[] {gs("value2")}, client.hvals(key1).get());
         assertArrayEquals(new GlideString[] {}, client.hvals(gs("nonExistingKey")).get());
 
@@ -1200,10 +1202,9 @@ public class SharedCommandTests {
         GlideString field1 = gs(UUID.randomUUID().toString());
         GlideString field2 = gs(UUID.randomUUID().toString());
         GlideString value = gs(UUID.randomUUID().toString());
-        Map<String, String> fieldValueMap =
-                Map.of(field1.toString(), value.toString(), field2.toString(), value.toString());
+        Map<GlideString, GlideString> fieldValueMap = Map.of(field1, value, field2, value);
 
-        assertEquals(2, client.hset(key.toString(), fieldValueMap).get());
+        assertEquals(2, client.hset(key, fieldValueMap).get());
         assertArrayEquals(
                 new GlideString[] {value, null, value},
                 client.hmget(key, new GlideString[] {field1, gs("non_existing_field"), field2}).get());
@@ -1234,10 +1235,10 @@ public class SharedCommandTests {
         GlideString key = gs(UUID.randomUUID().toString());
         GlideString field1 = gs(UUID.randomUUID().toString());
         GlideString field2 = gs(UUID.randomUUID().toString());
-        Map<String, String> fieldValueMap =
-                Map.of(field1.toString(), "value1", field2.toString(), "value1");
+        Map<GlideString, GlideString> fieldValueMap =
+                Map.of(field1, gs("value1"), field2, gs("value1"));
 
-        assertEquals(2, client.hset(key.toString(), fieldValueMap).get());
+        assertEquals(2, client.hset(key, fieldValueMap).get());
         assertTrue(client.hexists(key, field1).get());
         assertFalse(client.hexists(key, gs("non_existing_field")).get());
         assertFalse(client.hexists(gs("non_existing_key"), field2).get());
@@ -1266,12 +1267,10 @@ public class SharedCommandTests {
         GlideString field1 = gs(UUID.randomUUID().toString());
         GlideString field2 = gs(UUID.randomUUID().toString());
         GlideString value = gs(UUID.randomUUID().toString());
-        Map<String, String> fieldValueMapStrings =
-                Map.of(field1.getString(), value.getString(), field2.getString(), value.getString());
         HashMap<GlideString, GlideString> fieldValueMap =
                 new HashMap<>(Map.of(field1, value, field2, value));
 
-        assertEquals(2, client.hset(key.getString(), fieldValueMapStrings).get());
+        assertEquals(2, client.hset(key, fieldValueMap).get());
         Map<GlideString, GlideString> allItems = client.hgetall(key).get();
         assertEquals(value, allItems.get(field1));
         assertEquals(value, allItems.get(field2));
@@ -1358,10 +1357,10 @@ public class SharedCommandTests {
         GlideString key1 = gs(UUID.randomUUID().toString());
         GlideString key2 = gs(UUID.randomUUID().toString());
 
-        var data = new LinkedHashMap<String, String>();
-        data.put("f 1", "v 1");
-        data.put("f 2", "v 2");
-        assertEquals(2, client.hset(key1.toString(), data).get());
+        var data = new LinkedHashMap<GlideString, GlideString>();
+        data.put(gs("f 1"), gs("v 1"));
+        data.put(gs("f 2"), gs("v 2"));
+        assertEquals(2, client.hset(key1, data).get());
         assertArrayEquals(new GlideString[] {gs("f 1"), gs("f 2")}, client.hkeys(key1).get());
 
         assertEquals(0, client.hkeys(key2).get().length);
@@ -1526,25 +1525,24 @@ public class SharedCommandTests {
         assertNull(client.lpop("non_existing_key").get());
     }
 
-    //     TODO: uncomment once client.lrange has binary version
-    //     @SneakyThrows
-    //     @ParameterizedTest(autoCloseArguments = false)
-    //     @MethodSource("getClients")
-    //     public void lpush_lpop_lrange_binary_existing_non_existing_key(BaseClient client) {
-    //         GlideString key = gs(UUID.randomUUID().toString());
-    //         GlideString[] valueArray = new GlideString[] {gs("value4"), gs("value3"), gs("value2"),
-    // gs("value1")};
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lpush_lpop_lrange_binary_existing_non_existing_key(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString[] valueArray =
+                new GlideString[] {gs("value4"), gs("value3"), gs("value2"), gs("value1")};
 
-    //         assertEquals(4, client.lpush(key, valueArray).get());
-    //         assertEquals("value1", client.lpop(key).get());
-    //         assertArrayEquals(new GlideString[] {gs("value2"), gs("value3"), gs("value4")},
-    // client.lrange(key, 0, -1).get());
-    //         assertArrayEquals(new GlideString[] {gs("value2"), gs("value3")}, client.lpopCount(key,
-    // 2).get());
-    //         assertArrayEquals(new GlideString[] {}, client.lrange(gs("non_existing_key"), 0,
-    // -1).get());
-    //         assertNull(client.lpop(gs("non_existing_key")).get());
-    //     }
+        assertEquals(4, client.lpush(key, valueArray).get());
+        assertEquals(gs("value1"), client.lpop(key).get());
+        assertArrayEquals(
+                new GlideString[] {gs("value2"), gs("value3"), gs("value4")},
+                client.lrange(key, 0, -1).get());
+        assertArrayEquals(
+                new GlideString[] {gs("value2"), gs("value3")}, client.lpopCount(key, 2).get());
+        assertArrayEquals(new GlideString[] {}, client.lrange(gs("non_existing_key"), 0, -1).get());
+        assertNull(client.lpop(gs("non_existing_key")).get());
+    }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -1570,32 +1568,30 @@ public class SharedCommandTests {
         assertTrue(lrangeException.getCause() instanceof RequestException);
     }
 
-    //     TODO: uncomment once client.lrange has binary version
-    //     @SneakyThrows
-    //     @ParameterizedTest(autoCloseArguments = false)
-    //     @MethodSource("getClients")
-    //     public void lpush_lpop_lrange_binary_type_error(BaseClient client) {
-    //         GlideString key = gs(UUID.randomUUID().toString());
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lpush_lpop_lrange_binary_type_error(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
 
-    //         assertEquals(OK, client.set(key, "foo").get());
+        assertEquals(OK, client.set(key, gs("foo")).get());
 
-    //         Exception lpushException =
-    //                 assertThrows(ExecutionException.class, () -> client.lpush(key, new
-    // GlideString[] {gs("foo")}).get());
-    //         assertTrue(lpushException.getCause() instanceof RequestException);
+        Exception lpushException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lpush(key, new GlideString[] {gs("foo")}).get());
+        assertTrue(lpushException.getCause() instanceof RequestException);
 
-    //         Exception lpopException = assertThrows(ExecutionException.class, () ->
-    // client.lpop(key).get());
-    //         assertTrue(lpopException.getCause() instanceof RequestException);
+        Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
+        assertTrue(lpopException.getCause() instanceof RequestException);
 
-    //         Exception lpopCountException =
-    //                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
-    //         assertTrue(lpopCountException.getCause() instanceof RequestException);
+        Exception lpopCountException =
+                assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
+        assertTrue(lpopCountException.getCause() instanceof RequestException);
 
-    //         Exception lrangeException =
-    //                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
-    //         assertTrue(lrangeException.getCause() instanceof RequestException);
-    //     }
+        Exception lrangeException =
+                assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
+        assertTrue(lrangeException.getCause() instanceof RequestException);
+    }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -1672,11 +1668,11 @@ public class SharedCommandTests {
         assertEquals(4, client.lpush(key, valueArray).get());
         assertEquals(OK, client.ltrim(key, 0, 1).get());
         assertArrayEquals(
-                new String[] {"value1", "value2"}, client.lrange(key.toString(), 0, -1).get());
+                new GlideString[] {gs("value1"), gs("value2")}, client.lrange(key, 0, -1).get());
 
         // `start` is greater than `end` so the key will be removed.
         assertEquals(OK, client.ltrim(key, 4, 2).get());
-        assertArrayEquals(new String[] {}, client.lrange(key.toString(), 0, -1).get());
+        assertArrayEquals(new GlideString[] {}, client.lrange(key, 0, -1).get());
 
         assertEquals(OK, client.set(key, gs("foo")).get());
 
@@ -2146,7 +2142,7 @@ public class SharedCommandTests {
         // move missing element to missing key
         assertFalse(client.smove(setKey1, nonSetKey, gs("42")).get());
         assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
-        assertEquals("none", client.type(nonSetKey.toString()).get());
+        assertEquals("none", client.type(nonSetKey).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(nonSetKey, gs("bar")).get());
