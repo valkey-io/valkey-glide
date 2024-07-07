@@ -301,6 +301,22 @@ public interface StringBaseCommands {
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
 
     /**
+     * Sets multiple keys to multiple values in a single operation.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
+     *     keyValueMap</code> map to different hash slots.
+     * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Always <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String result = client.mset(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
+     * assert result.equals("OK"));
+     * }</pre>
+     */
+    CompletableFuture<String> msetBinary(Map<GlideString, GlideString> keyValueMap);
+
+    /**
      * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
      * more keys already exist, the entire operation fails.
      *
@@ -316,6 +332,23 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
+     * @example
+     *     <pre>{@code
+     * Boolean result = client.msetnx(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
+     * assert result;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> msetnxBinary(Map<GlideString, GlideString> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it

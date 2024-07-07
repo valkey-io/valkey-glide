@@ -623,18 +623,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void mset_mget_existing_non_existing_key_binary(BaseClient client) {
+        // keys are from different slots
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString key3 = gs(UUID.randomUUID().toString());
+        GlideString nonExisting = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+
+        assertEquals(OK, client.msetBinary(keyValueMap).get());
+        assertArrayEquals(
+                new GlideString[] {value, value, null, value},
+                client.mget(new GlideString[] {key1, key2, nonExisting, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void mset_mget_binary(BaseClient client) {
         // keys are from different slots
-        String key1 = UUID.randomUUID().toString();
-        String key2 = UUID.randomUUID().toString();
-        String key3 = UUID.randomUUID().toString();
-        String value = UUID.randomUUID().toString();
-        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString key3 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> keyValueMap = Map.of(key1, value, key2, value, key3, value);
 
-        assertEquals(OK, client.mset(keyValueMap).get());
+        assertEquals(OK, client.msetBinary(keyValueMap).get());
         assertArrayEquals(
-                new GlideString[] {gs(value), gs(value), gs(value)},
-                client.mget(new GlideString[] {gs(key1), gs(key2), gs(key3)}).get());
+                new GlideString[] {value, value, value},
+                client.mget(new GlideString[] {key1, key2, key3}).get());
     }
 
     @SneakyThrows
@@ -10280,6 +10298,30 @@ public class SharedCommandTests {
 
         // one of the keys is already set, nothing gets set
         assertFalse(client.msetnx(keyValueMap2).get());
+        assertNull(client.get(key3).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void msetnx_binary(BaseClient client) {
+        // keys are from different slots
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString nonExisting = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> keyValueMap1 = Map.of(key1, value, key2, value);
+        Map<GlideString, GlideString> keyValueMap2 = Map.of(key2, value, key3, value);
+
+        // all keys are empty, successfully set
+        assertTrue(client.msetnxBinary(keyValueMap1).get());
+        assertArrayEquals(
+                new GlideString[] {value, value, null},
+                client.mget(new GlideString[] {key1, key2, nonExisting}).get());
+
+        // one of the keys is already set, nothing gets set
+        assertFalse(client.msetnxBinary(keyValueMap2).get());
         assertNull(client.get(key3).get());
     }
 

@@ -1563,9 +1563,10 @@ public class CommandTests {
         GlideString initialCursor = gs("0");
 
         int numberKeys = 500;
-        Map<String, String> keys = new HashMap<>();
+        Map<GlideString, GlideString> keys = new HashMap<>();
         for (int i = 0; i < numberKeys; i++) {
-            keys.put("{key}-" + i + "-" + UUID.randomUUID(), "{value}-" + i + "-" + UUID.randomUUID());
+            keys.put(
+                    gs("{key}-" + i + "-" + UUID.randomUUID()), gs("{value}-" + i + "-" + UUID.randomUUID()));
         }
 
         int resultCursorIndex = 0;
@@ -1585,7 +1586,7 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
 
         // Add keys to the database using mset
-        regularClient.mset(keys).get();
+        regularClient.msetBinary(keys).get();
 
         Object[] result;
         Object[] keysFound = new GlideString[0];
@@ -1607,7 +1608,7 @@ public class CommandTests {
 
         // check that each key added to the database is found through the cursor
         Object[] finalKeysFound = keysFound;
-        keys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, gs(key))));
+        keys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, key)));
     }
 
     @Test
@@ -1701,11 +1702,12 @@ public class CommandTests {
         int resultCollectionIndex = 1;
 
         // Add string keys to the database using mset
-        Map<String, String> stringKeys = new HashMap<>();
+        Map<GlideString, GlideString> stringKeys = new HashMap<>();
         for (int i = 0; i < 10; i++) {
-            stringKeys.put("{key}-" + i + "-" + matchPattern, "{value}-" + i + "-" + matchPattern);
+            stringKeys.put(
+                    gs("{key}-" + i + "-" + matchPattern), gs("{value}-" + i + "-" + matchPattern));
         }
-        regularClient.mset(stringKeys).get();
+        regularClient.msetBinary(stringKeys).get();
 
         // Add set keys to the database using sadd
         List<GlideString> setKeys = new ArrayList<>();
@@ -1743,7 +1745,7 @@ public class CommandTests {
 
         // check that each key added to the database is found through the cursor
         Object[] finalKeysFound = keysFound;
-        stringKeys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, gs(key))));
+        stringKeys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, key)));
 
         // scan for sets by match pattern:
         options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(SET).build();
