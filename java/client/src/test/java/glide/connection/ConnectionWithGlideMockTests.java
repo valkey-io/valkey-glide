@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.NodeAddress;
 import glide.api.RedisClient;
@@ -28,7 +29,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
@@ -79,7 +79,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -102,7 +102,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -125,7 +125,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -144,7 +144,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });

@@ -1,10 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.RedisClusterClient;
 import glide.api.models.commands.SortClusterOptions;
