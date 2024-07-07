@@ -39,6 +39,7 @@ async def create_two_clients(
     pub_sub,
     pub_sub2: Optional[Any] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
+    timeout: Optional[int] = None,
 ) -> Tuple[
     Union[GlideClient, GlideClusterClient], Union[GlideClient, GlideClusterClient]
 ]:
@@ -67,6 +68,7 @@ async def create_two_clients(
         cluster_mode_pubsub=cluster_mode_pubsub2,
         standalone_mode_pubsub=standalone_mode_pubsub2,
         protocol=protocol,
+        timeout=timeout,
     )
     client2 = await create_client(
         request,
@@ -74,6 +76,7 @@ async def create_two_clients(
         cluster_mode_pubsub=cluster_mode_pubsub,
         standalone_mode_pubsub=standalone_mode_pubsub,
         protocol=protocol,
+        timeout=timeout,
     )
     return client, client2
 
@@ -513,7 +516,7 @@ class TestPubSub:
         channel = get_random_string(10)
         message = get_random_string(5)
         message2 = get_random_string(7)
-        publish_response = 1 if cluster_mode else OK
+        publish_response = 1
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -1848,9 +1851,6 @@ class TestPubSub:
                 await client_pattern.custom_command(["PUNSUBSCRIBE", CHANNEL_NAME])
                 await client_sharded.custom_command(["SUNSUBSCRIBE", CHANNEL_NAME])
 
-    @pytest.mark.skip(
-        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
-    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
         """
@@ -1868,9 +1868,9 @@ class TestPubSub:
         - Ensuring that no additional messages are left after the expected messages are received.
         """
         channel = get_random_string(10)
-        message = get_random_string(512 * 1024 * 1024)
-        message2 = get_random_string(512 * 1024 * 1024)
-        publish_response = 1 if cluster_mode else OK
+        message = "1" * 512 * 1024 * 1024
+        message2 = "2" * 512 * 1024 * 1024
+        publish_response = 1
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -1879,16 +1879,15 @@ class TestPubSub:
         )
 
         publishing_client, listening_client = await create_two_clients(
-            request, cluster_mode, pub_sub
+            request, cluster_mode, pub_sub, timeout=10000
         )
-
         try:
             assert await publishing_client.publish(message, channel) == publish_response
             assert (
                 await publishing_client.publish(message2, channel) == publish_response
             )
             # allow the message to propagate
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
             async_msg = await listening_client.get_pubsub_message()
             sync_msg = listening_client.try_get_pubsub_message()
@@ -1915,9 +1914,6 @@ class TestPubSub:
                 # So to avoid flakiness, we make sure to unsubscribe from the channels
                 await listening_client.custom_command(["UNSUBSCRIBE", channel])
 
-    @pytest.mark.skip(
-        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
-    )
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
         """
@@ -1935,9 +1931,9 @@ class TestPubSub:
         - Ensuring that no additional messages are left after the expected messages are received.
         """
         channel = get_random_string(10)
-        message = get_random_string(512 * 1024 * 1024)
-        message2 = get_random_string(512 * 1024 * 1024)
-        publish_response = 1 if cluster_mode else OK
+        message = "1" * 512 * 1024 * 1024
+        message2 = "2" * 512 * 1024 * 1024
+        publish_response = 1
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -1946,7 +1942,7 @@ class TestPubSub:
         )
 
         publishing_client, listening_client = await create_two_clients(
-            request, cluster_mode, pub_sub
+            request, cluster_mode, pub_sub, timeout=10000
         )
 
         # (Redis version > 7)
@@ -1961,10 +1957,12 @@ class TestPubSub:
                 == publish_response
             )
             assert (
-                await publishing_client.publish(message2, channel) == publish_response
+                await publishing_client.publish(message2, channel, sharded=True)
+                == publish_response
             )
+
             # allow the message to propagate
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
             async_msg = await listening_client.get_pubsub_message()
             sync_msg = listening_client.try_get_pubsub_message()
@@ -1991,9 +1989,6 @@ class TestPubSub:
                 # So to avoid flakiness, we make sure to unsubscribe from the channels
                 await listening_client.custom_command(["UNSUBSCRIBE", channel])
 
-    @pytest.mark.skip(
-        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
-    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_exact_max_size_message_callback(
         self, request, cluster_mode: bool
@@ -2012,8 +2007,8 @@ class TestPubSub:
         - Verifying that the message is received correctly using the callback method.
         """
         channel = get_random_string(10)
-        message = get_random_string(512 * 1024 * 1024)
-        publish_response = 1 if cluster_mode else OK
+        message = "0" * 512 * 1024 * 1024
+        publish_response = 1
 
         callback_messages: List[CoreCommands.PubSubMsg] = []
         callback, context = new_message, callback_messages
@@ -2027,7 +2022,7 @@ class TestPubSub:
         )
 
         publishing_client, listening_client = await create_two_clients(
-            request, cluster_mode, pub_sub
+            request, cluster_mode, pub_sub, timeout=10000
         )
 
         try:
@@ -2037,8 +2032,8 @@ class TestPubSub:
 
             assert len(callback_messages) == 1
 
-            assert callback_messages[0].message == message
-            assert callback_messages[0].channel == channel
+            assert callback_messages[0].message == message.encode()
+            assert callback_messages[0].channel == channel.encode()
             assert callback_messages[0].pattern is None
 
         finally:
@@ -2048,9 +2043,6 @@ class TestPubSub:
                 # So to avoid flakiness, we make sure to unsubscribe from the channels
                 await listening_client.custom_command(["UNSUBSCRIBE", channel])
 
-    @pytest.mark.skip(
-        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
-    )
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_sharded_max_size_message_callback(
         self, request, cluster_mode: bool
@@ -2069,8 +2061,8 @@ class TestPubSub:
         - Verifying that the message is received correctly using the callback method.
         """
         channel = get_random_string(10)
-        message = get_random_string(512 * 1024 * 1024)
-        publish_response = 1 if cluster_mode else OK
+        message = "0" * 512 * 1024 * 1024
+        publish_response = 1
 
         callback_messages: List[CoreCommands.PubSubMsg] = []
         callback, context = new_message, callback_messages
@@ -2084,7 +2076,7 @@ class TestPubSub:
         )
 
         publishing_client, listening_client = await create_two_clients(
-            request, cluster_mode, pub_sub
+            request, cluster_mode, pub_sub, timeout=10000
         )
 
         # (Valkey version > 7)
@@ -2103,8 +2095,8 @@ class TestPubSub:
 
             assert len(callback_messages) == 1
 
-            assert callback_messages[0].message == message
-            assert callback_messages[0].channel == channel
+            assert callback_messages[0].message == message.encode()
+            assert callback_messages[0].channel == channel.encode()
             assert callback_messages[0].pattern is None
 
         finally:
