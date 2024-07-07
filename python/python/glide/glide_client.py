@@ -390,6 +390,7 @@ class BaseClient(CoreCommands):
         push_notification = cast(
             Dict[str, Any], value_from_pointer(response.resp_pointer)
         )
+        print(f"recieved push_notification={push_notification}")
         message_kind = push_notification["kind"]
         if message_kind == "Disconnection":
             ClientLogger.log(
