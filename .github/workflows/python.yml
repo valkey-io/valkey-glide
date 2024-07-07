@@ -105,7 +105,7 @@ jobs:
             - name: Type check with mypy
               working-directory: ./python
               run: |
-                  # The type check should run inside the virtual env to get
+                  # The type check should run inside the virtual envirnment to get
                   # all installed dependencies and build files
                   source .env/bin/activate
                   pip install mypy types-protobuf
