@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
-
+import static glide.api.models.GlideString.gs;
+import glide.api.models.GlideString;
 import glide.api.commands.StreamBaseCommands;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,6 +62,33 @@ public class StreamReadOptions {
     }
 
     /**
+     * Converts options and the key-to-id input for {@link StreamBaseCommands#xread(Map,
+     * StreamReadOptions)} into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toArgsBinary(Map<GlideString, GlideString> streams) {
+        List<GlideString> optionArgs = new ArrayList<>();
+
+        if (this.count != null) {
+            optionArgs.add(gs(READ_COUNT_REDIS_API));
+            optionArgs.add(gs(count.toString()));
+        }
+
+        if (this.block != null) {
+            optionArgs.add(gs(READ_BLOCK_REDIS_API));
+            optionArgs.add(gs(block.toString()));
+        }
+
+        optionArgs.add(gs(READ_STREAMS_REDIS_API));
+        Set<Map.Entry<GlideString, GlideString>> entrySet = streams.entrySet();
+        optionArgs.addAll(entrySet.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
+        optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
+
+        return optionArgs.toArray(new GlideString[0]);
+    }
+
+    /**
      * Converts options into a String[].
      *
      * @return String[]
@@ -68,5 +96,15 @@ public class StreamReadOptions {
     public String[] toArgs() {
         Map<String, String> emptyMap = new HashMap<>();
         return toArgs(emptyMap);
+    }
+
+    /**
+     * Converts options into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toArgsBinary() {
+        Map<GlideString, GlideString> emptyMap = new HashMap<>();
+        return toArgsBinary(emptyMap);
     }
 }
