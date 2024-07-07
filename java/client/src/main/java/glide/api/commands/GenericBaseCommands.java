@@ -17,8 +17,8 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
-    /** Redis API keyword used to replace the destination key. */
-    String REPLACE_REDIS_API = "REPLACE";
+    /** Valkey API keyword used to replace the destination key. */
+    String REPLACE_VALKEY_API = "REPLACE";
 
     /**
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
@@ -555,7 +555,7 @@ public interface GenericBaseCommands {
      * will expire, in seconds.<br>
      * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
@@ -573,7 +573,7 @@ public interface GenericBaseCommands {
      * will expire, in seconds.<br>
      * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/expiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
@@ -590,7 +590,7 @@ public interface GenericBaseCommands {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire, in milliseconds.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
@@ -607,7 +607,7 @@ public interface GenericBaseCommands {
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire, in milliseconds.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/pexpiretime/">valkey.io</a> for details.
      * @param key The <code>key</code> to determine the expiration value of.
      * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
@@ -624,11 +624,11 @@ public interface GenericBaseCommands {
     // TODO add note to invokeScript about routing on cluster client
     /**
      * Invokes a Lua script.<br>
-     * This method simplifies the process of invoking scripts on a Redis server by using an object
-     * that represents a Lua script. The script loading and execution will all be handled internally.
-     * If the script has not already been loaded, it will be loaded automatically using the Redis
-     * <code>SCRIPT LOAD</code> command. After that, it will be invoked using the Redis <code>EVALSHA
-     * </code> command.
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading and execution will all be handled internally. If
+     * the script has not already been loaded, it will be loaded automatically using the <code>
+     * SCRIPT LOAD</code> command. After that, it will be invoked using the <code>EVALSHA </code>
+     * command.
      *
      * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
      *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
@@ -646,11 +646,11 @@ public interface GenericBaseCommands {
 
     /**
      * Invokes a Lua script with its keys and arguments.<br>
-     * This method simplifies the process of invoking scripts on a Redis server by using an object
-     * that represents a Lua script. The script loading, argument preparation, and execution will all
-     * be handled internally. If the script has not already been loaded, it will be loaded
-     * automatically using the Redis <code>SCRIPT LOAD</code> command. After that, it will be invoked
-     * using the Redis <code>EVALSHA</code> command.
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading, argument preparation, and execution will all be
+     * handled internally. If the script has not already been loaded, it will be loaded automatically
+     * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
+     * EVALSHA</code> command.
      *
      * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
      *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
@@ -671,11 +671,11 @@ public interface GenericBaseCommands {
 
     /**
      * Invokes a Lua script with its keys and arguments.<br>
-     * This method simplifies the process of invoking scripts on a Redis server by using an object
-     * that represents a Lua script. The script loading, argument preparation, and execution will all
-     * be handled internally. If the script has not already been loaded, it will be loaded
-     * automatically using the Redis <code>SCRIPT LOAD</code> command. After that, it will be invoked
-     * using the Redis <code>EVALSHA</code> command.
+     * This method simplifies the process of invoking scripts on the server by using an object that
+     * represents a Lua script. The script loading, argument preparation, and execution will all be
+     * handled internally. If the script has not already been loaded, it will be loaded automatically
+     * using the <code>SCRIPT LOAD</code> command. After that, it will be invoked using the <code>
+     * EVALSHA</code> command.
      *
      * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a> and <a
      *     href="https://valkey.io/commands/evalsha/">EVALSHA</a> for details.
@@ -801,7 +801,7 @@ public interface GenericBaseCommands {
     CompletableFuture<String> type(GlideString key);
 
     /**
-     * Returns the internal encoding for the Redis object stored at <code>key</code>.
+     * Returns the internal encoding for the Valkey object stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the internal encoding of.
@@ -819,7 +819,7 @@ public interface GenericBaseCommands {
     CompletableFuture<String> objectEncoding(String key);
 
     /**
-     * Returns the internal encoding for the Redis object stored at <code>key</code>.
+     * Returns the internal encoding for the Valkey object stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the internal encoding of.
@@ -837,7 +837,7 @@ public interface GenericBaseCommands {
     CompletableFuture<String> objectEncoding(GlideString key);
 
     /**
-     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
+     * Returns the logarithmic access frequency counter of a Valkey object stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
@@ -857,7 +857,7 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectFreq(String key);
 
     /**
-     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
+     * Returns the logarithmic access frequency counter of a Valkey object stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
      * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
@@ -1062,7 +1062,7 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1084,7 +1084,7 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1107,7 +1107,7 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1131,7 +1131,7 @@ public interface GenericBaseCommands {
      *
      * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
      *     to the same hash slot.
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -1249,7 +1249,7 @@ public interface GenericBaseCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return An <code>Array</code> of sorted elements.
      * @example
@@ -1267,7 +1267,7 @@ public interface GenericBaseCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return An <code>Array</code> of sorted elements.
      * @example

@@ -16,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface GenericCommands {
     /** Redis API keyword used to denote the destination db index. */
-    String DB_REDIS_API = "DB";
+    String DB_VALKEY_API = "DB";
 
     /**
      * Executes a single command, without checking inputs. Every part of the command, including
@@ -103,7 +103,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -125,7 +125,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -147,7 +147,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -167,7 +167,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -264,7 +264,7 @@ public interface GenericCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -287,7 +287,7 @@ public interface GenericCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
      * @return An <code>Array</code> of sorted elements.

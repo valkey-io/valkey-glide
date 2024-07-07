@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 public interface ConnectionManagementCommands {
 
     /**
-     * Pings the Redis server.
+     * Pings the server.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @return <code>String</code> with <code>"PONG"</code>.
@@ -25,7 +25,7 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> ping();
 
     /**
-     * Pings the Redis server.
+     * Pings the server.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param message The server will respond with a copy of the message.
@@ -39,7 +39,7 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> ping(String message);
 
     /**
-     * Pings the Redis server.
+     * Pings the server.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param message The server will respond with a copy of the message.
