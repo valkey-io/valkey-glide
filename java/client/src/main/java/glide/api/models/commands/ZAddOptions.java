@@ -2,6 +2,8 @@
 package glide.api.models.commands;
 
 import glide.api.commands.SortedSetBaseCommands;
+import glide.api.models.GlideString;
+import glide.utils.ArgsBuilder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -84,5 +86,14 @@ public final class ZAddOptions {
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts ZaddOptions into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toArgsBinary() {
+        return new ArgsBuilder().add(toArgs()).toArray();
     }
 }
