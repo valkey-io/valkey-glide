@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import glide.api.RedisClusterClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -102,7 +102,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 @Timeout(10) // seconds
 public class CommandTests {
 
-    private static RedisClusterClient clusterClient = null;
+    private static GlideClusterClient clusterClient = null;
 
     private static final String INITIAL_VALUE = "VALUE";
 
@@ -154,7 +154,7 @@ public class CommandTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(7000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(7000).build())
                         .get();
     }
 
@@ -1735,7 +1735,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1790,7 +1790,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1847,7 +1847,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1900,7 +1900,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1954,7 +1954,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -2022,7 +2022,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await

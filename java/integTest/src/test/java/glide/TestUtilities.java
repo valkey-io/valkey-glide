@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import glide.api.BaseClient;
-import glide.api.RedisClient;
-import glide.api.RedisClusterClient;
+import glide.api.GlideClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
-import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -77,15 +77,15 @@ public class TestUtilities {
                                 HashMap::new));
     }
 
-    public static RedisClientConfiguration.RedisClientConfigurationBuilder<?, ?>
+    public static GlideClientConfiguration.GlideClientConfigurationBuilder<?, ?>
             commonClientConfig() {
-        return RedisClientConfiguration.builder()
+        return GlideClientConfiguration.builder()
                 .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build());
     }
 
-    public static RedisClusterClientConfiguration.RedisClusterClientConfigurationBuilder<?, ?>
+    public static GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder<?, ?>
             commonClusterClientConfig() {
-        return RedisClusterClientConfiguration.builder()
+        return GlideClusterClientConfiguration.builder()
                 .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
     }
 
@@ -358,10 +358,10 @@ public class TestUtilities {
         boolean isBusy = true;
         do {
             try {
-                if (client instanceof RedisClusterClient) {
-                    ((RedisClusterClient) client).functionKill().get();
-                } else if (client instanceof RedisClient) {
-                    ((RedisClient) client).functionKill().get();
+                if (client instanceof GlideClusterClient) {
+                    ((GlideClusterClient) client).functionKill().get();
+                } else if (client instanceof GlideClient) {
+                    ((GlideClient) client).functionKill().get();
                 }
             } catch (Exception busy) {
                 // should throw `notbusy` error, because the function should be killed before

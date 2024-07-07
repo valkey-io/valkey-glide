@@ -341,7 +341,7 @@ public abstract class BaseClient
      * @param config Redis client Configuration.
      * @param constructor Redis client constructor reference.
      * @param <T> Client type.
-     * @return a Future to connect and return a RedisClient.
+     * @return a Future to connect and return a client.
      */
     protected static <T extends BaseClient> CompletableFuture<T> createClient(
             @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {

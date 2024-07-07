@@ -6,16 +6,16 @@ import static command_request.CommandRequestOuterClass.RequestType.Sort;
 import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 
-import glide.api.RedisClusterClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.commands.SortClusterOptions;
 import lombok.NonNull;
 
 /**
- * Transaction implementation for cluster {@link RedisClusterClient}. Transactions allow the
+ * Transaction implementation for cluster {@link GlideClusterClient}. Transactions allow the
  * execution of a group of commands in a single step.
  *
  * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
- * {@link RedisClusterClient#exec} command, in the order they were given. Each element in the array
+ * {@link GlideClusterClient#exec} command, in the order they were given. Each element in the array
  * represents a command given to the {@link ClusterTransaction}. The response for each command
  * depends on the executed Redis command. Specific response types are documented alongside each
  * method.
