@@ -70,7 +70,7 @@ public interface StreamRange {
          * @param id The stream id.
          */
         private IdBound(GlideString id) {
-            redisApi = id.getString();
+            valkeyApi = id.getString();
         }
 
         /**
@@ -125,7 +125,7 @@ public interface StreamRange {
          * @param id The stream id.
          */
         public static IdBound ofExclusive(GlideString id) {
-            return new IdBound(EXCLUSIVE_RANGE_REDIS_API + id.getString());
+            return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + id.getString());
         }
     }
 

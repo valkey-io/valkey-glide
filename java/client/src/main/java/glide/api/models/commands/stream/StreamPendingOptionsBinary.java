@@ -39,8 +39,8 @@ public class StreamPendingOptionsBinary {
             optionArgs.add(gs(Long.toString(minIdleTime)));
         }
 
-        optionArgs.add(gs(start.getRedisApi()));
-        optionArgs.add(gs(end.getRedisApi()));
+        optionArgs.add(gs(start.getValkeyApi()));
+        optionArgs.add(gs(end.getValkeyApi()));
         optionArgs.add(gs(Long.toString(count)));
 
         if (consumer != null) {
