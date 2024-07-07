@@ -844,6 +844,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> msetBinary(@NonNull Map<GlideString, GlideString> keyValueMap) {
+        GlideString[] args = convertMapToKeyValueGlideStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> objectEncoding(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectEncoding, new String[] {key}, this::handleStringOrNullResponse);
@@ -4019,6 +4025,13 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> msetnxBinary(
+            @NonNull Map<GlideString, GlideString> keyValueMap) {
+        GlideString[] args = convertMapToKeyValueGlideStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
     }
 
