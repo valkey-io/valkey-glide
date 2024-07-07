@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands for the "Connection Management" group for a cluster client.
  *
- * @see <a href="https://redis.io/commands/?group=connection">Connection Management Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=connection">Connection Management Commands</a>
  */
 public interface ConnectionManagementClusterCommands {
 

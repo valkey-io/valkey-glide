@@ -16,7 +16,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands for the "Generic Commands" group for a cluster client.
  *
- * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericClusterCommands {
 
@@ -46,13 +46,12 @@ public interface GenericClusterCommands {
      * <p>Client will route the command to the nodes defined by <code>route</code>.
      *
      * @apiNote See <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
-     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
-     *     API.
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
+     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return Response from Redis containing an <code>Object</code>.
+     * @return The returning value depends on the executed command.
      * @example
      *     <pre>{@code
      * ClusterValue<Object> result = clusterClient.customCommand(new String[]{ "CONFIG", "GET", "maxmemory"}, ALL_NODES).get();
@@ -69,7 +68,7 @@ public interface GenericClusterCommands {
      * <p>The transaction will be routed to the slot owner of the first key found in the transaction.
      * If no key is found, the command will be sent to a random node.
      *
-     * @see <a href="https://redis.io/topics/Transactions/">valkey.io</a> for details on Redis
+     * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
@@ -93,7 +92,7 @@ public interface GenericClusterCommands {
     /**
      * Executes a transaction by processing the queued commands.
      *
-     * @see <a href="https://redis.io/topics/Transactions/">valkey.io</a> for details on Redis
+     * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @param route A single-node routing configuration for the transaction. The client will route the
@@ -139,7 +138,7 @@ public interface GenericClusterCommands {
     /**
      * Returns a random key.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>, and will return the first successful
      *     result.
@@ -176,7 +175,7 @@ public interface GenericClusterCommands {
      * Returns a random key.<br>
      * The command will be routed to all primary nodes, and will return the first successful result.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/docs/commands/randomkey/">valkey.io</a> for details.
      * @return A random <code>key</code> from the database.
      * @example
      *     <pre>{@code
