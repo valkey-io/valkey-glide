@@ -332,10 +332,7 @@ async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUs
         get_cluster_scan_cursor(cursor)?
     };
 
-    let match_pattern_string = cluster_scan
-        .match_pattern
-        .map(|pattern| pattern.to_string());
-    let match_pattern = match_pattern_string.as_deref();
+    let match_pattern = cluster_scan.match_pattern.map(|pattern| pattern.into());
     let count = cluster_scan.count.map(|count| count as usize);
 
     let object_type = match cluster_scan.object_type {
