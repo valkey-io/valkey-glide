@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import glide.api.models.GlideString;
 import glide.utils.ArrayTransformUtils;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -64,11 +65,29 @@ public interface StreamRange {
         }
 
         /**
+         * Default constructor
+         *
+         * @param id The stream id.
+         */
+        private IdBound(GlideString id) {
+            valkeyApi = id.getString();
+        }
+
+        /**
          * Creates a stream ID boundary by stream id for range search.
          *
          * @param id The stream id.
          */
         public static IdBound of(String id) {
+            return new IdBound(id);
+        }
+
+        /**
+         * Creates a stream ID boundary by stream id for range search.
+         *
+         * @param id The stream id.
+         */
+        public static IdBound of(GlideString id) {
             return new IdBound(id);
         }
 
@@ -98,6 +117,15 @@ public interface StreamRange {
          */
         public static IdBound ofExclusive(String id) {
             return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + id);
+        }
+
+        /**
+         * Creates a stream ID exclusive boundary by stream id for range search.
+         *
+         * @param id The stream id.
+         */
+        public static IdBound ofExclusive(GlideString id) {
+            return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + id.getString());
         }
     }
 
