@@ -21,7 +21,7 @@ from glide.constants import (
     TFunctionStatsResponse,
     TResult,
 )
-from glide.protobuf.redis_request_pb2 import RequestType
+from glide.protobuf.command_request_pb2 import RequestType
 
 
 class StandaloneCommands(CoreCommands):
