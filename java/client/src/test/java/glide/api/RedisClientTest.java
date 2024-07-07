@@ -346,6 +346,7 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamAddOptionsBinary;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -6506,8 +6507,12 @@ public class RedisClientTest {
         Map<GlideString, GlideString> fieldValues = new LinkedHashMap<>();
         fieldValues.put(gs("testField1"), gs("testValue1"));
         fieldValues.put(gs("testField2"), gs("testValue2"));
-        StreamAddOptions options =
-                StreamAddOptions.builder().id("id").makeStream(false).trim(new MaxLen(true, 5L)).build();
+        StreamAddOptionsBinary options =
+                StreamAddOptionsBinary.builder()
+                        .id(gs("id"))
+                        .makeStream(false)
+                        .trim(new MaxLen(true, 5L))
+                        .build();
 
         GlideString[] arguments =
                 new GlideString[] {
@@ -6744,6 +6749,44 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xread_binary_multiple_keys() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        GlideString keyTwo = gs("two");
+        GlideString streamIdTwo = gs("id-two");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_STREAMS_REDIS_API), keyOne, keyTwo, streamIdOne, streamIdTwo
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<GlideString, GlideString> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadBinary(keysAndIds);
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xread_with_options() {
         // setup
         String keyOne = "one";
@@ -6778,6 +6821,48 @@ public class RedisClientTest {
                         Map.of(keyOne, streamIdOne),
                         StreamReadOptions.builder().block(block).count(count).build());
         Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xread_with_options_binary() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        Long block = 2L;
+        Long count = 10L;
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_COUNT_REDIS_API),
+            gs(count.toString()),
+            gs(READ_BLOCK_REDIS_API),
+            gs(block.toString()),
+            gs(READ_STREAMS_REDIS_API),
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadBinary(
+                        Map.of(keyOne, streamIdOne),
+                        StreamReadOptions.builder().block(block).count(count).build());
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -7128,6 +7213,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xgroupCreate_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        GlideString[] arguments = new GlideString[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupCreate), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupCreate(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xgroupCreate_withOptions() {
         // setup
         String key = "testKey";
@@ -7145,6 +7255,42 @@ public class RedisClientTest {
                     ENTRIES_READ_VALKEY_API,
                     Long.toString(testEntry)
                 };
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupCreate), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupCreate(key, groupName, id, options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupCreate_withOptions_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        Long testEntry = 123L;
+        StreamGroupOptions options =
+                StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(groupName)
+                        .add(id)
+                        .add(MAKE_STREAM_VALKEY_API)
+                        .add(ENTRIES_READ_VALKEY_API)
+                        .add(testEntry)
+                        .toArray();
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -7188,12 +7334,62 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xgroupDestroy_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString[] arguments = new GlideString[] {key, groupName};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(XGroupDestroy), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.xgroupDestroy(key, groupName);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(Boolean.TRUE, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xgroupCreateConsumer() {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
         String consumerName = "testConsumerName";
         String[] arguments = new String[] {key, groupName, consumerName};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(XGroupCreateConsumer), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response =
+                service.xgroupCreateConsumer(key, groupName, consumerName);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(Boolean.TRUE, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupCreateConsumer_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumerName = gs("testConsumerName");
+        GlideString[] arguments = new GlideString[] {key, groupName, consumerName};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -7240,12 +7436,63 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xgroupDelConsumer_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumerName = gs("testConsumerName");
+        GlideString[] arguments = new GlideString[] {key, groupName, consumerName};
+        Long result = 28L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XGroupDelConsumer), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xgroupDelConsumer(key, groupName, consumerName);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xgroupSetid() {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
         String id = "testId";
         String[] arguments = new String[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetid_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        GlideString[] arguments = new GlideString[] {key, groupName, id};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -7272,7 +7519,40 @@ public class RedisClientTest {
         String id = "testId";
         Long entriesRead = 1L;
         String[] arguments =
-                new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
+                new String[] {key, groupName, id, ENTRIES_READ_VALKEY_API, Long.toString(entriesRead)};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id, entriesRead);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetidWithEntriesRead_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        Long entriesRead = 1L;
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(groupName)
+                        .add(id)
+                        .add(ENTRIES_READ_VALKEY_API)
+                        .add(entriesRead)
+                        .toArray();
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -7339,6 +7619,53 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xreadgroup_binary_multiple_keys() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        GlideString keyTwo = gs("two");
+        GlideString streamIdTwo = gs("id-two");
+        GlideString groupName = gs("testGroup");
+        GlideString consumerName = gs("consumerGroup");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_GROUP_REDIS_API),
+            groupName,
+            consumerName,
+            gs(READ_STREAMS_REDIS_API),
+            keyOne,
+            keyTwo,
+            streamIdOne,
+            streamIdTwo
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<GlideString, GlideString> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadgroup(keysAndIds, groupName, consumerName);
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xreadgroup_with_options() {
         // setup
         String keyOne = "one";
@@ -7381,6 +7708,56 @@ public class RedisClientTest {
                         consumerName,
                         StreamReadGroupOptions.builder().block(block).count(count).noack().build());
         Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xreadgroup_with_options_binary() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        Long block = 2L;
+        Long count = 10L;
+        GlideString groupName = gs("testGroup");
+        GlideString consumerName = gs("consumerGroup");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_GROUP_REDIS_API),
+            groupName,
+            consumerName,
+            gs(READ_COUNT_REDIS_API),
+            gs(count.toString()),
+            gs(READ_BLOCK_REDIS_API),
+            gs(block.toString()),
+            gs(READ_NOACK_REDIS_API),
+            gs(READ_STREAMS_REDIS_API),
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadgroup(
+                        Map.of(keyOne, streamIdOne),
+                        groupName,
+                        consumerName,
+                        StreamReadGroupOptions.builder().block(block).count(count).noack().build());
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
