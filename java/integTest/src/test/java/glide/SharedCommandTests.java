@@ -3762,7 +3762,7 @@ public class SharedCommandTests {
         assertEquals(3, client.zadd(key, membersScores).get());
         assertEquals(0, client.zrevrank(key, gs("three")).get());
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
             assertArrayEquals(new Object[] {2L, 1.5}, client.zrevrankWithScore(key, gs("one")).get());
             assertNull(client.zrevrankWithScore(key, gs("nonExistingMember")).get());
             assertNull(client.zrevrankWithScore(gs("nonExistingKey"), gs("nonExistingMember")).get());
@@ -3805,7 +3805,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiff_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in 6.2.0");
 
         GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
         GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
@@ -5191,7 +5191,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zinter_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in 6.2.0");
 
         GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
         GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
