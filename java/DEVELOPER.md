@@ -223,8 +223,8 @@ The return types of these methods are in the form of a `CompletableFuture`, whic
 When implementing a command, include both a unit test and an integration test.
 
 Implement unit tests in the following files:
-- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java) for standalone commands.
-- [RedisClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
+- [GlideClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/GlideClientTest.java) for standalone commands.
+- [GlideClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/GlideClusterClientTest.java) for cluster commands.
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:

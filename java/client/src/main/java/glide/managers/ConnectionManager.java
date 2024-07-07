@@ -9,10 +9,10 @@ import connection_request.ConnectionRequestOuterClass.PubSubChannelsOrPatterns;
 import connection_request.ConnectionRequestOuterClass.PubSubSubscriptions;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.RedisClientConfiguration;
-import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import java.util.concurrent.CompletableFuture;
@@ -28,7 +28,7 @@ import response.ResponseOuterClass.Response;
 public class ConnectionManager {
 
     // TODO: consider making connection manager static, and moving the ChannelHandler to the
-    // RedisClient.
+    // GlideClient.
 
     /** UDS connection representation. */
     private final ChannelHandler channel;
@@ -69,13 +69,13 @@ public class ConnectionManager {
      * @return ConnectionRequest protobuf message
      */
     private ConnectionRequest createConnectionRequest(BaseClientConfiguration configuration) {
-        if (configuration instanceof RedisClusterClientConfiguration) {
-            return setupConnectionRequestBuilderRedisClusterClient(
-                            (RedisClusterClientConfiguration) configuration)
+        if (configuration instanceof GlideClusterClientConfiguration) {
+            return setupConnectionRequestBuilderGlideClusterClient(
+                            (GlideClusterClientConfiguration) configuration)
                     .build();
         }
 
-        return setupConnectionRequestBuilderRedisClient((RedisClientConfiguration) configuration)
+        return setupConnectionRequestBuilderGlideClient((GlideClientConfiguration) configuration)
                 .build();
     }
 
@@ -126,8 +126,8 @@ public class ConnectionManager {
      *
      * @param configuration Connection Request Configuration
      */
-    private ConnectionRequest.Builder setupConnectionRequestBuilderRedisClient(
-            RedisClientConfiguration configuration) {
+    private ConnectionRequest.Builder setupConnectionRequestBuilderGlideClient(
+            GlideClientConfiguration configuration) {
         ConnectionRequest.Builder connectionRequestBuilder =
                 setupConnectionRequestBuilderBaseConfiguration(configuration);
         connectionRequestBuilder.setClusterModeEnabled(false);
@@ -166,8 +166,8 @@ public class ConnectionManager {
      *
      * @param configuration
      */
-    private ConnectionRequest.Builder setupConnectionRequestBuilderRedisClusterClient(
-            RedisClusterClientConfiguration configuration) {
+    private ConnectionRequest.Builder setupConnectionRequestBuilderGlideClusterClient(
+            GlideClusterClientConfiguration configuration) {
         ConnectionRequest.Builder connectionRequestBuilder =
                 setupConnectionRequestBuilderBaseConfiguration(configuration);
         connectionRequestBuilder.setClusterModeEnabled(true);

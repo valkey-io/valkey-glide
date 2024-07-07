@@ -1,17 +1,17 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
-import glide.api.RedisClient;
+import glide.api.GlideClient;
 import lombok.Getter;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Represents the configuration settings for a Standalone {@link RedisClient}.
+ * Represents the configuration settings for a Standalone {@link GlideClient}.
  *
  * @example
  *     <pre>{@code
- * RedisClientConfiguration redisClientConfiguration =
- *     RedisClientConfiguration.builder()
+ * GlideClientConfiguration glideClientConfiguration =
+ *     GlideClientConfiguration.builder()
  *         .address(node1address)
  *         .address(node2address)
  *         .useTLS(true)
@@ -27,7 +27,7 @@ import lombok.experimental.SuperBuilder;
  */
 @Getter
 @SuperBuilder
-public class RedisClientConfiguration extends BaseClientConfiguration {
+public class GlideClientConfiguration extends BaseClientConfiguration {
     /** Strategy used to determine how and when to reconnect, in case of connection failures. */
     private final BackoffStrategy reconnectStrategy;
 

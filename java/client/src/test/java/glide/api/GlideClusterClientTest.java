@@ -82,9 +82,9 @@ import org.mockito.Mockito;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
-public class RedisClusterClientTest {
+public class GlideClusterClientTest {
 
-    RedisClusterClient service;
+    GlideClusterClient service;
 
     CommandManager commandManager;
 
@@ -94,7 +94,7 @@ public class RedisClusterClientTest {
     public void setUp() {
         commandManager = mock(CommandManager.class);
         service =
-                new RedisClusterClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
+                new GlideClusterClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @Test
@@ -158,7 +158,7 @@ public class RedisClusterClientTest {
         }
     }
 
-    private static class TestClient extends RedisClusterClient {
+    private static class TestClient extends GlideClusterClient {
 
         private final Object object;
 
@@ -771,7 +771,7 @@ public class RedisClusterClientTest {
         assertEquals(OK, payload);
     }
 
-    // TODO copy/move tests from RedisClientTest which call super for coverage
+    // TODO copy/move tests from GlideClientTest which call super for coverage
     @SneakyThrows
     @Test
     public void configGet_returns_success() {
