@@ -12,6 +12,7 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
     pull_request:
         paths:
             - glide-core/src/**
@@ -22,6 +23,7 @@ on:
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
 
 concurrency:
     group: java-${{ github.head_ref || github.ref }}
