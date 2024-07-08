@@ -76,7 +76,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             # For MUSL on X64 we need to install git since we use the checkout action
             - name: Install git for musl
@@ -288,7 +288,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: install Redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
