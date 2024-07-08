@@ -152,7 +152,7 @@ class BaseClient(CoreCommands):
         try:
             self._pubsub_lock.acquire()
             for pubsub_future in self._pubsub_futures:
-                if not response_future.done() and not pubsub_future.cancelled():
+                if not pubsub_future.done() and not pubsub_future.cancelled():
                     pubsub_future.set_exception(ClosingError(""))
         finally:
             self._pubsub_lock.release()
