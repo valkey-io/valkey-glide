@@ -52,7 +52,7 @@ jobs:
             matrix:
                 engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 dotnet:
-                    - '6.0'
+                    # - '6.0'
                     - '8.0'
                 host:
                     - {
@@ -60,11 +60,11 @@ jobs:
                         RUNNER: ubuntu-latest,
                         TARGET: x86_64-unknown-linux-gnu
                     }
-                    - {
-                        OS: macos,
-                        RUNNER: macos-latest,
-                        TARGET: aarch64-apple-darwin
-                    }
+                    # - {
+                    #     OS: macos,
+                    #     RUNNER: macos-latest,
+                    #     TARGET: aarch64-apple-darwin
+                    # }
     
         runs-on: ${{ matrix.host.RUNNER }}
 
