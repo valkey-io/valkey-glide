@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import glide.api.RedisClient;
+import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
@@ -77,13 +77,13 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
-    private static RedisClient regularClient = null;
+    private static GlideClient regularClient = null;
 
     @BeforeAll
     @SneakyThrows
     public static void init() {
         regularClient =
-                RedisClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
+                GlideClient.createClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll
@@ -754,7 +754,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName);
@@ -805,7 +805,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 testClient.fcall(funcName);
@@ -858,7 +858,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
@@ -869,7 +869,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // redis kills a function with 5 sec delay
+                        // valkey kills a function with 5 sec delay
                         // but this will always throw an error in the test
                         regularClient.functionKill().get();
                     } catch (ExecutionException executionException) {
@@ -924,7 +924,7 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
+                GlideClient.createClient(commonClientConfig().requestTimeout(10000).build()).get()) {
             try {
                 // call the function without await
                 promise = testClient.fcall(funcName, new GlideString[] {key}, new GlideString[0]);
@@ -935,7 +935,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // redis kills a function with 5 sec delay
+                        // valkey kills a function with 5 sec delay
                         // but this will always throw an error in the test
                         regularClient.functionKill().get();
                     } catch (ExecutionException executionException) {
@@ -1084,7 +1084,7 @@ public class CommandTests {
                 assertThrows(
                         ExecutionException.class, () -> regularClient.functionRestore(dump, REPLACE).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-        // redis checks names in random order and blames on first collision
+        // valkey checks names in random order and blames on first collision
         assertTrue(
                 executionException.getMessage().contains("Function " + name1 + " already exists")
                         || executionException.getMessage().contains("Function " + name2 + " already exists"));
@@ -1563,9 +1563,10 @@ public class CommandTests {
         GlideString initialCursor = gs("0");
 
         int numberKeys = 500;
-        Map<String, String> keys = new HashMap<>();
+        Map<GlideString, GlideString> keys = new HashMap<>();
         for (int i = 0; i < numberKeys; i++) {
-            keys.put("{key}-" + i + "-" + UUID.randomUUID(), "{value}-" + i + "-" + UUID.randomUUID());
+            keys.put(
+                    gs("{key}-" + i + "-" + UUID.randomUUID()), gs("{value}-" + i + "-" + UUID.randomUUID()));
         }
 
         int resultCursorIndex = 0;
@@ -1585,7 +1586,7 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
 
         // Add keys to the database using mset
-        regularClient.mset(keys).get();
+        regularClient.msetBinary(keys).get();
 
         Object[] result;
         Object[] keysFound = new GlideString[0];
@@ -1607,7 +1608,7 @@ public class CommandTests {
 
         // check that each key added to the database is found through the cursor
         Object[] finalKeysFound = keysFound;
-        keys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, gs(key))));
+        keys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, key)));
     }
 
     @Test
@@ -1701,11 +1702,12 @@ public class CommandTests {
         int resultCollectionIndex = 1;
 
         // Add string keys to the database using mset
-        Map<String, String> stringKeys = new HashMap<>();
+        Map<GlideString, GlideString> stringKeys = new HashMap<>();
         for (int i = 0; i < 10; i++) {
-            stringKeys.put("{key}-" + i + "-" + matchPattern, "{value}-" + i + "-" + matchPattern);
+            stringKeys.put(
+                    gs("{key}-" + i + "-" + matchPattern), gs("{value}-" + i + "-" + matchPattern));
         }
-        regularClient.mset(stringKeys).get();
+        regularClient.msetBinary(stringKeys).get();
 
         // Add set keys to the database using sadd
         List<GlideString> setKeys = new ArrayList<>();
@@ -1743,7 +1745,7 @@ public class CommandTests {
 
         // check that each key added to the database is found through the cursor
         Object[] finalKeysFound = keysFound;
-        stringKeys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, gs(key))));
+        stringKeys.forEach((key, value) -> assertTrue(ArrayUtils.contains(finalKeysFound, key)));
 
         // scan for sets by match pattern:
         options = ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(SET).build();

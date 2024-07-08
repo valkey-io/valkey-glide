@@ -1,8 +1,38 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.DBSize;
+import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.FCall;
+import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
+import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDump;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionFlush;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionKill;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.Time;
+import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.BaseClient.OK;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
@@ -10,8 +40,8 @@ import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -23,37 +53,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.FCall;
-import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
+import command_request.CommandRequestOuterClass.CommandRequest;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -68,7 +69,7 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
-import glide.managers.RedisExceptionCheckedFunction;
+import glide.managers.GlideExceptionCheckedFunction;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -78,13 +79,12 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
-public class RedisClusterClientTest {
+public class GlideClusterClientTest {
 
-    RedisClusterClient service;
+    GlideClusterClient service;
 
     CommandManager commandManager;
 
@@ -94,7 +94,7 @@ public class RedisClusterClientTest {
     public void setUp() {
         commandManager = mock(CommandManager.class);
         service =
-                new RedisClusterClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
+                new GlideClusterClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @Test
@@ -158,7 +158,7 @@ public class RedisClusterClientTest {
         }
     }
 
-    private static class TestClient extends RedisClusterClient {
+    private static class TestClient extends GlideClusterClient {
 
         private final Object object;
 
@@ -168,7 +168,7 @@ public class RedisClusterClientTest {
         }
 
         @Override
-        protected <T> T handleRedisResponse(
+        protected <T> T handleValkeyResponse(
                 Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;
@@ -190,7 +190,8 @@ public class RedisClusterClientTest {
 
         @Override
         public <T> CompletableFuture<T> submitCommandToChannel(
-                RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+                CommandRequest.Builder command,
+                GlideExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }
@@ -382,7 +383,7 @@ public class RedisClusterClientTest {
     @Test
     public void echo_returns_success() {
         // setup
-        String message = "GLIDE FOR REDIS";
+        String message = "Valkey GLIDE";
         String[] arguments = new String[] {message};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
@@ -404,7 +405,7 @@ public class RedisClusterClientTest {
     @Test
     public void echo_binary_returns_success() {
         // setup
-        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString message = gs("Valkey GLIDE");
         GlideString[] arguments = new GlideString[] {message};
         CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
@@ -426,7 +427,7 @@ public class RedisClusterClientTest {
     @Test
     public void echo_with_route_returns_success() {
         // setup
-        String message = "GLIDE FOR REDIS";
+        String message = "Valkey GLIDE";
         String[] arguments = new String[] {message};
         CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.ofSingleValue(message));
@@ -449,7 +450,7 @@ public class RedisClusterClientTest {
     @Test
     public void echo_binary_with_route_returns_success() {
         // setup
-        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString message = gs("Valkey GLIDE");
         GlideString[] arguments = new GlideString[] {message};
         CompletableFuture<ClusterValue<GlideString>> testResponse = new CompletableFuture<>();
         testResponse.complete(ClusterValue.ofSingleValue(message));
@@ -770,7 +771,7 @@ public class RedisClusterClientTest {
         assertEquals(OK, payload);
     }
 
-    // TODO copy/move tests from RedisClientTest which call super for coverage
+    // TODO copy/move tests from GlideClientTest which call super for coverage
     @SneakyThrows
     @Test
     public void configGet_returns_success() {
@@ -1161,7 +1162,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_VALKEY_API, "42"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1177,7 +1178,7 @@ public class RedisClusterClientTest {
     public void lolwut_with_version_and_params_returns_success() {
         // setup
         String value = "pewpew";
-        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        String[] arguments = new String[] {VERSION_VALKEY_API, "42", "1", "2"};
         int[] params = new int[] {1, 2};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1248,7 +1249,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_VALKEY_API, "42"}), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1264,7 +1265,7 @@ public class RedisClusterClientTest {
     public void lolwut_with_version_and_params_and_route_returns_success() {
         // setup
         ClusterValue<String> value = ClusterValue.ofSingleValue("pewpew");
-        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        String[] arguments = new String[] {VERSION_VALKEY_API, "42", "1", "2"};
         int[] params = new int[] {1, 2};
         CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1561,7 +1562,7 @@ public class RedisClusterClientTest {
     public void functionList_with_pattern_returns_success() {
         // setup
         String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
+        String[] args = new String[] {LIBRARY_NAME_VALKEY_API, pattern, WITH_CODE_VALKEY_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -1586,7 +1587,7 @@ public class RedisClusterClientTest {
         // setup
         GlideString pattern = gs("*");
         GlideString[] args =
-                new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern, gs(WITH_CODE_REDIS_API)};
+                new GlideString[] {gs(LIBRARY_NAME_VALKEY_API), pattern, gs(WITH_CODE_VALKEY_API)};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -1611,7 +1612,7 @@ public class RedisClusterClientTest {
     @Test
     public void functionList_with_route_returns_success() {
         // setup
-        String[] args = new String[] {WITH_CODE_REDIS_API};
+        String[] args = new String[] {WITH_CODE_VALKEY_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
@@ -1636,7 +1637,7 @@ public class RedisClusterClientTest {
     @Test
     public void functionList_binary_with_route_returns_success() {
         // setup
-        GlideString[] args = new GlideString[] {gs(WITH_CODE_REDIS_API)};
+        GlideString[] args = new GlideString[] {gs(WITH_CODE_VALKEY_API)};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> testResponse =
@@ -1663,7 +1664,7 @@ public class RedisClusterClientTest {
     public void functionList_with_pattern_and_route_returns_success() {
         // setup
         String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern};
+        String[] args = new String[] {LIBRARY_NAME_VALKEY_API, pattern};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
@@ -1689,7 +1690,7 @@ public class RedisClusterClientTest {
     public void functionList_binary_with_pattern_and_route_returns_success() {
         // setup
         GlideString pattern = gs("*");
-        GlideString[] args = new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern};
+        GlideString[] args = new GlideString[] {gs(LIBRARY_NAME_VALKEY_API), pattern};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> testResponse =

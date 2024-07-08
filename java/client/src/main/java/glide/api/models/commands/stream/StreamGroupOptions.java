@@ -38,7 +38,7 @@ public final class StreamGroupOptions {
     /**
      * A value representing the number of stream entries already read by the group.
      *
-     * @since Redis 7.0.0
+     * @since Valkey 7.0.0
      */
     private Long entriesRead;
 

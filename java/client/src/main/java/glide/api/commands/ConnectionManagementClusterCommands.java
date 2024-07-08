@@ -9,12 +9,12 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands for the "Connection Management" group for a cluster client.
  *
- * @see <a href="https://redis.io/commands/?group=connection">Connection Management Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=connection">Connection Management Commands</a>
  */
 public interface ConnectionManagementClusterCommands {
 
     /**
-     * Pings the Redis server.<br>
+     * Pings the server.<br>
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
@@ -28,7 +28,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping();
 
     /**
-     * Pings the Redis server.<br>
+     * Pings the server.<br>
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
@@ -43,7 +43,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping(String message);
 
     /**
-     * Pings the Redis server.<br>
+     * Pings the server.<br>
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
@@ -58,7 +58,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<GlideString> ping(GlideString message);
 
     /**
-     * Pings the Redis server.
+     * Pings the server.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -73,7 +73,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping(Route route);
 
     /**
-     * Pings the Redis server.
+     * Pings the server.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param message The ping argument that will be returned.
@@ -89,7 +89,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> ping(String message, Route route);
 
     /**
-     * Pings the Redis server.
+     * Pings the server.
      *
      * @see <a href="https://valkey.io/commands/ping/">valkey.io</a> for details.
      * @param message The ping argument that will be returned.

@@ -1,10 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.models.GlideString.gs;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.commands.SortedSetBaseCommands;
+import glide.api.models.GlideString;
+import glide.utils.ArgsBuilder;
 import lombok.Getter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
@@ -44,10 +47,10 @@ public class RangeOptions {
         POSITIVE_INFINITY("+inf"),
         NEGATIVE_INFINITY("-inf");
 
-        private final String redisApi;
+        private final String valkeyApi;
 
         public String toArgs() {
-            return redisApi;
+            return valkeyApi;
         }
     }
 
@@ -76,7 +79,7 @@ public class RangeOptions {
             this(bound, true);
         }
 
-        /** Convert the score boundary to the Redis protocol format. */
+        /** Convert the score boundary to the Valkey protocol format. */
         public String toArgs() {
             return (isInclusive ? "" : "(") + bound;
         }
@@ -102,11 +105,11 @@ public class RangeOptions {
         POSITIVE_INFINITY("+"),
         NEGATIVE_INFINITY("-");
 
-        private final String redisApi;
+        private final String valkeyApi;
 
         @Override
         public String toArgs() {
-            return redisApi;
+            return valkeyApi;
         }
     }
 
@@ -135,7 +138,7 @@ public class RangeOptions {
             this(value, true);
         }
 
-        /** Convert the lex boundary to the Redis protocol format. */
+        /** Convert the lex boundary to the Valkey protocol format. */
         @Override
         public String toArgs() {
             return (isInclusive ? "[" : "(") + value;
@@ -307,10 +310,27 @@ public class RangeOptions {
         return arguments;
     }
 
+    public static GlideString[] createZRangeArgsBinary(
+            GlideString key, RangeQuery rangeQuery, boolean reverse, boolean withScores) {
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {key}, createZRangeBaseArgsBinary(rangeQuery, reverse));
+        if (withScores) {
+            arguments = concatenateArrays(arguments, new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
+        }
+
+        return arguments;
+    }
+
     public static String[] createZRangeStoreArgs(
             String destination, String source, RangeQuery rangeQuery, boolean reverse) {
         return concatenateArrays(
                 new String[] {destination, source}, createZRangeBaseArgs(rangeQuery, reverse, false));
+    }
+
+    public static GlideString[] createZRangeStoreArgsBinary(
+            GlideString destination, GlideString source, RangeQuery rangeQuery, boolean reverse) {
+        return concatenateArrays(
+                new GlideString[] {destination, source}, createZRangeBaseArgsBinary(rangeQuery, reverse));
     }
 
     public static String[] createZRangeBaseArgs(
@@ -339,9 +359,27 @@ public class RangeOptions {
         }
 
         if (withScores) {
-            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_REDIS_API});
+            arguments = concatenateArrays(arguments, new String[] {WITH_SCORES_VALKEY_API});
         }
 
         return arguments;
+    }
+
+    public static GlideString[] createZRangeBaseArgsBinary(RangeQuery rangeQuery, boolean reverse) {
+        ArgsBuilder builder = new ArgsBuilder().add(rangeQuery.getStart()).add(rangeQuery.getEnd());
+
+        builder
+                .addIf("BYSCORE", rangeQuery instanceof RangeByScore)
+                .addIf("BYLEX", rangeQuery instanceof RangeByLex)
+                .addIf("REV", reverse);
+
+        if (rangeQuery.getLimit() != null) {
+            builder
+                    .add("LIMIT")
+                    .add(rangeQuery.getLimit().getOffset())
+                    .add(rangeQuery.getLimit().getCount());
+        }
+
+        return builder.toArray();
     }
 }
