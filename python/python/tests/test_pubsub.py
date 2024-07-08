@@ -40,9 +40,7 @@ async def create_two_clients_with_pubsub(
     client2_pubsub: Optional[Any] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = None,
-) -> Tuple[
-    Union[GlideClient, GlideClusterClient], Union[GlideClient, GlideClusterClient]
-]:
+) -> Tuple[TGlideClient, TGlideClient]:
     """
     Sets 2 up clients for testing purposes with optional pubsub configuration.
 
@@ -157,7 +155,7 @@ def new_message(msg: CoreCommands.PubSubMsg, context: Any):
 
 
 async def client_cleanup(
-    client: Union[GlideClient, GlideClusterClient],
+    client: Optional[Union[GlideClient, GlideClusterClient]],
     cluster_mode_subs: Optional[
         GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
@@ -168,26 +166,9 @@ async def client_cleanup(
     In addition, it tries to clean up cluster mode subsciptions since it was found the closing the client via close() is not enough.
     Note that unsubscribing is not feasible in the current implementation since its unknown on which node the subs are configured
     """
-    # if is_cluster:
-    #     pubsub_subs = cast(ClusterClientConfiguration.PubSubSubscriptions, pubsub_subs)
-    # else :
-    #     pubsub_subs = cast(GlideClientConfiguration.PubSubSubscriptions, pubsub_subs)
 
-    # for channel_type, channel_patterns in pubsub_subs:
-    #     if channel_type == ClusterClientConfiguration.PubSubChannelModes.Exact or channel_type == GlideClientConfiguration.PubSubChannelModes.Exact:
-    #         cmd = "UNSUBSCRIBE"
-    #     elif channel_type == ClusterClientConfiguration.PubSubChannelModes.Pattern or channel_type == GlideClientConfiguration.PubSubChannelModes.Pattern:
-    #         cmd = "PUNSUBSCRIBE"
-    #     else:
-    #         cmd = "SUNSUBSCRIBE"
-
-    #     # we need unsubscribe commands because close might
-    #     # UNSUBSCRIBE commands are unsupported, also, the routing might be wrong in cluster mode
-    #     for channel_patern in channel_patterns:
-
-    #         await listening_client.custom_command(
-    #             ["UNSUBSCRIBE", *list(channels_and_messages.keys())]
-    #         )
+    if client is None:
+        return
 
     if cluster_mode_subs:
         for (
@@ -204,6 +185,7 @@ async def client_cleanup(
             elif not await check_if_server_version_lt(client, "7.0.0"):
                 cmd = "SUNSUBSCRIBE"
             else:
+                # disregard sharded config for versions < 7.0.0
                 continue
 
             for channel_patern in channel_patterns:
@@ -211,6 +193,7 @@ async def client_cleanup(
 
     await client.close()
     del client
+    # The closure is not completed in the glide-core instantly
     await asyncio.sleep(1)
 
 
@@ -257,7 +240,6 @@ class TestPubSub:
             )
 
             result = await publishing_client.publish(message, channel)
-            # TODO: enable when client closing works
             if cluster_mode:
                 assert result == 1
             # allow the message to propagate
@@ -273,18 +255,8 @@ class TestPubSub:
 
             await check_no_messages_left(method, listening_client, callback_messages, 1)
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["UNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_exact_happy_path_coexistence(
@@ -315,7 +287,6 @@ class TestPubSub:
 
             for msg in [message, message2]:
                 result = await publishing_client.publish(msg, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -344,18 +315,8 @@ class TestPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["UNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -410,7 +371,6 @@ class TestPubSub:
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -435,20 +395,8 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(
-            #         ["UNSUBSCRIBE", *list(channels_and_messages.keys())]
-            #     )
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_exact_happy_path_many_channels_co_existence(
@@ -493,7 +441,6 @@ class TestPubSub:
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -519,20 +466,8 @@ class TestPubSub:
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(
-            #         ["UNSUBSCRIBE", *list(channels_and_messages.keys())]
-            #     )
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -575,17 +510,12 @@ class TestPubSub:
             if await check_if_server_version_lt(publishing_client, min_version):
                 pytest.skip(reason=f"Valkey version required >= {min_version}")
 
-            # TODO: enable when client closing works
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == publish_response
             )
-
-            # await cast(GlideClusterClient, publishing_client).publish(
-            #     message, channel, sharded=True
-            # )
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -601,18 +531,8 @@ class TestPubSub:
             await check_no_messages_left(method, listening_client, callback_messages, 1)
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["SUNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_sharded_pubsub_co_existence(self, request, cluster_mode: bool):
@@ -647,7 +567,6 @@ class TestPubSub:
             if await check_if_server_version_lt(publishing_client, min_version):
                 pytest.skip(reason=f"Valkey version required >= {min_version}")
 
-            # TODO: enable when client closing works
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -660,14 +579,6 @@ class TestPubSub:
                 )
                 == 1
             )
-
-            # await cast(GlideClusterClient, publishing_client).publish(
-            #     message, channel, sharded=True
-            # )
-
-            # await cast(GlideClusterClient, publishing_client).publish(
-            #     message2, channel, sharded=True
-            # )
 
             # allow the messages to propagate
             await asyncio.sleep(1)
@@ -694,18 +605,8 @@ class TestPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["SUNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -761,17 +662,12 @@ class TestPubSub:
 
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
-                # TODO: enable when client closing works
                 assert (
                     await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
                 )
-
-                # await cast(GlideClusterClient, publishing_client).publish(
-                #     message, channel, sharded=True
-                # )
 
             # Allow the messages to propagate
             await asyncio.sleep(1)
@@ -795,18 +691,10 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(
-            #         ["SUNSUBSCRIBE", *list(channels_and_messages.keys())]
-            #     )
             if listening_client:
                 await client_cleanup(
                     listening_client, pub_sub if cluster_mode else None
                 )
-
             if publishing_client:
                 await client_cleanup(publishing_client, None)
 
@@ -854,7 +742,6 @@ class TestPubSub:
 
             for channel, message in channels.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -877,18 +764,8 @@ class TestPubSub:
             await check_no_messages_left(method, listening_client, callback_messages, 2)
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_pattern_co_existence(self, request, cluster_mode: bool):
@@ -923,7 +800,6 @@ class TestPubSub:
 
             for channel, message in channels.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -950,18 +826,8 @@ class TestPubSub:
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -1007,7 +873,6 @@ class TestPubSub:
 
             for channel, message in channels.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -1032,18 +897,8 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -1122,7 +977,6 @@ class TestPubSub:
             # Publish messages to all channels
             for channel, message in all_channels_and_messages.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -1153,21 +1007,10 @@ class TestPubSub:
                 method, listening_client, callback_messages, NUM_CHANNELS * 2
             )
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(
-            #         ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
-            #     )
-            #     await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub_exact if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(
+                listening_client, pub_sub_exact if cluster_mode else None
+            )
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -1271,7 +1114,6 @@ class TestPubSub:
             # Publish messages to all channels
             for channel, message in all_channels_and_messages.items():
                 result = await publishing_client.publish(message, channel)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 1
 
@@ -1321,29 +1163,14 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client_exact.custom_command(
-            #         ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
-            #     )
-            #     await listening_client_pattern.custom_command(["PUNSUBSCRIBE", PATTERN])
-            if listening_client_exact:
-                await client_cleanup(
-                    listening_client_exact, pub_sub_exact if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
-
-            if listening_client_pattern:
-                await client_cleanup(
-                    listening_client_pattern, pub_sub_pattern if cluster_mode else None
-                )
-
-            if client_dont_care:
-                await client_cleanup(client_dont_care, None)
+            await client_cleanup(
+                listening_client_exact, pub_sub_exact if cluster_mode else None
+            )
+            await client_cleanup(publishing_client, None)
+            await client_cleanup(
+                listening_client_pattern, pub_sub_pattern if cluster_mode else None
+            )
+            await client_cleanup(client_dont_care, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -1429,26 +1256,19 @@ class TestPubSub:
                 **exact_channels_and_messages,
                 **pattern_channels_and_messages,
             }.items():
-                # TODO: enable when client closing works
                 assert (
                     await publishing_client.publish(message, channel)
                     == publish_response
                 )
-                # await publishing_client.publish(message, channel)
 
             # Publish sharded messages to all channels
             for channel, message in sharded_channels_and_messages.items():
-                # TODO: enable when client closing works
                 assert (
                     await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
                 )
-
-                # await cast(GlideClusterClient, publishing_client).publish(
-                #     message, channel, sharded=True
-                # )
 
             # allow the messages to propagate
             await asyncio.sleep(1)
@@ -1483,24 +1303,10 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(
-            #         ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
-            #     )
-            #     await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
-            #     await listening_client.custom_command(
-            #         ["SUNSUBSCRIBE", *list(sharded_channels_and_messages.keys())]
-            #     )
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub_exact if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(
+                listening_client, pub_sub_exact if cluster_mode else None
+            )
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -1527,6 +1333,13 @@ class TestPubSub:
             listening_client_pattern,
             listening_client_sharded,
         ) = (None, None, None, None)
+
+        (
+            pub_sub_exact,
+            pub_sub_sharded,
+            pub_sub_pattern,
+        ) = (None, None, None)
+
         try:
             NUM_CHANNELS = 256
             PATTERN = "{{{}}}:{}".format("pattern", "*")
@@ -1628,26 +1441,19 @@ class TestPubSub:
                 **exact_channels_and_messages,
                 **pattern_channels_and_messages,
             }.items():
-                # TODO: enable when client closing works
                 assert (
                     await publishing_client.publish(message, channel)
                     == publish_response
                 )
-                # await publishing_client.publish(message, channel)
 
             # Publish sharded messages to all channels
             for channel, message in sharded_channels_and_messages.items():
-                # TODO: enable when client closing works
                 assert (
                     await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
                 )
-
-                # await cast(GlideClusterClient, publishing_client).publish(
-                #     message, channel, sharded=True
-                # )
 
             # allow the messages to propagate
             await asyncio.sleep(1)
@@ -1717,32 +1523,16 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client_exact.custom_command(
-            #         ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
-            #     )
-            #     await listening_client_pattern.custom_command(["PUNSUBSCRIBE", PATTERN])
-            #     await listening_client_sharded.custom_command(
-            #         ["SUNSUBSCRIBE", *list(sharded_channels_and_messages.keys())]
-            #     )
-            if listening_client_exact:
-                await client_cleanup(
-                    listening_client_exact, pub_sub_exact if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
-
-            if listening_client_pattern:
-                await client_cleanup(
-                    listening_client_pattern, pub_sub_pattern if cluster_mode else None
-                )
-
-            if listening_client_sharded:
-                await client_cleanup(listening_client_sharded, None)
+            await client_cleanup(
+                listening_client_exact, pub_sub_exact if cluster_mode else None
+            )
+            await client_cleanup(publishing_client, None)
+            await client_cleanup(
+                listening_client_pattern, pub_sub_pattern if cluster_mode else None
+            )
+            await client_cleanup(
+                listening_client_sharded, pub_sub_sharded if cluster_mode else None
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -1770,6 +1560,13 @@ class TestPubSub:
             listening_client_pattern,
             listening_client_sharded,
         ) = (None, None, None, None)
+
+        (
+            pub_sub_exact,
+            pub_sub_sharded,
+            pub_sub_pattern,
+        ) = (None, None, None)
+
         try:
             CHANNEL_NAME = "same-channel-name"
             MESSAGE_EXACT = get_random_string(10)
@@ -1849,7 +1646,6 @@ class TestPubSub:
             )
 
             # Publish messages to each channel
-            # TODO: enable when client closing works
             assert await publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME) == 2
             assert await publishing_client.publish(MESSAGE_PATTERN, CHANNEL_NAME) == 2
             assert (
@@ -1858,12 +1654,6 @@ class TestPubSub:
                 )
                 == 1
             )
-
-            # await publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME)
-            # await publishing_client.publish(MESSAGE_PATTERN, CHANNEL_NAME)
-            # await cast(GlideClusterClient, publishing_client).publish(
-            #     MESSAGE_SHARDED, CHANNEL_NAME, sharded=True
-            # )
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -1901,34 +1691,16 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client_exact.custom_command(
-            #         ["UNSUBSCRIBE", CHANNEL_NAME]
-            #     )
-            #     await listening_client_pattern.custom_command(
-            #         ["PUNSUBSCRIBE", CHANNEL_NAME]
-            #     )
-            #     await listening_client_sharded.custom_command(
-            #         ["SUNSUBSCRIBE", CHANNEL_NAME]
-            #     )
-            if listening_client_exact:
-                await client_cleanup(
-                    listening_client_exact, pub_sub_exact if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
-
-            if listening_client_pattern:
-                await client_cleanup(
-                    listening_client_pattern, pub_sub_pattern if cluster_mode else None
-                )
-
-            if listening_client_sharded:
-                await client_cleanup(listening_client_sharded, None)
+            await client_cleanup(
+                listening_client_exact, pub_sub_exact if cluster_mode else None
+            )
+            await client_cleanup(publishing_client, None)
+            await client_cleanup(
+                listening_client_pattern, pub_sub_pattern if cluster_mode else None
+            )
+            await client_cleanup(
+                listening_client_sharded, pub_sub_sharded if cluster_mode else None
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
@@ -1996,7 +1768,6 @@ class TestPubSub:
             # Publish messages to each channel - both clients publishing
             for msg in [MESSAGE_EXACT, MESSAGE_PATTERN]:
                 result = await client_pattern.publish(msg, CHANNEL_NAME)
-                # TODO: enable when client closing works
                 if cluster_mode:
                     assert result == 2
 
@@ -2025,21 +1796,10 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await client_exact.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
-            #     await client_pattern.custom_command(["PUNSUBSCRIBE", CHANNEL_NAME])
-            if client_exact:
-                await client_cleanup(
-                    client_exact, pub_sub_exact if cluster_mode else None
-                )
-
-            if client_pattern:
-                await client_cleanup(
-                    client_pattern, pub_sub_pattern if cluster_mode else None
-                )
+            await client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
+            await client_cleanup(
+                client_pattern, pub_sub_pattern if cluster_mode else None
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
@@ -2137,7 +1897,6 @@ class TestPubSub:
                 pytest.skip("Valkey version required >= 7.0.0")
 
             # Publish messages to each channel - both clients publishing
-            # TODO: enable when client closing works
             assert (
                 await client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME)
                 == publish_response
@@ -2152,12 +1911,6 @@ class TestPubSub:
                 )
                 == 1
             )
-
-            # await client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME)
-            # await client_sharded.publish(MESSAGE_PATTERN, CHANNEL_NAME)
-            # await cast(GlideClusterClient, client_exact).publish(
-            #     MESSAGE_SHARDED, CHANNEL_NAME, sharded=True
-            # )
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -2194,30 +1947,14 @@ class TestPubSub:
             )
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await client_exact.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
-            #     await client_pattern.custom_command(["PUNSUBSCRIBE", CHANNEL_NAME])
-            #     await client_sharded.custom_command(["SUNSUBSCRIBE", CHANNEL_NAME])
-            if client_exact:
-                await client_cleanup(
-                    client_exact, pub_sub_exact if cluster_mode else None
-                )
-
-            if client_pattern:
-                await client_cleanup(
-                    client_pattern, pub_sub_pattern if cluster_mode else None
-                )
-
-            if client_sharded:
-                await client_cleanup(
-                    client_sharded, pub_sub_sharded if cluster_mode else None
-                )
-
-            if client_dont_care:
-                await client_cleanup(client_dont_care, None)
+            await client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
+            await client_cleanup(
+                client_pattern, pub_sub_pattern if cluster_mode else None
+            )
+            await client_cleanup(
+                client_sharded, pub_sub_sharded if cluster_mode else None
+            )
+            await client_cleanup(client_dont_care, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
@@ -2256,7 +1993,6 @@ class TestPubSub:
         )
 
         try:
-            # TODO: enable when client closing works
             result = await publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
@@ -2266,9 +2002,6 @@ class TestPubSub:
                 assert result == 1
             # allow the message to propagate
             await asyncio.sleep(15)
-
-            # await publishing_client.publish(message, channel)
-            # await publishing_client.publish(message2, channel)
 
             async_msg = await listening_client.get_pubsub_message()
             assert async_msg.message == message.encode()
@@ -2288,18 +2021,8 @@ class TestPubSub:
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["UNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
@@ -2343,7 +2066,6 @@ class TestPubSub:
             if await check_if_server_version_lt(publishing_client, "7.0.0"):
                 pytest.skip("Redis version required >= 7.0.0")
 
-            # TODO: enable when client closing works
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -2357,11 +2079,6 @@ class TestPubSub:
                 )
                 == 1
             )
-
-            # await cast(GlideClusterClient, publishing_client).publish(
-            #     message, channel, sharded=True
-            # )
-            # await publishing_client.publish(message2, channel)
 
             # allow the message to propagate
             await asyncio.sleep(15)
@@ -2385,18 +2102,8 @@ class TestPubSub:
             assert listening_client.try_get_pubsub_message() is None
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["UNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
@@ -2438,11 +2145,9 @@ class TestPubSub:
                 request, cluster_mode, pub_sub, timeout=10000
             )
 
-            # TODO: enable when client closing works
             result = await publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-            # await publishing_client.publish(message, channel)
             # allow the message to propagate
             await asyncio.sleep(15)
 
@@ -2453,18 +2158,8 @@ class TestPubSub:
             assert callback_messages[0].pattern is None
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["UNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems to vary across platforms and server versions"
@@ -2510,17 +2205,12 @@ class TestPubSub:
             if await check_if_server_version_lt(publishing_client, "7.0.0"):
                 pytest.skip("Valkey version required >= 7.0.0")
 
-            # TODO: enable when client closing works
             assert (
                 await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == 1
             )
-
-            # await cast(GlideClusterClient, publishing_client).publish(
-            #     message, channel, sharded=True
-            # )
 
             # allow the message to propagate
             await asyncio.sleep(15)
@@ -2532,18 +2222,8 @@ class TestPubSub:
             assert callback_messages[0].pattern is None
 
         finally:
-            # if cluster_mode:
-            #     # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
-            #     # In cluster mode, we check how many subscriptions received the message
-            #     # So to avoid flakiness, we make sure to unsubscribe from the channels
-            #     await listening_client.custom_command(["UNSUBSCRIBE", channel])
-            if listening_client:
-                await client_cleanup(
-                    listening_client, pub_sub if cluster_mode else None
-                )
-
-            if publishing_client:
-                await client_cleanup(publishing_client, None)
+            await client_cleanup(listening_client, pub_sub if cluster_mode else None)
+            await client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_resp2_raise_an_error(self, request, cluster_mode: bool):

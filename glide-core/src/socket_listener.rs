@@ -120,9 +120,9 @@ impl UnixStreamListener {
                     match self.rotating_buffer.get_requests() {
                         Ok(requests) => {
                             if !requests.is_empty() {
-                                // continue to read from socket
                                 return ReceivedValues(requests);
                             }
+                            // continue to read from socket
                             continue;
                         }
                         Err(err) => return UnhandledError(err.into()).into(),
