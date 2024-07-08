@@ -18,8 +18,8 @@ import lombok.Builder;
 @Builder
 public class StreamPendingOptionsBinary {
 
-    /** Redis api string to designate IDLE or minimum idle time */
-    public static final GlideString IDLE_TIME_REDIS_API_GLIDE_STRING = gs("IDLE");
+    /** Valkey api string to designate IDLE or minimum idle time */
+    public static final GlideString IDLE_TIME_VALKEY_API_GLIDE_STRING = gs("IDLE");
 
     /** Filters pending entries by their idle time - in Milliseconds */
     private final Long minIdleTime; // Milliseconds
@@ -30,12 +30,12 @@ public class StreamPendingOptionsBinary {
     /**
      * Convert StreamPendingOptions arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Redis
+     * @return arguments converted to an array to be consumed by Valkey
      */
     public GlideString[] toArgs(StreamRange start, StreamRange end, long count) {
         List<GlideString> optionArgs = new ArrayList<>();
         if (minIdleTime != null) {
-            optionArgs.add(IDLE_TIME_REDIS_API_GLIDE_STRING);
+            optionArgs.add(IDLE_TIME_VALKEY_API_GLIDE_STRING);
             optionArgs.add(gs(Long.toString(minIdleTime)));
         }
 
