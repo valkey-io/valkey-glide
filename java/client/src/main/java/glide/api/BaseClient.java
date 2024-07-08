@@ -1856,12 +1856,14 @@ public abstract class BaseClient
             @NonNull Map<GlideString, Double> membersScoresMap,
             @NonNull ZAddOptions options,
             boolean changed) {
-        GlideString[] changedArg = changed ? new GlideString[] {gs("CH")} : new GlideString[] {};
-        GlideString[] membersScores = convertMapToValueKeyStringArrayBinary(membersScoresMap);
-
+        System.err.println("22222");
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key}, options.toArgsBinary(), changedArg, membersScores);
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .addIf("CH", changed)
+                        .add(convertMapToValueKeyStringArrayBinary(membersScoresMap))
+                        .toArray();
 
         return commandManager.submitNewCommand(ZAdd, arguments, this::handleLongResponse);
     }
@@ -2143,7 +2145,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<GlideString[]> zdiff(@NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, gs(Long.toString(keys.length)));
+        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
         return commandManager.submitNewCommand(
                 ZDiff,
                 arguments,
@@ -2159,7 +2161,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zdiffWithScores(@NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, gs(Long.toString(keys.length)));
+        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
         arguments = ArrayUtils.add(arguments, gs(WITH_SCORES_VALKEY_API));
         return commandManager.submitNewCommand(ZDiff, arguments, this::handleBinaryStringMapResponse);
     }
@@ -4199,7 +4201,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> sintercard(@NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, gs(Long.toString(keys.length)));
+        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
         return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
     }
 
