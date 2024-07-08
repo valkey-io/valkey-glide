@@ -2108,7 +2108,7 @@ public abstract class BaseClient
             @NonNull GlideString key, @NonNull GlideString member) {
         return commandManager.submitNewCommand(
                 ZRevRank,
-                new GlideString[] {key, member, gs(WITH_SCORES_VALKEY_API)},
+                new GlideString[] {key, member, gs(WITH_SCORE_VALKEY_API)},
                 this::handleArrayOrNullResponseBinary);
     }
 
