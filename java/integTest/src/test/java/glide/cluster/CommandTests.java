@@ -121,7 +121,7 @@ public class CommandTests {
                     "Keyspace");
     public static final List<String> EVERYTHING_INFO_SECTIONS =
             SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")
-                    // Latencystats was added in redis 7
+                    // Latencystats was added in Valkey 7
                     ? List.of(
                             "Server",
                             "Clients",
@@ -1966,7 +1966,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // redis kills a function with 5 sec delay
+                        // valkey kills a function with 5 sec delay
                         // but this will always throw an error in the test
                         clusterClient.functionKill(route).get();
                     } catch (ExecutionException executionException) {
@@ -2034,7 +2034,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // redis kills a function with 5 sec delay
+                        // valkey kills a function with 5 sec delay
                         // but this will always throw an error in the test
                         clusterClient.functionKill(route).get();
                     } catch (ExecutionException executionException) {
@@ -2316,7 +2316,7 @@ public class CommandTests {
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.functionRestore(dump, REPLACE).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-        // redis checks names in random order and blames on first collision
+        // valkey checks names in random order and blames on first collision
         assertTrue(
                 executionException.getMessage().contains("Function " + name1 + " already exists")
                         || executionException.getMessage().contains("Function " + name2 + " already exists"));
