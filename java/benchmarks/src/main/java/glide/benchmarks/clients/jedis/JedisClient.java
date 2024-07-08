@@ -32,7 +32,7 @@ public class JedisClient implements SyncClient {
     }
 
     @Override
-    public void connectToRedis(ConnectionSettings connectionSettings) {
+    public void connectToValkey(ConnectionSettings connectionSettings) {
         isClusterMode = connectionSettings.clusterMode;
         if (isClusterMode) {
             jedisCluster =

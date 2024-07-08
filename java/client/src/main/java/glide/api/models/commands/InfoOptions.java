@@ -17,7 +17,7 @@ public final class InfoOptions {
     @Singular private final List<Section> sections;
 
     public enum Section {
-        /** SERVER: General information about the Redis server */
+        /** SERVER: General information about the server */
         SERVER,
         /** CLIENTS: Client connections section */
         CLIENTS,
@@ -31,19 +31,19 @@ public final class InfoOptions {
         REPLICATION,
         /** CPU: CPU consumption statistics */
         CPU,
-        /** COMMANDSTATS: Redis command statistics */
+        /** COMMANDSTATS: Valkey command statistics */
         COMMANDSTATS,
-        /** LATENCYSTATS: Redis command latency percentile distribution statistics */
+        /** LATENCYSTATS: Valkey command latency percentile distribution statistics */
         LATENCYSTATS,
-        /** SENTINEL: Redis Sentinel section (only applicable to Sentinel instances) */
+        /** SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances) */
         SENTINEL,
-        /** CLUSTER: Redis Cluster section */
+        /** CLUSTER: Valkey Cluster section */
         CLUSTER,
         /** MODULES: Modules section */
         MODULES,
         /** KEYSPACE: Database related statistics */
         KEYSPACE,
-        /** ERRORSTATS: Redis error statistics */
+        /** ERRORSTATS: Valkey error statistics */
         ERRORSTATS,
         /** ALL: Return all sections (excluding module generated ones) */
         ALL,
@@ -54,7 +54,7 @@ public final class InfoOptions {
     }
 
     /**
-     * Converts options enum into a String[] to add to a Redis request.
+     * Converts options enum into a String[] to add to the command request.
      *
      * @return String[]
      */

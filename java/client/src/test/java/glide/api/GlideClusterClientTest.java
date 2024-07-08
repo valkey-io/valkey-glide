@@ -168,7 +168,7 @@ public class GlideClusterClientTest {
         }
 
         @Override
-        protected <T> T handleRedisResponse(
+        protected <T> T handleValkeyResponse(
                 Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;
@@ -383,7 +383,7 @@ public class GlideClusterClientTest {
     @Test
     public void echo_returns_success() {
         // setup
-        String message = "GLIDE FOR REDIS";
+        String message = "Valkey GLIDE";
         String[] arguments = new String[] {message};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
@@ -405,7 +405,7 @@ public class GlideClusterClientTest {
     @Test
     public void echo_binary_returns_success() {
         // setup
-        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString message = gs("Valkey GLIDE");
         GlideString[] arguments = new GlideString[] {message};
         CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
         testResponse.complete(message);

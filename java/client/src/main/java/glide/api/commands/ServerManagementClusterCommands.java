@@ -13,17 +13,17 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Server Management Commands" group for a cluster
  * client.
  *
- * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=server">Server Management Commands</a>
  */
 public interface ServerManagementClusterCommands {
 
     /**
-     * Gets information and statistics about the Redis server using the {@link Section#DEFAULT}
-     * option. The command will be routed to all primary nodes.
+     * Gets information and statistics about the server using the {@link Section#DEFAULT} option. The
+     * command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
-     *     each address as the key and its corresponding value is the information for the node.
+     * @return A <code>Map{@literal <String, String>}</code> with each address as the key and its
+     *     corresponding value is the information for the node.
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info().get();
@@ -36,14 +36,14 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info();
 
     /**
-     * Gets information and statistics about the Redis server. If no argument is provided, so the
-     * {@link Section#DEFAULT} option is assumed.
+     * Gets information and statistics about the server. If no argument is provided, so the {@link
+     * Section#DEFAULT} option is assumed.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return Response from Redis cluster with a <code>String</code> with the requested Sections.
-     *     When specifying a <code>route</code> other than a single node, it returns a <code>
+     * @return A <code>String</code> containing the information for the default sections. When
+     *     specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
      *     value is the information for the node.
      * @example
@@ -58,16 +58,15 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info(Route route);
 
     /**
-     * Gets information and statistics about the Redis server. The command will be routed to all
-     * primary nodes.
+     * Gets information and statistics about the server. The command will be routed to all primary
+     * nodes.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param options A list of {@link InfoOptions.Section} values specifying which sections of
      *     information to retrieve. When no parameter is provided, the {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
-     * @return Response from Redis cluster with a <code>Map{@literal <String, String>}</code> with
-     *     each address as the key and its corresponding value is the information of the sections
-     *     requested for the node.
+     * @return A <code>Map{@literal <String, String>}</code> with each address as the key and its
+     *     corresponding value is the information of the sections requested for the node.
      * @example
      *     <pre>{@code
      * ClusterValue<String> payload = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
@@ -80,7 +79,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> info(InfoOptions options);
 
     /**
-     * Gets information and statistics about the Redis server.
+     * Gets information and statistics about the server.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param options A list of {@link InfoOptions.Section} values specifying which sections of
@@ -88,7 +87,7 @@ public interface ServerManagementClusterCommands {
      *     InfoOptions.Section#DEFAULT} option is assumed.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return Response from Redis cluster with a <code>String</code> with the requested sections.
+     * @return A <code>String</code> with the containing the information for the sections requested.
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
      *     value is the information of the sections requested for the node.
@@ -134,7 +133,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> configRewrite(Route route);
 
     /**
-     * Resets the statistics reported by Redis using the <a
+     * Resets the statistics reported by the server using the <a
      * href="https://valkey.io/commands/info/">INFO</a> and <a
      * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.<br>
      * The command will be routed automatically to all nodes.
@@ -150,7 +149,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> configResetStat();
 
     /**
-     * Resets the statistics reported by Redis using the <a
+     * Resets the statistics reported by the server using the <a
      * href="https://valkey.io/commands/info/">INFO</a> and <a
      * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
@@ -168,7 +167,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> configResetStat(Route route);
 
     /**
-     * Reads the configuration parameters of a running Redis server.<br>
+     * Get the values of configuration parameters.<br>
      * The command will be sent to a random node.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
@@ -185,7 +184,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<Map<String, String>> configGet(String[] parameters);
 
     /**
-     * Reads the configuration parameters of a running Redis server.
+     * Get the values of configuration parameters.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
@@ -446,11 +445,11 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> flushdb(FlushMode mode, Route route);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.<br>
+     * Displays a piece of generative computer art and the Valkey version.<br>
      * The command will be routed to a random node.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut().get();
@@ -461,19 +460,19 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> lolwut();
 
     /**
-     * Displays a piece of generative computer art and the Redis version.<br>
+     * Displays a piece of generative computer art and the Valkey version.<br>
      * The command will be routed to a random node.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param parameters Additional set of arguments in order to change the output:
      *     <ul>
-     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *       <li>On Valkey version <code>5</code>, those are length of the line, number of squares per
      *           row, and number of squares per column.
-     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On Valkey version <code>6</code>, those are number of columns and number of lines.
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(new int[] { 40, 20 }).get();
@@ -484,13 +483,13 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> lolwut(int[] parameters);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.<br>
+     * Displays a piece of generative computer art and the Valkey version.<br>
      * The command will be routed to a random node.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(6).get();
@@ -501,7 +500,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> lolwut(int version);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.<br>
+     * Displays a piece of generative computer art and the Valkey version.<br>
      * The command will be routed to a random node.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
@@ -514,7 +513,7 @@ public interface ServerManagementClusterCommands {
      *       <li>For version <code>6</code>, those are number of columns and number of lines.
      *     </ul>
      *
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(6, new int[] { 40, 20 }).get();
@@ -529,7 +528,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<String> lolwut(int version, int[] parameters);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -547,20 +546,20 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> lolwut(Route route);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param parameters Additional set of arguments in order to change the output:
      *     <ul>
-     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *       <li>On Valkey version <code>5</code>, those are length of the line, number of squares per
      *           row, and number of squares per column.
-     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On Valkey version <code>6</code>, those are number of columns and number of lines.
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(new int[] { 40, 20 }, ALL_NODES).get();
@@ -573,14 +572,14 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> lolwut(int[] parameters, Route route);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * ClusterValue<String> response = client.lolwut(6, ALL_NODES).get();
@@ -593,7 +592,7 @@ public interface ServerManagementClusterCommands {
     CompletableFuture<ClusterValue<String>> lolwut(int version, Route route);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
@@ -607,7 +606,7 @@ public interface ServerManagementClusterCommands {
      *
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(6, new int[] { 40, 20 }, ALL_NODES).get();

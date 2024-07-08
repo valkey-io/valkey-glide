@@ -11,10 +11,10 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Hash Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=hash">Hash Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=hash">Hash Commands</a>
  */
 public interface HashBaseCommands {
-    /** Redis API keyword used to query hash members with their values. */
+    /** Valkey API keyword used to query hash members with their values. */
     String WITH_VALUES_VALKEY_API = "WITHVALUES";
 
     /**
