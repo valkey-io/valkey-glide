@@ -10357,7 +10357,8 @@ public class SharedCommandTests {
         assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
         // First bit is flipped to 1 and throws 'utf-8' codec can't decode byte 0x9e in position 0:
         // invalid start byte
-        // TODO: update once fix is implemented for https://github.com/valkey-io/valkey-glide/issues/1447
+        // TODO: update once fix is implemented for
+        // https://github.com/valkey-io/valkey-glide/issues/1447
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.get(destination).get());
         assertTrue(executionException.getCause() instanceof RuntimeException);
