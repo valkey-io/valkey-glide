@@ -5,7 +5,7 @@ import glide.benchmarks.utils.ConnectionSettings;
 
 /** A Redis client interface */
 public interface Client {
-    void connectToRedis(ConnectionSettings connectionSettings);
+    void connectToValkey(ConnectionSettings connectionSettings);
 
     default void closeConnection() {}
 

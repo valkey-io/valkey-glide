@@ -13,10 +13,10 @@ import lombok.NonNull;
  * Supports commands and transactions for the "List Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=list">List Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=list">List Commands</a>
  */
 public interface ListBaseCommands {
-    /** Redis API keyword used to extract specific count of members from a sorted set. */
+    /** Valkey API keyword used to extract specific count of members from a sorted set. */
     String COUNT_FOR_LIST_VALKEY_API = "COUNT";
 
     /**
@@ -84,7 +84,7 @@ public interface ListBaseCommands {
      * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
      * a single element from the beginning of the list.
      *
-     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return The value of the first element.<br>
      *     If <code>key</code> does not exist, null will be returned.
@@ -317,7 +317,7 @@ public interface ListBaseCommands {
      * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,
      * depending on the list's length.
      *
-     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return An array of the popped elements will be returned depending on the list's length.<br>
@@ -642,7 +642,7 @@ public interface ListBaseCommands {
      * Removes and returns the last elements of the list stored at <code>key</code>.<br>
      * The command pops a single element from the end of the list.
      *
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return The value of the last element.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
@@ -681,7 +681,7 @@ public interface ListBaseCommands {
      * Removes and returns up to <code>count</code> elements from the list stored at <code>key</code>,
      * depending on the list's length.
      *
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return An array of popped elements will be returned depending on the list's length.<br>
@@ -784,7 +784,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
-     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/blpop/">valkey.io</a> for details.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -844,7 +844,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
-     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/brpop/">valkey.io</a> for details.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.

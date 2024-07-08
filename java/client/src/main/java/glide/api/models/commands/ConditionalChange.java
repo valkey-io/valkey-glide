@@ -16,12 +16,12 @@ import lombok.RequiredArgsConstructor;
 public enum ConditionalChange {
     /**
      * Only update elements that already exist. Don't add new elements. Equivalent to <code>XX
-     * </code> in the Redis API.
+     * </code> in the Valkey API.
      */
     ONLY_IF_EXISTS("XX"),
     /**
      * Only add new elements. Don't update already existing elements. Equivalent to <code>NX</code> in
-     * the Redis API.
+     * the Valkey API.
      */
     ONLY_IF_DOES_NOT_EXIST("NX");
 

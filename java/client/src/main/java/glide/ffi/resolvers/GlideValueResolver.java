@@ -3,7 +3,7 @@ package glide.ffi.resolvers;
 
 import response.ResponseOuterClass.Response;
 
-public class RedisValueResolver {
+public class GlideValueResolver {
     public static final long MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
 
     // TODO: consider lazy loading the glide_rs library
@@ -16,7 +16,7 @@ public class RedisValueResolver {
     }
 
     /**
-     * Resolve a value received from Redis using given C-style pointer. String data is assumed to be
+     * Resolve a value received from Valkey using given C-style pointer. String data is assumed to be
      * UTF-8 and exposed as <code>String</code> objects.
      *
      * @param pointer A memory pointer from {@link Response}
@@ -25,7 +25,7 @@ public class RedisValueResolver {
     public static native Object valueFromPointer(long pointer);
 
     /**
-     * Resolve a value received from Redis using given C-style pointer. This method does not assume
+     * Resolve a value received from Valkey using given C-style pointer. This method does not assume
      * that strings are valid UTF-8 encoded strings and will expose this data as a <code>byte[]</code>
      * .
      *

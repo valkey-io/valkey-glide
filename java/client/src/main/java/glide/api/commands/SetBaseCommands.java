@@ -11,10 +11,10 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Set Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=set">Set Commands</a>
  */
 public interface SetBaseCommands {
-    /** Redis API keyword used to limit calculation of intersection of sorted sets. */
+    /** Valkey API keyword used to limit calculation of intersection of sorted sets. */
     String SET_LIMIT_VALKEY_API = "LIMIT";
 
     /**
@@ -620,7 +620,7 @@ public interface SetBaseCommands {
     /**
      * Removes and returns one random member from the set stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/spop/">valkey.io</a> for details.
      * @param key The key of the set.
      * @return The value of the popped member.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
@@ -659,7 +659,7 @@ public interface SetBaseCommands {
      * Removes and returns up to <code>count</code> random members from the set stored at <code>key
      * </code>, depending on the set's length.
      *
-     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/spop/">valkey.io</a> for details.
      * @param key The key of the set.
      * @param count The count of the elements to pop from the set.
      * @return A set of popped elements will be returned depending on the set's length.<br>

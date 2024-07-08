@@ -79,7 +79,7 @@ public class RangeOptions {
             this(bound, true);
         }
 
-        /** Convert the score boundary to the Redis protocol format. */
+        /** Convert the score boundary to the Valkey protocol format. */
         public String toArgs() {
             return (isInclusive ? "" : "(") + bound;
         }
@@ -138,7 +138,7 @@ public class RangeOptions {
             this(value, true);
         }
 
-        /** Convert the lex boundary to the Redis protocol format. */
+        /** Convert the lex boundary to the Valkey protocol format. */
         @Override
         public String toArgs() {
             return (isInclusive ? "[" : "(") + value;

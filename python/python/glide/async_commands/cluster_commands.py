@@ -34,7 +34,7 @@ class ClusterCommands(CoreCommands):
     ) -> TResult:
         """
         Executes a single command, without checking inputs.
-        See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Return a list of all pub/sub clients from all nodes:
@@ -47,7 +47,7 @@ class ClusterCommands(CoreCommands):
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TResult: The returning value depends on the executed command and the route
+            TResult: The returning value depends on the executed command and the route.
         """
         return await self._execute_command(
             RequestType.CustomCommand, command_args, route
@@ -88,7 +88,7 @@ class ClusterCommands(CoreCommands):
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
-        See https://redis.io/topics/Transactions/ for details on Transactions.
+        See https://valkey.io/docs/topics/transactions/ for details on Transactions.
 
         Args:
             transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
@@ -502,7 +502,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.function_kill()
                 "OK"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
@@ -620,7 +620,7 @@ class ClusterCommands(CoreCommands):
                     }
                 }
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return cast(
             TClusterResponse[TFunctionStatsResponse],
@@ -844,7 +844,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.sort_ro("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
             [b'b', b'a']
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.SortReadOnly, args)

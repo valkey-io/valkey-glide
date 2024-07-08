@@ -3574,9 +3574,9 @@ class CoreCommands(Protocol):
                     b"radix-tree-keys": 1L,
                     b"radix-tree-nodes": 2L,
                     b"last-generated-id": b"1719877599564-0",
-                    b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
-                    b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
-                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
+                    b"max-deleted-entry-id": b"0-0",  # This field was added in Valkey version 7.0.0.
+                    b"entries-added": 4L,  # This field was added in Valkey version 7.0.0.
+                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Valkey version 7.0.0.
                     b"groups": 1L,
                     b"first-entry": [
                         b"1719710679916-0",
@@ -3621,9 +3621,9 @@ class CoreCommands(Protocol):
                     b"radix-tree-keys": 1L,
                     b"radix-tree-nodes": 2L,
                     b"last-generated-id": b"1719877599564-0",
-                    b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
-                    b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
-                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
+                    b"max-deleted-entry-id": b"0-0",  # This field was added in Valkey version 7.0.0.
+                    b"entries-added": 4L,  # This field was added in Valkey version 7.0.0.
+                    b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Valkey version 7.0.0.
                     b"entries": [
                         [
                             b"1719710679916-0",
@@ -3638,8 +3638,8 @@ class CoreCommands(Protocol):
                         {
                             b"name": b"mygroup",
                             b"last-delivered-id": b"1719710688676-0",
-                            b"entries-read": 2,  # This field was added in Redis version 7.0.0.
-                            b"lag": 0,  # This field was added in Redis version 7.0.0.
+                            b"entries-read": 2,  # This field was added in Valkey version 7.0.0.
+                            b"lag": 0,  # This field was added in Valkey version 7.0.0.
                             b"pel-count": 2,
                             b"pending": [
                                 [
@@ -3659,7 +3659,7 @@ class CoreCommands(Protocol):
                                 {
                                     b"name": b"Alice",
                                     b"seen-time": 1719710718373,
-                                    b"active-time": 1719710718373,  # This field was added in Redis version 7.2.0.
+                                    b"active-time": 1719710718373,  # This field was added in Valkey version 7.2.0.
                                     b"pel-count": 2,
                                     b"pending": [
                                         [
@@ -3680,7 +3680,7 @@ class CoreCommands(Protocol):
                 }
                 # Detailed stream information for "my_stream".
 
-        Since: Redis version 6.0.0.
+        Since: Valkey version 6.0.0.
         """
         args = [key, "FULL"]
         if count is not None:
@@ -5791,7 +5791,7 @@ class CoreCommands(Protocol):
 
     async def object_encoding(self, key: TEncodable) -> Optional[bytes]:
         """
-        Returns the internal encoding for the Redis object stored at `key`.
+        Returns the internal encoding for the Valkey object stored at `key`.
 
         See https://valkey.io/commands/object-encoding for more details.
 

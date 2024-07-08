@@ -17,8 +17,7 @@ import lombok.NonNull;
  * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
  * {@link GlideClusterClient#exec} command, in the order they were given. Each element in the array
  * represents a command given to the {@link ClusterTransaction}. The response for each command
- * depends on the executed Redis command. Specific response types are documented alongside each
- * method.
+ * depends on the executed command. Specific response types are documented alongside each method.
  *
  * @example
  *     <pre>{@code
@@ -46,7 +45,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
      * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
-     *     to <code>true</code> is only applicable with Redis 7.0+.
+     *     to <code>true</code> is only applicable with Valkey 7.0+.
      * @return Command response - The number of clients that received the message.
      */
     public <ArgType> ClusterTransaction publish(

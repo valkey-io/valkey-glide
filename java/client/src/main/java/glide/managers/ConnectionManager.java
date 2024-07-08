@@ -34,11 +34,11 @@ public class ConnectionManager {
     private final ChannelHandler channel;
 
     /**
-     * Make a connection request to Redis Rust-core client.
+     * Make a connection request to Valkey Rust-core client.
      *
      * @param configuration Connection Request Configuration
      */
-    public CompletableFuture<Void> connectToRedis(BaseClientConfiguration configuration) {
+    public CompletableFuture<Void> connectToValkey(BaseClientConfiguration configuration) {
         ConnectionRequest request = createConnectionRequest(configuration);
         return channel
                 .connect(request)
@@ -122,7 +122,7 @@ public class ConnectionManager {
     }
 
     /**
-     * Creates ConnectionRequestBuilder, so it has appropriate fields for the Redis Standalone Client.
+     * Creates ConnectionRequestBuilder, so it has appropriate fields for the Standalone Client.
      *
      * @param configuration Connection Request Configuration
      */
@@ -162,7 +162,7 @@ public class ConnectionManager {
     }
 
     /**
-     * Creates ConnectionRequestBuilder, so it has appropriate fields for the Redis Cluster Client.
+     * Creates ConnectionRequestBuilder, so it has appropriate fields for the Cluster Client.
      *
      * @param configuration
      */

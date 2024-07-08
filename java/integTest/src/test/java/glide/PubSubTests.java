@@ -677,7 +677,7 @@ public class PubSubTests {
             }
         }
 
-        // redis can reorder the messages, so we can't validate that the order (without big delays
+        // valkey can reorder the messages, so we can't validate that the order (without big delays
         // between sends)
         assertEquals(new LinkedHashSet<>(messages), received);
     }

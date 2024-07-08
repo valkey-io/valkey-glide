@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.configuration.RedisCredentials;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.concurrent.ExecutionException;
@@ -28,7 +28,7 @@ public class ClusterClientTests {
         String minVersion = "7.2.0";
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
-                "Redis version required >= " + minVersion);
+                "Valkey version required >= " + minVersion);
 
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -61,7 +61,7 @@ public class ClusterClientTests {
         GlideClusterClient auth_client =
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig()
-                                        .credentials(RedisCredentials.builder().password(password).build())
+                                        .credentials(ServerCredentials.builder().password(password).build())
                                         .build())
                         .get();
 
@@ -116,7 +116,7 @@ public class ClusterClientTests {
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig()
                                         .credentials(
-                                                RedisCredentials.builder().username(username).password(password).build())
+                                                ServerCredentials.builder().username(username).password(password).build())
                                         .build())
                         .get();
 

@@ -245,7 +245,7 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Executes a single command, without checking inputs.
-        See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Append a command to list of all pub/sub clients:
@@ -2033,7 +2033,7 @@ class BaseTransaction:
                 - `engines` with information about available engines and their stats.
                 See example for more details.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return self.append_command(RequestType.FunctionStats, [])
 
@@ -4243,7 +4243,7 @@ class BaseTransaction:
 
     def object_freq(self: TTransaction, key: TEncodable) -> TTransaction:
         """
-        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+        Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
         See https://valkey.io/commands/object-freq for more details.
 
@@ -4920,7 +4920,7 @@ class Transaction(BaseTransaction):
         Command response:
             List[Optional[bytes]]: Returns a list of sorted elements.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         return self.append_command(RequestType.SortReadOnly, args)
@@ -5088,7 +5088,7 @@ class ClusterTransaction(BaseTransaction):
         Command response:
             List[bytes]: A list of sorted elements.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         return self.append_command(RequestType.SortReadOnly, args)

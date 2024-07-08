@@ -14450,6 +14450,31 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
+Package: nanoid:0.4.0
+
+The following copyrights and licenses were found in the source code of this package:
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+----
+
 Package: nu-ansi-term:0.46.0
 
 The following copyrights and licenses were found in the source code of this package:
@@ -20599,7 +20624,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-native-certs:0.7.0
+Package: rustls-native-certs:0.7.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21314,7 +21339,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-webpki:0.102.4
+Package: rustls-webpki:0.102.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22507,7 +22532,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.203
+Package: serde:1.0.204
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22736,7 +22761,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.203
+Package: serde_derive:1.0.204
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23839,7 +23864,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.68
+Package: syn:2.0.69
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25442,7 +25467,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tinyvec:1.6.1
+Package: tinyvec:1.7.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31094,7 +31119,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows-targets:0.52.5
+Package: windows-targets:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -31781,7 +31806,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_gnullvm:0.52.5
+Package: windows_aarch64_gnullvm:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32468,7 +32493,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_aarch64_msvc:0.52.5
+Package: windows_aarch64_msvc:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33155,7 +33180,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_gnu:0.52.5
+Package: windows_i686_gnu:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33384,7 +33409,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_gnullvm:0.52.5
+Package: windows_i686_gnullvm:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34071,7 +34096,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_i686_msvc:0.52.5
+Package: windows_i686_msvc:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34758,7 +34783,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnu:0.52.5
+Package: windows_x86_64_gnu:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35445,7 +35470,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_gnullvm:0.52.5
+Package: windows_x86_64_gnullvm:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36132,7 +36157,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: windows_x86_64_msvc:0.52.5
+Package: windows_x86_64_msvc:0.52.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36361,7 +36386,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy:0.7.34
+Package: zerocopy:0.7.35
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36613,7 +36638,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.7.34
+Package: zerocopy-derive:0.7.35
 
 The following copyrights and licenses were found in the source code of this package:
 
