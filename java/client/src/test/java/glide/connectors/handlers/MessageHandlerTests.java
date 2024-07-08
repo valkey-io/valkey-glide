@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.managers.BaseResponseResolver;
 import java.util.ArrayList;
 import java.util.Map;
@@ -27,7 +27,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.Message,
@@ -52,7 +52,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.Message,
@@ -86,7 +86,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.SMessage,
@@ -110,7 +110,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.SMessage,
@@ -144,7 +144,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.PMessage,
@@ -171,7 +171,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.PMessage,
@@ -206,7 +206,7 @@ public class MessageHandlerTests {
         BaseResponseResolver fakeResolver =
                 new BaseResponseResolver(null) {
                     @Override
-                    public Object apply(ResponseOuterClass.Response response) throws RedisException {
+                    public Object apply(ResponseOuterClass.Response response) throws GlideException {
                         return Map.of(
                                 "kind",
                                 MessageHandler.PushKind.Message,

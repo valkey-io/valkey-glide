@@ -1,47 +1,47 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
+import static command_request.CommandRequestOuterClass.RequestType.DBSize;
+import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.FCall;
+import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
+import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDump;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionFlush;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionKill;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.Time;
+import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.FCall;
-import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
@@ -59,7 +59,7 @@ import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
-import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
@@ -74,11 +74,8 @@ import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.Response;
 
-/**
- * Async (non-blocking) client for Redis in Cluster mode. Use {@link #createClient} to request a
- * client to Redis.
- */
-public class RedisClusterClient extends BaseClient
+/** Async (non-blocking) client for Cluster mode. Use {@link #createClient} to request a client. */
+public class GlideClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
@@ -87,19 +84,19 @@ public class RedisClusterClient extends BaseClient
                 PubSubClusterCommands {
 
     /** A private constructor. Use {@link #createClient} to get a client. */
-    RedisClusterClient(ClientBuilder builder) {
+    GlideClusterClient(ClientBuilder builder) {
         super(builder);
     }
 
     /**
-     * Async request for an async (non-blocking) Redis client in Cluster mode.
+     * Async request for an async (non-blocking) client in Cluster mode.
      *
-     * @param config Redis cluster client Configuration.
-     * @return A Future to connect and return a RedisClusterClient.
+     * @param config Glide cluster client Configuration.
+     * @return A Future to connect and return a GlideClusterClient.
      */
-    public static CompletableFuture<RedisClusterClient> createClient(
-            @NonNull RedisClusterClientConfiguration config) {
-        return createClient(config, RedisClusterClient::new);
+    public static CompletableFuture<GlideClusterClient> createClient(
+            @NonNull GlideClusterClientConfiguration config) {
+        return createClient(config, GlideClusterClient::new);
     }
 
     @Override
@@ -445,7 +442,7 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
                 Lolwut,
-                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
 
@@ -453,7 +450,7 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> lolwut(int version, int @NonNull [] parameters) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
@@ -489,7 +486,7 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<ClusterValue<String>> lolwut(int version, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Lolwut,
-                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 route,
                 response ->
                         route instanceof SingleNodeRoute
@@ -502,7 +499,7 @@ public class RedisClusterClient extends BaseClient
             int version, int @NonNull [] parameters, @NonNull Route route) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(
                 Lolwut,
@@ -602,7 +599,7 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -610,7 +607,7 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
@@ -620,8 +617,8 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode
-                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
-                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                        ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -631,9 +628,9 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 new ArgsBuilder()
-                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
-                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
@@ -643,7 +640,7 @@ public class RedisClusterClient extends BaseClient
             boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
                 route,
                 response -> handleFunctionListResponse(response, route));
     }
@@ -652,7 +649,7 @@ public class RedisClusterClient extends BaseClient
             boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
                 route,
                 response -> handleFunctionListResponseBinary(response, route));
     }
@@ -663,8 +660,8 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode
-                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
-                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                        ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
                 route,
                 response -> handleFunctionListResponse(response, route));
     }
@@ -674,9 +671,9 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 new ArgsBuilder()
-                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
-                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
                 route,
                 response -> handleFunctionListResponseBinary(response, route));

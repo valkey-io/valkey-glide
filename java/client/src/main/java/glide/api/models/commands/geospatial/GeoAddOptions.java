@@ -16,7 +16,7 @@ import lombok.Getter;
  */
 @Getter
 public final class GeoAddOptions {
-    public static final String CHANGED_REDIS_API = "CH";
+    public static final String CHANGED_VALKEY_API = "CH";
 
     /** Options for handling existing members. See {@link ConditionalChange}. */
     private final ConditionalChange updateMode;
@@ -69,11 +69,11 @@ public final class GeoAddOptions {
         List<String> arguments = new ArrayList<>();
 
         if (updateMode != null) {
-            arguments.add(updateMode.getRedisApi());
+            arguments.add(updateMode.getValkeyApi());
         }
 
         if (changed) {
-            arguments.add(CHANGED_REDIS_API);
+            arguments.add(CHANGED_VALKEY_API);
         }
 
         return arguments.toArray(new String[0]);

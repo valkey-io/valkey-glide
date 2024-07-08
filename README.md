@@ -1,43 +1,35 @@
-### Valkey GLIDE
-
-Valkey General Language Independent Driver for the Enterprise (GLIDE), is an AWS-sponsored, open-source Valkey client that includes support for open-source Redis 6.2 to 7.2. Valkey GLIDE works with any distribution that adheres to the Redis Serialization Protocol (RESP) specification, including Amazon ElastiCache, and Amazon MemoryDB.
-Strategic, mission-critical applications have requirements for security, optimized performance, minimal downtime, and observability. Valkey GLIDE is designed to provide a client experience that helps meet these objectives. It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating RESP-compatible services used by hundreds of thousands of customers. To help ensure consistency in development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language. This design ensures that updates easily propagate to each language and reduces overall complexity. In this Preview release, Valkey GLIDE is available for Python and Java, with support for Javascript (Node.js) actively under development.
+# Valkey GLIDE
+Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, and it supports all Valkey commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
 
 ## Supported Engine Versions
-GLIDE for Redis is API-compatible with the following engine versions:
+Valkey GLIDE is API-compatible with the following engine versions:
 
-| Engine Type        | Version |
-|--------------------|---------|
-| Valkey and Redis   | 7.2     |
-| Valkey and Redis   | 7.0     |
-| Valkey and Redis   | 6.2     |
+| Engine Type           |  6.2  |  7.0  |  7.2  |
+|-----------------------|-------|-------|-------|
+| Valkey                |   V   |   V   |   V   |
+| Redis                 |   V   |   V   |   V   |
 
 ## Current Status
-We've made GLIDE for Redis an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
-This preview release is recommended for testing purposes only. It is available in Python and Javascript (Node.js), with Java to follow. We're tracking its production readiness and future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
-
+In this release, Valkey GLIDE is available for Python and Java. Support for Node.js is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
 
 ## Getting Started
-
--   [Node](./node/README.md)
--   [Python](./python/README.md)
 -   [Java](./java/README.md)
--   [Documentation](https://github.com/aws/glide-for-redis/wiki)
+-   [Python](./python/README.md)
+-   [Documentation](https://github.com/valkey-io/valkey-glide/wiki)
 
 ## Getting Help
-If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/aws/glide-for-redis/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including:
+If you have any questions, feature requests, encounter issues, or need assistance with this project, please don't hesitate to open a GitHub issue. Our community and contributors are here to help you. Before creating an issue, we recommend checking the [existing issues](https://github.com/valkey-io/valkey-glide/issues) to see if your question or problem has already been addressed. If not, feel free to create a new issue, and we'll do our best to assist you. Please provide as much detail as possible in your issue description, including:
 
 1. A clear and concise title
 2. Detailed description of the problem or question
-3. A reproducible test case or series of steps
-4. The GLIDE for Redis version in use
-5. Operating system
-6. Redis version
-7. Redis cluster information, cluster topology, number of shards, number of replicas, used data types
-8. Any modifications you've made that are relevant to the issue
-9. Anything unusual about your environment or deployment
+3. Reproducible test case or step-by-step instructions
+4. Valkey GLIDE version in use
+5. Operating system details
+6. Server version
+7. Cluster or standalone setup information, including topology, number of shards, number of replicas, and data types used
+8. Relevant modifications you've made
+9. Any unusual aspects of your environment or deployment
 10. Log files
-
 
 ## Contributing
 

@@ -1,7 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
@@ -13,37 +16,37 @@ import lombok.Builder;
  * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a>
  */
 @Builder
-public class StreamPendingOptions {
+public class StreamPendingOptionsBinary {
 
     /** Valkey api string to designate IDLE or minimum idle time */
-    public static final String IDLE_TIME_VALKEY_API = "IDLE";
+    public static final GlideString IDLE_TIME_VALKEY_API_GLIDE_STRING = gs("IDLE");
 
     /** Filters pending entries by their idle time - in Milliseconds */
     private final Long minIdleTime; // Milliseconds
 
     /** Filters pending entries by consumer */
-    private final String consumer;
+    private final GlideString consumer;
 
     /**
      * Convert StreamPendingOptions arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Valkey.
+     * @return arguments converted to an array to be consumed by Valkey
      */
-    public String[] toArgs(StreamRange start, StreamRange end, long count) {
-        List<String> optionArgs = new ArrayList<>();
+    public GlideString[] toArgs(StreamRange start, StreamRange end, long count) {
+        List<GlideString> optionArgs = new ArrayList<>();
         if (minIdleTime != null) {
-            optionArgs.add(IDLE_TIME_VALKEY_API);
-            optionArgs.add(Long.toString(minIdleTime));
+            optionArgs.add(IDLE_TIME_VALKEY_API_GLIDE_STRING);
+            optionArgs.add(gs(Long.toString(minIdleTime)));
         }
 
-        optionArgs.add(start.getValkeyApi());
-        optionArgs.add(end.getValkeyApi());
-        optionArgs.add(Long.toString(count));
+        optionArgs.add(gs(start.getValkeyApi()));
+        optionArgs.add(gs(end.getValkeyApi()));
+        optionArgs.add(gs(Long.toString(count)));
 
         if (consumer != null) {
             optionArgs.add(consumer);
         }
 
-        return optionArgs.toArray(new String[0]);
+        return optionArgs.toArray(new GlideString[0]);
     }
 }

@@ -21,14 +21,14 @@ public final class LPosOptions {
     /** The maximum number of comparisons to make between the element and the items in the list. */
     private Long maxLength;
 
-    /** Redis API keyword used to extract specific number of matching indices from a list. */
-    public static final String COUNT_REDIS_API = "COUNT";
+    /** Valkey API keyword used to extract specific number of matching indices from a list. */
+    public static final String COUNT_VALKEY_API = "COUNT";
 
-    /** Redis API keyword use to determine the rank of the match to return. */
-    public static final String RANK_REDIS_API = "RANK";
+    /** Valkey API keyword use to determine the rank of the match to return. */
+    public static final String RANK_VALKEY_API = "RANK";
 
-    /** Redis API keyword used to determine the maximum number of list items to compare. */
-    public static final String MAXLEN_REDIS_API = "MAXLEN";
+    /** Valkey API keyword used to determine the maximum number of list items to compare. */
+    public static final String MAXLEN_VALKEY_API = "MAXLEN";
 
     /**
      * Converts LPosOptions into a String[].
@@ -38,12 +38,12 @@ public final class LPosOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
         if (rank != null) {
-            optionArgs.add(RANK_REDIS_API);
+            optionArgs.add(RANK_VALKEY_API);
             optionArgs.add(String.valueOf(rank));
         }
 
         if (maxLength != null) {
-            optionArgs.add(MAXLEN_REDIS_API);
+            optionArgs.add(MAXLEN_VALKEY_API);
             optionArgs.add(String.valueOf(maxLength));
         }
 

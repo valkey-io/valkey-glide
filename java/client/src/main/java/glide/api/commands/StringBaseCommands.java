@@ -13,12 +13,12 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "String Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=string">String Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=string">String Commands</a>
  */
 public interface StringBaseCommands {
 
-    /** Redis API keyword used to indicate that the length of the lcs should be returned. */
-    public static final String LEN_REDIS_API = "LEN";
+    /** Valkey API keyword used to indicate that the length of the lcs should be returned. */
+    public static final String LEN_VALKEY_API = "LEN";
 
     /** <code>IDX</code> option string to include in the <code>LCS</code> command. */
     public static final String IDX_COMMAND_STRING = "IDX";
@@ -38,8 +38,8 @@ public interface StringBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
-     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
+     *     <code>String</code>. Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.get("key").get();
@@ -57,8 +57,8 @@ public interface StringBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/get/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
-     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
+     *     <code>String</code>. Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
      * GlideString value = client.get(gs("key")).get();
@@ -109,7 +109,7 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.2.0.
+     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -125,7 +125,7 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.2.0.
+     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
@@ -141,7 +141,7 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.2.0.
+     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -160,7 +160,7 @@ public interface StringBaseCommands {
     /**
      * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.2.0.
+     * @since Valkey 6.2.0.
      * @see <a href="https://valkey.io/commands/getex/">valkey.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
@@ -182,7 +182,7 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The <code>key</code> to store.
      * @param value The value to store with the given <code>key</code>.
-     * @return Response from Redis containing <code>"OK"</code>.
+     * @return A simple <code>"OK"</code> response.
      * @example
      *     <pre>{@code
      * String value = client.set("key", "value").get();
@@ -197,7 +197,7 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The <code>key</code> to store.
      * @param value The value to store with the given <code>key</code>.
-     * @return Response from Redis containing <code>"OK"</code>.
+     * @return A simple <code>"OK"</code> response.
      * @example
      *     <pre>{@code
      * GlideString value = client.set(gs("key"), gs("value")).get();
@@ -213,9 +213,8 @@ public interface StringBaseCommands {
      * @param key The key to store.
      * @param value The value to store with the given key.
      * @param options The Set options.
-     * @return Response from Redis containing a <code>String</code> or <code>null</code> response. If
-     *     the value is successfully set, return <code>"OK"</code>. If value isn't set because of
-     *     {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
+     * @return If the value is successfully set, return <code>"OK"</code>. If value isn't set because
+     *     of {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
      *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
      *     is set, return the old value as a <code>String</code>.
      * @example
@@ -234,9 +233,8 @@ public interface StringBaseCommands {
      * @param key The key to store.
      * @param value The value to store with the given key.
      * @param options The Set options.
-     * @return Response from Redis containing a <code>String</code> or <code>null</code> response. If
-     *     the value is successfully set, return <code>"OK"</code>. If value isn't set because of
-     *     {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
+     * @return If the value is successfully set, return <code>"OK"</code>. If value isn't set because
+     *     of {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
      *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
      *     is set, return the old value as a <code>String</code>.
      * @example
@@ -301,6 +299,22 @@ public interface StringBaseCommands {
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
 
     /**
+     * Sets multiple keys to multiple values in a single operation.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
+     *     keyValueMap</code> map to different hash slots.
+     * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Always <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String result = client.msetBinary(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
+     * assert result.equals("OK"));
+     * }</pre>
+     */
+    CompletableFuture<String> msetBinary(Map<GlideString, GlideString> keyValueMap);
+
+    /**
      * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
      * more keys already exist, the entire operation fails.
      *
@@ -316,6 +330,23 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
+     * @example
+     *     <pre>{@code
+     * Boolean result = client.msetnxBinary(Map.of(gs("key1"), gs("value1"), gs("key2"), gs("value2")}).get();
+     * assert result;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> msetnxBinary(Map<GlideString, GlideString> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
@@ -644,7 +675,7 @@ public interface StringBaseCommands {
      * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
      * key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -666,7 +697,7 @@ public interface StringBaseCommands {
      * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
      * key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -688,7 +719,7 @@ public interface StringBaseCommands {
      * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -708,7 +739,7 @@ public interface StringBaseCommands {
      * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -728,7 +759,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -771,7 +802,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -814,7 +845,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -858,7 +889,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -903,7 +934,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -948,7 +979,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -994,7 +1025,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
@@ -1041,7 +1072,7 @@ public interface StringBaseCommands {
      * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
      *     hash slot.
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.

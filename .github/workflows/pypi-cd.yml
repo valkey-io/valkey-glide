@@ -1,6 +1,6 @@
 # The cross platform build was created based on the [Packaging Rust Applications for the NPM Registry blog](https://blog.orhun.dev/packaging-rust-for-npm/).
 
-name: Continuous Deployment
+name: PyPI - Continuous Deployment
 
 on:
     pull_request:
@@ -13,6 +13,11 @@ on:
     push:
         tags:
             - "v*.*"
+    workflow_dispatch:
+      inputs:
+        version:
+          description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
+          required: true
 
 concurrency:
     group: pypi-${{ github.head_ref || github.ref }}
@@ -77,23 +82,22 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
-                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
-              
-              # For NPM and Cargo we need the the rc version to be {version}-rc{number} while for PyPi we need it to be {version}rc{number}
-              # This is because PyPi does not allow the '-' character in the version name
-              # So the tag will be as NPM and Cargo ask: v1.0.0-rc1 and for PyPi we'll chnage it to: v1.0.0rc1
-            - name: Change and set realease version for RC
-              if: ${{ github.event_name != 'pull_request' && contains(github.ref, 'rc') }}
-              shell: bash
-              run: |
-                  export py_version=`echo ${GITHUB_REF:11} | sed 's/-rc/rc/'`
-                  echo "PY_RELEASE_VERSION=${py_version}" >> $GITHUB_ENV
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Check that the release version dont have typo init
-              if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
+              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
               run: |
-                echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+                echo "The release version "${{ env.RELEASE_VERSION }}" contains a typo, please fix it"
                 echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
                 exit 1
 
@@ -154,20 +158,29 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }} 
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
                       # Install protobuf compiler
                       if [[ $(`which apt`) != '' ]]
-                      then 
-                        apt install protobuf-compiler -y
-                      else
-                        PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-                        curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip
-                        unzip protoc-3.15.8-linux-x86_64.zip -d $HOME/.local
-                        export PATH="$PATH:$HOME/.local/bin"
+                      then
+                        echo "installing unzip and curl"
+                        apt install unzip curl -y
                       fi
+                      PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                      ARCH=`uname -p`
+                      if [[ $ARCH == 'x86_64' ]]; then 
+                        PROTOC_ARCH="x86_64"
+                      elif [[ $ARCH == 'aarch64' ]]; then 
+                        PROTOC_ARCH="aarch_64"
+                      else 
+                        echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                        exit 1 
+                      fi
+                      curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
+                      unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+                      export PATH="$PATH:$HOME/.local/bin"
 
             - name: Build Python wheels (macos)
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
