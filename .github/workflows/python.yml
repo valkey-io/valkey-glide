@@ -166,7 +166,7 @@ jobs:
             run: |
                 source .env/bin/activate
                 cd python/tests/
-                pytest -c ../../pytest_pubsub.ini --asyncio-mode=auto test_pubsub.py::TestPubSub
+                pytest --asyncio-mode=auto -k test_pubsub
 
     lint-rust:
         runs-on: ubuntu-latest
@@ -238,7 +238,7 @@ jobs:
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest -c ../../pytest_pubsub.ini --asyncio-mode=auto test_pubsub.py::TestPubSub
+                  pytest --asyncio-mode=auto -k test_pubsub
 
     build-amazonlinux-latest:
         runs-on: ubuntu-latest
