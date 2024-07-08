@@ -233,7 +233,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
-        protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
+        protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
                 Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
     """
@@ -364,7 +364,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
-        protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
+        protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.

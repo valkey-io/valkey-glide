@@ -533,7 +533,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * ClusterValue<String> response = client.lolwut(ALL_NODES).get();
