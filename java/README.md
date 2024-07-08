@@ -50,7 +50,7 @@ java -version
 
 ### Adding the client to your project
 
-Refer to https://central.sonatype.com/artifact/software.amazon.glide/glide-for-redis.
+Refer to https://central.sonatype.com/artifact/io.valkey/valkey-glide.
 Once set up, you can run the basic examples.
 
 Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
@@ -71,22 +71,22 @@ Gradle:
 
 // osx-aarch_64
 dependencies {
-    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '0.4.3', classifier: 'osx-aarch_64'
 }
 
 // osx-x86_64
 dependencies {
-    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'osx-x86_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '0.4.3', classifier: 'osx-x86_64'
 }
 
 // linux-aarch_64
 dependencies {
-    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '0.4.3', classifier: 'linux-aarch_64'
 }
 
 // linux-x86_64
 dependencies {
-    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '0.4.3', classifier: 'linux-x86_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '0.4.3', classifier: 'linux-x86_64'
 }
 ```
 
@@ -96,32 +96,32 @@ Maven:
 
 <!--osx-aarch_64-->
 <dependency>
-   <groupId>software.amazon.glide</groupId>
-   <artifactId>glide-for-redis</artifactId>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
    <classifier>osx-aarch_64</classifier>
    <version>0.4.3</version>
 </dependency>
 
 <!--osx-x86_64-->
 <dependency>
-   <groupId>software.amazon.glide</groupId>
-   <artifactId>glide-for-redis</artifactId>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
    <classifier>osx-x86_64</classifier>
    <version>0.4.3</version>
 </dependency>
 
 <!--linux-aarch_64-->
 <dependency>
-   <groupId>software.amazon.glide</groupId>
-   <artifactId>glide-for-redis</artifactId>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
    <classifier>linux-aarch_64</classifier>
    <version>0.4.3</version>
 </dependency>
 
 <!--linux-x86_64-->
 <dependency>
-   <groupId>software.amazon.glide</groupId>
-   <artifactId>glide-for-redis</artifactId>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
    <classifier>linux-x86_64</classifier>
    <version>0.4.3</version>
 </dependency>
