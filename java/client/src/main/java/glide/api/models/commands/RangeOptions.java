@@ -374,12 +374,10 @@ public class RangeOptions {
                 .addIf("REV", reverse);
 
         if (rangeQuery.getLimit() != null) {
-            builder.add(
-                    new String[] {
-                        "LIMIT",
-                        Long.toString(rangeQuery.getLimit().getOffset()),
-                        Long.toString(rangeQuery.getLimit().getCount())
-                    });
+            builder
+                    .add("LIMIT")
+                    .add(rangeQuery.getLimit().getOffset())
+                    .add(rangeQuery.getLimit().getCount());
         }
 
         return builder.toArray();
