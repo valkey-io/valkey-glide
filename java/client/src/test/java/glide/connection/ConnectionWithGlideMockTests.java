@@ -69,7 +69,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
 
     @Test
     @SneakyThrows
-    // as of #710 https://github.com/aws/babushka/pull/710 - connection response is empty
+    // as of #710 https://github.com/valkey-io/valkey-glide/pull/710 - connection response is empty
     public void can_connect_with_empty_response() {
         RustCoreMock.updateGlideMock(
                 new RustCoreMock.GlideMockProtobuf() {

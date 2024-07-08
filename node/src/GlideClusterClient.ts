@@ -19,7 +19,7 @@ import {
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
-import { connection_request, command_request } from "./ProtobufMessage";
+import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
 
 /**
@@ -202,7 +202,7 @@ function toProtobufRoute(
 /**
  * Client used for connection to cluster Redis servers.
  * For full documentation, see
- * https://github.com/aws/babushka/wiki/NodeJS-wrapper#redis-cluster
+ * https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster
  */
 export class GlideClusterClient extends BaseClient {
     /**
@@ -259,7 +259,7 @@ export class GlideClusterClient extends BaseClient {
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
-     * See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
      *
      * @example
