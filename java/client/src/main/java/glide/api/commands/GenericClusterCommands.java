@@ -30,7 +30,7 @@ public interface GenericClusterCommands {
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
      *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name.
-     * @return Response from Redis containing an <code>Object</code>.
+     * @return The returning value depends on the executed command.
      * @example
      *     <pre>{@code
      * ClusterValue<Object> data = client.customCommand(new String[] {"ping"}).get();
@@ -51,7 +51,7 @@ public interface GenericClusterCommands {
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return The returning value depends on the executed command.
+     * @return The returning value depends on the executed command and route.
      * @example
      *     <pre>{@code
      * ClusterValue<Object> result = clusterClient.customCommand(new String[]{ "CONFIG", "GET", "maxmemory"}, ALL_NODES).get();
