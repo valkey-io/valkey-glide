@@ -28,7 +28,7 @@ class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
-        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Return a list of all pub/sub clients:

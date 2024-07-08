@@ -46,7 +46,7 @@ public class CallbackDispatcher {
      * search for a next free ID.
      */
     // TODO: Optimize to avoid growing up to 2e32 (16 Gb)
-    // https://github.com/aws/glide-for-redis/issues/704
+    // https://github.com/valkey-io/valkey-glide/issues/704
     protected final ConcurrentLinkedQueue<Integer> freeRequestIds = new ConcurrentLinkedQueue<>();
 
     /**
@@ -78,7 +78,7 @@ public class CallbackDispatcher {
      */
     public void completeRequest(Response response) throws MessageHandler.MessageCallbackException {
         if (response.hasClosingError()) {
-            // According to https://github.com/aws/glide-for-redis/issues/851
+            // According to https://github.com/valkey-io/valkey-glide/issues/851
             // a response with a closing error may arrive with any/random callback ID (usually -1)
             // CommandManager and ConnectionManager would close the UDS channel on ClosingException
             distributeClosingException(response.getClosingError());

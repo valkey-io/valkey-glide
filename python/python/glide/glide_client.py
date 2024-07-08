@@ -532,7 +532,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     """
     Client used for connection to cluster servers.
     For full documentation, see
-    https://github.com/aws/babushka/wiki/Python-wrapper#redis-cluster
+    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
     """
 
     async def _cluster_scan(
@@ -570,7 +570,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
     For full documentation, see
-    https://github.com/aws/babushka/wiki/Python-wrapper#redis-standalone
+    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#redis-standalone
     """
 
 

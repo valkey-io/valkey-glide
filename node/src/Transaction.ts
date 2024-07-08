@@ -1265,7 +1265,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
-     * See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
      *
      * Command Response - A response from Redis with an `Object`.
@@ -1416,7 +1416,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://valkey.io/commands/brpop/ for more details.
      * Note: `BRPOP` is a blocking command,
-     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -1433,7 +1433,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      * See https://valkey.io/commands/blpop/ for more details.
      * Note: `BLPOP` is a blocking command,
-     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.

@@ -1358,7 +1358,7 @@ class CoreCommands(Protocol):
 
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
-            2. `BLPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+            2. `BLPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
@@ -1428,7 +1428,7 @@ class CoreCommands(Protocol):
 
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
-            2. `BLMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+            2. `BLMPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/blmpop/ for details.
 
@@ -1657,7 +1657,7 @@ class CoreCommands(Protocol):
 
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
-            2. `BRPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+            2. `BRPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
@@ -1772,7 +1772,7 @@ class CoreCommands(Protocol):
 
         Notes:
             1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
-            2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+            2. `BLMOVE` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/blmove/ for details.
 
@@ -4257,7 +4257,7 @@ class CoreCommands(Protocol):
 
         `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
 
-        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMAX` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzpopmax for more details.
 
@@ -4324,7 +4324,7 @@ class CoreCommands(Protocol):
 
         `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
 
-        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMIN` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzpopmin for more details.
 
@@ -5323,7 +5323,7 @@ class CoreCommands(Protocol):
 
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
-            2. `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+            2. `BZMPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.

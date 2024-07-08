@@ -18,7 +18,7 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/aws/glide-for-redis.git"
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
     },
     "keywords": [
         "redis",
@@ -29,9 +29,9 @@
     "author": "Amazon Web Services",
     "license": "Apache-2.0",
     "bugs": {
-        "url": "https://github.com/aws/glide-for-redis/issues"
+        "url": "https://github.com/valkey-io/valkey-glide/issues"
     },
-    "homepage": "https://github.com/aws/glide-for-redis#readme",
+    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "devDependencies": {
         "@types/node": "^18.11.18",
         "@typescript-eslint/eslint-plugin": "^5.48.0",

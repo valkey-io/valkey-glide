@@ -983,7 +983,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
     @Disabled(
-            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+            "No way of currently testing this, see https://github.com/valkey-io/valkey-glide/issues/1649")
     public void pubsub_exact_max_size_message(boolean standalone) {
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
@@ -1023,7 +1023,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {false})
     @Disabled(
-            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+            "No way of currently testing this, see https://github.com/valkey-io/valkey-glide/issues/1649")
     public void pubsub_sharded_max_size_message(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
@@ -1068,7 +1068,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {true, false})
     @Disabled(
-            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+            "No way of currently testing this, see https://github.com/valkey-io/valkey-glide/issues/1649")
     public void pubsub_exact_max_size_message_callback(boolean standalone) {
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
@@ -1110,7 +1110,7 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}")
     @ValueSource(booleans = {false})
     @Disabled(
-            "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
+            "No way of currently testing this, see https://github.com/valkey-io/valkey-glide/issues/1649")
     public void pubsub_sharded_max_size_message_callback(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 

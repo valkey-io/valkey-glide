@@ -5,7 +5,7 @@ Strategic, mission-critical Redis-based applications have requirements for secur
 
 ## Supported Engine Versions
 
-Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-redis/blob/main/README.md#supported-engine-versions) for details.
+Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
 ## Current Status
 
@@ -86,11 +86,11 @@ client.close();
 
 ## Documentation
 
-Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
 
 ### Building & Testing
 
-Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/aws/glide-for-redis/blob/main/node/DEVELOPER.md#build-from-source) file.
+Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/node/DEVELOPER.md#build-from-source) file.
 
 ### Supported platforms
 

@@ -76,7 +76,7 @@ Before starting this step, make sure you've installed all software dependencies.
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+    git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd glide-for-redis/java
     ```
 2. Initialize git submodule:
@@ -213,9 +213,9 @@ A Valkey command can either have a standalone or cluster implementation which is
 - A cluster command will require a note to indicate a node will follow a specific routing.
 Refer to https://valkey.io/docs/topics/cluster-spec for more details on how hash slots work for cluster commands.
 
-When you start implementing a new command, check the [command_request.proto](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/protobuf/command_request.proto) and [request_type.rs](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
+When you start implementing a new command, check the [command_request.proto](https://github.com/valkey-io/valkey-glide/blob/main/glide-core/src/protobuf/command_request.proto) and [request_type.rs](https://github.com/valkey-io/valkey-glide/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
 
-Standalone and cluster clients both extend [BaseClient.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/BaseClient.java) and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
+Standalone and cluster clients both extend [BaseClient.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/BaseClient.java) and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
 The return types of these methods are in the form of a `CompletableFuture`, which fulfill the purpose of the asynchronous features of the program.
 
 ### Tests
@@ -223,35 +223,35 @@ The return types of these methods are in the form of a `CompletableFuture`, whic
 When implementing a command, include both a unit test and an integration test.
 
 Implement unit tests in the following files:
-- [GlideClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/GlideClientTest.java) for standalone commands.
-- [GlideClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/GlideClusterClientTest.java) for cluster commands.
+- [GlideClientTest.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/test/java/glide/api/GlideClientTest.java) for standalone commands.
+- [GlideClusterClientTest.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/test/java/glide/api/GlideClusterClientTest.java) for cluster commands.
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:
-- [TransactionTests.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/models/TransactionTests.java) (standalone and cluster).
-- [TransactionTestsUtilities.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster).
-- [SharedCommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone and cluster).
-- [cluster/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster).
-- [standalone/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/standalone/CommandTests.java) (standalone).
+- [TransactionTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/test/java/glide/api/models/TransactionTests.java) (standalone and cluster).
+- [TransactionTestsUtilities.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster).
+- [SharedCommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone and cluster).
+- [cluster/CommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster).
+- [standalone/CommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/standalone/CommandTests.java) (standalone).
 For commands that have options, create a separate file for the optional values.
 
-[BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
-Refer to [this](https://github.com/aws/glide-for-redis/tree/main/java/client/src/main/java/glide/api/commands) link to view the interface directory.
+[BaseTransaction.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
+Refer to [this](https://github.com/valkey-io/valkey-glide/tree/main/java/client/src/main/java/glide/api/commands) link to view the interface directory.
 Refer to https://valkey.io/docs/topics/transactions/ for more details about how Transactions work in Valkey.
 
 ### Javadocs
 
-[BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) and the methods within the command interfaces will both contain documentation on how the command operates.
+[BaseTransaction.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) and the methods within the command interfaces will both contain documentation on how the command operates.
 In the command interface each command's javadoc should contain:
 - Detail on when Valkey started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
 - A link to the Valkey documentation.
 - Information about the function parameters.
-- Any glide-core implementation details, such as how glide-core manages default routing for the command. Reference this [link](https://github.com/aws/glide-for-redis/blob/4df0dd939b515dbf9da0a00bfca6d3ad2f27440b/java/client/src/main/java/glide/api/commands/SetBaseCommands.java#L119) for an example.
-- The command's return type. In the [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
+- Any glide-core implementation details, such as how glide-core manages default routing for the command. Reference this [link](https://github.com/valkey-io/valkey-glide/blob/4df0dd939b515dbf9da0a00bfca6d3ad2f27440b/java/client/src/main/java/glide/api/commands/SetBaseCommands.java#L119) for an example.
+- The command's return type. In the [BaseTransaction.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
 
 ### Previous PR's
 
-Refer to [closed-PRs](https://github.com/aws/glide-for-redis/pulls?q=is%3Apr+is%3Aclosed+label%3Ajava) to see commands that have been previously merged.
+Refer to [closed-PRs](https://github.com/valkey-io/valkey-glide/pulls?q=is%3Apr+is%3Aclosed+label%3Ajava) to see commands that have been previously merged.
 
 ### FFI naming and signatures, and features
 
@@ -265,7 +265,7 @@ In this project, only the function name and signature name is necessary. lib.rs 
 
 ### Module Information
 
-- The [module-info.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/module-info.java) (glide.api) contains a list of all of the directories the user can access.
+- The [module-info.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/main/java/module-info.java) (glide.api) contains a list of all of the directories the user can access.
 - Ensure to update the exports list if there are more directories the user will need to access.
 
 ### Recommended extensions for VS Code
