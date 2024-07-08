@@ -3223,6 +3223,18 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zadd_binary_and_zaddIncr_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(3.0, client.zaddIncr(key, gs("one"), 2.0).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zadd_and_zaddIncr_wrong_type(BaseClient client) {
         assertEquals(OK, client.set("foo", "bar").get());
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
@@ -3233,6 +3245,24 @@ public class SharedCommandTests {
 
         ExecutionException executionExceptionZaddIncr =
                 assertThrows(ExecutionException.class, () -> client.zaddIncr("foo", "one", 2.0).get());
+        assertTrue(executionExceptionZaddIncr.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zadd_binary_and_zaddIncr_binary_wrong_type(BaseClient client) {
+        assertEquals(OK, client.set(gs("foo"), gs("bar")).get());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+
+        ExecutionException executionExceptionZadd =
+                assertThrows(ExecutionException.class, () -> client.zadd(gs("foo"), membersScores).get());
+        assertTrue(executionExceptionZadd.getCause() instanceof RequestException);
+
+        ExecutionException executionExceptionZaddIncr =
+                assertThrows(
+                        ExecutionException.class, () -> client.zaddIncr(gs("foo"), gs("one"), 2.0).get());
         assertTrue(executionExceptionZaddIncr.getCause() instanceof RequestException);
     }
 
@@ -3261,6 +3291,29 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zadd_binary_and_zaddIncr_binary_with_NX_XX(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+
+        ZAddOptions onlyIfExistsOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .build();
+        ZAddOptions onlyIfDoesNotExistOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .build();
+
+        assertEquals(0, client.zadd(key, membersScores, onlyIfExistsOptions).get());
+        assertEquals(3, client.zadd(key, membersScores, onlyIfDoesNotExistOptions).get());
+        assertNull(client.zaddIncr(key, gs("one"), 5, onlyIfDoesNotExistOptions).get());
+        assertEquals(6, client.zaddIncr(key, gs("one"), 5, onlyIfExistsOptions).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zadd_and_zaddIncr_with_GT_LT(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = new LinkedHashMap<>();
@@ -3284,6 +3337,34 @@ public class SharedCommandTests {
         assertEquals(0, client.zadd(key, membersScores, scoreLessThanOptions, true).get());
         assertEquals(7, client.zaddIncr(key, "one", -3, scoreLessThanOptions).get());
         assertNull(client.zaddIncr(key, "one", -3, scoreGreaterThanOptions).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zadd_binary_and_zaddIncr_binary_with_GT_LT(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put(gs("one"), -3.0);
+        membersScores.put(gs("two"), 2.0);
+        membersScores.put(gs("three"), 3.0);
+
+        assertEquals(3, client.zadd(key, membersScores).get());
+        membersScores.put(gs("one"), 10.0);
+
+        ZAddOptions scoreGreaterThanOptions =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        ZAddOptions scoreLessThanOptions =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build();
+
+        assertEquals(1, client.zadd(key, membersScores, scoreGreaterThanOptions, true).get());
+        assertEquals(0, client.zadd(key, membersScores, scoreLessThanOptions, true).get());
+        assertEquals(7, client.zaddIncr(key, gs("one"), -3, scoreLessThanOptions).get());
+        assertNull(client.zaddIncr(key, gs("one"), -3, scoreGreaterThanOptions).get());
     }
 
     // TODO move to another class
@@ -3318,6 +3399,40 @@ public class SharedCommandTests {
                         .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
         options.toArgs();
+    }
+
+    // TODO move to another class
+    @Test
+    public void zadd_binary_illegal_arguments() {
+        ZAddOptions existsGreaterThanOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        assertThrows(IllegalArgumentException.class, existsGreaterThanOptions::toArgs);
+        ZAddOptions existsLessThanOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build();
+        assertThrows(IllegalArgumentException.class, existsLessThanOptions::toArgs);
+        ZAddOptions options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .build();
+        options.toArgs();
+        options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        options.toArgs();
+        options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                        .build();
+        options.toArgsBinary();
     }
 
     @SneakyThrows
@@ -3704,6 +3819,31 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrevrank_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.5, gs("two"), 2.0, gs("three"), 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+        assertEquals(0, client.zrevrank(key, gs("three")).get());
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+            assertArrayEquals(new Object[] {2L, 1.5}, client.zrevrankWithScore(key, gs("one")).get());
+            assertNull(client.zrevrankWithScore(key, gs("nonExistingMember")).get());
+            assertNull(client.zrevrankWithScore(gs("nonExistingKey"), gs("nonExistingMember")).get());
+        }
+        assertNull(client.zrevrank(key, gs("nonExistingMember")).get());
+        assertNull(client.zrevrank(gs("nonExistingKey"), gs("nonExistingMember")).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrevrank(key, gs("one")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zrank(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.5, "two", 2.0, "three", 3.0);
@@ -3722,6 +3862,56 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zrank(key, "one").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zdiff_binary(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in 6.2.0");
+
+        GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
+        GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
+        GlideString key3 = gs("{testKey}:3-" + UUID.randomUUID());
+        GlideString nonExistentKey = gs("{testKey}:4-" + UUID.randomUUID());
+
+        Map<GlideString, Double> membersScores1 =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        Map<GlideString, Double> membersScores2 = Map.of(gs("two"), 2.0);
+        Map<GlideString, Double> membersScores3 =
+                Map.of(gs("one"), 0.5, gs("two"), 2.0, gs("three"), 3.0, gs("four"), 4.0);
+
+        assertEquals(3, client.zadd(key1, membersScores1).get());
+        assertEquals(1, client.zadd(key2, membersScores2).get());
+        assertEquals(4, client.zadd(key3, membersScores3).get());
+
+        assertArrayEquals(
+                new GlideString[] {gs("one"), gs("three")},
+                client.zdiff(new GlideString[] {key1, key2}).get());
+        assertArrayEquals(new GlideString[] {}, client.zdiff(new GlideString[] {key1, key3}).get());
+        assertArrayEquals(
+                new GlideString[] {}, client.zdiff(new GlideString[] {nonExistentKey, key3}).get());
+
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("three"), 3.0),
+                client.zdiffWithScores(new GlideString[] {key1, key2}).get());
+        assertEquals(Map.of(), client.zdiffWithScores(new GlideString[] {key1, key3}).get());
+        assertTrue(client.zdiffWithScores(new GlideString[] {nonExistentKey, key3}).get().isEmpty());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(nonExistentKey, gs("bar")).get());
+
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zdiff(new GlideString[] {nonExistentKey, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zdiffWithScores(new GlideString[] {nonExistentKey, key2}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -3874,6 +4064,61 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zcount_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+
+        // In range negative to positive infinity.
+        assertEquals(
+                3,
+                client
+                        .zcount(key1, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                        .get());
+        assertEquals(
+                3,
+                client
+                        .zcount(
+                                key1,
+                                new ScoreBoundary(Double.NEGATIVE_INFINITY),
+                                new ScoreBoundary(Double.POSITIVE_INFINITY))
+                        .get());
+        // In range 1 (exclusive) to 3 (inclusive)
+        assertEquals(
+                2, client.zcount(key1, new ScoreBoundary(1, false), new ScoreBoundary(3, true)).get());
+        // In range negative infinity to 3 (inclusive)
+        assertEquals(
+                3, client.zcount(key1, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        // Incorrect range start > end
+        assertEquals(
+                0, client.zcount(key1, InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, true)).get());
+        // Non-existing key
+        assertEquals(
+                0,
+                client
+                        .zcount(
+                                gs("non_existing_key"),
+                                InfScoreBound.NEGATIVE_INFINITY,
+                                InfScoreBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zcount(key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zcount(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -3906,6 +4151,46 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zcount(key2, NEGATIVE_INFINITY, POSITIVE_INFINITY).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zremrangebylex_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0, gs("d"), 4.0);
+        assertEquals(4, client.zadd(key1, membersScores).get());
+
+        assertEquals(
+                2, client.zremrangebylex(key1, new LexBoundary("a", false), new LexBoundary("c")).get());
+        assertEquals(Map.of(gs("a"), 1.0, gs("d"), 4.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                1, client.zremrangebylex(key1, new LexBoundary("d"), InfLexBound.POSITIVE_INFINITY).get());
+        assertEquals(Map.of(gs("a"), 1.0), client.zrangeWithScores(key1, query).get());
+
+        // MinLex > MaxLex
+        assertEquals(
+                0, client.zremrangebylex(key1, new LexBoundary("a"), InfLexBound.NEGATIVE_INFINITY).get());
+        assertEquals(Map.of(gs("a"), 1.0), client.zrangeWithScores(key1, query).get());
+
+        // Non Existing Key
+        assertEquals(
+                0,
+                client
+                        .zremrangebylex(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zremrangebylex(key2, new LexBoundary("a"), new LexBoundary("c")).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -3982,6 +4267,52 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zremrangebyscore_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0, gs("four"), 4.0);
+        assertEquals(4, client.zadd(key1, membersScores).get());
+
+        // MinScore > MaxScore
+        assertEquals(
+                0,
+                client.zremrangebyscore(key1, new ScoreBoundary(1), InfScoreBound.NEGATIVE_INFINITY).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0, gs("four"), 4.0),
+                client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                2, client.zremrangebyscore(key1, new ScoreBoundary(1, false), new ScoreBoundary(3)).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("four"), 4.0), client.zrangeWithScores(key1, query).get());
+
+        assertEquals(
+                1,
+                client.zremrangebyscore(key1, new ScoreBoundary(4), InfScoreBound.POSITIVE_INFINITY).get());
+        assertEquals(Map.of(gs("one"), 1.0), client.zrangeWithScores(key1, query).get());
+
+        // Non Existing Key
+        assertEquals(
+                0,
+                client
+                        .zremrangebyscore(
+                                key2, InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zremrangebyscore(key2, new ScoreBoundary(1), new ScoreBoundary(2)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zremrangebyscore(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -4020,6 +4351,54 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zremrangebyscore(key2, new ScoreBoundary(1), new ScoreBoundary(2)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zlexcount_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0);
+        assertEquals(3, client.zadd(key1, membersScores).get());
+
+        // In range negative to positive infinity.
+        assertEquals(
+                3,
+                client.zlexcount(key1, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY).get());
+
+        // In range a (exclusive) to c (inclusive)
+        assertEquals(
+                2, client.zlexcount(key1, new LexBoundary("a", false), new LexBoundary("c", true)).get());
+
+        // In range negative infinity to c (inclusive)
+        assertEquals(
+                3, client.zlexcount(key1, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", true)).get());
+
+        // Incorrect range start > end
+        assertEquals(
+                0, client.zlexcount(key1, InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", true)).get());
+
+        // Non-existing key
+        assertEquals(
+                0,
+                client
+                        .zlexcount(
+                                gs("non_existing_key"),
+                                InfLexBound.NEGATIVE_INFINITY,
+                                InfLexBound.POSITIVE_INFINITY)
+                        .get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zlexcount(key2, InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY)
+                                        .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -4072,6 +4451,46 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrangestore_binary_by_index(BaseClient client) {
+        GlideString key = gs("{testKey}:" + UUID.randomUUID());
+        GlideString destination = gs("{testKey}:" + UUID.randomUUID());
+        GlideString source = gs("{testKey}:" + UUID.randomUUID());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Full range.
+        assertEquals(3, client.zrangestore(destination, source, new RangeByIndex(0, -1)).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from rank 0 to 1. In descending order of scores.
+        assertEquals(2, client.zrangestore(destination, source, new RangeByIndex(0, 1), true).get());
+        assertEquals(
+                Map.of(gs("three"), 3.0, gs("two"), 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Incorrect range as start > stop.
+        assertEquals(0, client.zrangestore(destination, source, new RangeByIndex(3, 1)).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existing source.
+        assertEquals(0, client.zrangestore(destination, key, new RangeByIndex(0, -1)).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zrangestore_by_index(BaseClient client) {
         String key = "{testKey}:" + UUID.randomUUID();
         String destination = "{testKey}:" + UUID.randomUUID();
@@ -4105,6 +4524,75 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zrangestore(destination, key, new RangeByIndex(3, 1)).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_binary_by_score(BaseClient client) {
+        GlideString key = gs("{testKey}:" + UUID.randomUUID());
+        GlideString destination = gs("{testKey}:" + UUID.randomUUID());
+        GlideString source = gs("{testKey}:" + UUID.randomUUID());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Range from negative infinity to 3 (exclusive).
+        RangeByScore query =
+                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from 1 (inclusive) to positive infinity.
+        query = new RangeByScore(new ScoreBoundary(1), InfScoreBound.POSITIVE_INFINITY);
+        assertEquals(3, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from negative to positive infinity. Limited to ranks 1 to 2.
+        query =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of(gs("two"), 2.0, gs("three"), 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
+        query =
+                new RangeByScore(
+                        InfScoreBound.POSITIVE_INFINITY, InfScoreBound.NEGATIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query, true).get());
+        assertEquals(
+                Map.of(gs("two"), 2.0, gs("one"), 1.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Incorrect range as start > stop.
+        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        assertEquals(0, client.zrangestore(destination, source, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existent source.
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertEquals(0, client.zrangestore(destination, key, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zrangestore(
+                                                destination,
+                                                key,
+                                                new RangeByScore(new ScoreBoundary(0), new ScoreBoundary(3)))
+                                        .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -4172,6 +4660,68 @@ public class SharedCommandTests {
                                                 destination,
                                                 key,
                                                 new RangeByScore(new ScoreBoundary(0), new ScoreBoundary(3)))
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrangestore_binary_by_lex(BaseClient client) {
+        GlideString key = gs("{testKey}:" + UUID.randomUUID());
+        GlideString destination = gs("{testKey}:" + UUID.randomUUID());
+        GlideString source = gs("{testKey}:" + UUID.randomUUID());
+        Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0);
+        assertEquals(3, client.zadd(source, membersScores).get());
+
+        // Range from negative infinity to "c" (exclusive).
+        RangeByLex query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of(gs("a"), 1.0, gs("b"), 2.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from "a" (inclusive) to positive infinity.
+        query = new RangeByLex(new LexBoundary("a"), InfLexBound.POSITIVE_INFINITY);
+        assertEquals(3, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from negative to positive infinity. Limited to ranks 1 to 2.
+        query =
+                new RangeByLex(
+                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query).get());
+        assertEquals(
+                Map.of(gs("b"), 2.0, gs("c"), 3.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Range from positive to negative infinity with rev set to true. Limited to ranks 1 to 2.
+        query =
+                new RangeByLex(
+                        InfLexBound.POSITIVE_INFINITY, InfLexBound.NEGATIVE_INFINITY, new Limit(1, 2));
+        assertEquals(2, client.zrangestore(destination, source, query, true).get());
+        assertEquals(
+                Map.of(gs("b"), 2.0, gs("a"), 1.0),
+                client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Non-existent source.
+        query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertEquals(0, client.zrangestore(destination, key, query).get());
+        assertEquals(Map.of(), client.zrangeWithScores(destination, new RangeByIndex(0, -1)).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zrangestore(
+                                                destination,
+                                                key,
+                                                new RangeByLex(new LexBoundary("a"), new LexBoundary("c")))
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
@@ -4584,6 +5134,87 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zinterstore_binary(BaseClient client) {
+        GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
+        GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
+        GlideString key3 = gs("{testKey}:3-" + UUID.randomUUID());
+        GlideString key4 = gs("{testKey}:4-" + UUID.randomUUID());
+        RangeByIndex query = new RangeByIndex(0, -1);
+        Map<GlideString, Double> membersScores1 = Map.of(gs("one"), 1.0, gs("two"), 2.0);
+        Map<GlideString, Double> membersScores2 =
+                Map.of(gs("one"), 1.5, gs("two"), 2.5, gs("three"), 3.5);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(3, client.zadd(key2, membersScores2).get());
+
+        assertEquals(
+                2, client.zinterstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2})).get());
+        assertEquals(
+                Map.of(gs("one"), 2.5, gs("two"), 4.5), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the max score of elements
+        assertEquals(
+                2,
+                client
+                        .zinterstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MAX)
+                        .get());
+        assertEquals(
+                Map.of(gs("one"), 1.5, gs("two"), 2.5), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the min score of elements
+        assertEquals(
+                2,
+                client
+                        .zinterstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements
+        assertEquals(
+                2,
+                client
+                        .zinterstore(key3, new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.SUM)
+                        .get());
+        assertEquals(
+                Map.of(gs("one"), 2.5, gs("two"), 4.5), client.zrangeWithScores(key3, query).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertEquals(
+                2,
+                client
+                        .zinterstore(
+                                key3, new WeightedKeysBinary(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+        assertEquals(
+                Map.of(gs("one"), 5.0, gs("two"), 9.0), client.zrangeWithScores(key3, query).get());
+
+        // Intersection results are aggregated by the minimum score, with scores for key1 multiplied by
+        // 1.0 and for key2 by -2.0.
+        assertEquals(
+                2,
+                client
+                        .zinterstore(
+                                key3,
+                                new WeightedKeysBinary(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))),
+                                Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of(gs("two"), -5.0, gs("one"), -3.0), client.zrangeWithScores(key3, query).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key4, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client.zinterstore(key3, new KeyArrayBinary(new GlideString[] {key4, key2})).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zinter(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
@@ -4655,6 +5286,95 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zinter(new KeyArray(new String[] {key1, key3})).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zinter_binary(BaseClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in 6.2.0");
+
+        GlideString key1 = gs("{testKey}:1-" + UUID.randomUUID());
+        GlideString key2 = gs("{testKey}:2-" + UUID.randomUUID());
+        GlideString key3 = gs("{testKey}:3-" + UUID.randomUUID());
+        Map<GlideString, Double> membersScores1 = Map.of(gs("one"), 1.0, gs("two"), 2.0);
+        Map<GlideString, Double> membersScores2 = Map.of(gs("two"), 3.5, gs("three"), 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new GlideString[] {gs("two")},
+                client.zinter(new KeyArrayBinary(new GlideString[] {key1, key2})).get());
+        assertEquals(
+                Map.of(gs("two"), 5.5),
+                client.zinterWithScores(new KeyArrayBinary(new GlideString[] {key1, key2})).get());
+
+        // Intersection results are aggregated by the max score of elements
+        assertEquals(
+                Map.of(gs("two"), 3.5),
+                client
+                        .zinterWithScores(new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MAX)
+                        .get());
+
+        // Intersection results are aggregated by the min score of elements
+        assertEquals(
+                Map.of(gs("two"), 2.0),
+                client
+                        .zinterWithScores(new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.MIN)
+                        .get());
+
+        // Intersection results are aggregated by the sum of the scores of elements
+        assertEquals(
+                Map.of(gs("two"), 5.5),
+                client
+                        .zinterWithScores(new KeyArrayBinary(new GlideString[] {key1, key2}), Aggregate.SUM)
+                        .get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertEquals(
+                Map.of(gs("two"), 11.0),
+                client
+                        .zinterWithScores(
+                                new WeightedKeysBinary(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+
+        // Intersection results are aggregated by the minimum score,
+        // with scores for key1 multiplied by 1.0 and for key2 by -2.0.
+        assertEquals(
+                Map.of(gs("two"), -7.0),
+                client
+                        .zinterWithScores(
+                                new WeightedKeysBinary(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))),
+                                Aggregate.MIN)
+                        .get());
+
+        // Non-existing Key - empty intersection
+        assertEquals(0, client.zinter(new KeyArrayBinary(new GlideString[] {key1, key3})).get().length);
+        assertEquals(
+                0,
+                client.zinterWithScores(new KeyArrayBinary(new GlideString[] {key1, key3})).get().size());
+
+        // empty key list
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinter(new KeyArrayBinary(new GlideString[0])).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinterWithScores(new WeightedKeysBinary(List.of())).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, gs("value")).get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinter(new KeyArrayBinary(new GlideString[] {key1, key3})).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -6421,6 +7141,46 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrandmemberBinaryWithCountWithScores(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores = Map.of(gs("one"), 1.0, gs("two"), 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        // Unique values are expected as count is positive
+        Object[][] randMembersWithScores = client.zrandmemberWithCountWithScores(key1, 4).get();
+        assertEquals(2, randMembersWithScores.length);
+        for (Object[] membersWithScore : randMembersWithScores) {
+            GlideString member = (GlideString) membersWithScore[0];
+            Double score = (Double) membersWithScore[1];
+
+            assertEquals(score, membersScores.get(member));
+        }
+
+        // Duplicate values are expected as count is negative
+        randMembersWithScores = client.zrandmemberWithCountWithScores(key1, -4).get();
+        assertEquals(4, randMembersWithScores.length);
+        for (Object[] randMembersWithScore : randMembersWithScores) {
+            GlideString member = (GlideString) randMembersWithScore[0];
+            Double score = (Double) randMembersWithScore[1];
+
+            assertEquals(score, membersScores.get(member));
+        }
+
+        assertEquals(0, client.zrandmemberWithCountWithScores(key1, 0).get().length);
+        assertEquals(0, client.zrandmemberWithCountWithScores(gs("nonExistentKey"), 4).get().length);
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zrandmemberWithCountWithScores(key2, 5).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xgroupSetId_entriesRead_binary(BaseClient client) {
         GlideString key = gs("testKey" + UUID.randomUUID());
         GlideString nonExistingKey = gs("group" + UUID.randomUUID());
@@ -6511,6 +7271,36 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.xgroupSetId(stringKey, groupName, streamId0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmemberBinaryWithCount(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores = Map.of(gs("one"), 1.0, gs("two"), 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        // Unique values are expected as count is positive
+        List<GlideString> randMembers = Arrays.asList(client.zrandmemberWithCount(key1, 4).get());
+        assertEquals(2, randMembers.size());
+        assertEquals(2, new HashSet<>(randMembers).size());
+        randMembers.forEach(member -> assertTrue(membersScores.containsKey(member)));
+
+        // Duplicate values are expected as count is negative
+        randMembers = Arrays.asList(client.zrandmemberWithCount(key1, -4).get());
+        assertEquals(4, randMembers.size());
+        randMembers.forEach(member -> assertTrue(membersScores.containsKey(member)));
+
+        assertEquals(0, client.zrandmemberWithCount(key1, 0).get().length);
+        assertEquals(0, client.zrandmemberWithCount(gs("nonExistentKey"), 4).get().length);
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrandmemberWithCount(key2, 5).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -6815,6 +7605,26 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.xack(nonStreamKey, groupName, new String[] {zeroStreamId}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmember_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores = Map.of(gs("one"), 1.0, gs("two"), 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        GlideString randMember = client.zrandmember(key1).get();
+        assertTrue(membersScores.containsKey(randMember));
+        assertNull(client.zrandmember(gs("nonExistentKey")).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrandmember(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -8090,6 +8900,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrange_binary_with_different_types_of_keys(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        RangeByIndex query = new RangeByIndex(0, 1);
+
+        assertArrayEquals(new GlideString[] {}, client.zrange(gs("non_existing_key"), query).get());
+
+        assertTrue(
+                client
+                        .zrangeWithScores(gs("non_existing_key"), query)
+                        .get()
+                        .isEmpty()); // start is greater than stop
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrange(key, query).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zrangeWithScores(key, query).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void linsert_binary(BaseClient client) {
         GlideString key1 = gs(UUID.randomUUID().toString());
         GlideString key2 = gs(UUID.randomUUID().toString());
@@ -8300,6 +9136,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrange_binary_by_index(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+
+        RangeByIndex query = new RangeByIndex(0, 1);
+        assertArrayEquals(new GlideString[] {gs("one"), gs("two")}, client.zrange(key, query).get());
+
+        query = new RangeByIndex(0, -1);
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0),
+                client.zrangeWithScores(key, query).get());
+
+        query = new RangeByIndex(0, 1);
+        assertArrayEquals(
+                new GlideString[] {gs("three"), gs("two")}, client.zrange(key, query, true).get());
+
+        query = new RangeByIndex(3, 1);
+        assertArrayEquals(new GlideString[] {}, client.zrange(key, query, true).get());
+        assertTrue(client.zrangeWithScores(key, query).get().isEmpty());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zrange_by_score(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
@@ -8343,6 +9205,55 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zrange_binary_by_score(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores =
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+
+        RangeByScore query =
+                new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(new GlideString[] {gs("one"), gs("two")}, client.zrange(key, query).get());
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY);
+        assertEquals(
+                Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0),
+                client.zrangeWithScores(key, query).get());
+
+        query = new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        assertArrayEquals(
+                new GlideString[] {gs("two"), gs("one")}, client.zrange(key, query, true).get());
+
+        query =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY, InfScoreBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertArrayEquals(new GlideString[] {gs("two"), gs("three")}, client.zrange(key, query).get());
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(
+                new GlideString[] {},
+                client
+                        .zrange(key, query, true)
+                        .get()); // stop is greater than start with reverse set to True
+
+        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        assertArrayEquals(
+                new GlideString[] {}, client.zrange(key, query, true).get()); // start is greater than stop
+
+        query = new RangeByScore(InfScoreBound.POSITIVE_INFINITY, new ScoreBoundary(3, false));
+        assertTrue(client.zrangeWithScores(key, query).get().isEmpty()); // start is greater than stop
+
+        query = new RangeByScore(InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(3, false));
+        assertTrue(
+                client
+                        .zrangeWithScores(key, query, true)
+                        .get()
+                        .isEmpty()); // stop is greater than start with reverse set to True
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zrange_by_lex(BaseClient client) {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("a", 1.0, "b", 2.0, "c", 3.0);
@@ -8369,6 +9280,37 @@ public class SharedCommandTests {
         query = new RangeByLex(InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", false));
         assertArrayEquals(
                 new String[] {}, client.zrange(key, query).get()); // start is greater than stop
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrange_binary_by_lex(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0);
+        assertEquals(3, client.zadd(key, membersScores).get());
+
+        RangeByLex query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(new GlideString[] {gs("a"), gs("b")}, client.zrange(key, query).get());
+
+        query =
+                new RangeByLex(
+                        InfLexBound.NEGATIVE_INFINITY, InfLexBound.POSITIVE_INFINITY, new Limit(1, 2));
+        assertArrayEquals(new GlideString[] {gs("b"), gs("c")}, client.zrange(key, query).get());
+
+        query = new RangeByLex(new LexBoundary("c", false), InfLexBound.NEGATIVE_INFINITY);
+        assertArrayEquals(new GlideString[] {gs("b"), gs("a")}, client.zrange(key, query, true).get());
+
+        query = new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(
+                new GlideString[] {},
+                client
+                        .zrange(key, query, true)
+                        .get()); // stop is greater than start with reverse set to True
+
+        query = new RangeByLex(InfLexBound.POSITIVE_INFINITY, new LexBoundary("c", false));
+        assertArrayEquals(
+                new GlideString[] {}, client.zrange(key, query).get()); // start is greater than stop
     }
 
     @SneakyThrows

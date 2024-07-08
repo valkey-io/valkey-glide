@@ -186,6 +186,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
@@ -1851,8 +1852,33 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zadd(
+            @NonNull GlideString key,
+            @NonNull Map<GlideString, Double> membersScoresMap,
+            @NonNull ZAddOptions options,
+            boolean changed) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .addIf("CH", changed)
+                        .add(convertMapToValueKeyStringArrayBinary(membersScoresMap))
+                        .toArray();
+
+        return commandManager.submitNewCommand(ZAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
             @NonNull String key,
             @NonNull Map<String, Double> membersScoresMap,
+            @NonNull ZAddOptions options) {
+        return this.zadd(key, membersScoresMap, options, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
+            @NonNull GlideString key,
+            @NonNull Map<GlideString, Double> membersScoresMap,
             @NonNull ZAddOptions options) {
         return this.zadd(key, membersScoresMap, options, false);
     }
@@ -1865,7 +1891,21 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zadd(
+            @NonNull GlideString key,
+            @NonNull Map<GlideString, Double> membersScoresMap,
+            boolean changed) {
+        return this.zadd(key, membersScoresMap, ZAddOptions.builder().build(), changed);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
             @NonNull String key, @NonNull Map<String, Double> membersScoresMap) {
+        return this.zadd(key, membersScoresMap, ZAddOptions.builder().build(), false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zadd(
+            @NonNull GlideString key, @NonNull Map<GlideString, Double> membersScoresMap) {
         return this.zadd(key, membersScoresMap, ZAddOptions.builder().build(), false);
     }
 
@@ -1883,10 +1923,36 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Double> zaddIncr(
+            @NonNull GlideString key,
+            @NonNull GlideString member,
+            double increment,
+            @NonNull ZAddOptions options) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key},
+                        options.toArgsBinary(),
+                        new GlideString[] {gs("INCR"), gs(Double.toString(increment)), member});
+
+        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(
             @NonNull String key, @NonNull String member, double increment) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {key}, new String[] {"INCR", Double.toString(increment), member});
+
+        return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> zaddIncr(
+            @NonNull GlideString key, @NonNull GlideString member, double increment) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key},
+                        new GlideString[] {gs("INCR"), gs(Double.toString(increment)), member});
 
         return commandManager.submitNewCommand(ZAdd, arguments, this::handleDoubleResponse);
     }
@@ -2027,12 +2093,27 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zrevrank(@NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZRevRank, new GlideString[] {key, member}, this::handleLongOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Object[]> zrevrankWithScore(
             @NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZRevRank,
                 new String[] {key, member, WITH_SCORE_VALKEY_API},
                 this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zrevrankWithScore(
+            @NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZRevRank,
+                new GlideString[] {key, member, gs(WITH_SCORE_VALKEY_API)},
+                this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -2062,10 +2143,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> zdiff(@NonNull GlideString[] keys) {
+        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
+        return commandManager.submitNewCommand(
+                ZDiff,
+                arguments,
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Double>> zdiffWithScores(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
         arguments = ArrayUtils.add(arguments, WITH_SCORES_VALKEY_API);
         return commandManager.submitNewCommand(ZDiff, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zdiffWithScores(@NonNull GlideString[] keys) {
+        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
+        arguments = ArrayUtils.add(arguments, gs(WITH_SCORES_VALKEY_API));
+        return commandManager.submitNewCommand(ZDiff, arguments, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -2088,6 +2185,15 @@ public abstract class BaseClient
             @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         return commandManager.submitNewCommand(
                 ZCount, new String[] {key, minScore.toArgs(), maxScore.toArgs()}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zcount(
+            @NonNull GlideString key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        return commandManager.submitNewCommand(
+                ZCount,
+                new ArgsBuilder().add(key).add(minScore.toArgs()).add(maxScore.toArgs()).toArray(),
+                this::handleLongResponse);
     }
 
     @Override
@@ -2116,6 +2222,15 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zremrangebylex(
+            @NonNull GlideString key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        return commandManager.submitNewCommand(
+                ZRemRangeByLex,
+                new ArgsBuilder().add(key).add(minLex.toArgs()).add(maxLex.toArgs()).toArray(),
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zremrangebyscore(
             @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         return commandManager.submitNewCommand(
@@ -2125,10 +2240,28 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zremrangebyscore(
+            @NonNull GlideString key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
+        return commandManager.submitNewCommand(
+                ZRemRangeByScore,
+                new ArgsBuilder().add(key).add(minScore.toArgs()).add(maxScore.toArgs()).toArray(),
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zlexcount(
             @NonNull String key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
         return commandManager.submitNewCommand(
                 ZLexCount, new String[] {key, minLex.toArgs(), maxLex.toArgs()}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zlexcount(
+            @NonNull GlideString key, @NonNull LexRange minLex, @NonNull LexRange maxLex) {
+        return commandManager.submitNewCommand(
+                ZLexCount,
+                new ArgsBuilder().add(key).add(minLex.toArgs()).add(maxLex.toArgs()).toArray(),
+                this::handleLongResponse);
     }
 
     @Override
@@ -2145,7 +2278,27 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zrangestore(
+            @NonNull GlideString destination,
+            @NonNull GlideString source,
+            @NonNull RangeQuery rangeQuery,
+            boolean reverse) {
+        GlideString[] arguments =
+                RangeOptions.createZRangeStoreArgsBinary(destination, source, rangeQuery, reverse);
+
+        return commandManager.submitNewCommand(ZRangeStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(
             @NonNull String destination, @NonNull String source, @NonNull RangeQuery rangeQuery) {
+        return zrangestore(destination, source, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrangestore(
+            @NonNull GlideString destination,
+            @NonNull GlideString source,
+            @NonNull RangeQuery rangeQuery) {
         return zrangestore(destination, source, rangeQuery, false);
     }
 
@@ -2203,8 +2356,30 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zinterstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(keysOrWeightedKeys.toArgs())
+                        .add(aggregate.toArgs())
+                        .toArray();
+        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
+        return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zinterstore(
+            @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {destination}, keysOrWeightedKeys.toArgs());
         return commandManager.submitNewCommand(ZInterStore, arguments, this::handleLongResponse);
     }
 
@@ -2267,12 +2442,32 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> zinter(@NonNull KeyArrayBinary keys) {
+        return commandManager.submitNewCommand(
+                ZInter,
+                keys.toArgs(),
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Double>> zinterWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
         String[] arguments =
                 concatenateArrays(
                         keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zinterWithScores(
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(keysOrWeightedKeys.toArgs())
+                        .add(aggregate.toArgs())
+                        .add(WITH_SCORES_VALKEY_API)
+                        .toArray();
+        return commandManager.submitNewCommand(ZInter, arguments, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -2284,9 +2479,24 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Double>> zinterWithScores(
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        keysOrWeightedKeys.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
+        return commandManager.submitNewCommand(ZInter, arguments, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
     public CompletableFuture<String> zrandmember(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ZRandMember, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> zrandmember(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ZRandMember, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -2298,6 +2508,15 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> zrandmemberWithCount(
+            @NonNull GlideString key, long count) {
+        return commandManager.submitNewCommand(
+                ZRandMember,
+                new GlideString[] {key, gs(Long.toString(count))},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
             @NonNull String key, long count) {
         String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_VALKEY_API};
@@ -2305,6 +2524,17 @@ public abstract class BaseClient
                 ZRandMember,
                 arguments,
                 response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> zrandmemberWithCountWithScores(
+            @NonNull GlideString key, long count) {
+        GlideString[] arguments =
+                new GlideString[] {key, gs(Long.toString(count)), gs(WITH_SCORES_VALKEY_API)};
+        return commandManager.submitNewCommand(
+                ZRandMember,
+                arguments,
+                response -> castArray(handleArrayResponseBinary(response), Object[].class));
     }
 
     @Override
@@ -3233,7 +3463,24 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> zrange(
+            @NonNull GlideString key, @NonNull RangeQuery rangeQuery, boolean reverse) {
+        GlideString[] arguments = RangeOptions.createZRangeArgsBinary(key, rangeQuery, reverse, false);
+
+        return commandManager.submitNewCommand(
+                ZRange,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<String[]> zrange(@NonNull String key, @NonNull RangeQuery rangeQuery) {
+        return zrange(key, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> zrange(
+            @NonNull GlideString key, @NonNull RangeQuery rangeQuery) {
         return zrange(key, rangeQuery, false);
     }
 
@@ -3246,8 +3493,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Double>> zrangeWithScores(
+            @NonNull GlideString key, @NonNull ScoredRangeQuery rangeQuery, boolean reverse) {
+        GlideString[] arguments = RangeOptions.createZRangeArgsBinary(key, rangeQuery, reverse, true);
+
+        return commandManager.submitNewCommand(ZRange, arguments, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, Double>> zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
+        return zrangeWithScores(key, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zrangeWithScores(
+            @NonNull GlideString key, @NonNull ScoredRangeQuery rangeQuery) {
         return zrangeWithScores(key, rangeQuery, false);
     }
 
@@ -3939,7 +4200,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> sintercard(@NonNull GlideString[] keys) {
-        GlideString[] arguments = ArrayUtils.addFirst(keys, gs(Long.toString(keys.length)));
+        GlideString[] arguments = new ArgsBuilder().add(keys.length).add(keys).toArray();
         return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
     }
 
