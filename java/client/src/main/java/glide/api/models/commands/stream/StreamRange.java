@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import glide.api.models.GlideString;
 import glide.utils.ArrayTransformUtils;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -17,16 +18,16 @@ public interface StreamRange {
 
     String getValkeyApi();
 
-    /** Redis API string for MINIMUM entry ID range bounds */
+    /** Valkey API string for MINIMUM entry ID range bounds */
     String MINIMUM_RANGE_VALKEY_API = "-";
 
-    /** Redis API string for MAXIMUM entry ID range bounds */
+    /** Valkey API string for MAXIMUM entry ID range bounds */
     String MAXIMUM_RANGE_VALKEY_API = "+";
 
-    /** Redis API string to designate COUNT */
+    /** Valkey API string to designate COUNT */
     String RANGE_COUNT_VALKEY_API = "COUNT";
 
-    /** Redis API character to designate exclusive range bounds */
+    /** Valkey API character to designate exclusive range bounds */
     String EXCLUSIVE_RANGE_VALKEY_API = "(";
 
     /**
@@ -48,7 +49,7 @@ public interface StreamRange {
      * "1526985054069-0"</code>.<br>
      * Stream ID bounds can also be incomplete, with just a timestamp.<br>
      * Stream ID bounds are inclusive by default. When <code>isInclusive==false</code>, a <code>"("
-     * </code> is prepended for the Redis API.
+     * </code> is prepended for the Valkey API.
      */
     @Getter
     class IdBound implements StreamRange {
@@ -64,11 +65,29 @@ public interface StreamRange {
         }
 
         /**
+         * Default constructor
+         *
+         * @param id The stream id.
+         */
+        private IdBound(GlideString id) {
+            valkeyApi = id.getString();
+        }
+
+        /**
          * Creates a stream ID boundary by stream id for range search.
          *
          * @param id The stream id.
          */
         public static IdBound of(String id) {
+            return new IdBound(id);
+        }
+
+        /**
+         * Creates a stream ID boundary by stream id for range search.
+         *
+         * @param id The stream id.
+         */
+        public static IdBound of(GlideString id) {
             return new IdBound(id);
         }
 
@@ -99,12 +118,21 @@ public interface StreamRange {
         public static IdBound ofExclusive(String id) {
             return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + id);
         }
+
+        /**
+         * Creates a stream ID exclusive boundary by stream id for range search.
+         *
+         * @param id The stream id.
+         */
+        public static IdBound ofExclusive(GlideString id) {
+            return new IdBound(EXCLUSIVE_RANGE_VALKEY_API + id.getString());
+        }
     }
 
     /**
      * Convert StreamRange arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Redis
+     * @return arguments converted to an array to be consumed by Valkey.
      */
     static String[] toArgs(StreamRange start, StreamRange end) {
         return new String[] {start.getValkeyApi(), end.getValkeyApi()};
@@ -113,7 +141,7 @@ public interface StreamRange {
     /**
      * Convert StreamRange arguments to a string array
      *
-     * @return arguments converted to an array to be consumed by Redis
+     * @return arguments converted to an array to be consumed by Valkey.
      */
     static String[] toArgs(StreamRange start, StreamRange end, long count) {
         return ArrayTransformUtils.concatenateArrays(

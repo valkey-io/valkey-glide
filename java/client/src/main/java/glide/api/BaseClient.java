@@ -250,6 +250,7 @@ import glide.api.models.commands.stream.StreamAddOptionsBinary;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamPendingOptionsBinary;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -264,7 +265,7 @@ import glide.connectors.handlers.MessageHandler;
 import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
-import glide.ffi.resolvers.RedisValueResolver;
+import glide.ffi.resolvers.GlideValueResolver;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -313,11 +314,11 @@ public abstract class BaseClient
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver responseResolver =
-            new BaseResponseResolver(RedisValueResolver::valueFromPointer);
+            new BaseResponseResolver(GlideValueResolver::valueFromPointer);
 
     /** Helper which extracts data with binary strings from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver binaryResponseResolver =
-            new BaseResponseResolver(RedisValueResolver::valueFromPointerBinary);
+            new BaseResponseResolver(GlideValueResolver::valueFromPointerBinary);
 
     /** A constructor. */
     protected BaseClient(ClientBuilder builder) {
@@ -358,7 +359,7 @@ public abstract class BaseClient
             CommandManager commandManager = buildCommandManager(channelHandler);
             // TODO: Support exception throwing, including interrupted exceptions
             return connectionManager
-                    .connectToRedis(config)
+                    .connectToValkey(config)
                     .thenApply(
                             ignored ->
                                     constructor.apply(
@@ -479,7 +480,7 @@ public abstract class BaseClient
      * @throws GlideException On a type mismatch.
      */
     @SuppressWarnings("unchecked")
-    protected <T> T handleRedisResponse(
+    protected <T> T handleValkeyResponse(
             Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws GlideException {
         boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
@@ -503,76 +504,76 @@ public abstract class BaseClient
     }
 
     protected Object handleObjectOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(
+        return handleValkeyResponse(
                 Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Object handleBinaryObjectOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected String handleStringResponse(Response response) throws GlideException {
-        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return handleValkeyResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(
+        return handleValkeyResponse(
                 String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected byte[] handleBytesOrNullResponse(Response response) throws GlideException {
         var result =
-                handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+                handleValkeyResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
         if (result == null) return null;
 
         return result.getBytes();
     }
 
     protected GlideString handleGlideStringOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleValkeyResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected GlideString handleGlideStringResponse(Response response) throws GlideException {
-        return handleRedisResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws GlideException {
-        return handleRedisResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Long handleLongResponse(Response response) throws GlideException {
-        return handleRedisResponse(Long.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(Long.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Long handleLongOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(Long.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleValkeyResponse(Long.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Double handleDoubleResponse(Response response) throws GlideException {
-        return handleRedisResponse(Double.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(Double.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Double handleDoubleOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(Double.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleValkeyResponse(Double.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Object[] handleArrayResponse(Response response) throws GlideException {
-        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return handleValkeyResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Object[] handleArrayResponseBinary(Response response) throws GlideException {
-        return handleRedisResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(
+        return handleValkeyResponse(
                 Object[].class,
                 EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
                 response);
     }
 
     protected Object[] handleArrayOrNullResponseBinary(Response response) throws GlideException {
-        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleValkeyResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     /**
@@ -582,7 +583,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws GlideException {
-        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /**
@@ -595,7 +596,7 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
     protected <V> Map<GlideString, V> handleBinaryStringMapResponse(Response response)
             throws GlideException {
-        return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     /**
@@ -605,7 +606,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws GlideException {
-        return handleRedisResponse(
+        return handleValkeyResponse(
                 Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
@@ -617,7 +618,7 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
             throws GlideException {
-        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleValkeyResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     /**
@@ -658,12 +659,12 @@ public abstract class BaseClient
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws GlideException {
-        return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+        return handleValkeyResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     @SuppressWarnings("unchecked")
     protected Set<GlideString> handleSetBinaryResponse(Response response) throws GlideException {
-        return handleRedisResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleValkeyResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     /** Process a <code>FUNCTION LIST</code> standalone response. */
@@ -1282,7 +1283,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LPop,
                 new GlideString[] {key, gs(Long.toString(count))},
-                response -> castArray(handleArrayResponse(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -2012,7 +2013,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmin(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(BZPopMin, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZPopMin, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -2049,7 +2051,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object[]> bzpopmax(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
-        return commandManager.submitNewCommand(BZPopMax, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZPopMax, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -2959,7 +2962,7 @@ public abstract class BaseClient
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count) {
-        return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
+        return xpending(key, group, start, end, count, StreamPendingOptionsBinary.builder().build());
     }
 
     @Override
@@ -2982,13 +2985,11 @@ public abstract class BaseClient
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count,
-            @NonNull StreamPendingOptions options) {
-        String[] toArgsString = options.toArgs(start, end, count);
-        GlideString[] toArgs =
-                Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
-        GlideString[] args = concatenateArrays(new GlideString[] {key, group}, toArgs);
+            @NonNull StreamPendingOptionsBinary options) {
+        GlideString[] args =
+                concatenateArrays(new GlideString[] {key, group}, options.toArgs(start, end, count));
         return commandManager.submitNewCommand(
-                XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+                XPending, args, response -> castArray(handleArrayResponseBinary(response), Object[].class));
     }
 
     @Override
@@ -3013,7 +3014,10 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))}, ids);
-        return commandManager.submitNewCommand(XClaim, args, this::handleBinaryStringMapResponse);
+        return commandManager.submitNewCommand(
+                XClaim,
+                args,
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -3044,7 +3048,10 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))}, ids, toArgs);
-        return commandManager.submitNewCommand(XClaim, args, this::handleBinaryStringMapResponse);
+        return commandManager.submitNewCommand(
+                XClaim,
+                args,
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -3076,7 +3083,9 @@ public abstract class BaseClient
                         ids,
                         new GlideString[] {gs(JUST_ID_VALKEY_API)});
         return commandManager.submitNewCommand(
-                XClaim, args, response -> castArray(handleArrayResponse(response), GlideString.class));
+                XClaim,
+                args,
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -3115,7 +3124,9 @@ public abstract class BaseClient
                         toArgs,
                         new GlideString[] {gs(JUST_ID_VALKEY_API)});
         return commandManager.submitNewCommand(
-                XClaim, args, response -> castArray(handleArrayResponse(response), GlideString.class));
+                XClaim,
+                args,
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -3516,7 +3527,7 @@ public abstract class BaseClient
                         new GlideString[] {gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(modifier.toString())});
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3540,7 +3551,7 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3562,7 +3573,8 @@ public abstract class BaseClient
                         new GlideString[] {gs(Double.toString(timeout)), gs(Integer.toString(keys.length))},
                         keys,
                         new GlideString[] {gs(modifier.toString())});
-        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3586,7 +3598,8 @@ public abstract class BaseClient
                         new GlideString[] {
                             gs(modifier.toString()), gs(COUNT_VALKEY_API), gs(Long.toString(count))
                         });
-        return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
+        return commandManager.submitNewCommand(
+                BZMPop, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override

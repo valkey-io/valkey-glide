@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import glide.ffi.resolvers.RedisValueResolver;
+import glide.ffi.resolvers.GlideValueResolver;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,7 +60,7 @@ public class FfiTest {
     @Test
     public void redisValueToJavaValue_Nil() {
         long ptr = FfiTest.createLeakedNil();
-        Object nilValue = RedisValueResolver.valueFromPointer(ptr);
+        Object nilValue = GlideValueResolver.valueFromPointer(ptr);
         assertNull(nilValue);
     }
 
@@ -68,14 +68,14 @@ public class FfiTest {
     @ValueSource(strings = {"hello", "cat", "dog"})
     public void redisValueToJavaValue_SimpleString(String input) {
         long ptr = FfiTest.createLeakedSimpleString(input);
-        Object simpleStringValue = RedisValueResolver.valueFromPointer(ptr);
+        Object simpleStringValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, simpleStringValue);
     }
 
     @Test
     public void redisValueToJavaValue_Okay() {
         long ptr = FfiTest.createLeakedOkay();
-        Object okayValue = RedisValueResolver.valueFromPointer(ptr);
+        Object okayValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals("OK", okayValue);
     }
 
@@ -83,7 +83,7 @@ public class FfiTest {
     @ValueSource(longs = {0L, 100L, 774L, Integer.MAX_VALUE + 1L, Integer.MIN_VALUE - 1L})
     public void redisValueToJavaValue_Int(Long input) {
         long ptr = FfiTest.createLeakedInt(input);
-        Object longValue = RedisValueResolver.valueFromPointer(ptr);
+        Object longValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue(longValue instanceof Long);
         assertEquals(input, longValue);
     }
@@ -100,7 +100,7 @@ public class FfiTest {
         long ptr = FfiTest.createLeakedBulkString(bulkString);
         final String input;
         input = new String(bulkString, StandardCharsets.UTF_8);
-        Object bulkStringValue = RedisValueResolver.valueFromPointer(ptr);
+        Object bulkStringValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, bulkStringValue);
     }
 
@@ -108,7 +108,7 @@ public class FfiTest {
     public void redisValueToJavaValue_Array() {
         long[] array = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedLongArray(array);
-        Object longArrayValue = RedisValueResolver.valueFromPointer(ptr);
+        Object longArrayValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue(longArrayValue instanceof Object[]);
         Object[] result = (Object[]) longArrayValue;
         assertArrayEquals(new Object[] {1L, 2L, 3L}, result);
@@ -119,7 +119,7 @@ public class FfiTest {
         long[] keys = {12L, 14L, 23L};
         long[] values = {1L, 2L, 3L};
         long ptr = FfiTest.createLeakedMap(keys, values);
-        Object mapValue = RedisValueResolver.valueFromPointer(ptr);
+        Object mapValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue(mapValue instanceof HashMap<?, ?>);
         HashMap<?, ?> result = (HashMap<?, ?>) mapValue;
         assertAll(
@@ -132,14 +132,14 @@ public class FfiTest {
     @ValueSource(doubles = {1.0d, 25.2d, 103.5d})
     public void redisValueToJavaValue_Double(Double input) {
         long ptr = FfiTest.createLeakedDouble(input);
-        Object doubleValue = RedisValueResolver.valueFromPointer(ptr);
+        Object doubleValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, doubleValue);
     }
 
     @Test
     public void redisValueToJavaValue_Boolean() {
         long ptr = FfiTest.createLeakedBoolean(true);
-        Object booleanValue = RedisValueResolver.valueFromPointer(ptr);
+        Object booleanValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue((Boolean) booleanValue);
     }
 
@@ -147,7 +147,7 @@ public class FfiTest {
     @ValueSource(strings = {"hello", "cat", "dog"})
     public void redisValueToJavaValue_VerbatimString(String input) {
         long ptr = FfiTest.createLeakedVerbatimString(input);
-        Object verbatimStringValue = RedisValueResolver.valueFromPointer(ptr);
+        Object verbatimStringValue = GlideValueResolver.valueFromPointer(ptr);
         assertEquals(input, verbatimStringValue);
     }
 
@@ -155,7 +155,7 @@ public class FfiTest {
     public void redisValueToJavaValue_Set() {
         long[] array = {1L, 2L, 2L};
         long ptr = FfiTest.createLeakedLongSet(array);
-        Object longSetValue = RedisValueResolver.valueFromPointer(ptr);
+        Object longSetValue = GlideValueResolver.valueFromPointer(ptr);
         assertTrue(longSetValue instanceof HashSet<?>);
         HashSet<?> result = (HashSet<?>) longSetValue;
         assertAll(
