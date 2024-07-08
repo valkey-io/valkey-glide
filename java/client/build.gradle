@@ -181,19 +181,19 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            groupId = 'software.amazon.glide'
-            artifactId = 'glide-for-redis'
+            groupId = 'io.valkey'
+            artifactId = 'valkey-glide'
             // version is replaced during released workflow java-cd.yml
             version = "255.255.255"
             pom {
-                name = 'glide-for-valkey'
+                name = 'valkey-glide'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
-                url = 'https://github.com/aws/glide-for-redis.git'
+                url = 'https://github.com/valkey-io/valkey-glide.git'
                 inceptionYear = '2024'
                 scm {
-                    url = 'https://github.com/aws/glide-for-redis/tree/main'
-                    connection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
-                    developerConnection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
+                    url = 'https://github.com/valkey-io/valkey-glide'
+                    connection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
                 }
                 licenses {
                     license {
@@ -204,8 +204,8 @@ publishing {
                 }
                 developers {
                     developer {
-                        name = 'glide-for-valkey'
-                        url = 'https://github.com/aws/glide-for-redis.git'
+                        name = 'valkey-glide'
+                        url = 'https://github.com/valkey-io/valkey-glide.git'
                     }
                 }
             }
