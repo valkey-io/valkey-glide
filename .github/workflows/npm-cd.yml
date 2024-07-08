@@ -29,7 +29,7 @@ permissions:
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -63,7 +63,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
         container:
