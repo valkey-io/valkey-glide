@@ -6,6 +6,7 @@ on:
             - .github/workflows/java-cd.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/json_matrices/build-matrix.json
     push:
         tags:
             - "v*.*"
@@ -71,7 +72,7 @@ jobs:
                   }
                   - {
                     OS: macos,
-                    RUNNER: macos-13-xlarge,
+                    RUNNER: macos-latest,
                     TARGET: aarch64-apple-darwin,
                     CLASSIFIER: osx-aarch_64
                   }

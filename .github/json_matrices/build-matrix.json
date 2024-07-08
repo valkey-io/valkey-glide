@@ -27,7 +27,7 @@
     {
         "OS": "macos",
         "NAMED_OS": "darwin",
-        "RUNNER": "macos-13-xlarge",
+        "RUNNER": "macos-latest",
         "ARCH": "arm64",
         "TARGET": "aarch64-apple-darwin",
         "PACKAGE_MANAGERS": ["pypi", "npm"]
