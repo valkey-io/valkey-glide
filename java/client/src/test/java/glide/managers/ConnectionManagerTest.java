@@ -29,7 +29,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.RedisCredentials;
+import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
@@ -90,7 +90,7 @@ public class ConnectionManagerTest {
 
         // execute
         when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(glideClientConfiguration);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
 
         // verify
         // no exception
@@ -116,7 +116,7 @@ public class ConnectionManagerTest {
         // execute
         when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
         CompletableFuture<Void> result =
-                connectionManager.connectToRedis(glideClusterClientConfiguration);
+                connectionManager.connectToValkey(glideClusterClientConfiguration);
 
         // verify
         assertNull(result.get());
@@ -133,7 +133,7 @@ public class ConnectionManagerTest {
                         .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
                         .readFrom(ReadFrom.PREFER_REPLICA)
-                        .credentials(RedisCredentials.builder().username(USERNAME).password(PASSWORD).build())
+                        .credentials(ServerCredentials.builder().username(USERNAME).password(PASSWORD).build())
                         .requestTimeout(REQUEST_TIMEOUT)
                         .reconnectStrategy(
                                 BackoffStrategy.builder()
@@ -200,7 +200,7 @@ public class ConnectionManagerTest {
 
         // execute
         when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(glideClientConfiguration);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
 
         // verify
         assertNull(result.get());
@@ -218,7 +218,7 @@ public class ConnectionManagerTest {
 
         // execute
         when(channel.connect(any())).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(glideClientConfiguration);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
 
         // verify
         assertNull(result.get());
@@ -238,7 +238,7 @@ public class ConnectionManagerTest {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> connectionManager.connectToRedis(glideClientConfiguration).get());
+                        () -> connectionManager.connectToValkey(glideClientConfiguration).get());
 
         assertTrue(executionException.getCause() instanceof ClosingException);
         assertEquals("Unexpected empty data in response", executionException.getCause().getMessage());
@@ -258,7 +258,7 @@ public class ConnectionManagerTest {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> connectionManager.connectToRedis(glideClientConfiguration).get());
+                        () -> connectionManager.connectToValkey(glideClientConfiguration).get());
 
         assertTrue(executionException.getCause() instanceof ClosingException);
         assertEquals("Unexpected data in response", executionException.getCause().getMessage());

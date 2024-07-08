@@ -168,7 +168,7 @@ public class GlideClusterClientTest {
         }
 
         @Override
-        protected <T> T handleRedisResponse(
+        protected <T> T handleValkeyResponse(
                 Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;

@@ -20,7 +20,7 @@ public class GlideAsyncClient implements AsyncClient<String> {
     private BaseClient glideClient;
 
     @Override
-    public void connectToRedis(ConnectionSettings connectionSettings) {
+    public void connectToValkey(ConnectionSettings connectionSettings) {
 
         if (connectionSettings.clusterMode) {
             GlideClusterClientConfiguration config =

@@ -135,7 +135,7 @@ public class TestUtilities {
     /**
      * Validate whether `FUNCTION LIST` response contains required info.
      *
-     * @param response The response from redis.
+     * @param response The response from valkey.
      * @param libName Expected library name.
      * @param functionDescriptions Expected function descriptions. Key - function name, value -
      *     description.
@@ -184,7 +184,7 @@ public class TestUtilities {
     /**
      * Validate whether `FUNCTION LIST` response contains required info.
      *
-     * @param response The response from redis.
+     * @param response The response from valkey.
      * @param libName Expected library name.
      * @param functionDescriptions Expected function descriptions. Key - function name, value -
      *     description.

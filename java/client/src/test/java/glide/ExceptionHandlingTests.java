@@ -88,7 +88,7 @@ public class ExceptionHandlingTests {
         var callbackDispatcher = new TestCallbackDispatcher(new ClosingException("TEST"));
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
-        var future = connectionManager.connectToRedis(createDummyConfig());
+        var future = connectionManager.connectToValkey(createDummyConfig());
 
         callbackDispatcher.completeRequest(null);
         var exception = assertThrows(ExecutionException.class, future::get);
@@ -157,7 +157,7 @@ public class ExceptionHandlingTests {
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
-        var future = connectionManager.connectToRedis(createDummyConfig());
+        var future = connectionManager.connectToValkey(createDummyConfig());
         callbackDispatcher.completeRequest(null);
 
         var exception = assertThrows(ExecutionException.class, future::get);
@@ -178,8 +178,8 @@ public class ExceptionHandlingTests {
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
-        var future1 = connectionManager.connectToRedis(createDummyConfig());
-        var future2 = connectionManager.connectToRedis(createDummyConfig());
+        var future1 = connectionManager.connectToValkey(createDummyConfig());
+        var future2 = connectionManager.connectToValkey(createDummyConfig());
         var response = Response.newBuilder().setClosingError("TEST").build();
         callbackDispatcher.completeRequest(response);
 
@@ -245,8 +245,8 @@ public class ExceptionHandlingTests {
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
-        var future1 = connectionManager.connectToRedis(createDummyConfig());
-        var future2 = connectionManager.connectToRedis(createDummyConfig());
+        var future1 = connectionManager.connectToValkey(createDummyConfig());
+        var future2 = connectionManager.connectToValkey(createDummyConfig());
 
         var response = Response.newBuilder().setCallbackIdx(42).build();
         callbackDispatcher.completeRequest(response);

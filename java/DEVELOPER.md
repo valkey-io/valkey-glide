@@ -208,10 +208,10 @@ git submodule update
 
 ### Contributing new ValKey commands
 
-A redis command can either have a standalone or cluster implementation which is dependent on their specifications.
-- A node is an instance of a Redis server, and a redis cluster is composed of multiple nodes working in tandem.
+A Valkey command can either have a standalone or cluster implementation which is dependent on their specifications.
+- A node is an instance of a Valkey server, and a valkey cluster is composed of multiple nodes working in tandem.
 - A cluster command will require a note to indicate a node will follow a specific routing.
-Refer to https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec for more details on how hash slots work for cluster commands.
+Refer to https://valkey.io/docs/topics/cluster-spec for more details on how hash slots work for cluster commands.
 
 When you start implementing a new command, check the [command_request.proto](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/protobuf/command_request.proto) and [request_type.rs](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
 
@@ -236,8 +236,8 @@ Implement integration tests in the following files:
 For commands that have options, create a separate file for the optional values.
 
 [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
-Refer to [this](https://github.com/aws/glide-for-redis/tree/35f36ee61a777ee2dd3a15dc6078c5f3759aeaa7/java/client/src/main/java/glide/api/commands) link to view the interface directory.
-Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
+Refer to [this](https://github.com/aws/glide-for-redis/tree/main/java/client/src/main/java/glide/api/commands) link to view the interface directory.
+Refer to https://valkey.io/docs/topics/transactions/ for more details about how Transactions work in Valkey.
 
 ### Javadocs
 
@@ -258,9 +258,9 @@ Refer to [closed-PRs](https://github.com/aws/glide-for-redis/pulls?q=is%3Apr+is%
 Javac will create the name of the signature in Rust convention which can be called on native code.
 - In the command line write:
 ```bash
-javac -h . RedisValueResolver.java
+javac -h . GlideValueResolver.java
 ```
-The results can be found in the `glide_ffi_resolvers_RedisValueResolver` file once the `javac -h. RedisValueResolver.java` command is ran.
+The results can be found in the `glide_ffi_resolvers_GlideValueResolver` file once the `javac -h. GlideValueResolver.java` command is ran.
 In this project, only the function name and signature name is necessary. lib.rs method names explicitly point to the native functions defined there.
 
 ### Module Information

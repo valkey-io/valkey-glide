@@ -6,16 +6,16 @@ import lombok.Getter;
 import lombok.NonNull;
 
 /**
- * Represents the credentials for connecting to a Redis server.
+ * Represents the credentials for connecting to a server.
  *
  * @example
  *     <pre>{@code
  * // credentials with username:
- * RedisCredentials credentials1 = RedisCredentials.builder()
+ * ServerCredentials credentials1 = ServerCredentials.builder()
  *     .username("GLIDE")
  *     .build();
  * // credentials with username and password:
- * RedisCredentials credentials2 = RedisCredentials.builder()
+ * ServerCredentials credentials2 = ServerCredentials.builder()
  *     .username("GLIDE")
  *     .password(pwd)
  *     .build();
@@ -23,13 +23,13 @@ import lombok.NonNull;
  */
 @Getter
 @Builder
-public class RedisCredentials {
-    /** The password that will be used for authenticating connections to the Redis servers. */
+public class ServerCredentials {
+    /** The password that will be used for authenticating connections to the servers. */
     @NonNull private final String password;
 
     /**
-     * The username that will be used for authenticating connections to the Redis servers. If not
-     * supplied, "default" will be used.
+     * The username that will be used for authenticating connections to the servers. If not supplied,
+     * "default" will be used.
      */
     private final String username;
 }
