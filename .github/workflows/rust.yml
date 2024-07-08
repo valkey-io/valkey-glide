@@ -11,6 +11,7 @@ on:
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
     pull_request:
         paths:
             - logger_core/**
@@ -20,6 +21,7 @@ on:
             - .github/workflows/rust.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
 
 concurrency:
     group: rust-${{ github.head_ref || github.ref }}
