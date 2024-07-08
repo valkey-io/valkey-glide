@@ -2474,7 +2474,7 @@ export class BaseClient {
      *
      * @remarks
      * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
@@ -2502,7 +2502,7 @@ export class BaseClient {
      *
      * @remarks
      * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * 2. `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,

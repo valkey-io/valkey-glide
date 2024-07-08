@@ -14,7 +14,7 @@ Software Dependencies
 
 ##### **Note:** Nodejs Supported Version
 
-If your Nodejs version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
+If your Nodejs version is below the supported version specified in the client's [documentation](https://github.com/valkey-io/valkey-glide/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
 
 -   npm
 -   git
@@ -63,7 +63,7 @@ Before starting this step, make sure you've installed all software requirments.
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+    git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd glide-for-redis
     ```
 2. Initialize git submodule:

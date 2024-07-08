@@ -70,7 +70,7 @@ tasks.register('stopAllBeforeTests', Exec) {
     ignoreExitValue true // ignore fail if servers are stopped before
 }
 
-// delete dirs if stop failed due to https://github.com/aws/glide-for-redis/issues/849
+// delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
 }

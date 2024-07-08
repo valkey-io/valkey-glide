@@ -9,7 +9,7 @@ Strategic, mission-critical Redis-based applications have requirements for secur
 
 ## Supported Engine Versions
 
-Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-redis/blob/main/README.md#supported-engine-versions) for details.
+Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
 ## Current Status
 

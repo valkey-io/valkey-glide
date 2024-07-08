@@ -38,7 +38,7 @@ public class IntegrationTestBase : IDisposable
         // Stop all if weren't stopped on previous test run
         StopRedis(false);
 
-        // Delete dirs if stop failed due to https://github.com/aws/glide-for-redis/issues/849
+        // Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
         Directory.Delete(Path.Combine(_scriptDir, "clusters"), true);
 
         // Start cluster
