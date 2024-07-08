@@ -40,7 +40,13 @@ fn redis_value_to_java<'local>(
 ) -> Result<JObject<'local>, FFIError> {
     match val {
         Value::Nil => Ok(JObject::null()),
-        Value::SimpleString(str) => Ok(JObject::from(env.new_string(str)?)),
+        Value::SimpleString(data) => {
+            if encoding_utf8 {
+                Ok(JObject::from(env.new_string(data)?))
+            } else {
+                Ok(JObject::from(env.byte_array_from_slice(data.as_bytes())?))
+            }
+        }
         Value::Okay => Ok(JObject::from(env.new_string("OK")?)),
         Value::Int(num) => Ok(env.new_object("java/lang/Long", "(J)V", &[num.into()])?),
         Value::BulkString(data) => {
@@ -70,7 +76,13 @@ fn redis_value_to_java<'local>(
         }
         Value::Double(float) => Ok(env.new_object("java/lang/Double", "(D)V", &[float.into()])?),
         Value::Boolean(bool) => Ok(env.new_object("java/lang/Boolean", "(Z)V", &[bool.into()])?),
-        Value::VerbatimString { format: _, text } => Ok(JObject::from(env.new_string(text)?)),
+        Value::VerbatimString { format: _, text } => {
+            if encoding_utf8 {
+                Ok(JObject::from(env.new_string(text)?))
+            } else {
+                Ok(JObject::from(env.byte_array_from_slice(text.as_bytes())?))
+            }
+        }
         Value::BigNumber(_num) => todo!(),
         Value::Set(array) => {
             let set = env.new_object("java/util/HashSet", "()V", &[])?;
