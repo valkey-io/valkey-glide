@@ -19,7 +19,7 @@ permissions:
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -37,7 +37,7 @@ jobs:
 
     create-binaries-to-publish:
         needs: start-self-hosted-runner
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         strategy:
             # Run all jobs
