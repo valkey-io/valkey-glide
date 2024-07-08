@@ -10,6 +10,7 @@ on:
         - .github/workflows/start-self-hosted-runner/action.yml
         - .github/workflows/install-shared-dependencies/action.yml
         - .github/workflows/install-valkey/action.yml
+        - .github/json_matrices/build-matrix.json
     push:
         tags:
             - "v*.*"
