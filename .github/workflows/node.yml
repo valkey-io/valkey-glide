@@ -112,39 +112,39 @@ jobs:
                   cargo-toml-folder: ./node/rust-client
               name: lint node rust
 
-    # build-macos-latest:
-    #     runs-on: macos-latest
-    #     timeout-minutes: 25
-    #     steps:
-    #         - uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-    #         - name: Set up Homebrew
-    #           uses: Homebrew/actions/setup-homebrew@master
+    build-macos-latest:
+        runs-on: macos-latest
+        timeout-minutes: 25
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            - name: Set up Homebrew
+              uses: Homebrew/actions/setup-homebrew@master
 
-    #         - name: Install NodeJS
-    #           run: |
-    #               brew update
-    #               brew upgrade || true
-    #               brew install node
+            - name: Install NodeJS
+              run: |
+                  brew update
+                  brew upgrade || true
+                  brew install node
 
-    #         - name: Downgrade npm major version to 8
-    #           run: |
-    #               npm i -g npm@8
+            - name: Downgrade npm major version to 8
+              run: |
+                  npm i -g npm@8
 
-    #         - name: Build Node wrapper
-    #           uses: ./.github/workflows/build-node-wrapper
-    #           with:
-    #               os: "macos"
-    #               named_os: "darwin"
-    #               arch: "arm64"
-    #               target: "aarch64-apple-darwin"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
-    #               engine-version: "7.2.5"
+            - name: Build Node wrapper
+              uses: ./.github/workflows/build-node-wrapper
+              with:
+                  os: "macos"
+                  named_os: "darwin"
+                  arch: "arm64"
+                  target: "aarch64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "7.2.5"
 
-    #         - name: Test compatibility
-    #           run: npm test -- -t "set and get flow works"
-    #           working-directory: ./node
+            - name: Test compatibility
+              run: npm test -- -t "set and get flow works"
+              working-directory: ./node
 
     build-amazonlinux-latest:
         runs-on: ubuntu-latest

@@ -60,10 +60,10 @@ jobs:
             matrix:
                 engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 python:
-                  # - "3.8"
-                  # - "3.9"
-                  # - "3.10"
-                  # - "3.11"
+                  - "3.8"
+                  - "3.9"
+                  - "3.10"
+                  - "3.11"
                   - "3.12"
 
         steps:
@@ -139,10 +139,10 @@ jobs:
           matrix:
               engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
               python:
-                # - "3.8"
-                # - "3.9"
-                # - "3.10"
-                # - "3.11"
+                - "3.8"
+                - "3.9"
+                - "3.10"
+                - "3.11"
                 - "3.12"
 
       steps:
@@ -183,64 +183,64 @@ jobs:
                   cargo-toml-folder: ./python
               name: lint python-rust
 
-    # test-macos-latest:
-    #     runs-on: macos-latest
-    #     needs: load-engine-matrix
-    #     timeout-minutes: 35
-    #     strategy:
-    #       fail-fast: false
-    #       matrix:
-    #           engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-    #     steps:
-    #         - uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-    #         - name: Set up Homebrew
-    #           uses: Homebrew/actions/setup-homebrew@master
+    test-macos-latest:
+        runs-on: macos-latest
+        needs: load-engine-matrix
+        timeout-minutes: 35
+        strategy:
+          fail-fast: false
+          matrix:
+              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            - name: Set up Homebrew
+              uses: Homebrew/actions/setup-homebrew@master
 
-    #         - name: Build Python wrapper
-    #           uses: ./.github/workflows/build-python-wrapper
-    #           with:
-    #               os: "macos"
-    #               target: "aarch64-apple-darwin"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
-    #               engine-version: ${{ matrix.engine.version }}
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: "macos"
+                  target: "aarch64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
 
-    #         - name: Test with pytest
-    #           working-directory: ./python
-    #           run: |
-    #               source .env/bin/activate
-    #               pytest --asyncio-mode=auto
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  pytest --asyncio-mode=auto
 
-    # test-pubsub-macos-latest:
-    #     runs-on: macos-latest
-    #     needs: load-engine-matrix
-    #     timeout-minutes: 35
-    #     strategy:
-    #       fail-fast: false
-    #       matrix:
-    #           engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-    #     steps:
-    #         - uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-    #         - name: Set up Homebrew
-    #           uses: Homebrew/actions/setup-homebrew@master
+    test-pubsub-macos-latest:
+        runs-on: macos-latest
+        needs: load-engine-matrix
+        timeout-minutes: 35
+        strategy:
+          fail-fast: false
+          matrix:
+              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            - name: Set up Homebrew
+              uses: Homebrew/actions/setup-homebrew@master
 
-    #         - name: Build Python wrapper
-    #           uses: ./.github/workflows/build-python-wrapper
-    #           with:
-    #               os: "macos"
-    #               target: "aarch64-apple-darwin"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
-    #               engine-version: ${{ matrix.engine.version }}
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: "macos"
+                  target: "aarch64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
 
-    #         - name: Test pubsub with pytest
-    #           working-directory: ./python
-    #           run: |
-    #               source .env/bin/activate
-    #               cd python/tests/
-    #               pytest --asyncio-mode=auto -k test_pubsub
+            - name: Test pubsub with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto -k test_pubsub
 
     build-amazonlinux-latest:
         runs-on: ubuntu-latest
