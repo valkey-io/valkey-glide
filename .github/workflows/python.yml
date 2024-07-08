@@ -52,7 +52,7 @@ jobs:
     test-ubuntu-latest:
         runs-on: ubuntu-latest
         needs: load-engine-matrix
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
@@ -128,6 +128,46 @@ jobs:
               with:
                   language-flag: -python
 
+    test-pubsub-ubuntu-latest:
+      runs-on: ubuntu-latest
+      needs: load-engine-matrix
+      timeout-minutes: 35
+      strategy:
+          fail-fast: false
+          matrix:
+              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+              python:
+                - "3.8"
+                - "3.9"
+                - "3.10"
+                - "3.11"
+                - "3.12"
+
+      steps:
+          - uses: actions/checkout@v4
+            with:
+                submodules: recursive
+
+          - name: Set up Python
+            uses: actions/setup-python@v4
+            with:
+                python-version: ${{ matrix.python }}
+
+          - name: Build Python wrapper
+            uses: ./.github/workflows/build-python-wrapper
+            with:
+                os: "ubuntu"
+                target: "x86_64-unknown-linux-gnu"
+                github-token: ${{ secrets.GITHUB_TOKEN }}
+                engine-version: ${{ matrix.engine.version }}
+
+          - name: Test pubsub with pytest
+            working-directory: ./python
+            run: |
+                source .env/bin/activate
+                cd python/tests/
+                pytest --asyncio-mode=auto -k test_pubsub
+
     lint-rust:
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -141,9 +181,14 @@ jobs:
                   cargo-toml-folder: ./python
               name: lint python-rust
 
-    build-macos-latest:
+    test-macos-latest:
         runs-on: macos-latest
-        timeout-minutes: 25
+        needs: load-engine-matrix
+        timeout-minutes: 35
+        strategy:
+          fail-fast: false
+          matrix:
+              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -157,13 +202,43 @@ jobs:
                   os: "macos"
                   target: "aarch64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  engine-version: "7.2.5"
+                  engine-version: ${{ matrix.engine.version }}
 
-            - name: Test compatibility with pytest
+            - name: Test with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test
+                  pytest --asyncio-mode=auto
+
+    test-pubsub-macos-latest:
+        runs-on: macos-latest
+        needs: load-engine-matrix
+        timeout-minutes: 35
+        strategy:
+          fail-fast: false
+          matrix:
+              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+            - name: Set up Homebrew
+              uses: Homebrew/actions/setup-homebrew@master
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: "macos"
+                  target: "aarch64-apple-darwin"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+
+            - name: Test pubsub with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto -k test_pubsub
 
     build-amazonlinux-latest:
         runs-on: ubuntu-latest
