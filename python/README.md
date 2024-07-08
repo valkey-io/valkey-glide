@@ -4,7 +4,7 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE), is an ope
 
 ## Supported Engine Versions
 
-Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-redis/blob/main/README.md#supported-engine-versions) for details.
+Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
 # Getting Started - Python Wrapper
 
@@ -84,8 +84,8 @@ Get response is bar
 
 ## Documentation
 
-Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/Python-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
+Visit our [wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper) for examples and further details on TLS, Read strategy, Timeouts and various other configurations.
 
 ### Building & Testing
 
-Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/aws/glide-for-redis/blob/main/python/DEVELOPER.md#build-from-source) file.
+Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/valkey-io/valkey-glide/blob/main/python/DEVELOPER.md#build-from-source) file.

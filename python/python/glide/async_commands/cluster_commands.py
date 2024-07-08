@@ -34,7 +34,7 @@ class ClusterCommands(CoreCommands):
     ) -> TResult:
         """
         Executes a single command, without checking inputs.
-        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Return a list of all pub/sub clients from all nodes:
@@ -1156,7 +1156,7 @@ class ClusterCommands(CoreCommands):
         For each iteration the new cursor object should be used to continue the scan.
         Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
         For more information about the Cluster Scan implementation,
-        see [Cluster Scan](https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan).
+        see [Cluster Scan](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan).
 
         As the SCAN command, the method can be used to iterate over the keys in the database,
         to return all keys the database have from the time the scan started till the scan ends.

@@ -23,7 +23,7 @@ public interface GenericCommands {
      * subcommands, should be added as a separate value in <code>args</code>.
      *
      * @apiNote See <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
+     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
      *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
      * @return The returning value depends on the executed command.
