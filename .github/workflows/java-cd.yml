@@ -82,7 +82,6 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
               run: |
                   GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
                   if [ -d $GHA_HOME ]; then
