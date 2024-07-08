@@ -310,7 +310,7 @@ import lombok.NonNull;
  */
 @Getter
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
-    /** Command class to send a single request to Redis. */
+    /** Command class to send a single request to Valkey. */
     protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
 
     /**
@@ -2813,8 +2813,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2829,11 +2827,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination,
+    public T zunionstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore,
@@ -2849,8 +2846,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2862,9 +2890,32 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        checkTypeOrThrow(destination);
+    public T zunionstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
@@ -2876,8 +2927,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2892,11 +2941,43 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zinterstore(
-            @NonNull ArgType destination,
+    public T zinterstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZInterStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zinterstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZInterStore,
@@ -4144,7 +4225,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
      *           values being a 2D list of the field-value pairs in the format <code>
      *           [[field1, value1], [field2, value2], ...]</code>.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4183,7 +4264,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
      *           values being a 2D list of the field-value pairs in the format <code>
      *           [[field1, value1], [field2, value2], ...]</code>.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4229,7 +4310,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4274,7 +4355,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4413,7 +4494,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Displays a piece of generative computer art and the server version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut() {
@@ -4434,7 +4515,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int @NonNull [] parameters) {
@@ -4448,7 +4529,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int version) {
@@ -4470,7 +4551,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>For version <code>6</code>, those are number of columns and number of lines.
      *     </ul>
      *
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int version, int @NonNull [] parameters) {
@@ -5366,7 +5447,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type

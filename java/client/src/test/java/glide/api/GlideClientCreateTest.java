@@ -71,11 +71,11 @@ public class GlideClientCreateTest {
     @SneakyThrows
     public void createClient_with_default_config_successfully_returns_GlideClient() {
         // setup
-        CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
-        connectToRedisFuture.complete(null);
+        CompletableFuture<Void> connectToValkeyFuture = new CompletableFuture<>();
+        connectToValkeyFuture.complete(null);
         GlideClientConfiguration config = GlideClientConfiguration.builder().build();
 
-        when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
+        when(connectionManager.connectToValkey(eq(config))).thenReturn(connectToValkeyFuture);
 
         // exercise
         CompletableFuture<GlideClient> result = createClient(config);
@@ -90,12 +90,12 @@ public class GlideClientCreateTest {
     @SneakyThrows
     public void createClient_with_custom_config_successfully_returns_GlideClient() {
         // setup
-        CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
-        connectToRedisFuture.complete(null);
+        CompletableFuture<Void> connectToValkeyFuture = new CompletableFuture<>();
+        connectToValkeyFuture.complete(null);
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder().threadPoolResource(threadPoolResource).build();
 
-        when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
+        when(connectionManager.connectToValkey(eq(config))).thenReturn(connectToValkeyFuture);
 
         // exercise
         CompletableFuture<GlideClient> result = createClient(config);
@@ -110,13 +110,13 @@ public class GlideClientCreateTest {
     @Test
     public void createClient_error_on_connection_throws_ExecutionException() {
         // setup
-        CompletableFuture<Void> connectToRedisFuture = new CompletableFuture<>();
+        CompletableFuture<Void> connectToValkeyFuture = new CompletableFuture<>();
         ClosingException exception = new ClosingException("disconnected");
-        connectToRedisFuture.completeExceptionally(exception);
+        connectToValkeyFuture.completeExceptionally(exception);
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder().threadPoolResource(threadPoolResource).build();
 
-        when(connectionManager.connectToRedis(eq(config))).thenReturn(connectToRedisFuture);
+        when(connectionManager.connectToValkey(eq(config))).thenReturn(connectToValkeyFuture);
 
         // exercise
         CompletableFuture<GlideClient> result = createClient(config);

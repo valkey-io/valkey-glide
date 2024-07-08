@@ -9,6 +9,7 @@ import glide.api.models.commands.stream.StreamAddOptionsBinary.StreamAddOptionsB
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamPendingOptionsBinary;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -1269,7 +1270,7 @@ public interface StreamBaseCommands {
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      * @param count Limits the number of messages returned.
-     * @param options Stream add options {@link StreamPendingOptions}.
+     * @param options Stream add options {@link StreamPendingOptionsBinary}.
      * @return A 2D-<code>array</code> of 4-tuples containing extended message information with the format
      * <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]</code>, where:
      * <ul>
@@ -1287,7 +1288,7 @@ public interface StreamBaseCommands {
      *     InfRangeBound.MIN,
      *     InfRangeBound.MAX,
      *     10L,
-     *     StreamPendingOptions.builder().consumer("my_consumer").build()
+     *     StreamPendingOptionsBinary.builder().consumer(gs("my_consumer")).build()
      * ).get();
      * for (Object[] messageResult : result) {
      *     System.out.printf("Message %s from consumer %s was read %s times", messageResult[0], messageResult[1], messageResult[2]);
@@ -1299,7 +1300,7 @@ public interface StreamBaseCommands {
             StreamRange start,
             StreamRange end,
             long count,
-            StreamPendingOptions options);
+            StreamPendingOptionsBinary options);
 
     /**
      * Changes the ownership of a pending message.

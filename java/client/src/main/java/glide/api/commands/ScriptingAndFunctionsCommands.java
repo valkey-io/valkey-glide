@@ -12,12 +12,12 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Scripting and Function" group for a standalone
  * client.
  *
- * @see <a href="https://redis.io/commands/?group=scripting">Scripting and Function Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsCommands {
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
@@ -35,7 +35,7 @@ public interface ScriptingAndFunctionsCommands {
     CompletableFuture<String> functionLoad(String libraryCode, boolean replace);
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
@@ -224,7 +224,7 @@ public interface ScriptingAndFunctionsCommands {
      * @example
      *     <pre>{@code
      * byte[] data = client.functionDump().get();
-     * // now data could be saved to restore loaded functions on any Redis instance
+     * // now data could be saved to restore loaded functions on any Valkey instance
      * }</pre>
      */
     CompletableFuture<byte[]> functionDump();
@@ -377,7 +377,7 @@ public interface ScriptingAndFunctionsCommands {
      * available execution engines.
      *
      * @since Valkey 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> with two keys:
      *     <ul>
      *       <li><code>running_script</code> with information about the running script.

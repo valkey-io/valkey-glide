@@ -19,7 +19,7 @@ public interface PubSubClusterCommands {
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
      * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
-     *     to <code>true</code> is only applicable with Redis 7.0+.
+     *     to <code>true</code> is only applicable with Valkey 7.0+.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -37,7 +37,7 @@ public interface PubSubClusterCommands {
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
      * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
-     *     to <code>true</code> is only applicable with Redis 7.0+.
+     *     to <code>true</code> is only applicable with Valkey 7.0+.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code

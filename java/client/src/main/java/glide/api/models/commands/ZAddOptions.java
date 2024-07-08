@@ -34,12 +34,12 @@ public final class ZAddOptions {
     public enum ConditionalChange {
         /**
          * Only update elements that already exist. Don't add new elements. Equivalent to <code>XX
-         * </code> in the Redis API.
+         * </code> in the Valkey API.
          */
         ONLY_IF_EXISTS("XX"),
         /**
          * Only add new elements. Don't update already existing elements. Equivalent to <code>NX</code>
-         * in the Redis API.
+         * in the Valkey API.
          */
         ONLY_IF_DOES_NOT_EXIST("NX");
 
@@ -50,12 +50,12 @@ public final class ZAddOptions {
     public enum UpdateOptions {
         /**
          * Only update existing elements if the new score is less than the current score. Equivalent to
-         * <code>LT</code> in the Redis API.
+         * <code>LT</code> in the Valkey API.
          */
         SCORE_LESS_THAN_CURRENT("LT"),
         /**
          * Only update existing elements if the new score is greater than the current score. Equivalent
-         * to <code>GT</code> in the Redis API.
+         * to <code>GT</code> in the Valkey API.
          */
         SCORE_GREATER_THAN_CURRENT("GT");
 

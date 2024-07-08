@@ -8,7 +8,8 @@ import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
 
 /**
- * Response resolver responsible for evaluating the Redis response object with a success or failure.
+ * Response resolver responsible for evaluating the Valkey response object with a success or
+ * failure.
  */
 @AllArgsConstructor
 public class BaseResponseResolver implements GlideExceptionCheckedFunction<Response, Object> {
