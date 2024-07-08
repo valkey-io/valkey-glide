@@ -71,30 +71,30 @@ async def transaction_test(
     keyslot: str,
     glide_client: TGlideClient,
 ) -> List[TResult]:
-    key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
-    key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
-    key3 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key4 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key5 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key6 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key7 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key8 = "{{{}}}:{}".format(keyslot, get_random_string(3))
-    key9 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
-    key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
-    key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # streams
-    key12 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # geo
-    key13 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
-    key14 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
-    key15 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
-    key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
-    key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
-    key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
-    key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
-    key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
-    key22 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # getex
-    key23 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
-    key24 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
-    key25 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
+    key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
+    key2 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
+    key3 = "{{{}}}:{}".format(keyslot, get_random_string(10))
+    key4 = "{{{}}}:{}".format(keyslot, get_random_string(10))
+    key5 = "{{{}}}:{}".format(keyslot, get_random_string(10))
+    key6 = "{{{}}}:{}".format(keyslot, get_random_string(10))
+    key7 = "{{{}}}:{}".format(keyslot, get_random_string(10))
+    key8 = "{{{}}}:{}".format(keyslot, get_random_string(10))
+    key9 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # list
+    key10 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # hyper log log
+    key11 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # streams
+    key12 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # geo
+    key13 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
+    key14 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
+    key15 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
+    key16 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sorted set
+    key17 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
+    key18 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # sort
+    key19 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # bitmap
+    key20 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # bitmap
+    key22 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # getex
+    key23 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # string
+    key24 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # string
+    key25 = "{{{}}}:{}".format(keyslot, get_random_string(10))  # list
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
@@ -938,8 +938,10 @@ class TestTransaction:
     async def test_standalone_transaction(self, glide_client: GlideClient):
         assert await glide_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
-        key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
-        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
+        key1 = "{{{}}}:{}".format(
+            keyslot, get_random_string(10)
+        )  # to get the same slot
         value = get_random_string(5)
         transaction = Transaction()
         transaction.info()
@@ -994,8 +996,10 @@ class TestTransaction:
             return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         keyslot = get_random_string(3)
-        key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
-        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key = "{{{}}}:{}".format(keyslot, get_random_string(10))  # to get the same slot
+        key1 = "{{{}}}:{}".format(
+            keyslot, get_random_string(10)
+        )  # to get the same slot
         value = get_random_string(5)
         transaction = Transaction()
         transaction.select(1)
@@ -1126,8 +1130,10 @@ class TestTransaction:
     ):
         cluster_mode = isinstance(glide_client, GlideClusterClient)
         keyslot = get_random_string(3)
-        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
-        key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))
+        key1 = "{{{}}}:{}".format(
+            keyslot, get_random_string(10)
+        )  # to get the same slot
+        key2 = "{{{}}}:{}".format(keyslot, get_random_string(10))
 
         # Verify Dump
         transaction = ClusterTransaction() if cluster_mode else Transaction()
