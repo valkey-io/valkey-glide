@@ -72,7 +72,7 @@ jobs:
                   }
                   - {
                     OS: macos,
-                    RUNNER: macos-13-xlarge,
+                    RUNNER: macos-latest,
                     TARGET: aarch64-apple-darwin,
                     CLASSIFIER: osx-aarch_64
                   }
