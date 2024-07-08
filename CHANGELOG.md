@@ -1,3 +1,5 @@
+## 1.0.0 (2024-07-09)
+
 #### Changes
 * Node: Added ZINTERSTORE command ([#1513](https://github.com/valkey-io/valkey-glide/pull/1513))
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/valkey-io/valkey-glide/pull/1471))
