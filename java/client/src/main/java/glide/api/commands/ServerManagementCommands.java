@@ -10,20 +10,18 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands and transactions for the "Server Management" group for a standalone client.
  *
- * @see <a href="https://redis.io/commands/?group=server">Server Management Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=server">Server Management Commands</a>
  */
 public interface ServerManagementCommands {
 
     /** A keyword for {@link #lolwut(int)} and {@link #lolwut(int, int[])}. */
-    String VERSION_REDIS_API = "VERSION";
+    String VERSION_VALKEY_API = "VERSION";
 
     /**
-     * Gets information and statistics about the Redis server using the {@link Section#DEFAULT}
-     * option.
+     * Gets information and statistics about the server using the {@link Section#DEFAULT} option.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @return Response from Redis containing a <code>String</code> with the information for the
-     *     default sections.
+     * @return A <code>String</code> with the information for the default sections.
      * @example
      *     <pre>{@code
      * String response = client.info().get();
@@ -33,13 +31,12 @@ public interface ServerManagementCommands {
     CompletableFuture<String> info();
 
     /**
-     * Get information and statistics about the Redis server.
+     * Get information and statistics about the server.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
      * @param options A list of {@link Section} values specifying which sections of information to
      *     retrieve. When no parameter is provided, the {@link Section#DEFAULT} option is assumed.
-     * @return Response from Redis containing a <code>String</code> with the information for the
-     *     sections requested.
+     * @return A <code>String</code> containing the information for the sections requested.
      * @example
      *     <pre>{@code
      * String response = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
@@ -49,7 +46,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> info(InfoOptions options);
 
     /**
-     * Changes the currently selected Redis database.
+     * Changes the currently selected database.
      *
      * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
      * @param index The index of the database to select.
@@ -77,7 +74,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> configRewrite();
 
     /**
-     * Resets the statistics reported by Redis using the <a
+     * Resets the statistics reported by the server using the <a
      * href="https://valkey.io/commands/info/">INFO</a> and <a
      * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
@@ -92,7 +89,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> configResetStat();
 
     /**
-     * Reads the configuration parameters of a running Redis server.
+     * Get the values of configuration parameters.
      *
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
@@ -209,10 +206,10 @@ public interface ServerManagementCommands {
     CompletableFuture<String> flushdb(FlushMode mode);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut().get();
@@ -223,18 +220,18 @@ public interface ServerManagementCommands {
     CompletableFuture<String> lolwut();
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param parameters Additional set of arguments in order to change the output:
      *     <ul>
-     *       <li>On Redis version <code>5</code>, those are length of the line, number of squares per
+     *       <li>On Valkey version <code>5</code>, those are length of the line, number of squares per
      *           row, and number of squares per column.
-     *       <li>On Redis version <code>6</code>, those are number of columns and number of lines.
+     *       <li>On Valkey version <code>6</code>, those are number of columns and number of lines.
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(new int[] { 40, 20 }).get();
@@ -245,12 +242,12 @@ public interface ServerManagementCommands {
     CompletableFuture<String> lolwut(int[] parameters);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(6).get();
@@ -261,7 +258,7 @@ public interface ServerManagementCommands {
     CompletableFuture<String> lolwut(int version);
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the Valkey version.
      *
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
@@ -273,7 +270,7 @@ public interface ServerManagementCommands {
      *       <li>For version <code>6</code>, those are number of columns and number of lines.
      *     </ul>
      *
-     * @return A piece of generative computer art along with the current Redis version.
+     * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
      * String data = client.lolwut(6, new int[] { 40, 20 }).get();

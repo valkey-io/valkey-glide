@@ -208,12 +208,12 @@ git submodule update
 
 ### Contributing new ValKey commands
 
-A redis command can either have a standalone or cluster implementation which is dependent on their specifications.
-- A node is an instance of a Redis server, and a redis cluster is composed of multiple nodes working in tandem.
+A Valkey command can either have a standalone or cluster implementation which is dependent on their specifications.
+- A node is an instance of a Valkey server, and a valkey cluster is composed of multiple nodes working in tandem.
 - A cluster command will require a note to indicate a node will follow a specific routing.
-Refer to https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec for more details on how hash slots work for cluster commands.
+Refer to https://valkey.io/docs/topics/cluster-spec for more details on how hash slots work for cluster commands.
 
-When you start implementing a new command, check the [redis_request.proto](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/protobuf/redis_request.proto) and [request_type.rs](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
+When you start implementing a new command, check the [command_request.proto](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/protobuf/command_request.proto) and [request_type.rs](https://github.com/aws/glide-for-redis/blob/main/glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
 
 Standalone and cluster clients both extend [BaseClient.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/BaseClient.java) and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
 The return types of these methods are in the form of a `CompletableFuture`, which fulfill the purpose of the asynchronous features of the program.
@@ -223,8 +223,8 @@ The return types of these methods are in the form of a `CompletableFuture`, whic
 When implementing a command, include both a unit test and an integration test.
 
 Implement unit tests in the following files:
-- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java) for standalone commands.
-- [RedisClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
+- [GlideClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/GlideClientTest.java) for standalone commands.
+- [GlideClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/GlideClusterClientTest.java) for cluster commands.
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:
@@ -236,15 +236,15 @@ Implement integration tests in the following files:
 For commands that have options, create a separate file for the optional values.
 
 [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
-Refer to [this](https://github.com/aws/glide-for-redis/tree/35f36ee61a777ee2dd3a15dc6078c5f3759aeaa7/java/client/src/main/java/glide/api/commands) link to view the interface directory.
-Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
+Refer to [this](https://github.com/aws/glide-for-redis/tree/main/java/client/src/main/java/glide/api/commands) link to view the interface directory.
+Refer to https://valkey.io/docs/topics/transactions/ for more details about how Transactions work in Valkey.
 
 ### Javadocs
 
 [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) and the methods within the command interfaces will both contain documentation on how the command operates.
 In the command interface each command's javadoc should contain:
-- Detail on when the Redis started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
-- A link to the Redis documentation.
+- Detail on when Valkey started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
+- A link to the Valkey documentation.
 - Information about the function parameters.
 - Any glide-core implementation details, such as how glide-core manages default routing for the command. Reference this [link](https://github.com/aws/glide-for-redis/blob/4df0dd939b515dbf9da0a00bfca6d3ad2f27440b/java/client/src/main/java/glide/api/commands/SetBaseCommands.java#L119) for an example.
 - The command's return type. In the [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
@@ -258,9 +258,9 @@ Refer to [closed-PRs](https://github.com/aws/glide-for-redis/pulls?q=is%3Apr+is%
 Javac will create the name of the signature in Rust convention which can be called on native code.
 - In the command line write:
 ```bash
-javac -h . RedisValueResolver.java
+javac -h . GlideValueResolver.java
 ```
-The results can be found in the `glide_ffi_resolvers_RedisValueResolver` file once the `javac -h. RedisValueResolver.java` command is ran.
+The results can be found in the `glide_ffi_resolvers_GlideValueResolver` file once the `javac -h. GlideValueResolver.java` command is ran.
 In this project, only the function name and signature name is necessary. lib.rs method names explicitly point to the native functions defined there.
 
 ### Module Information

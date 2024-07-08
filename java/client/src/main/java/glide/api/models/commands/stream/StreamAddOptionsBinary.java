@@ -1,24 +1,28 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.Builder;
 
 /**
- * Optional arguments to {@link StreamBaseCommands#xadd(String, Map, StreamAddOptions)}
+ * Optional arguments to {@link StreamBaseCommands#xadd(GlideString, Map, StreamAddOptionsBinary)}
  *
  * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a>
  */
 @Builder
-public final class StreamAddOptions {
-    public static final String NO_MAKE_STREAM_VALKEY_API = "NOMKSTREAM";
-    public static final String ID_WILDCARD_VALKEY_API = "*";
+public final class StreamAddOptionsBinary {
+    public static final GlideString NO_MAKE_STREAM_VALKEY_API_GLIDE_STRING = gs("NOMKSTREAM");
+    public static final GlideString ID_WILDCARD_VALKEY_API_GLIDE_STRING = gs("*");
 
     /** If set, the new entry will be added with this <code>id</code>. */
-    private final String id;
+    private final GlideString id;
 
     /**
      * If set to <code>false</code>, a new stream won't be created if no stream matches the given key.
@@ -31,27 +35,28 @@ public final class StreamAddOptions {
     private final StreamTrimOptions trim;
 
     /**
-     * Converts options for Xadd into a String[].
+     * Converts options for Xadd into a GlideString[].
      *
-     * @return String[]
+     * @return GlideString[]
      */
-    public String[] toArgs() {
-        List<String> optionArgs = new ArrayList<>();
+    public GlideString[] toArgs() {
+        List<GlideString> optionArgs = new ArrayList<>();
 
         if (makeStream != null && !makeStream) {
-            optionArgs.add(NO_MAKE_STREAM_VALKEY_API);
+            optionArgs.add(NO_MAKE_STREAM_VALKEY_API_GLIDE_STRING);
         }
 
         if (trim != null) {
-            optionArgs.addAll(trim.getValkeyApi());
+            optionArgs.addAll(
+                    trim.getValkeyApi().stream().map(GlideString::gs).collect(Collectors.toList()));
         }
 
         if (id != null) {
             optionArgs.add(id);
         } else {
-            optionArgs.add(ID_WILDCARD_VALKEY_API);
+            optionArgs.add(ID_WILDCARD_VALKEY_API_GLIDE_STRING);
         }
 
-        return optionArgs.toArray(new String[0]);
+        return optionArgs.toArray(new GlideString[0]);
     }
 }

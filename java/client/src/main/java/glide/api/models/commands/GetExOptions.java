@@ -37,7 +37,7 @@ public class GetExOptions {
     }
 
     /**
-     * Set the specified expire time, in seconds. Equivalent to <code>EX</code> in the Redis API.
+     * Set the specified expire time, in seconds. Equivalent to <code>EX</code> in the Valkey API.
      *
      * @param seconds The time to expire, in seconds.
      * @return The options specifying the given expiry.
@@ -47,7 +47,8 @@ public class GetExOptions {
     }
 
     /**
-     * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Redis API.
+     * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Valkey
+     * API.
      *
      * @param milliseconds The time to expire, in milliseconds.
      * @return The options specifying the given expiry.
@@ -58,7 +59,7 @@ public class GetExOptions {
 
     /**
      * Set the specified Unix time at which the key will expire, in seconds. Equivalent to <code>
-     * EXAT</code> in the Redis API.
+     * EXAT</code> in the Valkey API.
      *
      * @param unixSeconds The <code>UNIX TIME</code> to expire, in seconds.
      * @return The options specifying the given expiry.
@@ -69,7 +70,7 @@ public class GetExOptions {
 
     /**
      * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to <code>
-     * PXAT</code> in the Redis API.
+     * PXAT</code> in the Valkey API.
      *
      * @param unixMilliseconds The <code>UNIX TIME</code> to expire, in milliseconds.
      * @return The options specifying the given expiry.
@@ -92,7 +93,7 @@ public class GetExOptions {
         UNIX_MILLISECONDS("PXAT"),
         PERSIST("PERSIST");
 
-        private final String redisApi;
+        private final String valkeyApi;
     }
 
     /**
@@ -103,7 +104,7 @@ public class GetExOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
 
-        optionArgs.add(type.redisApi);
+        optionArgs.add(type.valkeyApi);
         if (count != null) {
             optionArgs.add(String.valueOf(count));
         }

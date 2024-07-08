@@ -1,27 +1,27 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.GenericCommands.DB_REDIS_API;
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
+import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.Select;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.GenericCommands.DB_VALKEY_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.Move;
-import static redis_request.RedisRequestOuterClass.RequestType.Scan;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
-import glide.api.RedisClient;
+import glide.api.GlideClient;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import lombok.NonNull;
 
 /**
- * Transaction implementation for standalone {@link RedisClient}. Transactions allow the execution
+ * Transaction implementation for standalone {@link GlideClient}. Transactions allow the execution
  * of a group of commands in a single step.
  *
  * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
- * {@link RedisClient#exec} API, in the order they were given. Each element in the array represents
+ * {@link GlideClient#exec} API, in the order they were given. Each element in the array represents
  * a command given to the {@link Transaction}. The response for each command depends on the executed
  * Valkey command. Specific response types are documented alongside each method.
  *
@@ -119,9 +119,9 @@ public class Transaction extends BaseTransaction<Transaction> {
                         newArgsBuilder()
                                 .add(source)
                                 .add(destination)
-                                .add(DB_REDIS_API)
+                                .add(DB_VALKEY_API)
                                 .add(destinationDB)
-                                .addIf(REPLACE_REDIS_API, replace)));
+                                .addIf(REPLACE_VALKEY_API, replace)));
         return this;
     }
 
