@@ -270,7 +270,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
-import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -4183,7 +4183,7 @@ public class GlideClientTest {
         Map<GlideString, Double> membersScores = new LinkedHashMap<>();
         membersScores.put(gs("testMember1"), 1.0);
         membersScores.put(gs("testMember2"), 2.0);
-        GlideString[] membersScoresArgs = flattenMapToGlideStringArray(membersScores);
+        GlideString[] membersScoresArgs = convertMapToValueKeyStringArrayBinary(membersScores);
         GlideString[] arguments = ArrayUtils.addFirst(membersScoresArgs, key);
         Long value = 2L;
 
@@ -4251,7 +4251,7 @@ public class GlideClientTest {
         Map<GlideString, Double> membersScores = new LinkedHashMap<>();
         membersScores.put(gs("testMember1"), 1.0);
         membersScores.put(gs("testMember2"), 2.0);
-        GlideString[] membersScoresArgs = flattenMapToGlideStringArray(membersScores);
+        GlideString[] membersScoresArgs = convertMapToValueKeyStringArrayBinary(membersScores);
         GlideString[] arguments = ArrayUtils.addAll(new GlideString[] {key}, options.toArgsBinary());
         arguments = ArrayUtils.addAll(arguments, membersScoresArgs);
         Long value = 2L;
