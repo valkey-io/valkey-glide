@@ -27,7 +27,7 @@ public interface GenericClusterCommands {
      * <p>The command will be routed to all primaries.
      *
      * @apiNote See <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
+     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
      *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name.
      * @return The returning value depends on the executed command.
@@ -46,7 +46,7 @@ public interface GenericClusterCommands {
      * <p>Client will route the command to the nodes defined by <code>route</code>.
      *
      * @apiNote See <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
+     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
      *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command including the command name
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -194,7 +194,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
+     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
      * Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
@@ -253,7 +253,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
+     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
      * Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
@@ -311,7 +311,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
+     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
      * Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
@@ -372,7 +372,7 @@ public interface GenericClusterCommands {
      * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
      * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
      * object to manage iterations. For more information about the Cluster Scan implementation, see <a
-     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
+     * href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan">Cluster
      * Scan</a>.
      *
      * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means

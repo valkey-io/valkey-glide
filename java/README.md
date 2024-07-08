@@ -26,7 +26,7 @@ The Java client contains the following parts:
 
 ## Supported Engine Versions
 
-Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-redis/blob/main/README.md#supported-engine-versions) for details.
+Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
 ## Installation and Setup
 

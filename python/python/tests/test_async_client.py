@@ -7298,7 +7298,7 @@ class TestCommands:
         assert await glide_client.get(destination) == b"a"
         assert await glide_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
         # currently, attempting to get the value from destination after the above NOT incorrectly raises an error
-        # TODO: update with a GET call once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
+        # TODO: update with a GET call once fix is implemented for https://github.com/valkey-io/valkey-glide/issues/1447
 
         assert await glide_client.setbit(key1, 0, 1) == 0
         assert await glide_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1

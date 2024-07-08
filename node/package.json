@@ -7,9 +7,9 @@
     "type": "commonjs",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/aws/glide-for-redis.git"
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
     },
-    "homepage": "https://github.com/aws/glide-for-redis#readme",
+    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "dependencies": {
         "eslint-config-prettier": "^9.1.0",
         "eslint-plugin-import": "^2.29.1",

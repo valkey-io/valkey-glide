@@ -245,7 +245,7 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Executes a single command, without checking inputs.
-        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Append a command to list of all pub/sub clients:
@@ -927,7 +927,7 @@ class BaseTransaction:
 
         See https://valkey.io/commands/blpop for details.
 
-        BLPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        BLPOP is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
@@ -1147,7 +1147,7 @@ class BaseTransaction:
 
         See https://valkey.io/commands/brpop for details.
 
-        BRPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        BRPOP is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the lists to pop from.
@@ -3157,7 +3157,7 @@ class BaseTransaction:
 
         `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
 
-        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMAX` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzpopmax for more details.
 
@@ -3205,7 +3205,7 @@ class BaseTransaction:
 
         `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
 
-        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMIN` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzpopmin for more details.
 
@@ -3904,7 +3904,7 @@ class BaseTransaction:
         See https://valkey.io/commands/bzmpop for more details.
 
         Note:
-            `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+            `BZMPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[TEncodable]): The keys of the sorted sets.
