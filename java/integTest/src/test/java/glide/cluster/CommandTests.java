@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import glide.api.RedisClusterClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -71,7 +71,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -102,7 +102,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 @Timeout(10) // seconds
 public class CommandTests {
 
-    private static RedisClusterClient clusterClient = null;
+    private static GlideClusterClient clusterClient = null;
 
     private static final String INITIAL_VALUE = "VALUE";
 
@@ -121,7 +121,7 @@ public class CommandTests {
                     "Keyspace");
     public static final List<String> EVERYTHING_INFO_SECTIONS =
             SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")
-                    // Latencystats was added in redis 7
+                    // Latencystats was added in Valkey 7
                     ? List.of(
                             "Server",
                             "Clients",
@@ -154,7 +154,7 @@ public class CommandTests {
     @SneakyThrows
     public static void init() {
         clusterClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(7000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(7000).build())
                         .get();
     }
 
@@ -458,7 +458,7 @@ public class CommandTests {
         var exception =
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.configGet(new String[] {}).get());
-        assertTrue(exception.getCause() instanceof RedisException);
+        assertTrue(exception.getCause() instanceof GlideException);
     }
 
     @Test
@@ -1735,7 +1735,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1790,7 +1790,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1847,7 +1847,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1900,7 +1900,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1954,7 +1954,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -1966,7 +1966,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // redis kills a function with 5 sec delay
+                        // valkey kills a function with 5 sec delay
                         // but this will always throw an error in the test
                         clusterClient.functionKill(route).get();
                     } catch (ExecutionException executionException) {
@@ -2022,7 +2022,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
         try (var testClient =
-                RedisClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
                         .get()) {
             try {
                 // call the function without await
@@ -2034,7 +2034,7 @@ public class CommandTests {
                 int timeout = 4000; // ms
                 while (timeout >= 0) {
                     try {
-                        // redis kills a function with 5 sec delay
+                        // valkey kills a function with 5 sec delay
                         // but this will always throw an error in the test
                         clusterClient.functionKill(route).get();
                     } catch (ExecutionException executionException) {
@@ -2316,7 +2316,7 @@ public class CommandTests {
                 assertThrows(
                         ExecutionException.class, () -> clusterClient.functionRestore(dump, REPLACE).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-        // redis checks names in random order and blames on first collision
+        // valkey checks names in random order and blames on first collision
         assertTrue(
                 executionException.getMessage().contains("Function " + name1 + " already exists")
                         || executionException.getMessage().contains("Function " + name2 + " already exists"));

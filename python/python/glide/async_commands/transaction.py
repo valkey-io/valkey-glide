@@ -55,7 +55,7 @@ from glide.async_commands.stream import (
     _create_xpending_range_args,
 )
 from glide.constants import TEncodable
-from glide.protobuf.redis_request_pb2 import RequestType
+from glide.protobuf.command_request_pb2 import RequestType
 
 TTransaction = TypeVar("TTransaction", bound="BaseTransaction")
 
@@ -245,7 +245,7 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Executes a single command, without checking inputs.
-        See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Append a command to list of all pub/sub clients:
@@ -2033,7 +2033,7 @@ class BaseTransaction:
                 - `engines` with information about available engines and their stats.
                 See example for more details.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return self.append_command(RequestType.FunctionStats, [])
 
@@ -4243,7 +4243,7 @@ class BaseTransaction:
 
     def object_freq(self: TTransaction, key: TEncodable) -> TTransaction:
         """
-        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+        Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
         See https://valkey.io/commands/object-freq for more details.
 
@@ -4830,14 +4830,14 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Select, [str(index)])
 
     def sort(
-        self: TTransaction,
+        self,
         key: TEncodable,
         by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -4877,14 +4877,14 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def sort_ro(
-        self: TTransaction,
+        self,
         key: TEncodable,
         by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -4920,13 +4920,13 @@ class Transaction(BaseTransaction):
         Command response:
             List[Optional[bytes]]: Returns a list of sorted elements.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
-        self: TTransaction,
+        self,
         key: TEncodable,
         destination: TEncodable,
         by_pattern: Optional[TEncodable] = None,
@@ -4934,7 +4934,7 @@ class Transaction(BaseTransaction):
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
@@ -4977,12 +4977,12 @@ class Transaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def copy(
-        self: TTransaction,
+        self,
         source: TEncodable,
         destination: TEncodable,
         destinationDB: Optional[int] = None,
         replace: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "Transaction":
         """
         Copies the value stored at the `source` to the `destination` key. If `destinationDB`
         is specified, the value will be copied to the database specified by `destinationDB`,
@@ -5010,9 +5010,7 @@ class Transaction(BaseTransaction):
 
         return self.append_command(RequestType.Copy, args)
 
-    def publish(
-        self: TTransaction, message: TEncodable, channel: TEncodable
-    ) -> TTransaction:
+    def publish(self, message: TEncodable, channel: TEncodable) -> "Transaction":
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
@@ -5021,8 +5019,8 @@ class Transaction(BaseTransaction):
             message (TEncodable): Message to publish
             channel (TEncodable): Channel to publish the message on.
 
-        Returns:
-            TOK: a simple `OK` response.
+        Command Respose:
+            int: Number of subscriptions in that shard that received the message.
 
         """
         return self.append_command(RequestType.Publish, [channel, message])
@@ -5038,12 +5036,12 @@ class ClusterTransaction(BaseTransaction):
     """
 
     def sort(
-        self: TTransaction,
+        self,
         key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         This command is routed to primary only.
@@ -5066,12 +5064,12 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def sort_ro(
-        self: TTransaction,
+        self,
         key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -5090,19 +5088,19 @@ class ClusterTransaction(BaseTransaction):
         Command response:
             List[bytes]: A list of sorted elements.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
-        self: TTransaction,
+        self,
         key: TEncodable,
         destination: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         When in cluster mode, `key` and `store` must map to the same hash slot.
@@ -5126,11 +5124,11 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def copy(
-        self: TTransaction,
+        self,
         source: TEncodable,
         destination: TEncodable,
         replace: Optional[bool] = None,
-    ) -> TTransaction:
+    ) -> "ClusterTransaction":
         """
         Copies the value stored at the `source` to the `destination` key. When `replace` is True,
         removes the `destination` key first if it already exists, otherwise performs no action.
@@ -5154,8 +5152,8 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Copy, args)
 
     def publish(
-        self: TTransaction, message: str, channel: str, sharded: bool = False
-    ) -> TTransaction:
+        self, message: str, channel: str, sharded: bool = False
+    ) -> "ClusterTransaction":
         """
         Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.

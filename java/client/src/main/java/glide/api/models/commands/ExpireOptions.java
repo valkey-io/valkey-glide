@@ -13,26 +13,26 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ExpireOptions {
     /**
-     * Sets expiry only when the key has no expiry. Equivalent to <code>NX</code> in the Redis API.
+     * Sets expiry only when the key has no expiry. Equivalent to <code>NX</code> in the Valkey API.
      */
     HAS_NO_EXPIRY("NX"),
     /**
      * Sets expiry only when the key has an existing expiry. Equivalent to <code>XX</code> in the
-     * Redis API.
+     * Valkey API.
      */
     HAS_EXISTING_EXPIRY("XX"),
     /**
      * Sets expiry only when the new expiry is greater than current one. Equivalent to <code>GT</code>
-     * in the Redis API.
+     * in the Valkey API.
      */
     NEW_EXPIRY_GREATER_THAN_CURRENT("GT"),
     /**
      * Sets expiry only when the new expiry is less than current one. Equivalent to <code>LT</code> in
-     * the Redis API.
+     * the Valkey API.
      */
     NEW_EXPIRY_LESS_THAN_CURRENT("LT");
 
-    private final String redisApi;
+    private final String valkeyApi;
 
     /**
      * Converts ExpireOptions into a String[].
@@ -40,6 +40,6 @@ public enum ExpireOptions {
      * @return String[]
      */
     public String[] toArgs() {
-        return new String[] {this.redisApi};
+        return new String[] {this.valkeyApi};
     }
 }

@@ -145,7 +145,7 @@ fn array_to_java_array<'local>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointer<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointer<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     pointer: jlong,
@@ -168,7 +168,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointerBinary<
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPointerBinary<
     'local,
 >(
     mut env: JNIEnv<'local>,
@@ -200,7 +200,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
 /// * `_class`  - The class object. Not used.
 /// * `args`    - The arguments. This should be a byte[][] from Java.
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedBytesVec<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_createLeakedBytesVec<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     args: JObjectArray<'local>,
@@ -238,7 +238,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
 /// * `_env`    - The JNI environment. Not used.
 /// * `_class`  - The class object. Not used.
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLengthInBytes<
+pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_getMaxRequestArgsLengthInBytes<
     'local,
 >(
     _env: JNIEnv<'local>,

@@ -21,14 +21,14 @@ from glide.constants import (
     TFunctionStatsResponse,
     TResult,
 )
-from glide.protobuf.redis_request_pb2 import RequestType
+from glide.protobuf.command_request_pb2 import RequestType
 
 
 class StandaloneCommands(CoreCommands):
     async def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
-        See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
+        See the [Valkey GLIDE Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
         for details on the restrictions and limitations of the custom command API.
 
             @example - Return a list of all pub/sub clients:
@@ -39,7 +39,7 @@ class StandaloneCommands(CoreCommands):
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
         Returns:
-            TResult: The returning value depends on the executed command and the route
+            TResult: The returning value depends on the executed command.
         """
         return await self._execute_command(RequestType.CustomCommand, command_args)
 
@@ -70,7 +70,7 @@ class StandaloneCommands(CoreCommands):
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
-        See https://redis.io/topics/Transactions/ for details on Transactions.
+        See https://valkey.io/docs/topics/transactions/ for details on Transactions.
 
         Args:
             transaction (Transaction): A `Transaction` object containing a list of commands to be executed.
@@ -383,7 +383,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.function_kill()
                 "OK"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
@@ -419,7 +419,7 @@ class StandaloneCommands(CoreCommands):
                     }
                 }
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return cast(
             TFunctionStatsResponse,
@@ -662,7 +662,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.sort_ro("user_ids", by_pattern="user:*->age", get_patterns=["user:*->name"])
             [b'Bob', b'Alice']
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         result = await self._execute_command(RequestType.SortReadOnly, args)

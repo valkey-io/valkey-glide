@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
+import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import glide.connectors.resources.Platform;
 import io.netty.bootstrap.ServerBootstrap;
@@ -24,7 +25,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
-import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -54,10 +54,10 @@ public class RustCoreMock {
         public abstract Response connection(ConnectionRequest request);
 
         /** Return `null` to do not reply. */
-        public abstract Response.Builder redisRequest(RedisRequest request);
+        public abstract Response.Builder commandRequest(CommandRequest request);
 
-        public Response redisRequestWithCallbackId(RedisRequest request) {
-            var responseDraft = redisRequest(request);
+        public Response commandRequestWithCallbackId(CommandRequest request) {
+            var responseDraft = commandRequest(request);
             return responseDraft == null
                     ? null
                     : responseDraft.setCallbackIdx(request.getCallbackIdx()).build();
@@ -166,8 +166,8 @@ public class RustCoreMock {
                 response = handler.connection(connection);
                 anybodyConnected.setPlain(true);
             } else {
-                var request = RedisRequest.parseFrom(bytes);
-                response = handler.redisRequestWithCallbackId(request);
+                var request = CommandRequest.parseFrom(bytes);
+                response = handler.commandRequestWithCallbackId(request);
             }
             if (response != null) {
                 ctx.writeAndFlush(response);

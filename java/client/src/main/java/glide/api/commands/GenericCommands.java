@@ -12,22 +12,21 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands and transactions for the "Generic Commands" group for a standalone client.
  *
- * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericCommands {
-    /** Redis API keyword used to denote the destination db index. */
-    String DB_REDIS_API = "DB";
+    /** Valkey API keyword used to denote the destination db index. */
+    String DB_VALKEY_API = "DB";
 
     /**
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
      * @apiNote See <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Glide
-     *     for Redis Wiki</a> for details on the restrictions and limitations of the custom command
-     *     API.
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command">Valkey
+     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
-     * @return Response from Redis containing an <code>Object</code>.
+     * @return The returning value depends on the executed command.
      * @example
      *     <pre>{@code
      * Object response = (String) client.customCommand(new String[] {"ping", "GLIDE"}).get();
@@ -41,7 +40,7 @@ public interface GenericCommands {
     /**
      * Executes a transaction by processing the queued commands.
      *
-     * @see <a href="https://redis.io/topics/Transactions/">valkey.io</a> for details on Redis
+     * @see <a href="https://valkey.io/docs/topics/transactions/">valkey.io</a> for details on
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
@@ -103,7 +102,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -125,7 +124,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -147,7 +146,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -167,7 +166,7 @@ public interface GenericCommands {
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
@@ -201,7 +200,7 @@ public interface GenericCommands {
     /**
      * Returns a random key from currently selected database.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @return A random <code>key</code> from the database.
      * @example
      *     <pre>{@code
@@ -264,7 +263,7 @@ public interface GenericCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
@@ -287,7 +286,7 @@ public interface GenericCommands {
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
      * @return An <code>Array</code> of sorted elements.

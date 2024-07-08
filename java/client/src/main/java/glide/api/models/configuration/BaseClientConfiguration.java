@@ -10,8 +10,8 @@ import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Configuration settings class for creating a Redis Client. Shared settings for standalone and
- * cluster clients.
+ * Configuration settings class for creating a client. Shared settings for standalone and cluster
+ * clients.
  */
 @Getter
 @SuperBuilder
@@ -43,7 +43,7 @@ public abstract class BaseClientConfiguration {
      * Credentials for authentication process. If none are set, the client will not authenticate
      * itself with the server.
      */
-    private final RedisCredentials credentials;
+    private final ServerCredentials credentials;
 
     /**
      * The duration in milliseconds that the client should wait for a request to complete. This

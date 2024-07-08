@@ -4,9 +4,12 @@ package glide.api.commands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamAddOptionsBinary;
+import glide.api.models.commands.stream.StreamAddOptionsBinary.StreamAddOptionsBinaryBuilder;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamPendingOptionsBinary;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -88,12 +91,12 @@ public interface StreamBaseCommands {
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options {@link StreamAddOptions}.
      * @return The id of the added entry, or <code>null</code> if {@link
-     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
-     *     with the matching <code>key</code> exists.
+     *     StreamAddOptionsBinaryBuilder#makeStream(Boolean)} is set to <code>false</code> and no
+     *     stream with the matching <code>key</code> exists.
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
+     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd(gs("key"), Map.of(gs("name"), gs("Sara"), gs("surname"), gs("OConnor")), options).get();
      * if (streamId != null) {
      *     assert streamId.equals("sid");
@@ -101,7 +104,7 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<GlideString> xadd(
-            GlideString key, Map<GlideString, GlideString> values, StreamAddOptions options);
+            GlideString key, Map<GlideString, GlideString> values, StreamAddOptionsBinary options);
 
     /**
      * Reads entries from the given streams.
@@ -138,6 +141,33 @@ public interface StreamBaseCommands {
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
+     * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * Map<GlideString, GlideString> xreadKeys = Map.of(gs("streamKey"), gs("0-0"));
+     * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xread(xreadKeys).get();
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            Map<GlideString, GlideString> keysAndIds);
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
@@ -158,6 +188,36 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             Map<String, String> keysAndIds, StreamReadOptions options);
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @param options Options detailing how to read the stream {@link StreamReadOptions}.
+     * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // retrieve streamKey entries and block for 1 second if is no stream data
+     * Map<String, String> xreadKeys = Map.of(gs("streamKey"), gs("0-0"));
+     * StreamReadOptions options = StreamReadOptions.builder().block(1L).build();
+     * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xread(xreadKeys, options).get();
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            Map<GlideString, GlideString> keysAndIds, StreamReadOptions options);
 
     /**
      * Trims the stream by evicting older entries.
@@ -591,6 +651,25 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group gs("mygroup"), using zero as the starting ID:
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupCreate(GlideString key, GlideString groupname, GlideString id);
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
@@ -607,6 +686,27 @@ public interface StreamBaseCommands {
             String key, String groupName, String id, StreamGroupOptions options);
 
     /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @param options The group options {@link StreamGroupOptions}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group gs("mygroup"), and the stream if it does not exist, after the last ID
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("$"), new StreamGroupOptions(true)).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupCreate(
+            GlideString key, GlideString groupName, GlideString id, StreamGroupOptions options);
+
+    /**
      * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
@@ -620,6 +720,21 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> xgroupDestroy(String key, String groupname);
+
+    /**
+     * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The consumer group name to delete.
+     * @return <code>true</code> if the consumer group is destroyed. Otherwise, <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * // Destroys the consumer group gs("mygroup")
+     * assert client.xgroupDestroy(gs("mystream"), gs("mygroup")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<Boolean> xgroupDestroy(GlideString key, GlideString groupname);
 
     /**
      * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
@@ -639,6 +754,24 @@ public interface StreamBaseCommands {
     CompletableFuture<Boolean> xgroupCreateConsumer(String key, String group, String consumer);
 
     /**
+     * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-createconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return <code>true</code> if the consumer is created. Otherwise, <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * // Creates the consumer gs("myconsumer") in consumer group gs("mygroup")
+     * assert client.xgroupCreateConsumer(gs("mystream"), gs("mygroup"), gs("myconsumer")).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> xgroupCreateConsumer(
+            GlideString key, GlideString group, GlideString consumer);
+
+    /**
      * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
      *
      * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
@@ -655,6 +788,25 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xgroupDelConsumer(String key, String group, String consumer);
+
+    /**
+     * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The consumer to delete.
+     * @return The number of pending messages the <code>consumer</code> had before it was deleted.
+     * @example
+     *     <pre>{@code
+     * // Deletes the consumer gs("myconsumer") in consumer group gs("mygroup")
+     * Long pendingMsgCount = client.xgroupDelConsumer(gs("mystream"), gs("mygroup"), gs("myconsumer")).get();
+     * System.out.println("Consumer 'myconsumer' had " +
+     *     + pendingMsgCount + " pending messages unclaimed.");
+     * }</pre>
+     */
+    CompletableFuture<Long> xgroupDelConsumer(
+            GlideString key, GlideString group, GlideString consumer);
 
     /**
      * Sets the last delivered ID for a consumer group.
@@ -676,6 +828,23 @@ public interface StreamBaseCommands {
     /**
      * Sets the last delivered ID for a consumer group.
      *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Update consumer group gs("mygroup"), to set the last delivered entry ID.
+     * assert client.xgroupSetId(gs("mystream"), gs("mygroup"), gs("0")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(GlideString key, GlideString groupName, GlideString id);
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
      * @since Valkey 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -687,10 +856,30 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Update consumer group "mygroup", to set the last delivered entry ID.
-     * assert client.xgroupSetId("mystream", "mygroup", "0", "1-1").get().equals("OK");
+     * assert client.xgroupSetId("mystream", "mygroup", "0", 1L).get().equals("OK");
      * }</pre>
      */
     CompletableFuture<String> xgroupSetId(String key, String groupName, String id, long entriesRead);
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @since Valkey 7.0 and above
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesRead A value representing the number of stream entries already read by the group.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Update consumer group gs("mygroup"), to set the last delivered entry ID.
+     * assert client.xgroupSetId(gs("mystream"), gs("mygroup"),gs("0"), 1L).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(
+            GlideString key, GlideString groupName, GlideString id, long entriesRead);
 
     /**
      * Reads entries from the given streams owned by a consumer group.
@@ -734,6 +923,40 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal gs(">")}</code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The consumer name.
+     * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *      Returns <code>null</code> if there is no stream that can be served.
+     * @example
+     *     <pre>{@code
+     * // create a new stream at gs("mystream"), with stream id gs("1-0")
+     * String streamId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")), StreamAddOptionsBinary.builder().id(gs("1-0")).build()).get();
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK"); // create the consumer group gs("mygroup")
+     * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xreadgroup(Map.of(gs("mystream"), gs(">")), gs("mygroup"), gs("myconsumer")).get();
+     * // Returns gs("mystream"): gs("1-0"): {{gs("myfield"), gs("mydata")}}
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }
+     * </pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroup(
+            Map<GlideString, GlideString> keysAndIds, GlideString group, GlideString consumer);
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The consumer name.
@@ -763,6 +986,45 @@ public interface StreamBaseCommands {
             Map<String, String> keysAndIds,
             String group,
             String consumer,
+            StreamReadGroupOptions options);
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal gs(">")}</code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The consumer name.
+     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
+     * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      Returns <code>null</code> if there is no stream that can be served.
+     * @example
+     *     <pre>{@code
+     * // create a new stream at gs("mystream"), with stream id gs("1-0")
+     * String streamId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")), StreamAddOptionsBinary.builder().id(gs("1-0")).build()).get();
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK"); // create the consumer group gs("mygroup")
+     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
+     * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xreadgroup(Map.of(gs("mystream"), gs(">")), gs("mygroup"), gs("myconsumer"), options).get();
+     * // Returns gs("mystream"): gs("1-0"): {{gs("myfield"), gs("mydata")}}
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }
+     * </pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroup(
+            Map<GlideString, GlideString> keysAndIds,
+            GlideString group,
+            GlideString consumer,
             StreamReadGroupOptions options);
 
     /**
@@ -1008,7 +1270,7 @@ public interface StreamBaseCommands {
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      * @param count Limits the number of messages returned.
-     * @param options Stream add options {@link StreamPendingOptions}.
+     * @param options Stream add options {@link StreamPendingOptionsBinary}.
      * @return A 2D-<code>array</code> of 4-tuples containing extended message information with the format
      * <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]</code>, where:
      * <ul>
@@ -1026,7 +1288,7 @@ public interface StreamBaseCommands {
      *     InfRangeBound.MIN,
      *     InfRangeBound.MAX,
      *     10L,
-     *     StreamPendingOptions.builder().consumer("my_consumer").build()
+     *     StreamPendingOptionsBinary.builder().consumer(gs("my_consumer")).build()
      * ).get();
      * for (Object[] messageResult : result) {
      *     System.out.printf("Message %s from consumer %s was read %s times", messageResult[0], messageResult[1], messageResult[2]);
@@ -1038,7 +1300,7 @@ public interface StreamBaseCommands {
             StreamRange start,
             StreamRange end,
             long count,
-            StreamPendingOptions options);
+            StreamPendingOptionsBinary options);
 
     /**
      * Changes the ownership of a pending message.
@@ -1753,7 +2015,7 @@ public interface StreamBaseCommands {
      * Returns verbose information about the stream stored at key <code>key</code>.<br>
      * The output is limited by first <code>10</code> PEL entries.
      *
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
@@ -1827,7 +2089,7 @@ public interface StreamBaseCommands {
      * Returns verbose information about the stream stored at key <code>key</code>.<br>
      * The output is limited by first <code>10</code> PEL entries.
      *
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return A <code>Map</code> of detailed stream information for the given <code>key</code>. See
@@ -1900,7 +2162,7 @@ public interface StreamBaseCommands {
     /**
      * Returns verbose information about the stream stored at key <code>key</code>.
      *
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
@@ -1918,7 +2180,7 @@ public interface StreamBaseCommands {
     /**
      * Returns verbose information about the stream stored at key <code>key</code>.
      *
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>

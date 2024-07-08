@@ -31,7 +31,7 @@ from glide.async_commands.core import (
     InsertPosition,
     UpdateOptions,
 )
-from glide.async_commands.redis_modules import json
+from glide.async_commands.server_modules import json
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,

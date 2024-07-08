@@ -13,11 +13,11 @@ import lombok.NonNull;
  * Supports commands and transactions for the "List Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/commands/?group=list">List Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=list">List Commands</a>
  */
 public interface ListBaseCommands {
-    /** Redis API keyword used to extract specific count of members from a sorted set. */
-    String COUNT_FOR_LIST_REDIS_API = "COUNT";
+    /** Valkey API keyword used to extract specific count of members from a sorted set. */
+    String COUNT_FOR_LIST_VALKEY_API = "COUNT";
 
     /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
@@ -84,7 +84,7 @@ public interface ListBaseCommands {
      * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
      * a single element from the beginning of the list.
      *
-     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return The value of the first element.<br>
      *     If <code>key</code> does not exist, null will be returned.
@@ -103,7 +103,7 @@ public interface ListBaseCommands {
      * Returns the index of the first occurrence of <code>element</code> inside the list specified by
      * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -122,7 +122,7 @@ public interface ListBaseCommands {
      * Returns the index of the first occurrence of <code>element</code> inside the list specified by
      * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -141,7 +141,7 @@ public interface ListBaseCommands {
      * Returns the index of an occurrence of <code>element</code> within a list based on the given
      * <code>options</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -170,7 +170,7 @@ public interface ListBaseCommands {
      * Returns the index of an occurrence of <code>element</code> within a list based on the given
      * <code>options</code>. If no match is found, <code>null</code> is returned.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -198,7 +198,7 @@ public interface ListBaseCommands {
     /**
      * Returns an <code>array</code> of indices of matching elements within a list.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -216,7 +216,7 @@ public interface ListBaseCommands {
     /**
      * Returns an <code>array</code> of indices of matching elements within a list.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -236,7 +236,7 @@ public interface ListBaseCommands {
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
      * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -265,7 +265,7 @@ public interface ListBaseCommands {
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
      * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
      *
-     * @since Redis 6.0.6.
+     * @since Valkey 6.0.6.
      * @see <a href="https://valkey.io/commands/lpos/">valkey.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
@@ -317,7 +317,7 @@ public interface ListBaseCommands {
      * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,
      * depending on the list's length.
      *
-     * @see <a href="https://redis.io/commands/lpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/lpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return An array of the popped elements will be returned depending on the list's length.<br>
@@ -642,7 +642,7 @@ public interface ListBaseCommands {
      * Removes and returns the last elements of the list stored at <code>key</code>.<br>
      * The command pops a single element from the end of the list.
      *
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @return The value of the last element.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
@@ -681,7 +681,7 @@ public interface ListBaseCommands {
      * Removes and returns up to <code>count</code> elements from the list stored at <code>key</code>,
      * depending on the list's length.
      *
-     * @see <a href="https://redis.io/commands/rpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/rpop/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param count The count of the elements to pop from the list.
      * @return An array of popped elements will be returned depending on the list's length.<br>
@@ -784,7 +784,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
-     * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/blpop/">valkey.io</a> for details.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -844,7 +844,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ul>
      *
-     * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/brpop/">valkey.io</a> for details.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -933,7 +933,7 @@ public interface ListBaseCommands {
      * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -956,7 +956,7 @@ public interface ListBaseCommands {
      * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -978,7 +978,7 @@ public interface ListBaseCommands {
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -998,7 +998,7 @@ public interface ListBaseCommands {
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
@@ -1029,7 +1029,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1063,7 +1063,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1097,7 +1097,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1130,7 +1130,7 @@ public interface ListBaseCommands {
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
@@ -1193,7 +1193,7 @@ public interface ListBaseCommands {
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -1222,7 +1222,7 @@ public interface ListBaseCommands {
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
@@ -1254,7 +1254,7 @@ public interface ListBaseCommands {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
      * ListDirection)}.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @apiNote
      *     <ol>
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
@@ -1300,7 +1300,7 @@ public interface ListBaseCommands {
      * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
      * ListDirection)}.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @apiNote
      *     <ol>
      *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map

@@ -1,13 +1,200 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static command_request.CommandRequestOuterClass.RequestType.Append;
+import static command_request.CommandRequestOuterClass.RequestType.BLMPop;
+import static command_request.CommandRequestOuterClass.RequestType.BLMove;
+import static command_request.CommandRequestOuterClass.RequestType.BLPop;
+import static command_request.CommandRequestOuterClass.RequestType.BRPop;
+import static command_request.CommandRequestOuterClass.RequestType.BZMPop;
+import static command_request.CommandRequestOuterClass.RequestType.BZPopMax;
+import static command_request.CommandRequestOuterClass.RequestType.BZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.BitCount;
+import static command_request.CommandRequestOuterClass.RequestType.BitField;
+import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.BitOp;
+import static command_request.CommandRequestOuterClass.RequestType.BitPos;
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.DBSize;
+import static command_request.CommandRequestOuterClass.RequestType.Decr;
+import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
+import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.Dump;
+import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.Exists;
+import static command_request.CommandRequestOuterClass.RequestType.Expire;
+import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.FCall;
+import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
+import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDump;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionFlush;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.GeoAdd;
+import static command_request.CommandRequestOuterClass.RequestType.GeoDist;
+import static command_request.CommandRequestOuterClass.RequestType.GeoHash;
+import static command_request.CommandRequestOuterClass.RequestType.GeoPos;
+import static command_request.CommandRequestOuterClass.RequestType.GeoSearch;
+import static command_request.CommandRequestOuterClass.RequestType.GeoSearchStore;
+import static command_request.CommandRequestOuterClass.RequestType.Get;
+import static command_request.CommandRequestOuterClass.RequestType.GetBit;
+import static command_request.CommandRequestOuterClass.RequestType.GetDel;
+import static command_request.CommandRequestOuterClass.RequestType.GetEx;
+import static command_request.CommandRequestOuterClass.RequestType.GetRange;
+import static command_request.CommandRequestOuterClass.RequestType.HDel;
+import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HGet;
+import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.HKeys;
+import static command_request.CommandRequestOuterClass.RequestType.HLen;
+import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HRandField;
+import static command_request.CommandRequestOuterClass.RequestType.HScan;
+import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HVals;
+import static command_request.CommandRequestOuterClass.RequestType.Incr;
+import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.IncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.LCS;
+import static command_request.CommandRequestOuterClass.RequestType.LIndex;
+import static command_request.CommandRequestOuterClass.RequestType.LInsert;
+import static command_request.CommandRequestOuterClass.RequestType.LLen;
+import static command_request.CommandRequestOuterClass.RequestType.LMPop;
+import static command_request.CommandRequestOuterClass.RequestType.LMove;
+import static command_request.CommandRequestOuterClass.RequestType.LPop;
+import static command_request.CommandRequestOuterClass.RequestType.LPos;
+import static command_request.CommandRequestOuterClass.RequestType.LPush;
+import static command_request.CommandRequestOuterClass.RequestType.LPushX;
+import static command_request.CommandRequestOuterClass.RequestType.LRange;
+import static command_request.CommandRequestOuterClass.RequestType.LRem;
+import static command_request.CommandRequestOuterClass.RequestType.LSet;
+import static command_request.CommandRequestOuterClass.RequestType.LTrim;
+import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MGet;
+import static command_request.CommandRequestOuterClass.RequestType.MSet;
+import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCount;
+import static command_request.CommandRequestOuterClass.RequestType.PExpire;
+import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.Persist;
+import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
+import static command_request.CommandRequestOuterClass.RequestType.PfCount;
+import static command_request.CommandRequestOuterClass.RequestType.PfMerge;
+import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.Publish;
+import static command_request.CommandRequestOuterClass.RequestType.RPop;
+import static command_request.CommandRequestOuterClass.RequestType.RPush;
+import static command_request.CommandRequestOuterClass.RequestType.RPushX;
+import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.Rename;
+import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.Restore;
+import static command_request.CommandRequestOuterClass.RequestType.SAdd;
+import static command_request.CommandRequestOuterClass.RequestType.SCard;
+import static command_request.CommandRequestOuterClass.RequestType.SDiff;
+import static command_request.CommandRequestOuterClass.RequestType.SDiffStore;
+import static command_request.CommandRequestOuterClass.RequestType.SInter;
+import static command_request.CommandRequestOuterClass.RequestType.SInterCard;
+import static command_request.CommandRequestOuterClass.RequestType.SInterStore;
+import static command_request.CommandRequestOuterClass.RequestType.SIsMember;
+import static command_request.CommandRequestOuterClass.RequestType.SMIsMember;
+import static command_request.CommandRequestOuterClass.RequestType.SMembers;
+import static command_request.CommandRequestOuterClass.RequestType.SMove;
+import static command_request.CommandRequestOuterClass.RequestType.SPop;
+import static command_request.CommandRequestOuterClass.RequestType.SRandMember;
+import static command_request.CommandRequestOuterClass.RequestType.SRem;
+import static command_request.CommandRequestOuterClass.RequestType.SScan;
+import static command_request.CommandRequestOuterClass.RequestType.SUnion;
+import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.Set;
+import static command_request.CommandRequestOuterClass.RequestType.SetBit;
+import static command_request.CommandRequestOuterClass.RequestType.SetRange;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.TTL;
+import static command_request.CommandRequestOuterClass.RequestType.Time;
+import static command_request.CommandRequestOuterClass.RequestType.Touch;
+import static command_request.CommandRequestOuterClass.RequestType.Type;
+import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.XAck;
+import static command_request.CommandRequestOuterClass.RequestType.XAdd;
+import static command_request.CommandRequestOuterClass.RequestType.XAutoClaim;
+import static command_request.CommandRequestOuterClass.RequestType.XClaim;
+import static command_request.CommandRequestOuterClass.RequestType.XDel;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupCreate;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupDelConsumer;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupDestroy;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupSetId;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoConsumers;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoGroups;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoStream;
+import static command_request.CommandRequestOuterClass.RequestType.XLen;
+import static command_request.CommandRequestOuterClass.RequestType.XPending;
+import static command_request.CommandRequestOuterClass.RequestType.XRange;
+import static command_request.CommandRequestOuterClass.RequestType.XRead;
+import static command_request.CommandRequestOuterClass.RequestType.XReadGroup;
+import static command_request.CommandRequestOuterClass.RequestType.XRevRange;
+import static command_request.CommandRequestOuterClass.RequestType.XTrim;
+import static command_request.CommandRequestOuterClass.RequestType.ZAdd;
+import static command_request.CommandRequestOuterClass.RequestType.ZCard;
+import static command_request.CommandRequestOuterClass.RequestType.ZCount;
+import static command_request.CommandRequestOuterClass.RequestType.ZDiff;
+import static command_request.CommandRequestOuterClass.RequestType.ZDiffStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZIncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.ZInter;
+import static command_request.CommandRequestOuterClass.RequestType.ZInterCard;
+import static command_request.CommandRequestOuterClass.RequestType.ZInterStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZLexCount;
+import static command_request.CommandRequestOuterClass.RequestType.ZMPop;
+import static command_request.CommandRequestOuterClass.RequestType.ZMScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZPopMax;
+import static command_request.CommandRequestOuterClass.RequestType.ZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.ZRandMember;
+import static command_request.CommandRequestOuterClass.RequestType.ZRange;
+import static command_request.CommandRequestOuterClass.RequestType.ZRangeStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZRem;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByLex;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZRevRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZScan;
+import static command_request.CommandRequestOuterClass.RequestType.ZScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
+import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
@@ -23,225 +210,41 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
-import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
+import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_VALKEY_API;
+import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_VALKEY_API;
 import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
-import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
+import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static redis_request.RedisRequestOuterClass.RequestType.Append;
-import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
-import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
-import static redis_request.RedisRequestOuterClass.RequestType.BitField;
-import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
-import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Decr;
-import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.Del;
-import static redis_request.RedisRequestOuterClass.RequestType.Dump;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.Exists;
-import static redis_request.RedisRequestOuterClass.RequestType.Expire;
-import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
-import static redis_request.RedisRequestOuterClass.RequestType.FCall;
-import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoSearch;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoSearchStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Get;
-import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
-import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
-import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
-import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.HDel;
-import static redis_request.RedisRequestOuterClass.RequestType.HExists;
-import static redis_request.RedisRequestOuterClass.RequestType.HGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HGetAll;
-import static redis_request.RedisRequestOuterClass.RequestType.HIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
-import static redis_request.RedisRequestOuterClass.RequestType.HLen;
-import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
-import static redis_request.RedisRequestOuterClass.RequestType.HScan;
-import static redis_request.RedisRequestOuterClass.RequestType.HSet;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
-import static redis_request.RedisRequestOuterClass.RequestType.HVals;
-import static redis_request.RedisRequestOuterClass.RequestType.Incr;
-import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LCS;
-import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
-import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
-import static redis_request.RedisRequestOuterClass.RequestType.LLen;
-import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.LMove;
-import static redis_request.RedisRequestOuterClass.RequestType.LPop;
-import static redis_request.RedisRequestOuterClass.RequestType.LPos;
-import static redis_request.RedisRequestOuterClass.RequestType.LPush;
-import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.LRange;
-import static redis_request.RedisRequestOuterClass.RequestType.LRem;
-import static redis_request.RedisRequestOuterClass.RequestType.LSet;
-import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.MGet;
-import static redis_request.RedisRequestOuterClass.RequestType.MSet;
-import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
-import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
-import static redis_request.RedisRequestOuterClass.RequestType.Persist;
-import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
-import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.Publish;
-import static redis_request.RedisRequestOuterClass.RequestType.RPop;
-import static redis_request.RedisRequestOuterClass.RequestType.RPush;
-import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.Rename;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
-import static redis_request.RedisRequestOuterClass.RequestType.Restore;
-import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.SCard;
-import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
-import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
-import static redis_request.RedisRequestOuterClass.RequestType.SInter;
-import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
-import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
-import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
-import static redis_request.RedisRequestOuterClass.RequestType.SMove;
-import static redis_request.RedisRequestOuterClass.RequestType.SPop;
-import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SRem;
-import static redis_request.RedisRequestOuterClass.RequestType.SScan;
-import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Set;
-import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
-import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
-import static redis_request.RedisRequestOuterClass.RequestType.TTL;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.Touch;
-import static redis_request.RedisRequestOuterClass.RequestType.Type;
-import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
-import static redis_request.RedisRequestOuterClass.RequestType.Wait;
-import static redis_request.RedisRequestOuterClass.RequestType.XAck;
-import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
-import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
-import static redis_request.RedisRequestOuterClass.RequestType.XDel;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
-import static redis_request.RedisRequestOuterClass.RequestType.XLen;
-import static redis_request.RedisRequestOuterClass.RequestType.XPending;
-import static redis_request.RedisRequestOuterClass.RequestType.XRange;
-import static redis_request.RedisRequestOuterClass.RequestType.XRead;
-import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
-import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
-import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
-import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
-import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
-import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
-import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRem;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
-import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import com.google.protobuf.ByteString;
+import command_request.CommandRequestOuterClass.Command;
+import command_request.CommandRequestOuterClass.Command.ArgsArray;
+import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
@@ -302,9 +305,6 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
-import redis_request.RedisRequestOuterClass.RequestType;
 
 public class TransactionTests {
     private static Stream<Arguments> getTransactionBuilders() {
@@ -430,7 +430,7 @@ public class TransactionTests {
                 .hrandfieldWithCountWithValues("key", 3);
         results.add(Pair.of(HRandField, buildArgs("key")));
         results.add(Pair.of(HRandField, buildArgs("key", "2")));
-        results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_REDIS_API)));
+        results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_VALKEY_API)));
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
@@ -615,13 +615,13 @@ public class TransactionTests {
         results.add(Pair.of(ZRank, buildArgs("key", "member")));
 
         transaction.zrankWithScore("key", "member");
-        results.add(Pair.of(ZRank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
+        results.add(Pair.of(ZRank, buildArgs("key", "member", WITH_SCORE_VALKEY_API)));
 
         transaction.zrevrank("key", "member");
         results.add(Pair.of(ZRevRank, buildArgs("key", "member")));
 
         transaction.zrevrankWithScore("key", "member");
-        results.add(Pair.of(ZRevRank, buildArgs("key", "member", WITH_SCORE_REDIS_API)));
+        results.add(Pair.of(ZRevRank, buildArgs("key", "member", WITH_SCORE_VALKEY_API)));
 
         transaction.zmscore("key", new String[] {"member1", "member2"});
         results.add(Pair.of(ZMScore, buildArgs("key", "member1", "member2")));
@@ -630,7 +630,7 @@ public class TransactionTests {
         results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
 
         transaction.zdiffWithScores(new String[] {"key1", "key2"});
-        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
@@ -686,7 +686,7 @@ public class TransactionTests {
         results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2")));
 
         transaction.zunionWithScores(new KeyArray(new String[] {"key1", "key2"}));
-        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZUnion, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         List<Pair<String, Double>> weightedKeys = new ArrayList<>();
         weightedKeys.add(Pair.of("key1", 10.0));
@@ -701,10 +701,10 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString())));
 
         transaction.zunionstore("destination", new WeightedKeys(weightedKeys), Aggregate.MAX);
@@ -716,10 +716,10 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString())));
 
         transaction.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
@@ -730,14 +730,14 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString(),
-                                WITH_SCORES_REDIS_API)));
+                                WITH_SCORES_VALKEY_API)));
         transaction.zintercard(new String[] {"key1", "key2"}, 5);
-        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_REDIS_API, "5")));
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_VALKEY_API, "5")));
 
         transaction.zintercard(new String[] {"key1", "key2"});
         results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2")));
@@ -746,7 +746,7 @@ public class TransactionTests {
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2")));
 
         transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
-        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_VALKEY_API)));
 
         transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
@@ -756,12 +756,12 @@ public class TransactionTests {
                                 "2",
                                 "key1",
                                 "key2",
-                                WEIGHTS_REDIS_API,
+                                WEIGHTS_VALKEY_API,
                                 "10.0",
                                 "20.0",
-                                AGGREGATE_REDIS_API,
+                                AGGREGATE_VALKEY_API,
                                 Aggregate.MAX.toString(),
-                                WITH_SCORES_REDIS_API)));
+                                WITH_SCORES_VALKEY_API)));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
@@ -770,21 +770,22 @@ public class TransactionTests {
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
         transaction.xtrim("key", new MinId(true, "id"));
-        results.add(Pair.of(XTrim, buildArgs("key", TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id")));
+        results.add(
+                Pair.of(XTrim, buildArgs("key", TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id")));
 
         transaction.xread(Map.of("key", "id"));
-        results.add(Pair.of(XRead, buildArgs(READ_STREAMS_REDIS_API, "key", "id")));
+        results.add(Pair.of(XRead, buildArgs(READ_STREAMS_VALKEY_API, "key", "id")));
 
         transaction.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
         results.add(
                 Pair.of(
                         XRead,
                         buildArgs(
-                                READ_COUNT_REDIS_API,
+                                READ_COUNT_VALKEY_API,
                                 "2",
-                                READ_BLOCK_REDIS_API,
+                                READ_BLOCK_VALKEY_API,
                                 "1",
-                                READ_STREAMS_REDIS_API,
+                                READ_STREAMS_VALKEY_API,
                                 "key",
                                 "id")));
 
@@ -796,7 +797,7 @@ public class TransactionTests {
 
         transaction.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX);
         results.add(
-                Pair.of(XRange, buildArgs("key", MINIMUM_RANGE_REDIS_API, MAXIMUM_RANGE_REDIS_API)));
+                Pair.of(XRange, buildArgs("key", MINIMUM_RANGE_VALKEY_API, MAXIMUM_RANGE_VALKEY_API)));
 
         transaction.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 99L);
         results.add(
@@ -804,14 +805,14 @@ public class TransactionTests {
                         XRange,
                         buildArgs(
                                 "key",
-                                MINIMUM_RANGE_REDIS_API,
-                                MAXIMUM_RANGE_REDIS_API,
-                                RANGE_COUNT_REDIS_API,
+                                MINIMUM_RANGE_VALKEY_API,
+                                MAXIMUM_RANGE_VALKEY_API,
+                                RANGE_COUNT_VALKEY_API,
                                 "99")));
 
         transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN);
         results.add(
-                Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API)));
+                Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_VALKEY_API, MINIMUM_RANGE_VALKEY_API)));
 
         transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
         results.add(
@@ -819,9 +820,9 @@ public class TransactionTests {
                         XRevRange,
                         buildArgs(
                                 "key",
-                                MAXIMUM_RANGE_REDIS_API,
-                                MINIMUM_RANGE_REDIS_API,
-                                RANGE_COUNT_REDIS_API,
+                                MAXIMUM_RANGE_VALKEY_API,
+                                MINIMUM_RANGE_VALKEY_API,
+                                RANGE_COUNT_VALKEY_API,
                                 "99")));
 
         transaction.xgroupCreate("key", "group", "id");
@@ -849,7 +850,7 @@ public class TransactionTests {
                 Pair.of(
                         XReadGroup,
                         buildArgs(
-                                READ_GROUP_REDIS_API, "group", "consumer", READ_STREAMS_REDIS_API, "key", "id")));
+                                READ_GROUP_VALKEY_API, "group", "consumer", READ_STREAMS_VALKEY_API, "key", "id")));
 
         transaction.xgroupSetId("key", "group", "id");
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
@@ -866,15 +867,15 @@ public class TransactionTests {
                 Pair.of(
                         XReadGroup,
                         buildArgs(
-                                READ_GROUP_REDIS_API,
+                                READ_GROUP_VALKEY_API,
                                 "group",
                                 "consumer",
-                                READ_COUNT_REDIS_API,
+                                READ_COUNT_VALKEY_API,
                                 "2",
-                                READ_BLOCK_REDIS_API,
+                                READ_BLOCK_VALKEY_API,
                                 "1",
-                                READ_NOACK_REDIS_API,
-                                READ_STREAMS_REDIS_API,
+                                READ_NOACK_VALKEY_API,
+                                READ_STREAMS_VALKEY_API,
                                 "key",
                                 "id")));
 
@@ -888,7 +889,7 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         XPending,
-                        buildArgs("key", "group", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API, "99")));
+                        buildArgs("key", "group", MAXIMUM_RANGE_VALKEY_API, MINIMUM_RANGE_VALKEY_API, "99")));
 
         transaction.xpending(
                 "key",
@@ -903,10 +904,10 @@ public class TransactionTests {
                         buildArgs(
                                 "key",
                                 "group",
-                                IDLE_TIME_REDIS_API,
+                                IDLE_TIME_VALKEY_API,
                                 "5",
-                                EXCLUSIVE_RANGE_REDIS_API + "11",
-                                EXCLUSIVE_RANGE_REDIS_API + "1234-0",
+                                EXCLUSIVE_RANGE_VALKEY_API + "11",
+                                EXCLUSIVE_RANGE_VALKEY_API + "1234-0",
                                 "99",
                                 "consumer")));
 
@@ -932,19 +933,19 @@ public class TransactionTests {
                                 "99",
                                 "12345-1",
                                 "98765-4",
-                                IDLE_REDIS_API,
+                                IDLE_VALKEY_API,
                                 "11",
-                                TIME_REDIS_API,
+                                TIME_VALKEY_API,
                                 "12",
-                                RETRY_COUNT_REDIS_API,
+                                RETRY_COUNT_VALKEY_API,
                                 "5",
-                                FORCE_REDIS_API)));
+                                FORCE_VALKEY_API)));
 
         transaction.xclaimJustId("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
         results.add(
                 Pair.of(
                         XClaim,
-                        buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_REDIS_API)));
+                        buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_VALKEY_API)));
 
         transaction.xclaimJustId(
                 "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
@@ -958,14 +959,14 @@ public class TransactionTests {
                                 "99",
                                 "12345-1",
                                 "98765-4",
-                                IDLE_REDIS_API,
+                                IDLE_VALKEY_API,
                                 "11",
-                                TIME_REDIS_API,
+                                TIME_VALKEY_API,
                                 "12",
-                                RETRY_COUNT_REDIS_API,
+                                RETRY_COUNT_VALKEY_API,
                                 "5",
-                                FORCE_REDIS_API,
-                                JUST_ID_REDIS_API)));
+                                FORCE_VALKEY_API,
+                                JUST_ID_VALKEY_API)));
 
         transaction.xinfoGroups("key");
         results.add(Pair.of(XInfoGroups, buildArgs("key")));
@@ -1005,9 +1006,9 @@ public class TransactionTests {
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
-        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "5")));
+        results.add(Pair.of(Lolwut, buildArgs(VERSION_VALKEY_API, "5")));
         results.add(Pair.of(Lolwut, buildArgs("1", "2")));
-        results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "6", "42")));
+        results.add(Pair.of(Lolwut, buildArgs(VERSION_VALKEY_API, "6", "42")));
 
         transaction.dbsize();
         results.add(Pair.of(DBSize, buildArgs()));
@@ -1022,7 +1023,7 @@ public class TransactionTests {
         results.add(Pair.of(ZRandMember, buildArgs("key", "5")));
 
         transaction.zrandmemberWithCountWithScores("key", 5);
-        results.add(Pair.of(ZRandMember, buildArgs("key", "5", WITH_SCORES_REDIS_API)));
+        results.add(Pair.of(ZRandMember, buildArgs("key", "5", WITH_SCORES_VALKEY_API)));
 
         transaction.zincrby("key", 3.14, "value");
         results.add(Pair.of(ZIncrBy, buildArgs("key", "3.14", "value")));
@@ -1067,7 +1068,7 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         ZRange,
-                        buildArgs("key", "5.0", "+inf", "BYSCORE", "LIMIT", "1", "2", WITH_SCORES_REDIS_API)));
+                        buildArgs("key", "5.0", "+inf", "BYSCORE", "LIMIT", "1", "2", WITH_SCORES_VALKEY_API)));
 
         transaction.pfadd("hll", new String[] {"a", "b", "c"});
         results.add(Pair.of(PfAdd, buildArgs("hll", "a", "b", "c")));
@@ -1113,8 +1114,8 @@ public class TransactionTests {
                         GeoAdd,
                         buildArgs(
                                 "key",
-                                ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
-                                CHANGED_REDIS_API,
+                                ConditionalChange.ONLY_IF_EXISTS.getValkeyApi(),
+                                CHANGED_VALKEY_API,
                                 "10.0",
                                 "20.0",
                                 "Place")));
@@ -1126,8 +1127,8 @@ public class TransactionTests {
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
 
         transaction.functionList(true).functionList("*", false);
-        results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
-        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
+        results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_VALKEY_API)));
+        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_VALKEY_API, "*")));
 
         transaction.functionDump();
         results.add(Pair.of(FunctionDump, buildArgs()));
@@ -1251,7 +1252,7 @@ public class TransactionTests {
         results.add(Pair.of(FunctionDelete, buildArgs("LIB")));
 
         transaction.copy("key1", "key2", true);
-        results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
+        results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_VALKEY_API)));
 
         transaction.dump("key1");
         results.add(Pair.of(Dump, buildArgs("key1")));
@@ -1327,7 +1328,7 @@ public class TransactionTests {
                                 "1.0",
                                 "1.0",
                                 "km",
-                                COUNT_REDIS_API,
+                                COUNT_VALKEY_API,
                                 "2",
                                 "ASC")));
 
@@ -1412,7 +1413,7 @@ public class TransactionTests {
                                 "1.0",
                                 "1.0",
                                 "km",
-                                COUNT_REDIS_API,
+                                COUNT_VALKEY_API,
                                 "2",
                                 "ASC")));
 

@@ -12,8 +12,8 @@ import glide.api.commands.ScriptingAndFunctionsCommands;
  */
 public class FunctionListOptions {
     /** Causes the server to include the libraries source implementation in the reply. */
-    public static final String WITH_CODE_REDIS_API = "WITHCODE";
+    public static final String WITH_CODE_VALKEY_API = "WITHCODE";
 
-    /** REDIS API keyword followed by library name pattern. */
-    public static final String LIBRARY_NAME_REDIS_API = "LIBRARYNAME";
+    /** Valkey API keyword followed by library name pattern. */
+    public static final String LIBRARY_NAME_VALKEY_API = "LIBRARYNAME";
 }

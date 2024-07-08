@@ -7,7 +7,7 @@ import glide.api.logging.Logger;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.managers.BaseResponseResolver;
 import java.util.Arrays;
 import java.util.Map;
@@ -61,7 +61,7 @@ public class MessageHandler {
                     Logger.Level.WARN,
                     "invalid push",
                     "Received invalid push: empty or in incorrect format.");
-            throw new RedisException("Received invalid push: empty or in incorrect format.");
+            throw new GlideException("Received invalid push: empty or in incorrect format.");
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> push = (Map<String, Object>) data;

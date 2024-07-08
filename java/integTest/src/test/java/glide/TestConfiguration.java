@@ -5,7 +5,7 @@ import com.vdurmont.semver4j.Semver;
 import java.util.Arrays;
 
 public final class TestConfiguration {
-    // All redis servers are hosted on localhost
+    // All servers are hosted on localhost
     public static final int[] STANDALONE_PORTS = getPortsFromProperty("test.server.standalone.ports");
     public static final int[] CLUSTER_PORTS = getPortsFromProperty("test.server.cluster.ports");
     public static final Semver SERVER_VERSION = new Semver(System.getProperty("test.server.version"));

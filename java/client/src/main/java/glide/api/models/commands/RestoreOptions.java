@@ -19,18 +19,18 @@ import lombok.*;
 @Builder
 public final class RestoreOptions {
     /** <code>REPLACE</code> subcommand string to replace existing key */
-    public static final String REPLACE_REDIS_API = "REPLACE";
+    public static final String REPLACE_VALKEY_API = "REPLACE";
 
     /**
      * <code>ABSTTL</code> subcommand string to represent absolute timestamp (in milliseconds) for TTL
      */
-    public static final String ABSTTL_REDIS_API = "ABSTTL";
+    public static final String ABSTTL_VALKEY_API = "ABSTTL";
 
     /** <code>IDELTIME</code> subcommand string to set Object Idletime */
-    public static final String IDLETIME_REDIS_API = "IDLETIME";
+    public static final String IDLETIME_VALKEY_API = "IDLETIME";
 
     /** <code>FREQ</code> subcommand string to set Object Frequency */
-    public static final String FREQ_REDIS_API = "FREQ";
+    public static final String FREQ_VALKEY_API = "FREQ";
 
     /** When `true`, it represents <code>REPLACE</code> keyword has been used */
     @Builder.Default private boolean hasReplace = false;
@@ -58,20 +58,20 @@ public final class RestoreOptions {
         resultList.add(gs(value));
 
         if (hasReplace) {
-            resultList.add(gs(REPLACE_REDIS_API));
+            resultList.add(gs(REPLACE_VALKEY_API));
         }
 
         if (hasAbsttl) {
-            resultList.add(gs(ABSTTL_REDIS_API));
+            resultList.add(gs(ABSTTL_VALKEY_API));
         }
 
         if (idletime != null) {
-            resultList.add(gs(IDLETIME_REDIS_API));
+            resultList.add(gs(IDLETIME_VALKEY_API));
             resultList.add(gs(Long.toString(idletime)));
         }
 
         if (frequency != null) {
-            resultList.add(gs(FREQ_REDIS_API));
+            resultList.add(gs(FREQ_VALKEY_API));
             resultList.add(gs(Long.toString(frequency)));
         }
 

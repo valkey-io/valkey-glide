@@ -1,20 +1,213 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.Append;
+import static command_request.CommandRequestOuterClass.RequestType.BLMPop;
+import static command_request.CommandRequestOuterClass.RequestType.BLMove;
+import static command_request.CommandRequestOuterClass.RequestType.BLPop;
+import static command_request.CommandRequestOuterClass.RequestType.BRPop;
+import static command_request.CommandRequestOuterClass.RequestType.BZMPop;
+import static command_request.CommandRequestOuterClass.RequestType.BZPopMax;
+import static command_request.CommandRequestOuterClass.RequestType.BZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.BitCount;
+import static command_request.CommandRequestOuterClass.RequestType.BitField;
+import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.BitOp;
+import static command_request.CommandRequestOuterClass.RequestType.BitPos;
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
+import static command_request.CommandRequestOuterClass.RequestType.DBSize;
+import static command_request.CommandRequestOuterClass.RequestType.Decr;
+import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
+import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.Dump;
+import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.Exists;
+import static command_request.CommandRequestOuterClass.RequestType.Expire;
+import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.FCall;
+import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
+import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDump;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionFlush;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionKill;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.GeoAdd;
+import static command_request.CommandRequestOuterClass.RequestType.GeoDist;
+import static command_request.CommandRequestOuterClass.RequestType.GeoHash;
+import static command_request.CommandRequestOuterClass.RequestType.GeoPos;
+import static command_request.CommandRequestOuterClass.RequestType.GeoSearch;
+import static command_request.CommandRequestOuterClass.RequestType.GeoSearchStore;
+import static command_request.CommandRequestOuterClass.RequestType.Get;
+import static command_request.CommandRequestOuterClass.RequestType.GetBit;
+import static command_request.CommandRequestOuterClass.RequestType.GetDel;
+import static command_request.CommandRequestOuterClass.RequestType.GetEx;
+import static command_request.CommandRequestOuterClass.RequestType.GetRange;
+import static command_request.CommandRequestOuterClass.RequestType.HDel;
+import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HGet;
+import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.HKeys;
+import static command_request.CommandRequestOuterClass.RequestType.HLen;
+import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HRandField;
+import static command_request.CommandRequestOuterClass.RequestType.HScan;
+import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HVals;
+import static command_request.CommandRequestOuterClass.RequestType.Incr;
+import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.IncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.LCS;
+import static command_request.CommandRequestOuterClass.RequestType.LIndex;
+import static command_request.CommandRequestOuterClass.RequestType.LInsert;
+import static command_request.CommandRequestOuterClass.RequestType.LLen;
+import static command_request.CommandRequestOuterClass.RequestType.LMPop;
+import static command_request.CommandRequestOuterClass.RequestType.LMove;
+import static command_request.CommandRequestOuterClass.RequestType.LPop;
+import static command_request.CommandRequestOuterClass.RequestType.LPos;
+import static command_request.CommandRequestOuterClass.RequestType.LPush;
+import static command_request.CommandRequestOuterClass.RequestType.LPushX;
+import static command_request.CommandRequestOuterClass.RequestType.LRange;
+import static command_request.CommandRequestOuterClass.RequestType.LRem;
+import static command_request.CommandRequestOuterClass.RequestType.LSet;
+import static command_request.CommandRequestOuterClass.RequestType.LTrim;
+import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MGet;
+import static command_request.CommandRequestOuterClass.RequestType.MSet;
+import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCount;
+import static command_request.CommandRequestOuterClass.RequestType.PExpire;
+import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.Persist;
+import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
+import static command_request.CommandRequestOuterClass.RequestType.PfCount;
+import static command_request.CommandRequestOuterClass.RequestType.PfMerge;
+import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.Publish;
+import static command_request.CommandRequestOuterClass.RequestType.RPop;
+import static command_request.CommandRequestOuterClass.RequestType.RPush;
+import static command_request.CommandRequestOuterClass.RequestType.RPushX;
+import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.Rename;
+import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.Restore;
+import static command_request.CommandRequestOuterClass.RequestType.SAdd;
+import static command_request.CommandRequestOuterClass.RequestType.SCard;
+import static command_request.CommandRequestOuterClass.RequestType.SDiff;
+import static command_request.CommandRequestOuterClass.RequestType.SDiffStore;
+import static command_request.CommandRequestOuterClass.RequestType.SInter;
+import static command_request.CommandRequestOuterClass.RequestType.SInterCard;
+import static command_request.CommandRequestOuterClass.RequestType.SInterStore;
+import static command_request.CommandRequestOuterClass.RequestType.SIsMember;
+import static command_request.CommandRequestOuterClass.RequestType.SMIsMember;
+import static command_request.CommandRequestOuterClass.RequestType.SMembers;
+import static command_request.CommandRequestOuterClass.RequestType.SMove;
+import static command_request.CommandRequestOuterClass.RequestType.SPop;
+import static command_request.CommandRequestOuterClass.RequestType.SRandMember;
+import static command_request.CommandRequestOuterClass.RequestType.SRem;
+import static command_request.CommandRequestOuterClass.RequestType.SScan;
+import static command_request.CommandRequestOuterClass.RequestType.SUnion;
+import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.Select;
+import static command_request.CommandRequestOuterClass.RequestType.SetBit;
+import static command_request.CommandRequestOuterClass.RequestType.SetRange;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.TTL;
+import static command_request.CommandRequestOuterClass.RequestType.Time;
+import static command_request.CommandRequestOuterClass.RequestType.Touch;
+import static command_request.CommandRequestOuterClass.RequestType.Type;
+import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
+import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.Watch;
+import static command_request.CommandRequestOuterClass.RequestType.XAck;
+import static command_request.CommandRequestOuterClass.RequestType.XAdd;
+import static command_request.CommandRequestOuterClass.RequestType.XAutoClaim;
+import static command_request.CommandRequestOuterClass.RequestType.XClaim;
+import static command_request.CommandRequestOuterClass.RequestType.XDel;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupCreate;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupDelConsumer;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupDestroy;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupSetId;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoConsumers;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoGroups;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoStream;
+import static command_request.CommandRequestOuterClass.RequestType.XLen;
+import static command_request.CommandRequestOuterClass.RequestType.XPending;
+import static command_request.CommandRequestOuterClass.RequestType.XRange;
+import static command_request.CommandRequestOuterClass.RequestType.XRead;
+import static command_request.CommandRequestOuterClass.RequestType.XReadGroup;
+import static command_request.CommandRequestOuterClass.RequestType.XRevRange;
+import static command_request.CommandRequestOuterClass.RequestType.XTrim;
+import static command_request.CommandRequestOuterClass.RequestType.ZAdd;
+import static command_request.CommandRequestOuterClass.RequestType.ZCard;
+import static command_request.CommandRequestOuterClass.RequestType.ZCount;
+import static command_request.CommandRequestOuterClass.RequestType.ZDiff;
+import static command_request.CommandRequestOuterClass.RequestType.ZDiffStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZIncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.ZInter;
+import static command_request.CommandRequestOuterClass.RequestType.ZInterCard;
+import static command_request.CommandRequestOuterClass.RequestType.ZInterStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZLexCount;
+import static command_request.CommandRequestOuterClass.RequestType.ZMPop;
+import static command_request.CommandRequestOuterClass.RequestType.ZMScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZPopMax;
+import static command_request.CommandRequestOuterClass.RequestType.ZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.ZRandMember;
+import static command_request.CommandRequestOuterClass.RequestType.ZRange;
+import static command_request.CommandRequestOuterClass.RequestType.ZRangeStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZRem;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByLex;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZRevRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZScan;
+import static command_request.CommandRequestOuterClass.RequestType.ZScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
+import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
 import static glide.api.BaseClient.OK;
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.GenericCommands.DB_REDIS_API;
-import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
-import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.GenericCommands.DB_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.LCS_MATCHES_RESULT_KEY;
-import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.commands.StringBaseCommands.LEN_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.GlideString.gs;
@@ -37,9 +230,9 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRIN
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.OVERFLOW_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.SET_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
@@ -48,35 +241,36 @@ import static glide.api.models.commands.scan.BaseScanOptionsBinary.COUNT_OPTION_
 import static glide.api.models.commands.scan.BaseScanOptionsBinary.MATCH_OPTION_GLIDE_STRING;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.api.models.commands.scan.ScanOptions.TYPE_OPTION_STRING;
-import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
-import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
-import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
-import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_REDIS_API;
+import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_VALKEY_API;
+import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_VALKEY_API;
+import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -88,200 +282,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static redis_request.RedisRequestOuterClass.RequestType.Append;
-import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
-import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
-import static redis_request.RedisRequestOuterClass.RequestType.BitField;
-import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
-import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Decr;
-import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.Del;
-import static redis_request.RedisRequestOuterClass.RequestType.Dump;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.Exists;
-import static redis_request.RedisRequestOuterClass.RequestType.Expire;
-import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
-import static redis_request.RedisRequestOuterClass.RequestType.FCall;
-import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoSearch;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoSearchStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Get;
-import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
-import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
-import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
-import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.HDel;
-import static redis_request.RedisRequestOuterClass.RequestType.HExists;
-import static redis_request.RedisRequestOuterClass.RequestType.HGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HGetAll;
-import static redis_request.RedisRequestOuterClass.RequestType.HIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
-import static redis_request.RedisRequestOuterClass.RequestType.HLen;
-import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
-import static redis_request.RedisRequestOuterClass.RequestType.HScan;
-import static redis_request.RedisRequestOuterClass.RequestType.HSet;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
-import static redis_request.RedisRequestOuterClass.RequestType.HVals;
-import static redis_request.RedisRequestOuterClass.RequestType.Incr;
-import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LCS;
-import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
-import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
-import static redis_request.RedisRequestOuterClass.RequestType.LLen;
-import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.LMove;
-import static redis_request.RedisRequestOuterClass.RequestType.LPop;
-import static redis_request.RedisRequestOuterClass.RequestType.LPos;
-import static redis_request.RedisRequestOuterClass.RequestType.LPush;
-import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.LRange;
-import static redis_request.RedisRequestOuterClass.RequestType.LRem;
-import static redis_request.RedisRequestOuterClass.RequestType.LSet;
-import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.MGet;
-import static redis_request.RedisRequestOuterClass.RequestType.MSet;
-import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.Move;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
-import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
-import static redis_request.RedisRequestOuterClass.RequestType.Persist;
-import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
-import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.Publish;
-import static redis_request.RedisRequestOuterClass.RequestType.RPop;
-import static redis_request.RedisRequestOuterClass.RequestType.RPush;
-import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.Rename;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
-import static redis_request.RedisRequestOuterClass.RequestType.Restore;
-import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.SCard;
-import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
-import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
-import static redis_request.RedisRequestOuterClass.RequestType.SInter;
-import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
-import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
-import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
-import static redis_request.RedisRequestOuterClass.RequestType.SMove;
-import static redis_request.RedisRequestOuterClass.RequestType.SPop;
-import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SRem;
-import static redis_request.RedisRequestOuterClass.RequestType.SScan;
-import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Scan;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
-import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
-import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
-import static redis_request.RedisRequestOuterClass.RequestType.TTL;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.Touch;
-import static redis_request.RedisRequestOuterClass.RequestType.Type;
-import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
-import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
-import static redis_request.RedisRequestOuterClass.RequestType.Wait;
-import static redis_request.RedisRequestOuterClass.RequestType.Watch;
-import static redis_request.RedisRequestOuterClass.RequestType.XAck;
-import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
-import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
-import static redis_request.RedisRequestOuterClass.RequestType.XDel;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
-import static redis_request.RedisRequestOuterClass.RequestType.XLen;
-import static redis_request.RedisRequestOuterClass.RequestType.XPending;
-import static redis_request.RedisRequestOuterClass.RequestType.XRange;
-import static redis_request.RedisRequestOuterClass.RequestType.XRead;
-import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
-import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
-import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
-import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
-import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
-import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
-import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRem;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
-import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
@@ -345,9 +347,11 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamAddOptionsBinary;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamPendingOptionsBinary;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -373,21 +377,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import redis_request.RedisRequestOuterClass.RequestType;
 
-public class RedisClientTest {
+public class GlideClientTest {
 
     // bypass import conflict between Set (collection) and Set (enum variant)
     private static final RequestType pSet = RequestType.Set;
 
-    RedisClient service;
+    GlideClient service;
 
     CommandManager commandManager;
 
     @BeforeEach
     public void setUp() {
         commandManager = mock(CommandManager.class);
-        service = new RedisClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
+        service = new GlideClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @SneakyThrows
@@ -441,7 +444,7 @@ public class RedisClientTest {
     @Test
     public void echo_returns_success() {
         // setup
-        String message = "GLIDE FOR REDIS";
+        String message = "Valkey GLIDE";
         String[] arguments = new String[] {message};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
@@ -463,7 +466,7 @@ public class RedisClientTest {
     @Test
     public void echo_binary_returns_success() {
         // setup
-        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString message = gs("Valkey GLIDE");
         GlideString[] arguments = new GlideString[] {message};
         CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
         testResponse.complete(message);
@@ -873,7 +876,7 @@ public class RedisClientTest {
                         .returnOldValue(false)
                         .expiry(Expiry.KeepExisting())
                         .build();
-        String[] arguments = new String[] {key, value, ONLY_IF_EXISTS.getRedisApi(), "KEEPTTL"};
+        String[] arguments = new String[] {key, value, ONLY_IF_EXISTS.getValkeyApi(), "KEEPTTL"};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
@@ -902,7 +905,7 @@ public class RedisClientTest {
                         .build();
         String[] arguments =
                 new String[] {
-                    key, value, ONLY_IF_DOES_NOT_EXIST.getRedisApi(), RETURN_OLD_VALUE, "EXAT", "60"
+                    key, value, ONLY_IF_DOES_NOT_EXIST.getValkeyApi(), RETURN_OLD_VALUE, "EXAT", "60"
                 };
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1751,6 +1754,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void mset_binary_returns_success() {
+        // setup
+        Map<GlideString, GlideString> keyValueMap = new LinkedHashMap<>();
+        keyValueMap.put(gs("key1"), gs("value1"));
+        keyValueMap.put(gs("key2"), gs("value2"));
+        GlideString[] args = {gs("key1"), gs("value1"), gs("key2"), gs("value2")};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MSet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.msetBinary(keyValueMap);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void msetnx_returns_success() {
         // setup
         Map<String, String> keyValueMap = new LinkedHashMap<>();
@@ -1768,6 +1796,32 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Boolean> response = service.msetnx(keyValueMap);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void msetnx_binary_returns_success() {
+        // setup
+        Map<GlideString, GlideString> keyValueMap = new LinkedHashMap<>();
+        keyValueMap.put(gs("key1"), gs("value1"));
+        keyValueMap.put(gs("key2"), gs("value2"));
+        GlideString[] args = {gs("key1"), gs("value1"), gs("key2"), gs("value2")};
+        Boolean value = true;
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(MSetNX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.msetnxBinary(keyValueMap);
         Boolean payload = response.get();
 
         // verify
@@ -2794,7 +2848,7 @@ public class RedisClientTest {
     public void hrandfieldWithCountWithValues_returns_success() {
         // setup
         String key = "testKey";
-        String[] args = {key, "2", WITH_VALUES_REDIS_API};
+        String[] args = {key, "2", WITH_VALUES_VALKEY_API};
         String[][] fields = new String[][] {{"field_1", "value_1"}, {"field_2", "value_2"}};
 
         CompletableFuture<String[][]> testResponse = new CompletableFuture<>();
@@ -4123,6 +4177,35 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zadd_binary_noOptions_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put(gs("testMember1"), 1.0);
+        membersScores.put(gs("testMember2"), 2.0);
+        GlideString[] membersScoresArgs = convertMapToValueKeyStringArrayBinary(membersScores);
+        GlideString[] arguments = ArrayUtils.addFirst(membersScoresArgs, key);
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zadd(key, membersScores, ZAddOptions.builder().build(), false);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zadd_withOptions_returns_success() {
         // setup
         String key = "testKey";
@@ -4136,6 +4219,40 @@ public class RedisClientTest {
         membersScores.put("testMember2", 2.0);
         String[] membersScoresArgs = convertMapToValueKeyStringArray(membersScores);
         String[] arguments = ArrayUtils.addAll(new String[] {key}, options.toArgs());
+        arguments = ArrayUtils.addAll(arguments, membersScoresArgs);
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zadd(key, membersScores, options, false);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zadd_binary_withOptions_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        ZAddOptions options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put(gs("testMember1"), 1.0);
+        membersScores.put(gs("testMember2"), 2.0);
+        GlideString[] membersScoresArgs = convertMapToValueKeyStringArrayBinary(membersScores);
+        GlideString[] arguments = ArrayUtils.addAll(new GlideString[] {key}, options.toArgsBinary());
         arguments = ArrayUtils.addAll(arguments, membersScoresArgs);
         Long value = 2L;
 
@@ -4175,12 +4292,58 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zadd_binary_withIllegalArgument_throws_exception() {
+        // setup
+        GlideString key = gs("testKey");
+        ZAddOptions options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        Map<GlideString, Double> membersScores = new LinkedHashMap<>();
+        membersScores.put(gs("testMember1"), 1.0);
+        membersScores.put(gs("testMember2"), 2.0);
+
+        assertThrows(
+                IllegalArgumentException.class, () -> service.zadd(key, membersScores, options, false));
+    }
+
+    @SneakyThrows
+    @Test
     public void zaddIncr_noOptions_returns_success() {
         // setup
         String key = "testKey";
         String member = "member";
         double increment = 3.0;
         String[] arguments = new String[] {key, "INCR", Double.toString(increment), member};
+        Double value = 3.0;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response =
+                service.zaddIncr(key, member, increment, ZAddOptions.builder().build());
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zaddIncr_binary_noOptions_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("member");
+        double increment = 3.0;
+        GlideString[] arguments =
+                new GlideString[] {key, gs("INCR"), gs(Double.toString(increment)), member};
         Double value = 3.0;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -4216,6 +4379,40 @@ public class RedisClientTest {
                         new String[] {key},
                         options.toArgs(),
                         new String[] {"INCR", Double.toString(increment), member});
+        Double value = 3.0;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zaddIncr(key, member, increment, options);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zaddIncr_binary_withOptions_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        ZAddOptions options =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                        .build();
+        GlideString member = gs("member");
+        double increment = 3.0;
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key},
+                        options.toArgsBinary(),
+                        new GlideString[] {gs("INCR"), gs(Double.toString(increment)), member});
         Double value = 3.0;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -5039,6 +5236,32 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrange_binary_by_index_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        RangeByIndex rangeByIndex = new RangeByIndex(0, 1);
+        GlideString[] arguments =
+                new GlideString[] {key, gs(rangeByIndex.getStart()), gs(rangeByIndex.getEnd())};
+        GlideString[] value = new GlideString[] {gs("one"), gs("two")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZRange), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zrange(key, rangeByIndex);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrange_by_score_with_reverse_returns_success() {
         // setup
         String key = "testKey";
@@ -5058,6 +5281,35 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.zrange(key, rangeByScore, true);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrange_binary_by_score_with_reverse_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        RangeByScore rangeByScore =
+                new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, gs(rangeByScore.getStart()), gs(rangeByScore.getEnd()), gs("BYSCORE"), gs("REV")
+                };
+        GlideString[] value = new GlideString[] {gs("two"), gs("one")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZRange), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zrange(key, rangeByScore, true);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -5092,12 +5344,39 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrange_binary_by_lex_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        RangeByLex rangeByLex =
+                new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        GlideString[] arguments =
+                new GlideString[] {key, gs(rangeByLex.getStart()), gs(rangeByLex.getEnd()), gs("BYLEX")};
+        GlideString[] value = new GlideString[] {gs("a"), gs("b")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZRange), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zrange(key, rangeByLex);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrangeWithScores_by_index_returns_success() {
         // setup
         String key = "testKey";
         RangeByIndex rangeByIndex = new RangeByIndex(0, 4);
         String[] arguments =
-                new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd(), WITH_SCORES_REDIS_API};
+                new String[] {key, rangeByIndex.getStart(), rangeByIndex.getEnd(), WITH_SCORES_VALKEY_API};
         Map<String, Double> value = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5110,6 +5389,36 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, Double>> response = service.zrangeWithScores(key, rangeByIndex);
         Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangeWithScores_binary_by_index_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        RangeByIndex rangeByIndex = new RangeByIndex(0, 4);
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, gs(rangeByIndex.getStart()), gs(rangeByIndex.getEnd()), gs(WITH_SCORES_VALKEY_API)
+                };
+        Map<GlideString, Double> value = Map.of(gs("one"), 1.0, gs("two"), 2.0, gs("three"), 3.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZRange), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response =
+                service.zrangeWithScores(key, rangeByIndex);
+        Map<GlideString, Double> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -5135,7 +5444,7 @@ public class RedisClientTest {
                     "LIMIT",
                     "1",
                     "2",
-                    WITH_SCORES_REDIS_API
+                    WITH_SCORES_VALKEY_API
                 };
         Map<String, Double> value = Map.of("two", 2.0, "three", 3.0);
 
@@ -5150,6 +5459,47 @@ public class RedisClientTest {
         CompletableFuture<Map<String, Double>> response =
                 service.zrangeWithScores(key, rangeByScore, false);
         Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangeWithScores_binary_by_score_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        RangeByScore rangeByScore =
+                new RangeByScore(
+                        InfScoreBound.NEGATIVE_INFINITY,
+                        InfScoreBound.POSITIVE_INFINITY,
+                        new RangeOptions.Limit(1, 2));
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    gs(rangeByScore.getStart()),
+                    gs(rangeByScore.getEnd()),
+                    gs("BYSCORE"),
+                    gs("LIMIT"),
+                    gs("1"),
+                    gs("2"),
+                    gs(WITH_SCORES_VALKEY_API)
+                };
+        Map<GlideString, Double> value = Map.of(gs("two"), 2.0, gs("three"), 3.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZRange), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response =
+                service.zrangeWithScores(key, rangeByScore, false);
+        Map<GlideString, Double> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -5212,7 +5562,7 @@ public class RedisClientTest {
         // setup
         String key = "testKey";
         String member = "testMember";
-        String[] arguments = new String[] {key, member, WITH_SCORE_REDIS_API};
+        String[] arguments = new String[] {key, member, WITH_SCORE_VALKEY_API};
         Object[] value = new Object[] {1, 6.0};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -5262,7 +5612,7 @@ public class RedisClientTest {
         // setup
         String key = "testKey";
         String member = "testMember";
-        String[] arguments = new String[] {key, member, WITH_SCORE_REDIS_API};
+        String[] arguments = new String[] {key, member, WITH_SCORE_VALKEY_API};
         Object[] value = new Object[] {1, 6.0};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -5411,11 +5761,36 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zdiff_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {gs("2"), key1, key2};
+        GlideString[] value = new GlideString[] {gs("element1")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZDiff), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zdiff(new GlideString[] {key1, key2});
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zdiffWithScores_returns_success() {
         // setup
         String key1 = "testKey1";
         String key2 = "testKey2";
-        String[] arguments = new String[] {"2", key1, key2, WITH_SCORES_REDIS_API};
+        String[] arguments = new String[] {"2", key1, key2, WITH_SCORES_VALKEY_API};
         Map<String, Double> value = Map.of("element1", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5437,10 +5812,61 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zdiffWithScores_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {gs("2"), key1, key2, gs(WITH_SCORES_VALKEY_API)};
+        Map<GlideString, Double> value = Map.of(gs("element1"), 2.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(eq(ZDiff), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response =
+                service.zdiffWithScores(new GlideString[] {key1, key2});
+        Map<GlideString, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zcount_returns_success() {
         // setup
         String key = "testKey";
         String[] arguments = new String[] {key, "-inf", "10.0"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZCount), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zcount(key, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(10, true));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zcount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key, gs("-inf"), gs("10.0")};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -5542,6 +5968,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zremrangebylex_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key, gs("-"), gs("[z")};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRemRangeByLex), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zremrangebylex(key, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("z", true));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zremrangebyscore_returns_success() {
         // setup
         String key = "testKey";
@@ -5567,10 +6018,60 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zremrangebyscore_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key, gs("-inf"), gs("10.0")};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRemRangeByScore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zremrangebyscore(key, InfScoreBound.NEGATIVE_INFINITY, new ScoreBoundary(10, true));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zlexcount_returns_success() {
         // setup
         String key = "testKey";
         String[] arguments = new String[] {key, "-", "[c"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZLexCount), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zlexcount(key, InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", true));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zlexcount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key, gs("-"), gs("[c")};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -5620,6 +6121,36 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrangestore_binary_by_lex_returns_success() {
+        // setup
+        GlideString source = gs("testSourceKey");
+        GlideString destination = gs("testDestinationKey");
+        RangeByLex rangeByLex =
+                new RangeByLex(InfLexBound.NEGATIVE_INFINITY, new LexBoundary("c", false));
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(rangeByLex.getStart()), gs(rangeByLex.getEnd()), gs("BYLEX")
+                };
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRangeStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrangestore(source, destination, rangeByLex);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrangestore_by_index_returns_success() {
         // setup
         String source = "testSourceKey";
@@ -5627,6 +6158,35 @@ public class RedisClientTest {
         RangeByIndex rangeByIndex = new RangeByIndex(0, 1);
         String[] arguments =
                 new String[] {source, destination, rangeByIndex.getStart(), rangeByIndex.getEnd()};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRangeStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrangestore(source, destination, rangeByIndex);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangestore_binary_by_index_returns_success() {
+        // setup
+        GlideString source = gs("testSourceKey");
+        GlideString destination = gs("testDestinationKey");
+        RangeByIndex rangeByIndex = new RangeByIndex(0, 1);
+        GlideString[] arguments =
+                new GlideString[] {
+                    source, destination, gs(rangeByIndex.getStart()), gs(rangeByIndex.getEnd())
+                };
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -5657,6 +6217,43 @@ public class RedisClientTest {
         String[] arguments =
                 new String[] {
                     source, destination, rangeByScore.getStart(), rangeByScore.getEnd(), "BYSCORE", "REV"
+                };
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRangeStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.zrangestore(source, destination, rangeByScore, reversed);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrangestore_binary_by_score_with_reverse_returns_success() {
+        // setup
+        GlideString source = gs("testSourceKey");
+        GlideString destination = gs("testDestinationKey");
+        RangeByScore rangeByScore =
+                new RangeByScore(new ScoreBoundary(3, false), InfScoreBound.NEGATIVE_INFINITY);
+        boolean reversed = true;
+        GlideString[] arguments =
+                new GlideString[] {
+                    source,
+                    destination,
+                    gs(rangeByScore.getStart()),
+                    gs(rangeByScore.getEnd()),
+                    gs("BYSCORE"),
+                    gs("REV")
                 };
         Long value = 2L;
 
@@ -5851,7 +6448,8 @@ public class RedisClientTest {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         KeyArray keyArray = new KeyArray(keys);
-        String[] arguments = concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        String[] arguments =
+                concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5877,7 +6475,7 @@ public class RedisClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         KeyArrayBinary keyArray = new KeyArrayBinary(keys);
         GlideString[] arguments =
-                concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_REDIS_API)});
+                concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
         Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
         CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
@@ -5908,7 +6506,7 @@ public class RedisClientTest {
         Aggregate aggregate = Aggregate.MIN;
         String[] arguments =
                 concatenateArrays(
-                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -5941,7 +6539,7 @@ public class RedisClientTest {
                 new ArgsBuilder()
                         .add(weightedKeys.toArgs())
                         .add(aggregate.toArgs())
-                        .add(WITH_SCORES_REDIS_API)
+                        .add(WITH_SCORES_VALKEY_API)
                         .toArray();
         Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
 
@@ -5990,11 +6588,37 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zinter_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        KeyArrayBinary keyArray = new KeyArrayBinary(keys);
+        GlideString[] arguments = keyArray.toArgs();
+        GlideString[] value = new GlideString[] {gs("elem1"), gs("elem2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zinter(keyArray);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zinterWithScores_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         KeyArray keyArray = new KeyArray(keys);
-        String[] arguments = concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        String[] arguments =
+                concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -6015,6 +6639,33 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zinterWithScores_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        KeyArrayBinary keyArray = new KeyArrayBinary(keys);
+        GlideString[] arguments =
+                concatenateArrays(keyArray.toArgs(), new GlideString[] {gs(WITH_SCORES_VALKEY_API)});
+        Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response = service.zinterWithScores(keyArray);
+        Map<GlideString, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zinterWithScores_with_aggregation_returns_success() {
         // setup
         List<Pair<String, Double>> keysWeights = new ArrayList<>();
@@ -6024,7 +6675,7 @@ public class RedisClientTest {
         Aggregate aggregate = Aggregate.MIN;
         String[] arguments =
                 concatenateArrays(
-                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_VALKEY_API});
         Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
 
         CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
@@ -6046,12 +6697,73 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zinterWithScores_binary_with_aggregation_returns_success() {
+        // setup
+        List<Pair<GlideString, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of(gs("key1"), 10.0));
+        keysWeights.add(Pair.of(gs("key2"), 20.0));
+        WeightedKeysBinary weightedKeys = new WeightedKeysBinary(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(weightedKeys.toArgs())
+                        .add(aggregate.toArgs())
+                        .add(WITH_SCORES_VALKEY_API)
+                        .toArray();
+        Map<GlideString, Double> value = Map.of(gs("elem1"), 1.0, gs("elem2"), 2.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response =
+                service.zinterWithScores(weightedKeys, aggregate);
+        Map<GlideString, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zinterstore_returns_success() {
         // setup
         String destination = "destinationKey";
         String[] keys = new String[] {"key1", "key2"};
         KeyArray keyArray = new KeyArray(keys);
         String[] arguments = concatenateArrays(new String[] {destination}, keyArray.toArgs());
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZInterStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zinterstore(destination, keyArray);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinterstore_binary_returns_success() {
+        // setup
+        GlideString destination = gs("destinationKey");
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        KeyArrayBinary keyArray = new KeyArrayBinary(keys);
+        GlideString[] arguments = concatenateArrays(new GlideString[] {destination}, keyArray.toArgs());
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6102,11 +6814,45 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zinterstore_binary_with_options_returns_success() {
+        // setup
+        GlideString destination = gs("destinationKey");
+        List<Pair<GlideString, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of(gs("key1"), 10.0));
+        keysWeights.add(Pair.of(gs("key2"), 20.0));
+        WeightedKeysBinary weightedKeys = new WeightedKeysBinary(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(weightedKeys.toArgs())
+                        .add(aggregate.toArgs())
+                        .toArray();
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZInterStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zinterstore(destination, weightedKeys, aggregate);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zintercard_with_limit_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         long limit = 3L;
-        String[] arguments = new String[] {"2", "key1", "key2", LIMIT_REDIS_API, "3"};
+        String[] arguments = new String[] {"2", "key1", "key2", LIMIT_VALKEY_API, "3"};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6132,7 +6878,7 @@ public class RedisClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         long limit = 3L;
         GlideString[] arguments =
-                new GlideString[] {gs("2"), gs("key1"), gs("key2"), gs(LIMIT_REDIS_API), gs("3")};
+                new GlideString[] {gs("2"), gs("key1"), gs("key2"), gs(LIMIT_VALKEY_API), gs("3")};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6225,6 +6971,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrandmember_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
+        GlideString value = gs("testValue");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(ZRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.zrandmember(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrandmemberWithCount_returns_success() {
         // setup
         String key = "testKey";
@@ -6250,12 +7020,63 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrandmemberWithCount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
+        GlideString[] value = new GlideString[] {gs("member1"), gs("member2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zrandmemberWithCount(key, count);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrandmemberWithCountWithScores_returns_success() {
         // setup
         String key = "testKey";
         long count = 2L;
-        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_REDIS_API};
+        String[] arguments = new String[] {key, Long.toString(count), WITH_SCORES_VALKEY_API};
         Object[][] value = new Object[][] {{"member1", 2.0}, {"member2", 3.0}};
+
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[][]>submitNewCommand(eq(ZRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[][]> response = service.zrandmemberWithCountWithScores(key, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zrandmemberWithCountWithScores_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString[] arguments =
+                new GlideString[] {key, gs(Long.toString(count)), gs(WITH_SCORES_VALKEY_API)};
+        Object[][] value = new Object[][] {{gs("member1"), 2.0}, {gs("member2"), 3.0}};
 
         CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -6387,7 +7208,7 @@ public class RedisClientTest {
                         // no TRIM option
                         "test_xadd_no_trim",
                         StreamAddOptions.builder().id("id").makeStream(Boolean.FALSE).build(),
-                        new String[] {NO_MAKE_STREAM_REDIS_API, "id"}),
+                        new String[] {NO_MAKE_STREAM_VALKEY_API, "id"}),
                 Arguments.of(
                         // MAXLEN with LIMIT
                         "test_xadd_maxlen_with_limit",
@@ -6397,10 +7218,10 @@ public class RedisClientTest {
                                 .trim(new MaxLen(5L, 10L))
                                 .build(),
                         new String[] {
-                            TRIM_MAXLEN_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            TRIM_MAXLEN_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             Long.toString(5L),
-                            TRIM_LIMIT_REDIS_API,
+                            TRIM_LIMIT_VALKEY_API,
                             Long.toString(10L),
                             "id"
                         }),
@@ -6412,9 +7233,9 @@ public class RedisClientTest {
                                 .trim(new MaxLen(false, 2L))
                                 .build(),
                         new String[] {
-                            NO_MAKE_STREAM_REDIS_API,
-                            TRIM_MAXLEN_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            NO_MAKE_STREAM_VALKEY_API,
+                            TRIM_MAXLEN_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             Long.toString(2L),
                             "*"
                         }),
@@ -6427,10 +7248,10 @@ public class RedisClientTest {
                                 .trim(new MinId("testKey", 10L))
                                 .build(),
                         new String[] {
-                            TRIM_MINID_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            TRIM_MINID_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             "testKey",
-                            TRIM_LIMIT_REDIS_API,
+                            TRIM_LIMIT_VALKEY_API,
                             Long.toString(10L),
                             "id"
                         }),
@@ -6442,9 +7263,9 @@ public class RedisClientTest {
                                 .trim(new MinId(false, "testKey"))
                                 .build(),
                         new String[] {
-                            NO_MAKE_STREAM_REDIS_API,
-                            TRIM_MINID_REDIS_API,
-                            TRIM_NOT_EXACT_REDIS_API,
+                            NO_MAKE_STREAM_VALKEY_API,
+                            TRIM_MINID_VALKEY_API,
+                            TRIM_NOT_EXACT_VALKEY_API,
                             "testKey",
                             "*"
                         }));
@@ -6473,9 +7294,9 @@ public class RedisClientTest {
         String[] arguments =
                 new String[] {
                     key,
-                    NO_MAKE_STREAM_REDIS_API,
-                    TRIM_MAXLEN_REDIS_API,
-                    TRIM_EXACT_REDIS_API,
+                    NO_MAKE_STREAM_VALKEY_API,
+                    TRIM_MAXLEN_VALKEY_API,
+                    TRIM_EXACT_VALKEY_API,
                     Long.toString(5L),
                     "id"
                 };
@@ -6506,15 +7327,19 @@ public class RedisClientTest {
         Map<GlideString, GlideString> fieldValues = new LinkedHashMap<>();
         fieldValues.put(gs("testField1"), gs("testValue1"));
         fieldValues.put(gs("testField2"), gs("testValue2"));
-        StreamAddOptions options =
-                StreamAddOptions.builder().id("id").makeStream(false).trim(new MaxLen(true, 5L)).build();
+        StreamAddOptionsBinary options =
+                StreamAddOptionsBinary.builder()
+                        .id(gs("id"))
+                        .makeStream(false)
+                        .trim(new MaxLen(true, 5L))
+                        .build();
 
         GlideString[] arguments =
                 new GlideString[] {
                     key,
-                    gs(NO_MAKE_STREAM_REDIS_API),
-                    gs(TRIM_MAXLEN_REDIS_API),
-                    gs(TRIM_EXACT_REDIS_API),
+                    gs(NO_MAKE_STREAM_VALKEY_API),
+                    gs(TRIM_MAXLEN_VALKEY_API),
+                    gs(TRIM_EXACT_VALKEY_API),
                     gs(Long.toString(5L)),
                     gs("id")
                 };
@@ -6543,7 +7368,7 @@ public class RedisClientTest {
         // setup
         String key = "testKey";
         StreamTrimOptions limit = new MinId(true, "id");
-        String[] arguments = new String[] {key, TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id"};
+        String[] arguments = new String[] {key, TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id"};
         Long completedResult = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6569,7 +7394,7 @@ public class RedisClientTest {
         GlideString key = gs("testKey");
         StreamTrimOptions limit = new MinId(true, "id");
         GlideString[] arguments =
-                new GlideString[] {key, gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("id")};
+                new GlideString[] {key, gs(TRIM_MINID_VALKEY_API), gs(TRIM_EXACT_VALKEY_API), gs("id")};
         Long completedResult = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6592,33 +7417,33 @@ public class RedisClientTest {
         return List.of(
                 Arguments.of(
                         // MAXLEN just THRESHOLD
-                        "test_xtrim_maxlen", new MaxLen(5L), new String[] {TRIM_MAXLEN_REDIS_API, "5"}),
+                        "test_xtrim_maxlen", new MaxLen(5L), new String[] {TRIM_MAXLEN_VALKEY_API, "5"}),
                 Arguments.of(
                         // MAXLEN with LIMIT
                         "test_xtrim_maxlen_with_limit",
                         new MaxLen(5L, 10L),
                         new String[] {
-                            TRIM_MAXLEN_REDIS_API, TRIM_NOT_EXACT_REDIS_API, "5", TRIM_LIMIT_REDIS_API, "10"
+                            TRIM_MAXLEN_VALKEY_API, TRIM_NOT_EXACT_VALKEY_API, "5", TRIM_LIMIT_VALKEY_API, "10"
                         }),
                 Arguments.of(
                         // MAXLEN with exact
                         "test_xtrim_exact_maxlen",
                         new MaxLen(true, 10L),
-                        new String[] {TRIM_MAXLEN_REDIS_API, TRIM_EXACT_REDIS_API, "10"}),
+                        new String[] {TRIM_MAXLEN_VALKEY_API, TRIM_EXACT_VALKEY_API, "10"}),
                 Arguments.of(
                         // MINID just THRESHOLD
-                        "test_xtrim_minid", new MinId("0-1"), new String[] {TRIM_MINID_REDIS_API, "0-1"}),
+                        "test_xtrim_minid", new MinId("0-1"), new String[] {TRIM_MINID_VALKEY_API, "0-1"}),
                 Arguments.of(
                         // MINID with exact
                         "test_xtrim_exact_minid",
                         new MinId(true, "0-2"),
-                        new String[] {TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "0-2"}),
+                        new String[] {TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "0-2"}),
                 Arguments.of(
                         // MINID with LIMIT
                         "test_xtrim_minid_with_limit",
                         new MinId("0-3", 10L),
                         new String[] {
-                            TRIM_MINID_REDIS_API, TRIM_NOT_EXACT_REDIS_API, "0-3", TRIM_LIMIT_REDIS_API, "10"
+                            TRIM_MINID_VALKEY_API, TRIM_NOT_EXACT_VALKEY_API, "0-3", TRIM_LIMIT_VALKEY_API, "10"
                         }));
     }
 
@@ -6628,42 +7453,42 @@ public class RedisClientTest {
                         // MAXLEN just THRESHOLD
                         "test_xtrim_maxlen",
                         new MaxLen(5L),
-                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs("5")}),
+                        new GlideString[] {gs(TRIM_MAXLEN_VALKEY_API), gs("5")}),
                 Arguments.of(
                         // MAXLEN with LIMIT
                         "test_xtrim_maxlen_with_limit",
                         new MaxLen(5L, 10L),
                         new GlideString[] {
-                            gs(TRIM_MAXLEN_REDIS_API),
-                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs(TRIM_MAXLEN_VALKEY_API),
+                            gs(TRIM_NOT_EXACT_VALKEY_API),
                             gs("5"),
-                            gs(TRIM_LIMIT_REDIS_API),
+                            gs(TRIM_LIMIT_VALKEY_API),
                             gs("10")
                         }),
                 Arguments.of(
                         // MAXLEN with exact
                         "test_xtrim_exact_maxlen",
                         new MaxLen(true, 10L),
-                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("10")}),
+                        new GlideString[] {gs(TRIM_MAXLEN_VALKEY_API), gs(TRIM_EXACT_VALKEY_API), gs("10")}),
                 Arguments.of(
                         // MINID just THRESHOLD
                         "test_xtrim_minid",
                         new MinId("0-1"),
-                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs("0-1")}),
+                        new GlideString[] {gs(TRIM_MINID_VALKEY_API), gs("0-1")}),
                 Arguments.of(
                         // MINID with exact
                         "test_xtrim_exact_minid",
                         new MinId(true, "0-2"),
-                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("0-2")}),
+                        new GlideString[] {gs(TRIM_MINID_VALKEY_API), gs(TRIM_EXACT_VALKEY_API), gs("0-2")}),
                 Arguments.of(
                         // MINID with LIMIT
                         "test_xtrim_minid_with_limit",
                         new MinId("0-3", 10L),
                         new GlideString[] {
-                            gs(TRIM_MINID_REDIS_API),
-                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs(TRIM_MINID_VALKEY_API),
+                            gs(TRIM_NOT_EXACT_VALKEY_API),
                             gs("0-3"),
-                            gs(TRIM_LIMIT_REDIS_API),
+                            gs(TRIM_LIMIT_VALKEY_API),
                             gs("10")
                         }));
     }
@@ -6719,7 +7544,7 @@ public class RedisClientTest {
         Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
-        String[] arguments = {READ_STREAMS_REDIS_API, keyOne, keyTwo, streamIdOne, streamIdTwo};
+        String[] arguments = {READ_STREAMS_VALKEY_API, keyOne, keyTwo, streamIdOne, streamIdTwo};
 
         CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
                 new CompletableFuture<>();
@@ -6744,6 +7569,44 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xread_binary_multiple_keys() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        GlideString keyTwo = gs("two");
+        GlideString streamIdTwo = gs("id-two");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_STREAMS_VALKEY_API), keyOne, keyTwo, streamIdOne, streamIdTwo
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<GlideString, GlideString> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadBinary(keysAndIds);
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xread_with_options() {
         // setup
         String keyOne = "one";
@@ -6754,11 +7617,11 @@ public class RedisClientTest {
         Map<String, Map<String, String[][]>> completedResult =
                 Map.of(keyOne, Map.of(streamIdOne, fieldValues));
         String[] arguments = {
-            READ_COUNT_REDIS_API,
+            READ_COUNT_VALKEY_API,
             count.toString(),
-            READ_BLOCK_REDIS_API,
+            READ_BLOCK_VALKEY_API,
             block.toString(),
-            READ_STREAMS_REDIS_API,
+            READ_STREAMS_VALKEY_API,
             keyOne,
             streamIdOne
         };
@@ -6778,6 +7641,48 @@ public class RedisClientTest {
                         Map.of(keyOne, streamIdOne),
                         StreamReadOptions.builder().block(block).count(count).build());
         Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xread_with_options_binary() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        Long block = 2L;
+        Long count = 10L;
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_COUNT_VALKEY_API),
+            gs(count.toString()),
+            gs(READ_BLOCK_VALKEY_API),
+            gs(block.toString()),
+            gs(READ_STREAMS_VALKEY_API),
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadBinary(
+                        Map.of(keyOne, streamIdOne),
+                        StreamReadOptions.builder().block(block).count(count).build());
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -6910,9 +7815,9 @@ public class RedisClientTest {
                         eq(
                                 new String[] {
                                     key,
-                                    MINIMUM_RANGE_REDIS_API,
-                                    MAXIMUM_RANGE_REDIS_API,
-                                    RANGE_COUNT_REDIS_API,
+                                    MINIMUM_RANGE_VALKEY_API,
+                                    MAXIMUM_RANGE_VALKEY_API,
+                                    RANGE_COUNT_VALKEY_API,
                                     Long.toString(count)
                                 }),
                         any()))
@@ -6949,9 +7854,9 @@ public class RedisClientTest {
                         eq(
                                 new GlideString[] {
                                     key,
-                                    gs(MINIMUM_RANGE_REDIS_API),
-                                    gs(MAXIMUM_RANGE_REDIS_API),
-                                    gs(RANGE_COUNT_REDIS_API),
+                                    gs(MINIMUM_RANGE_VALKEY_API),
+                                    gs(MAXIMUM_RANGE_VALKEY_API),
+                                    gs(RANGE_COUNT_VALKEY_API),
                                     gs(Long.toString(count))
                                 }),
                         any()))
@@ -7044,9 +7949,9 @@ public class RedisClientTest {
                         eq(
                                 new String[] {
                                     key,
-                                    MAXIMUM_RANGE_REDIS_API,
-                                    MINIMUM_RANGE_REDIS_API,
-                                    RANGE_COUNT_REDIS_API,
+                                    MAXIMUM_RANGE_VALKEY_API,
+                                    MINIMUM_RANGE_VALKEY_API,
+                                    RANGE_COUNT_VALKEY_API,
                                     Long.toString(count)
                                 }),
                         any()))
@@ -7083,9 +7988,9 @@ public class RedisClientTest {
                         eq(
                                 new GlideString[] {
                                     key,
-                                    gs(MAXIMUM_RANGE_REDIS_API),
-                                    gs(MINIMUM_RANGE_REDIS_API),
-                                    gs(RANGE_COUNT_REDIS_API),
+                                    gs(MAXIMUM_RANGE_VALKEY_API),
+                                    gs(MINIMUM_RANGE_VALKEY_API),
+                                    gs(RANGE_COUNT_VALKEY_API),
                                     gs(Long.toString(count))
                                 }),
                         any()))
@@ -7109,6 +8014,31 @@ public class RedisClientTest {
         String groupName = "testGroupName";
         String id = "testId";
         String[] arguments = new String[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupCreate), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupCreate(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupCreate_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        GlideString[] arguments = new GlideString[] {key, groupName, id};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -7164,11 +8094,71 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xgroupCreate_withOptions_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        Long testEntry = 123L;
+        StreamGroupOptions options =
+                StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(groupName)
+                        .add(id)
+                        .add(MAKE_STREAM_VALKEY_API)
+                        .add(ENTRIES_READ_VALKEY_API)
+                        .add(testEntry)
+                        .toArray();
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupCreate), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupCreate(key, groupName, id, options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xgroupDestroy() {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
         String[] arguments = new String[] {key, groupName};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(XGroupDestroy), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.xgroupDestroy(key, groupName);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(Boolean.TRUE, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupDestroy_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString[] arguments = new GlideString[] {key, groupName};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -7194,6 +8184,32 @@ public class RedisClientTest {
         String groupName = "testGroupName";
         String consumerName = "testConsumerName";
         String[] arguments = new String[] {key, groupName, consumerName};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(XGroupCreateConsumer), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response =
+                service.xgroupCreateConsumer(key, groupName, consumerName);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(Boolean.TRUE, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupCreateConsumer_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumerName = gs("testConsumerName");
+        GlideString[] arguments = new GlideString[] {key, groupName, consumerName};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -7240,12 +8256,63 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xgroupDelConsumer_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumerName = gs("testConsumerName");
+        GlideString[] arguments = new GlideString[] {key, groupName, consumerName};
+        Long result = 28L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XGroupDelConsumer), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xgroupDelConsumer(key, groupName, consumerName);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xgroupSetid() {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
         String id = "testId";
         String[] arguments = new String[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetid_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        GlideString[] arguments = new GlideString[] {key, groupName, id};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -7272,7 +8339,40 @@ public class RedisClientTest {
         String id = "testId";
         Long entriesRead = 1L;
         String[] arguments =
-                new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
+                new String[] {key, groupName, id, ENTRIES_READ_VALKEY_API, Long.toString(entriesRead)};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id, entriesRead);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetidWithEntriesRead_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        Long entriesRead = 1L;
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(groupName)
+                        .add(id)
+                        .add(ENTRIES_READ_VALKEY_API)
+                        .add(entriesRead)
+                        .toArray();
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -7305,10 +8405,10 @@ public class RedisClientTest {
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
         String[] arguments = {
-            READ_GROUP_REDIS_API,
+            READ_GROUP_VALKEY_API,
             groupName,
             consumerName,
-            READ_STREAMS_REDIS_API,
+            READ_STREAMS_VALKEY_API,
             keyOne,
             keyTwo,
             streamIdOne,
@@ -7339,6 +8439,53 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xreadgroup_binary_multiple_keys() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        GlideString keyTwo = gs("two");
+        GlideString streamIdTwo = gs("id-two");
+        GlideString groupName = gs("testGroup");
+        GlideString consumerName = gs("consumerGroup");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_GROUP_VALKEY_API),
+            groupName,
+            consumerName,
+            gs(READ_STREAMS_VALKEY_API),
+            keyOne,
+            keyTwo,
+            streamIdOne,
+            streamIdTwo
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<GlideString, GlideString> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadgroup(keysAndIds, groupName, consumerName);
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xreadgroup_with_options() {
         // setup
         String keyOne = "one";
@@ -7351,15 +8498,15 @@ public class RedisClientTest {
         Map<String, Map<String, String[][]>> completedResult =
                 Map.of(keyOne, Map.of(streamIdOne, fieldValues));
         String[] arguments = {
-            READ_GROUP_REDIS_API,
+            READ_GROUP_VALKEY_API,
             groupName,
             consumerName,
-            READ_COUNT_REDIS_API,
+            READ_COUNT_VALKEY_API,
             count.toString(),
-            READ_BLOCK_REDIS_API,
+            READ_BLOCK_VALKEY_API,
             block.toString(),
-            READ_NOACK_REDIS_API,
-            READ_STREAMS_REDIS_API,
+            READ_NOACK_VALKEY_API,
+            READ_STREAMS_VALKEY_API,
             keyOne,
             streamIdOne
         };
@@ -7381,6 +8528,56 @@ public class RedisClientTest {
                         consumerName,
                         StreamReadGroupOptions.builder().block(block).count(count).noack().build());
         Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xreadgroup_with_options_binary() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        Long block = 2L;
+        Long count = 10L;
+        GlideString groupName = gs("testGroup");
+        GlideString consumerName = gs("consumerGroup");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_GROUP_VALKEY_API),
+            groupName,
+            consumerName,
+            gs(READ_COUNT_VALKEY_API),
+            gs(count.toString()),
+            gs(READ_BLOCK_VALKEY_API),
+            gs(block.toString()),
+            gs(READ_NOACK_VALKEY_API),
+            gs(READ_STREAMS_VALKEY_API),
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadgroup(
+                        Map.of(keyOne, streamIdOne),
+                        groupName,
+                        consumerName,
+                        StreamReadGroupOptions.builder().block(block).count(count).noack().build());
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -7492,13 +8689,13 @@ public class RedisClientTest {
                     consumer,
                     "18",
                     "testId",
-                    IDLE_REDIS_API,
+                    IDLE_VALKEY_API,
                     "11",
-                    TIME_REDIS_API,
+                    TIME_VALKEY_API,
                     "12",
-                    RETRY_COUNT_REDIS_API,
+                    RETRY_COUNT_VALKEY_API,
                     "5",
-                    FORCE_REDIS_API
+                    FORCE_VALKEY_API
                 };
         Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
 
@@ -7537,13 +8734,13 @@ public class RedisClientTest {
                     consumer,
                     gs("18"),
                     gs("testId"),
-                    gs(IDLE_REDIS_API),
+                    gs(IDLE_VALKEY_API),
                     gs("11"),
-                    gs(TIME_REDIS_API),
+                    gs(TIME_VALKEY_API),
                     gs("12"),
-                    gs(RETRY_COUNT_REDIS_API),
+                    gs(RETRY_COUNT_VALKEY_API),
                     gs("5"),
-                    gs(FORCE_REDIS_API)
+                    gs(FORCE_VALKEY_API)
                 };
         Map<GlideString, GlideString[][]> mockResult =
                 Map.of(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
@@ -7575,7 +8772,8 @@ public class RedisClientTest {
         String consumer = "testConsumer";
         Long minIdleTime = 18L;
         String[] ids = new String[] {"testId"};
-        String[] arguments = new String[] {key, groupName, consumer, "18", "testId", JUST_ID_REDIS_API};
+        String[] arguments =
+                new String[] {key, groupName, consumer, "18", "testId", JUST_ID_VALKEY_API};
         String[] mockResult = {"message", "log"};
 
         CompletableFuture<String[]> testResponse = new CompletableFuture<>();
@@ -7605,7 +8803,9 @@ public class RedisClientTest {
         Long minIdleTime = 18L;
         GlideString[] ids = new GlideString[] {gs("testId")};
         GlideString[] arguments =
-                new GlideString[] {key, groupName, consumer, gs("18"), gs("testId"), gs(JUST_ID_REDIS_API)};
+                new GlideString[] {
+                    key, groupName, consumer, gs("18"), gs("testId"), gs(JUST_ID_VALKEY_API)
+                };
         GlideString[] mockResult = {gs("message"), gs("log")};
 
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
@@ -7643,14 +8843,14 @@ public class RedisClientTest {
                     consumer,
                     "18",
                     "testId",
-                    IDLE_REDIS_API,
+                    IDLE_VALKEY_API,
                     "11",
-                    TIME_REDIS_API,
+                    TIME_VALKEY_API,
                     "12",
-                    RETRY_COUNT_REDIS_API,
+                    RETRY_COUNT_VALKEY_API,
                     "5",
-                    FORCE_REDIS_API,
-                    JUST_ID_REDIS_API
+                    FORCE_VALKEY_API,
+                    JUST_ID_VALKEY_API
                 };
         String[] mockResult = {"message", "log"};
 
@@ -7689,14 +8889,14 @@ public class RedisClientTest {
                     consumer,
                     gs("18"),
                     gs("testId"),
-                    gs(IDLE_REDIS_API),
+                    gs(IDLE_VALKEY_API),
                     gs("11"),
-                    gs(TIME_REDIS_API),
+                    gs(TIME_VALKEY_API),
                     gs("12"),
-                    gs(RETRY_COUNT_REDIS_API),
+                    gs(RETRY_COUNT_VALKEY_API),
                     gs("5"),
-                    gs(FORCE_REDIS_API),
-                    gs(JUST_ID_REDIS_API)
+                    gs(FORCE_VALKEY_API),
+                    gs(JUST_ID_VALKEY_API)
                 };
         GlideString[] mockResult = {gs("message"), gs("log")};
 
@@ -8123,7 +9323,7 @@ public class RedisClientTest {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
-        String[] arguments = {key, groupName, EXCLUSIVE_RANGE_REDIS_API + "1234-0", "2345-5", "4"};
+        String[] arguments = {key, groupName, EXCLUSIVE_RANGE_VALKEY_API + "1234-0", "2345-5", "4"};
         StreamRange start = IdBound.ofExclusive("1234-0");
         StreamRange end = IdBound.of("2345-5");
         Long count = 4L;
@@ -8152,7 +9352,7 @@ public class RedisClientTest {
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
         GlideString[] arguments = {
-            key, groupName, gs(EXCLUSIVE_RANGE_REDIS_API + "1234-0"), gs("2345-5"), gs("4")
+            key, groupName, gs(EXCLUSIVE_RANGE_VALKEY_API + "1234-0"), gs("2345-5"), gs("4")
         };
         StreamRange start = IdBound.ofExclusive("1234-0");
         StreamRange end = IdBound.of("2345-5");
@@ -8185,10 +9385,10 @@ public class RedisClientTest {
         String[] arguments = {
             key,
             groupName,
-            IDLE_TIME_REDIS_API,
+            IDLE_TIME_VALKEY_API,
             "100",
-            MINIMUM_RANGE_REDIS_API,
-            MAXIMUM_RANGE_REDIS_API,
+            MINIMUM_RANGE_VALKEY_API,
+            MAXIMUM_RANGE_VALKEY_API,
             "4",
             consumer
         };
@@ -8226,16 +9426,16 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
-        String consumer = "testConsumer";
+        GlideString consumer = gs("testConsumer");
         GlideString[] arguments = {
             key,
             groupName,
-            gs(IDLE_TIME_REDIS_API),
+            gs(IDLE_TIME_VALKEY_API),
             gs("100"),
-            gs(MINIMUM_RANGE_REDIS_API),
-            gs(MAXIMUM_RANGE_REDIS_API),
+            gs(MINIMUM_RANGE_VALKEY_API),
+            gs(MAXIMUM_RANGE_VALKEY_API),
             gs("4"),
-            gs(consumer)
+            consumer
         };
         StreamRange start = InfRangeBound.MIN;
         StreamRange end = InfRangeBound.MAX;
@@ -8257,7 +9457,7 @@ public class RedisClientTest {
                         start,
                         end,
                         count,
-                        StreamPendingOptions.builder().minIdleTime(100L).consumer(consumer).build());
+                        StreamPendingOptionsBinary.builder().minIdleTime(100L).consumer(consumer).build());
         Object[][] payload = response.get();
 
         // verify
@@ -8609,7 +9809,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_VALKEY_API, "42"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -8625,7 +9825,7 @@ public class RedisClientTest {
     public void lolwut_with_version_and_params_returns_success() {
         // setup
         String value = "pewpew";
-        String[] arguments = new String[] {VERSION_REDIS_API, "42", "1", "2"};
+        String[] arguments = new String[] {VERSION_VALKEY_API, "42", "1", "2"};
         int[] params = new int[] {1, 2};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -9359,8 +10559,8 @@ public class RedisClientTest {
         String[] arguments =
                 new String[] {
                     key,
-                    ConditionalChange.ONLY_IF_EXISTS.getRedisApi(),
-                    CHANGED_REDIS_API,
+                    ConditionalChange.ONLY_IF_EXISTS.getValkeyApi(),
+                    CHANGED_VALKEY_API,
                     "15.087269",
                     "40.0",
                     "Catania",
@@ -9398,8 +10598,8 @@ public class RedisClientTest {
         GlideString[] arguments =
                 new GlideString[] {
                     key,
-                    gs(ConditionalChange.ONLY_IF_EXISTS.getRedisApi()),
-                    gs(CHANGED_REDIS_API),
+                    gs(ConditionalChange.ONLY_IF_EXISTS.getValkeyApi()),
+                    gs(CHANGED_VALKEY_API),
                     gs("15.087269"),
                     gs("40.0"),
                     gs("Catania"),
@@ -9797,7 +10997,7 @@ public class RedisClientTest {
     public void functionList_with_pattern_returns_success() {
         // setup
         String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
+        String[] args = new String[] {LIBRARY_NAME_VALKEY_API, pattern, WITH_CODE_VALKEY_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
@@ -9822,7 +11022,7 @@ public class RedisClientTest {
         // setup
         GlideString pattern = gs("*");
         GlideString[] args =
-                new GlideString[] {gs(LIBRARY_NAME_REDIS_API), pattern, gs(WITH_CODE_REDIS_API)};
+                new GlideString[] {gs(LIBRARY_NAME_VALKEY_API), pattern, gs(WITH_CODE_VALKEY_API)};
         @SuppressWarnings("unchecked")
         Map<GlideString, Object>[] value = new Map[0];
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
@@ -10517,7 +11717,7 @@ public class RedisClientTest {
                     key,
                     key2,
                     listDirection.toString(),
-                    COUNT_FOR_LIST_REDIS_API,
+                    COUNT_FOR_LIST_VALKEY_API,
                     Long.toString(count)
                 };
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
@@ -10556,7 +11756,7 @@ public class RedisClientTest {
                     key,
                     key2,
                     gs(listDirection.toString()),
-                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
@@ -10884,7 +12084,7 @@ public class RedisClientTest {
         long count = 1L;
         String[] arguments =
                 new String[] {
-                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_VALKEY_API, Long.toString(count)
                 };
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
@@ -10919,7 +12119,7 @@ public class RedisClientTest {
                     key,
                     key2,
                     gs(listDirection.toString()),
-                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(COUNT_FOR_LIST_VALKEY_API),
                     gs(Long.toString(count))
                 };
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
@@ -11155,7 +12355,7 @@ public class RedisClientTest {
         String key1 = "testKey";
         String key2 = "testKey2";
         long limit = 1L;
-        String[] arguments = new String[] {"2", key1, key2, SET_LIMIT_REDIS_API, "1"};
+        String[] arguments = new String[] {"2", key1, key2, SET_LIMIT_VALKEY_API, "1"};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -11182,7 +12382,7 @@ public class RedisClientTest {
         GlideString key2 = gs("testKey2");
         long limit = 1L;
         GlideString[] arguments =
-                new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_REDIS_API), gs("1")};
+                new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_VALKEY_API), gs("1")};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -11681,7 +12881,7 @@ public class RedisClientTest {
         // setup
         String source = "testKey1";
         String destination = "testKey2";
-        String[] arguments = new String[] {source, destination, REPLACE_REDIS_API};
+        String[] arguments = new String[] {source, destination, REPLACE_VALKEY_API};
         Boolean value = true;
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
@@ -11707,7 +12907,7 @@ public class RedisClientTest {
         String source = "testKey1";
         String destination = "testKey2";
         long destinationDB = 1;
-        String[] arguments = new String[] {source, destination, DB_REDIS_API, "1", REPLACE_REDIS_API};
+        String[] arguments = new String[] {source, destination, DB_VALKEY_API, "1", REPLACE_VALKEY_API};
         Boolean value = true;
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
@@ -11782,7 +12982,7 @@ public class RedisClientTest {
         // setup
         String key1 = "testKey1";
         String key2 = "testKey2";
-        String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
+        String[] arguments = new String[] {key1, key2, LEN_VALKEY_API};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -11807,7 +13007,7 @@ public class RedisClientTest {
         // setup
         GlideString key1 = gs("testKey1");
         GlideString key2 = gs("testKey2");
-        GlideString[] arguments = new GlideString[] {key1, key2, gs(LEN_REDIS_API)};
+        GlideString[] arguments = new GlideString[] {key1, key2, gs(LEN_VALKEY_API)};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -13075,7 +14275,7 @@ public class RedisClientTest {
                             "BYRADIUS",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2"
                         },
                         new String[] {"place3", "place4"}),
@@ -13093,7 +14293,7 @@ public class RedisClientTest {
                             "1.0",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2",
                             "ANY",
                             "DESC"
@@ -13146,7 +14346,7 @@ public class RedisClientTest {
                             gs("BYRADIUS"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2")
                         },
                         new GlideString[] {gs("place3"), gs("place4")}),
@@ -13164,7 +14364,7 @@ public class RedisClientTest {
                             gs("1.0"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2"),
                             gs("ANY"),
                             gs("DESC")
@@ -13472,7 +14672,7 @@ public class RedisClientTest {
                             "BYRADIUS",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2"
                         },
                         3L),
@@ -13491,7 +14691,7 @@ public class RedisClientTest {
                             "1.0",
                             "1.0",
                             "km",
-                            COUNT_REDIS_API,
+                            COUNT_VALKEY_API,
                             "2",
                             "ANY",
                             "DESC"
@@ -13547,7 +14747,7 @@ public class RedisClientTest {
                             gs("BYRADIUS"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2")
                         },
                         3L),
@@ -13566,7 +14766,7 @@ public class RedisClientTest {
                             gs("1.0"),
                             gs("1.0"),
                             gs("km"),
-                            gs(COUNT_REDIS_API),
+                            gs(COUNT_VALKEY_API),
                             gs("2"),
                             gs("ANY"),
                             gs("DESC")

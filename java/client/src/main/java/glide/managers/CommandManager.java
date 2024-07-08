@@ -2,6 +2,16 @@
 package glide.managers;
 
 import com.google.protobuf.ByteString;
+import command_request.CommandRequestOuterClass;
+import command_request.CommandRequestOuterClass.Command;
+import command_request.CommandRequestOuterClass.Command.ArgsArray;
+import command_request.CommandRequestOuterClass.CommandRequest;
+import command_request.CommandRequestOuterClass.RequestType;
+import command_request.CommandRequestOuterClass.Routes;
+import command_request.CommandRequestOuterClass.ScriptInvocation;
+import command_request.CommandRequestOuterClass.ScriptInvocationPointers;
+import command_request.CommandRequestOuterClass.SimpleRoutes;
+import command_request.CommandRequestOuterClass.SlotTypes;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
@@ -18,7 +28,7 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
-import glide.ffi.resolvers.RedisValueResolver;
+import glide.ffi.resolvers.GlideValueResolver;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -26,16 +36,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import redis_request.RedisRequestOuterClass;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
-import redis_request.RedisRequestOuterClass.RedisRequest;
-import redis_request.RedisRequestOuterClass.RequestType;
-import redis_request.RedisRequestOuterClass.Routes;
-import redis_request.RedisRequestOuterClass.ScriptInvocation;
-import redis_request.RedisRequestOuterClass.ScriptInvocationPointers;
-import redis_request.RedisRequestOuterClass.SimpleRoutes;
-import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -64,42 +64,42 @@ public class CommandManager {
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             GlideString[] arguments,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -108,17 +108,17 @@ public class CommandManager {
             RequestType requestType,
             String[] arguments,
             Route route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
      * Build a command and send.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -127,28 +127,28 @@ public class CommandManager {
             RequestType requestType,
             GlideString[] arguments,
             Route route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
+        CommandRequest.Builder command = prepareCommandRequest(requestType, arguments, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
      * Build a Transaction and send.
      *
-     * @param transaction Redis Transaction request with multiple commands
+     * @param transaction Transaction request with multiple commands
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     public <T> CompletableFuture<T> submitNewTransaction(
-            Transaction transaction, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            Transaction transaction, GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(transaction);
+        CommandRequest.Builder command = prepareCommandRequest(transaction);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
-     * Build a Script (by hash) request to send to Redis.
+     * Build a Script (by hash) request to send to Valkey.
      *
      * @param script Lua script hash object
      * @param keys The keys that are used in the script
@@ -160,16 +160,16 @@ public class CommandManager {
             Script script,
             List<GlideString> keys,
             List<GlideString> args,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareScript(script, keys, args);
+        CommandRequest.Builder command = prepareScript(script, keys, args);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
      * Build a Cluster Transaction and send.
      *
-     * @param transaction Redis Transaction request with multiple commands
+     * @param transaction Transaction request with multiple commands
      * @param route Transaction routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -177,9 +177,9 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewTransaction(
             ClusterTransaction transaction,
             Optional<Route> route,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(transaction, route);
+        CommandRequest.Builder command = prepareCommandRequest(transaction, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -194,21 +194,21 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitClusterScan(
             ClusterScanCursor cursor,
             @NonNull ScanOptions options,
-            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
 
-        final RedisRequest.Builder command = prepareCursorRequest(cursor, options);
+        final CommandRequest.Builder command = prepareCursorRequest(cursor, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
     /**
-     * Take a redis request and send to channel.
+     * Take a command request and send to channel.
      *
-     * @param command The Redis command request as a builder to execute
+     * @param command The command request as a builder to execute
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
      */
     protected <T> CompletableFuture<T> submitCommandToChannel(
-            RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+            CommandRequest.Builder command, GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (channel.isClosed()) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
@@ -227,85 +227,85 @@ public class CommandManager {
     /**
      * Build a protobuf command request object with routing options.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, String[] arguments, Route route) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
         var builder =
-                RedisRequest.newBuilder()
+                CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return prepareCommandRequestRoute(builder, route);
     }
 
     /**
      * Build a protobuf command request object with routing options.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @param route Command routing parameters
      * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, GlideString[] arguments, Route route) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
         var builder =
-                RedisRequest.newBuilder()
+                CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
-        return prepareRedisRequestRoute(builder, route);
+        return prepareCommandRequestRoute(builder, route);
     }
 
     /**
      * Build a protobuf transaction request object with routing options.
      *
-     * @param transaction Redis transaction with commands
+     * @param transaction Valkey transaction with commands
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(Transaction transaction) {
-        return RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+    protected CommandRequest.Builder prepareCommandRequest(Transaction transaction) {
+        return CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
     }
 
     /**
      * Build a protobuf Script Invoke request.
      *
-     * @param script Redis Script
+     * @param script Valkey Script
      * @param keys keys for the Script
      * @param args args for the Script
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareScript(
+    protected CommandRequest.Builder prepareScript(
             Script script, List<GlideString> keys, List<GlideString> args) {
 
         if (keys.stream().mapToLong(key -> key.getBytes().length).sum()
                         + args.stream().mapToLong(key -> key.getBytes().length).sum()
-                > RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
-            return RedisRequest.newBuilder()
+                > GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
+            return CommandRequest.newBuilder()
                     .setScriptInvocationPointers(
                             ScriptInvocationPointers.newBuilder()
                                     .setHash(script.getHash())
                                     .setArgsPointer(
-                                            RedisValueResolver.createLeakedBytesVec(
+                                            GlideValueResolver.createLeakedBytesVec(
                                                     args.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
                                     .setKeysPointer(
-                                            RedisValueResolver.createLeakedBytesVec(
+                                            GlideValueResolver.createLeakedBytesVec(
                                                     keys.stream().map(GlideString::getBytes).toArray(byte[][]::new)))
                                     .build());
         }
 
-        return RedisRequest.newBuilder()
+        return CommandRequest.newBuilder()
                 .setScriptInvocation(
                         ScriptInvocation.newBuilder()
                                 .setHash(script.getHash())
@@ -325,18 +325,18 @@ public class CommandManager {
     /**
      * Build a protobuf transaction request object with routing options.
      *
-     * @param transaction Redis transaction with commands
+     * @param transaction Valkey transaction with commands
      * @param route Command routing parameters
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             ClusterTransaction transaction, Optional<Route> route) {
 
-        RedisRequest.Builder builder =
-                RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
+        CommandRequest.Builder builder =
+                CommandRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
-        return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
+        return route.isPresent() ? prepareCommandRequestRoute(builder, route.get()) : builder;
     }
 
     /**
@@ -347,11 +347,11 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareCursorRequest(
+    protected CommandRequest.Builder prepareCursorRequest(
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
-        RedisRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
-                RedisRequestOuterClass.ClusterScan.newBuilder();
+        CommandRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
+                CommandRequestOuterClass.ClusterScan.newBuilder();
 
         if (cursor != ClusterScanCursor.INITIAL_CURSOR_INSTANCE) {
             if (cursor instanceof ClusterScanCursorDetail) {
@@ -361,8 +361,9 @@ public class CommandManager {
             }
         }
 
+        // Use the binary match pattern first
         if (options.getMatchPattern() != null) {
-            clusterScanBuilder.setMatchPattern(options.getMatchPattern());
+            clusterScanBuilder.setMatchPattern(ByteString.copyFrom(options.getMatchPattern().getBytes()));
         }
 
         if (options.getCount() != null) {
@@ -373,43 +374,45 @@ public class CommandManager {
             clusterScanBuilder.setObjectType(options.getType().getNativeName());
         }
 
-        return RedisRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
+        return CommandRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
     }
 
     /**
      * Build a protobuf command request object.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(RequestType requestType, String[] arguments) {
+    protected CommandRequest.Builder prepareCommandRequest(
+            RequestType requestType, String[] arguments) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        return RedisRequest.newBuilder()
+        return CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
     }
 
     /**
      * Build a protobuf command request object.
      *
-     * @param requestType Redis command type
-     * @param arguments Redis command arguments
+     * @param requestType Valkey command type
+     * @param arguments Valkey command arguments
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(
+    protected CommandRequest.Builder prepareCommandRequest(
             RequestType requestType, GlideString[] arguments) {
         final Command.Builder commandBuilder = Command.newBuilder();
         populateCommandWithArgs(arguments, commandBuilder);
 
-        return RedisRequest.newBuilder()
+        return CommandRequest.newBuilder()
                 .setSingleCommand(commandBuilder.setRequestType(requestType).build());
     }
 
-    private RedisRequest.Builder prepareRedisRequestRoute(RedisRequest.Builder builder, Route route) {
+    private CommandRequest.Builder prepareCommandRequestRoute(
+            CommandRequest.Builder builder, Route route) {
 
         if (route instanceof SimpleMultiNodeRoute) {
             builder.setRoute(
@@ -425,7 +428,7 @@ public class CommandManager {
             builder.setRoute(
                     Routes.newBuilder()
                             .setSlotIdRoute(
-                                    RedisRequestOuterClass.SlotIdRoute.newBuilder()
+                                    CommandRequestOuterClass.SlotIdRoute.newBuilder()
                                             .setSlotId(((SlotIdRoute) route).getSlotId())
                                             .setSlotType(
                                                     SlotTypes.forNumber(((SlotIdRoute) route).getSlotType().ordinal()))));
@@ -433,7 +436,7 @@ public class CommandManager {
             builder.setRoute(
                     Routes.newBuilder()
                             .setSlotKeyRoute(
-                                    RedisRequestOuterClass.SlotKeyRoute.newBuilder()
+                                    CommandRequestOuterClass.SlotKeyRoute.newBuilder()
                                             .setSlotKey(((SlotKeyRoute) route).getSlotKey())
                                             .setSlotType(
                                                     SlotTypes.forNumber(((SlotKeyRoute) route).getSlotType().ordinal()))));
@@ -441,7 +444,7 @@ public class CommandManager {
             builder.setRoute(
                     Routes.newBuilder()
                             .setByAddressRoute(
-                                    RedisRequestOuterClass.ByAddressRoute.newBuilder()
+                                    CommandRequestOuterClass.ByAddressRoute.newBuilder()
                                             .setHost(((ByAddressRoute) route).getHost())
                                             .setPort(((ByAddressRoute) route).getPort())));
         } else {
@@ -462,7 +465,7 @@ public class CommandManager {
             channel.close();
         }
         if (e instanceof RuntimeException) {
-            // RedisException also goes here
+            // GlideException also goes here
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);
@@ -500,7 +503,7 @@ public class CommandManager {
      * Add the given set of arguments to the output Command.Builder.
      *
      * <p>Implementation note: When the length in bytes of all arguments supplied to the given command
-     * exceed {@link RedisValueResolver#MAX_REQUEST_ARGS_LENGTH_IN_BYTES}, the Command will hold a
+     * exceed {@link GlideValueResolver#MAX_REQUEST_ARGS_LENGTH_IN_BYTES}, the Command will hold a
      * handle to leaked vector of byte arrays in the native layer in the <code>ArgsVecPointer</code>
      * field. In the normal case where the command arguments are small, they'll be serialized as to an
      * {@link ArgsArray} message.
@@ -511,13 +514,13 @@ public class CommandManager {
     private static void populateCommandWithArgs(
             List<byte[]> arguments, Command.Builder outputBuilder) {
         final long totalArgSize = arguments.stream().mapToLong(arg -> arg.length).sum();
-        if (totalArgSize < RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
+        if (totalArgSize < GlideValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
             ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
             arguments.forEach(arg -> commandArgs.addArgs(ByteString.copyFrom(arg)));
             outputBuilder.setArgsArray(commandArgs);
         } else {
             outputBuilder.setArgsVecPointer(
-                    RedisValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
+                    GlideValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
         }
     }
 }

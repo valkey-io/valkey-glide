@@ -1,46 +1,46 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
+import static command_request.CommandRequestOuterClass.RequestType.DBSize;
+import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
+import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDump;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionFlush;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionKill;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
+import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.Select;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.Time;
+import static command_request.CommandRequestOuterClass.RequestType.UnWatch;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.Move;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.Scan;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
@@ -55,7 +55,7 @@ import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
-import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
 import java.util.Map;
@@ -64,10 +64,9 @@ import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**
- * Async (non-blocking) client for Redis in Standalone mode. Use {@link #createClient} to request a
- * client to Redis.
+ * Async (non-blocking) client for Standalone mode. Use {@link #createClient} to request a client.
  */
-public class RedisClient extends BaseClient
+public class GlideClient extends BaseClient
         implements GenericCommands,
                 ServerManagementCommands,
                 ConnectionManagementCommands,
@@ -77,19 +76,19 @@ public class RedisClient extends BaseClient
     /**
      * A constructor. Use {@link #createClient} to get a client. Made protected to simplify testing.
      */
-    protected RedisClient(ClientBuilder builder) {
+    protected GlideClient(ClientBuilder builder) {
         super(builder);
     }
 
     /**
-     * Async request for an async (non-blocking) Redis client in Standalone mode.
+     * Async request for an async (non-blocking) client in Standalone mode.
      *
-     * @param config Redis client Configuration.
-     * @return A Future to connect and return a RedisClient.
+     * @param config Glide client Configuration.
+     * @return A Future to connect and return a GlideClient.
      */
-    public static CompletableFuture<RedisClient> createClient(
-            @NonNull RedisClientConfiguration config) {
-        return createClient(config, RedisClient::new);
+    public static CompletableFuture<GlideClient> createClient(
+            @NonNull GlideClientConfiguration config) {
+        return createClient(config, GlideClient::new);
     }
 
     @Override
@@ -235,7 +234,7 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
                 Lolwut,
-                new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
 
@@ -243,7 +242,7 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> lolwut(int version, int @NonNull [] parameters) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {VERSION_REDIS_API, Integer.toString(version)},
+                        new String[] {VERSION_VALKEY_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
@@ -287,7 +286,7 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                withCode ? new String[] {WITH_CODE_VALKEY_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -295,7 +294,7 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
+                new ArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode).toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
@@ -305,8 +304,8 @@ public class RedisClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 withCode
-                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
-                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                        ? new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern, WITH_CODE_VALKEY_API}
+                        : new String[] {LIBRARY_NAME_VALKEY_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
@@ -316,9 +315,9 @@ public class RedisClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionList,
                 new ArgsBuilder()
-                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(LIBRARY_NAME_VALKEY_API)
                         .add(libNamePattern)
-                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .addIf(WITH_CODE_VALKEY_API, withCode)
                         .toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
@@ -392,7 +391,7 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB) {
         String[] arguments =
-                new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
@@ -400,7 +399,9 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
         GlideString[] arguments =
-                new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
@@ -408,9 +409,9 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
         String[] arguments =
-                new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+                new String[] {source, destination, DB_VALKEY_API, Long.toString(destinationDB)};
         if (replace) {
-            arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+            arguments = ArrayUtils.add(arguments, REPLACE_VALKEY_API);
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
@@ -422,9 +423,11 @@ public class RedisClient extends BaseClient
             long destinationDB,
             boolean replace) {
         GlideString[] arguments =
-                new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
+                new GlideString[] {
+                    source, destination, gs(DB_VALKEY_API), gs(Long.toString(destinationDB))
+                };
         if (replace) {
-            arguments = ArrayUtils.add(arguments, gs(REPLACE_REDIS_API));
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_VALKEY_API));
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }

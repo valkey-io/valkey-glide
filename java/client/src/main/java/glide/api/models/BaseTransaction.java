@@ -1,222 +1,226 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
-import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
-import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
-import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
-import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
-import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static command_request.CommandRequestOuterClass.RequestType.Append;
+import static command_request.CommandRequestOuterClass.RequestType.BLMPop;
+import static command_request.CommandRequestOuterClass.RequestType.BLMove;
+import static command_request.CommandRequestOuterClass.RequestType.BLPop;
+import static command_request.CommandRequestOuterClass.RequestType.BRPop;
+import static command_request.CommandRequestOuterClass.RequestType.BZMPop;
+import static command_request.CommandRequestOuterClass.RequestType.BZPopMax;
+import static command_request.CommandRequestOuterClass.RequestType.BZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.BitCount;
+import static command_request.CommandRequestOuterClass.RequestType.BitField;
+import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.BitOp;
+import static command_request.CommandRequestOuterClass.RequestType.BitPos;
+import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
+import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
+import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
+import static command_request.CommandRequestOuterClass.RequestType.DBSize;
+import static command_request.CommandRequestOuterClass.RequestType.Decr;
+import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
+import static command_request.CommandRequestOuterClass.RequestType.Del;
+import static command_request.CommandRequestOuterClass.RequestType.Dump;
+import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.Exists;
+import static command_request.CommandRequestOuterClass.RequestType.Expire;
+import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.FCall;
+import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
+import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionDump;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionFlush;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionList;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionLoad;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionRestore;
+import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
+import static command_request.CommandRequestOuterClass.RequestType.GeoAdd;
+import static command_request.CommandRequestOuterClass.RequestType.GeoDist;
+import static command_request.CommandRequestOuterClass.RequestType.GeoHash;
+import static command_request.CommandRequestOuterClass.RequestType.GeoPos;
+import static command_request.CommandRequestOuterClass.RequestType.GeoSearch;
+import static command_request.CommandRequestOuterClass.RequestType.GeoSearchStore;
+import static command_request.CommandRequestOuterClass.RequestType.Get;
+import static command_request.CommandRequestOuterClass.RequestType.GetBit;
+import static command_request.CommandRequestOuterClass.RequestType.GetDel;
+import static command_request.CommandRequestOuterClass.RequestType.GetEx;
+import static command_request.CommandRequestOuterClass.RequestType.GetRange;
+import static command_request.CommandRequestOuterClass.RequestType.HDel;
+import static command_request.CommandRequestOuterClass.RequestType.HExists;
+import static command_request.CommandRequestOuterClass.RequestType.HGet;
+import static command_request.CommandRequestOuterClass.RequestType.HGetAll;
+import static command_request.CommandRequestOuterClass.RequestType.HIncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.HIncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.HKeys;
+import static command_request.CommandRequestOuterClass.RequestType.HLen;
+import static command_request.CommandRequestOuterClass.RequestType.HMGet;
+import static command_request.CommandRequestOuterClass.RequestType.HRandField;
+import static command_request.CommandRequestOuterClass.RequestType.HScan;
+import static command_request.CommandRequestOuterClass.RequestType.HSet;
+import static command_request.CommandRequestOuterClass.RequestType.HSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.HStrlen;
+import static command_request.CommandRequestOuterClass.RequestType.HVals;
+import static command_request.CommandRequestOuterClass.RequestType.Incr;
+import static command_request.CommandRequestOuterClass.RequestType.IncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.IncrByFloat;
+import static command_request.CommandRequestOuterClass.RequestType.Info;
+import static command_request.CommandRequestOuterClass.RequestType.LCS;
+import static command_request.CommandRequestOuterClass.RequestType.LIndex;
+import static command_request.CommandRequestOuterClass.RequestType.LInsert;
+import static command_request.CommandRequestOuterClass.RequestType.LLen;
+import static command_request.CommandRequestOuterClass.RequestType.LMPop;
+import static command_request.CommandRequestOuterClass.RequestType.LMove;
+import static command_request.CommandRequestOuterClass.RequestType.LPop;
+import static command_request.CommandRequestOuterClass.RequestType.LPos;
+import static command_request.CommandRequestOuterClass.RequestType.LPush;
+import static command_request.CommandRequestOuterClass.RequestType.LPushX;
+import static command_request.CommandRequestOuterClass.RequestType.LRange;
+import static command_request.CommandRequestOuterClass.RequestType.LRem;
+import static command_request.CommandRequestOuterClass.RequestType.LSet;
+import static command_request.CommandRequestOuterClass.RequestType.LTrim;
+import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MGet;
+import static command_request.CommandRequestOuterClass.RequestType.MSet;
+import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
+import static command_request.CommandRequestOuterClass.RequestType.ObjectRefCount;
+import static command_request.CommandRequestOuterClass.RequestType.PExpire;
+import static command_request.CommandRequestOuterClass.RequestType.PExpireAt;
+import static command_request.CommandRequestOuterClass.RequestType.PExpireTime;
+import static command_request.CommandRequestOuterClass.RequestType.PTTL;
+import static command_request.CommandRequestOuterClass.RequestType.Persist;
+import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
+import static command_request.CommandRequestOuterClass.RequestType.PfCount;
+import static command_request.CommandRequestOuterClass.RequestType.PfMerge;
+import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.Publish;
+import static command_request.CommandRequestOuterClass.RequestType.RPop;
+import static command_request.CommandRequestOuterClass.RequestType.RPush;
+import static command_request.CommandRequestOuterClass.RequestType.RPushX;
+import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.Rename;
+import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.Restore;
+import static command_request.CommandRequestOuterClass.RequestType.SAdd;
+import static command_request.CommandRequestOuterClass.RequestType.SCard;
+import static command_request.CommandRequestOuterClass.RequestType.SDiff;
+import static command_request.CommandRequestOuterClass.RequestType.SDiffStore;
+import static command_request.CommandRequestOuterClass.RequestType.SInter;
+import static command_request.CommandRequestOuterClass.RequestType.SInterCard;
+import static command_request.CommandRequestOuterClass.RequestType.SInterStore;
+import static command_request.CommandRequestOuterClass.RequestType.SIsMember;
+import static command_request.CommandRequestOuterClass.RequestType.SMIsMember;
+import static command_request.CommandRequestOuterClass.RequestType.SMembers;
+import static command_request.CommandRequestOuterClass.RequestType.SMove;
+import static command_request.CommandRequestOuterClass.RequestType.SPop;
+import static command_request.CommandRequestOuterClass.RequestType.SRandMember;
+import static command_request.CommandRequestOuterClass.RequestType.SRem;
+import static command_request.CommandRequestOuterClass.RequestType.SScan;
+import static command_request.CommandRequestOuterClass.RequestType.SUnion;
+import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.Set;
+import static command_request.CommandRequestOuterClass.RequestType.SetBit;
+import static command_request.CommandRequestOuterClass.RequestType.SetRange;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.Strlen;
+import static command_request.CommandRequestOuterClass.RequestType.TTL;
+import static command_request.CommandRequestOuterClass.RequestType.Time;
+import static command_request.CommandRequestOuterClass.RequestType.Touch;
+import static command_request.CommandRequestOuterClass.RequestType.Type;
+import static command_request.CommandRequestOuterClass.RequestType.Unlink;
+import static command_request.CommandRequestOuterClass.RequestType.Wait;
+import static command_request.CommandRequestOuterClass.RequestType.XAck;
+import static command_request.CommandRequestOuterClass.RequestType.XAdd;
+import static command_request.CommandRequestOuterClass.RequestType.XAutoClaim;
+import static command_request.CommandRequestOuterClass.RequestType.XClaim;
+import static command_request.CommandRequestOuterClass.RequestType.XDel;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupCreate;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupDelConsumer;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupDestroy;
+import static command_request.CommandRequestOuterClass.RequestType.XGroupSetId;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoConsumers;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoGroups;
+import static command_request.CommandRequestOuterClass.RequestType.XInfoStream;
+import static command_request.CommandRequestOuterClass.RequestType.XLen;
+import static command_request.CommandRequestOuterClass.RequestType.XPending;
+import static command_request.CommandRequestOuterClass.RequestType.XRange;
+import static command_request.CommandRequestOuterClass.RequestType.XRead;
+import static command_request.CommandRequestOuterClass.RequestType.XReadGroup;
+import static command_request.CommandRequestOuterClass.RequestType.XRevRange;
+import static command_request.CommandRequestOuterClass.RequestType.XTrim;
+import static command_request.CommandRequestOuterClass.RequestType.ZAdd;
+import static command_request.CommandRequestOuterClass.RequestType.ZCard;
+import static command_request.CommandRequestOuterClass.RequestType.ZCount;
+import static command_request.CommandRequestOuterClass.RequestType.ZDiff;
+import static command_request.CommandRequestOuterClass.RequestType.ZDiffStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZIncrBy;
+import static command_request.CommandRequestOuterClass.RequestType.ZInter;
+import static command_request.CommandRequestOuterClass.RequestType.ZInterCard;
+import static command_request.CommandRequestOuterClass.RequestType.ZInterStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZLexCount;
+import static command_request.CommandRequestOuterClass.RequestType.ZMPop;
+import static command_request.CommandRequestOuterClass.RequestType.ZMScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZPopMax;
+import static command_request.CommandRequestOuterClass.RequestType.ZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.ZRandMember;
+import static command_request.CommandRequestOuterClass.RequestType.ZRange;
+import static command_request.CommandRequestOuterClass.RequestType.ZRangeStore;
+import static command_request.CommandRequestOuterClass.RequestType.ZRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZRem;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByLex;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZRemRangeByScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZRevRank;
+import static command_request.CommandRequestOuterClass.RequestType.ZScan;
+import static command_request.CommandRequestOuterClass.RequestType.ZScore;
+import static command_request.CommandRequestOuterClass.RequestType.ZUnion;
+import static command_request.CommandRequestOuterClass.RequestType.ZUnionStore;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_VALKEY_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_VALKEY_API;
+import static glide.api.commands.ServerManagementCommands.VERSION_VALKEY_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_VALKEY_API;
+import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
-import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.commands.StringBaseCommands.LEN_VALKEY_API;
 import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
-import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
-import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
-import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
-import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_VALKEY_API;
 import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
 import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
-import static redis_request.RedisRequestOuterClass.RequestType.Append;
-import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
-import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
-import static redis_request.RedisRequestOuterClass.RequestType.BitField;
-import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
-import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Decr;
-import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.Del;
-import static redis_request.RedisRequestOuterClass.RequestType.Dump;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.Exists;
-import static redis_request.RedisRequestOuterClass.RequestType.Expire;
-import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
-import static redis_request.RedisRequestOuterClass.RequestType.FCall;
-import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoSearch;
-import static redis_request.RedisRequestOuterClass.RequestType.GeoSearchStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Get;
-import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
-import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
-import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
-import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.HDel;
-import static redis_request.RedisRequestOuterClass.RequestType.HExists;
-import static redis_request.RedisRequestOuterClass.RequestType.HGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HGetAll;
-import static redis_request.RedisRequestOuterClass.RequestType.HIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
-import static redis_request.RedisRequestOuterClass.RequestType.HLen;
-import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
-import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
-import static redis_request.RedisRequestOuterClass.RequestType.HScan;
-import static redis_request.RedisRequestOuterClass.RequestType.HSet;
-import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
-import static redis_request.RedisRequestOuterClass.RequestType.HVals;
-import static redis_request.RedisRequestOuterClass.RequestType.Incr;
-import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LCS;
-import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
-import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
-import static redis_request.RedisRequestOuterClass.RequestType.LLen;
-import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.LMove;
-import static redis_request.RedisRequestOuterClass.RequestType.LPop;
-import static redis_request.RedisRequestOuterClass.RequestType.LPos;
-import static redis_request.RedisRequestOuterClass.RequestType.LPush;
-import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.LRange;
-import static redis_request.RedisRequestOuterClass.RequestType.LRem;
-import static redis_request.RedisRequestOuterClass.RequestType.LSet;
-import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.MGet;
-import static redis_request.RedisRequestOuterClass.RequestType.MSet;
-import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
-import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
-import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
-import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
-import static redis_request.RedisRequestOuterClass.RequestType.Persist;
-import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
-import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.Publish;
-import static redis_request.RedisRequestOuterClass.RequestType.RPop;
-import static redis_request.RedisRequestOuterClass.RequestType.RPush;
-import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.Rename;
-import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
-import static redis_request.RedisRequestOuterClass.RequestType.Restore;
-import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.SCard;
-import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
-import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
-import static redis_request.RedisRequestOuterClass.RequestType.SInter;
-import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
-import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
-import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
-import static redis_request.RedisRequestOuterClass.RequestType.SMove;
-import static redis_request.RedisRequestOuterClass.RequestType.SPop;
-import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
-import static redis_request.RedisRequestOuterClass.RequestType.SRem;
-import static redis_request.RedisRequestOuterClass.RequestType.SScan;
-import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
-import static redis_request.RedisRequestOuterClass.RequestType.Set;
-import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
-import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
-import static redis_request.RedisRequestOuterClass.RequestType.TTL;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.Touch;
-import static redis_request.RedisRequestOuterClass.RequestType.Type;
-import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
-import static redis_request.RedisRequestOuterClass.RequestType.Wait;
-import static redis_request.RedisRequestOuterClass.RequestType.XAck;
-import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.XAutoClaim;
-import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
-import static redis_request.RedisRequestOuterClass.RequestType.XDel;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
-import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
-import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
-import static redis_request.RedisRequestOuterClass.RequestType.XLen;
-import static redis_request.RedisRequestOuterClass.RequestType.XPending;
-import static redis_request.RedisRequestOuterClass.RequestType.XRange;
-import static redis_request.RedisRequestOuterClass.RequestType.XRead;
-import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
-import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
-import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
-import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
-import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
-import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
-import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
-import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
-import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
-import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
-import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
-import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRandMember;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRange;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRangeStore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRem;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
-import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
-import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
-import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
-import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import command_request.CommandRequestOuterClass.Command;
+import command_request.CommandRequestOuterClass.Command.ArgsArray;
+import command_request.CommandRequestOuterClass.RequestType;
+import command_request.CommandRequestOuterClass.Transaction;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -292,10 +296,6 @@ import glide.utils.ArgsBuilder;
 import java.util.Map;
 import lombok.Getter;
 import lombok.NonNull;
-import redis_request.RedisRequestOuterClass.Command;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
-import redis_request.RedisRequestOuterClass.RequestType;
-import redis_request.RedisRequestOuterClass.Transaction;
 
 /**
  * Base class encompassing shared commands for both standalone and cluster server installations.
@@ -310,7 +310,7 @@ import redis_request.RedisRequestOuterClass.Transaction;
  */
 @Getter
 public abstract class BaseTransaction<T extends BaseTransaction<T>> {
-    /** Command class to send a single request to Redis. */
+    /** Command class to send a single request to Valkey. */
     protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
 
     /**
@@ -1051,7 +1051,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T hrandfieldWithCountWithValues(@NonNull ArgType key, long count) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(HRandField, newArgsBuilder().add(key).add(count).add(WITH_VALUES_REDIS_API)));
+                buildCommand(HRandField, newArgsBuilder().add(key).add(count).add(WITH_VALUES_VALKEY_API)));
         return getThis();
     }
 
@@ -1148,7 +1148,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lposCount(@NonNull ArgType key, @NonNull ArgType element, long count) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(LPos, newArgsBuilder().add(key).add(element).add(COUNT_REDIS_API).add(count)));
+                buildCommand(
+                        LPos, newArgsBuilder().add(key).add(element).add(COUNT_VALKEY_API).add(count)));
         return getThis();
     }
 
@@ -1176,7 +1177,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(key)
                                 .add(element)
-                                .add(COUNT_REDIS_API)
+                                .add(COUNT_VALKEY_API)
                                 .add(count)
                                 .add(options.toArgs())));
         return getThis();
@@ -1614,7 +1615,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(
                 buildCommand(
                         SInterCard,
-                        newArgsBuilder().add(keys.length).add(keys).add(SET_LIMIT_REDIS_API).add(limit)));
+                        newArgsBuilder().add(keys.length).add(keys).add(SET_LIMIT_VALKEY_API).add(limit)));
         return getThis();
     }
 
@@ -2301,7 +2302,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrandmemberWithCountWithScores(ArgType key, long count) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(ZRandMember, newArgsBuilder().add(key).add(count).add(WITH_SCORES_REDIS_API)));
+                buildCommand(
+                        ZRandMember, newArgsBuilder().add(key).add(count).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -2476,7 +2478,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrankWithScore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(ZRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_REDIS_API)));
+                buildCommand(ZRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_VALKEY_API)));
         return getThis();
     }
 
@@ -2519,7 +2521,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T zrevrankWithScore(@NonNull ArgType key, @NonNull ArgType member) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-                buildCommand(ZRevRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_REDIS_API)));
+                buildCommand(ZRevRank, newArgsBuilder().add(key).add(member).add(WITH_SCORE_VALKEY_API)));
         return getThis();
     }
 
@@ -2580,7 +2582,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         checkTypeOrThrow(keys);
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZDiff, newArgsBuilder().add(keys.length).add(keys).add(WITH_SCORES_REDIS_API)));
+                        ZDiff, newArgsBuilder().add(keys.length).add(keys).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -2811,8 +2813,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2827,11 +2827,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination,
+    public T zunionstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore,
@@ -2847,8 +2846,39 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2860,9 +2890,32 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zunionstore(
-            @NonNull ArgType destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        checkTypeOrThrow(destination);
+    public T zunionstore(
+            @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeys</code>, and
+     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
+     * is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightedKeysBinary} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zunionstore(
+            @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZUnionStore, newArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs())));
@@ -2874,8 +2927,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -2890,11 +2941,43 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of elements in the resulting sorted set stored at <code>
      *      destination</code>.
      */
-    public <ArgType> T zinterstore(
-            @NonNull ArgType destination,
+    public T zinterstore(
+            @NonNull String destination,
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys,
             @NonNull Aggregate aggregate) {
-        checkTypeOrThrow(destination);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        ZInterStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(keysOrWeightedKeys.toArgs())
+                                .add(aggregate.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>
+     * , and stores the result in <code>destination</code>. If <code>destination</code> already
+     * exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
+     * @param destination The key of the destination sorted set.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link WeightAggregateOptions.KeyArrayBinary} for keys only.
+     *       <li>Use {@link WeightAggregateOptions.WeightedKeysBinary} for weighted keys with score
+     *           multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The number of elements in the resulting sorted set stored at <code>
+     *      destination</code>.
+     */
+    public T zinterstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZInterStore,
@@ -2942,7 +3025,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         protobufTransaction.addCommands(
                 buildCommand(
                         ZInterCard,
-                        newArgsBuilder().add(keys.length).add(keys).add(LIMIT_REDIS_API).add(limit)));
+                        newArgsBuilder().add(keys.length).add(keys).add(LIMIT_VALKEY_API).add(limit)));
         return getThis();
     }
 
@@ -3050,7 +3133,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3078,7 +3161,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3101,7 +3184,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zunionWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3124,7 +3207,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zunionWithScores(@NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZUnion, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3176,7 +3259,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zinterWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3198,7 +3281,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T zinterWithScores(@NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API)));
+                        ZInter, newArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3226,7 +3309,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3254,7 +3337,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         newArgsBuilder()
                                 .add(keysOrWeightedKeys.toArgs())
                                 .add(aggregate.toArgs())
-                                .add(WITH_SCORES_REDIS_API)));
+                                .add(WITH_SCORES_VALKEY_API)));
         return getThis();
     }
 
@@ -3925,7 +4008,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * The output is limited by first <code>10</code> PEL entries.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @return Command Response - A <code>Map</code> of detailed stream information for the given
@@ -3941,7 +4024,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * The output is limited by first <code>10</code> PEL entries.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     * @since Redis 6.0 and above.
+     * @since Valkey 6.0 and above.
      * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code>
@@ -4050,7 +4133,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(ids)
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4087,7 +4170,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(minIdleTime)
                                 .add(ids)
                                 .add(options.toArgs())
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4142,7 +4225,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
      *           values being a 2D list of the field-value pairs in the format <code>
      *           [[field1, value1], [field2, value2], ...]</code>.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4181,7 +4264,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
      *           values being a 2D list of the field-value pairs in the format <code>
      *           [[field1, value1], [field2, value2], ...]</code>.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4202,7 +4285,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add(READ_COUNT_REDIS_API)
+                                .add(READ_COUNT_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -4227,7 +4310,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4247,7 +4330,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4272,7 +4355,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
-     *       <li>If you are using Redis 7.0.0 or above, the response list will also include a list
+     *       <li>If you are using Valkey 7.0.0 or above, the response list will also include a list
      *           containing the message IDs that were in the Pending Entries List but no longer exist
      *           in the stream. These IDs are deleted from the Pending Entries List.
      *     </ul>
@@ -4293,9 +4376,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(consumer)
                                 .add(minIdleTime)
                                 .add(start)
-                                .add(READ_COUNT_REDIS_API)
+                                .add(READ_COUNT_VALKEY_API)
                                 .add(count)
-                                .add(JUST_ID_REDIS_API)));
+                                .add(JUST_ID_VALKEY_API)));
         return getThis();
     }
 
@@ -4411,7 +4494,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Displays a piece of generative computer art and the server version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut() {
@@ -4432,7 +4515,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int @NonNull [] parameters) {
@@ -4446,12 +4529,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int version) {
         protobufTransaction.addCommands(
-                buildCommand(Lolwut, newArgsBuilder().add(VERSION_REDIS_API).add(version)));
+                buildCommand(Lolwut, newArgsBuilder().add(VERSION_VALKEY_API).add(version)));
         return getThis();
     }
 
@@ -4468,12 +4551,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>For version <code>6</code>, those are number of columns and number of lines.
      *     </ul>
      *
-     * @return Command Response - A piece of generative computer art along with the current Redis
+     * @return Command Response - A piece of generative computer art along with the current Valkey
      *     version.
      */
     public T lolwut(int version, int @NonNull [] parameters) {
         protobufTransaction.addCommands(
-                buildCommand(Lolwut, newArgsBuilder().add(VERSION_REDIS_API).add(version).add(parameters)));
+                buildCommand(
+                        Lolwut, newArgsBuilder().add(VERSION_VALKEY_API).add(version).add(parameters)));
         return getThis();
     }
 
@@ -4825,7 +4909,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(modifier)
-                                .add(COUNT_REDIS_API)
+                                .add(COUNT_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -4896,7 +4980,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(modifier)
-                                .add(COUNT_REDIS_API)
+                                .add(COUNT_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -5066,7 +5150,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         checkTypeOrThrow(source);
         protobufTransaction.addCommands(
                 buildCommand(
-                        Copy, newArgsBuilder().add(source).add(destination).addIf(REPLACE_REDIS_API, replace)));
+                        Copy,
+                        newArgsBuilder().add(source).add(destination).addIf(REPLACE_VALKEY_API, replace)));
         return getThis();
     }
 
@@ -5362,7 +5447,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Valkey.
      *
      * @since Valkey 7.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
@@ -5390,7 +5475,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T functionList(boolean withCode) {
         protobufTransaction.addCommands(
-                buildCommand(FunctionList, newArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode)));
+                buildCommand(FunctionList, newArgsBuilder().addIf(WITH_CODE_VALKEY_API, withCode)));
         return getThis();
     }
 
@@ -5411,9 +5496,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildCommand(
                         FunctionList,
                         newArgsBuilder()
-                                .add(LIBRARY_NAME_REDIS_API)
+                                .add(LIBRARY_NAME_VALKEY_API)
                                 .add(libNamePattern)
-                                .addIf(WITH_CODE_REDIS_API, withCode)));
+                                .addIf(WITH_CODE_VALKEY_API, withCode)));
         return getThis();
     }
 
@@ -5519,7 +5604,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the serialized payload of all loaded libraries. The command will be routed to a random
      * node.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @return Command Response - The serialized payload of all loaded libraries.
      */
@@ -5532,7 +5617,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
      * will be routed to all primary nodes.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return Command Response - <code>OK</code>.
@@ -5546,7 +5631,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}. The command
      * will be routed to all primary nodes.
      *
-     * @since Redis 7.0 and above.
+     * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
@@ -5636,7 +5721,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(direction)
-                                .add(COUNT_FOR_LIST_REDIS_API)
+                                .add(COUNT_FOR_LIST_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -5818,7 +5903,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(keys.length)
                                 .add(keys)
                                 .add(direction)
-                                .add(COUNT_FOR_LIST_REDIS_API)
+                                .add(COUNT_FOR_LIST_VALKEY_API)
                                 .add(count)));
         return getThis();
     }
@@ -6142,7 +6227,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public <ArgType> T lcsLen(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
         protobufTransaction.addCommands(
-                buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(LEN_REDIS_API)));
+                buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(LEN_VALKEY_API)));
         return getThis();
     }
 

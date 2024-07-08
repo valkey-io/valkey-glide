@@ -1,24 +1,23 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.SPublish;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
-import glide.api.RedisClusterClient;
+import glide.api.GlideClusterClient;
 import glide.api.models.commands.SortClusterOptions;
 import lombok.NonNull;
 
 /**
- * Transaction implementation for cluster {@link RedisClusterClient}. Transactions allow the
+ * Transaction implementation for cluster {@link GlideClusterClient}. Transactions allow the
  * execution of a group of commands in a single step.
  *
  * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
- * {@link RedisClusterClient#exec} command, in the order they were given. Each element in the array
+ * {@link GlideClusterClient#exec} command, in the order they were given. Each element in the array
  * represents a command given to the {@link ClusterTransaction}. The response for each command
- * depends on the executed Redis command. Specific response types are documented alongside each
- * method.
+ * depends on the executed command. Specific response types are documented alongside each method.
  *
  * @example
  *     <pre>{@code
@@ -46,7 +45,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
      * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
-     *     to <code>true</code> is only applicable with Redis 7.0+.
+     *     to <code>true</code> is only applicable with Valkey 7.0+.
      * @return Command response - The number of clients that received the message.
      */
     public <ArgType> ClusterTransaction publish(
