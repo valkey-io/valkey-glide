@@ -1856,7 +1856,6 @@ public abstract class BaseClient
             @NonNull Map<GlideString, Double> membersScoresMap,
             @NonNull ZAddOptions options,
             boolean changed) {
-        System.err.println("22222");
         GlideString[] arguments =
                 new ArgsBuilder()
                         .add(key)
