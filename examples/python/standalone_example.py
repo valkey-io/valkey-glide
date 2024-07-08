@@ -12,8 +12,14 @@ from glide import (
 
 
 async def create_client(host: str = "localhost", port: int = 6379) -> GlideClient:
+    # Replicas can be added to the addresses list
     addresses = [NodeAddress(host, port)]
-    config = GlideClientConfiguration(addresses)
+    # Check `GlideClientConfiguration` for additional options.
+    config = GlideClientConfiguration(
+        addresses,
+        # Enable this field if the servers are configured with TLS.
+        # use_tls=True
+    )
     return await GlideClient.create(config)
 
 

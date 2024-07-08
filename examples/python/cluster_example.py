@@ -16,13 +16,13 @@ from glide import (
 async def create_client(
     host: str = "localhost", port: int = 6379
 ) -> GlideClusterClient:
-    # When in Redis is cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
+    # In cluster mode, add the address of any node; the client will automatically discover all nodes in the cluster.
     addresses = [NodeAddress(host, port)]
     # Check `GlideClusterClientConfiguration` for additional options.
     config = GlideClusterClientConfiguration(
         addresses=addresses,
         client_name="test_cluster_client",
-        # if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
+        # Enable this field if the servers are configured with TLS.
         # use_tls=True
     )
     return await GlideClusterClient.create(config)
