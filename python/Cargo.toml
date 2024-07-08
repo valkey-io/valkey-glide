@@ -1,9 +1,9 @@
 [package]
-name = "glide-for-redis"
+name = "valkey-glide"
 version = "255.255.255"
 edition = "2021"
 license = "Apache-2.0"
-authors = ["Amazon Web Services"]
+authors = ["Valkey GLIDE Maintainers"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
