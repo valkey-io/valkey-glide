@@ -6861,7 +6861,6 @@ class TestCommands:
         )
 
         result_full = await glide_client.xinfo_stream_full(key, count=1)
-        print(result_full)
         assert result_full.get(b"length") == 2
         entries = cast(list, result_full.get(b"entries"))
         # only the first entry will be returned since we passed count=1
