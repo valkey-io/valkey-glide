@@ -55,6 +55,18 @@ jar xf bundle-java-aarch64-apple-darwin.jar
 mvn install:install-file -Dfile=valkey-glide-1.0.0-osx-aarch_64.jar -DgroupId=io.valkey -DartifactId=valkey-glide -Dversion=1.0.0 -Dpackaging=jar -DPom=valkey-glide-1.0.0.pom
 ```
 
+You can then add the valkey dependency via gradle:
+```gradle
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenLocal()
+}
+
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0'
+}
+```
+
 Refer to https://central.sonatype.com/artifact/io.valkey/valkey-glide.
 Once set up, you can run the basic examples.
 
