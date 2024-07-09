@@ -49,7 +49,7 @@ jobs:
                 
 
     start-self-hosted-runner:
-        if: ${{ HEAD_OWNER }} == 'valkey-io'
+        if: $HEAD_OWNER == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -64,7 +64,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
-        if: ${{ HEAD_OWNER }} == 'valkey-io'
+        if: $HEAD_OWNER == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         timeout-minutes: 25
