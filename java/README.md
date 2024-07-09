@@ -18,7 +18,7 @@ macOS:
 ## Layout of Java code
 The Java client contains the following parts:
 
-1. `src`: Rust dynamic library FFI to integrate with [GLIDE core library](../glide-core/README.md).
+1. `src`: Rust dynamic library FFI to integrate with [GLIDE core library](../glide-core/).
 2. `client`: A Java-wrapper around the GLIDE core rust library and unit tests for it.
 3. `examples`: An example app to test the client against a Valkey localhost.
 4. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Valkey and other Java clients.
@@ -238,7 +238,7 @@ public class Main {
 ```
 
 ### Accessing tests
-For more examples, you can refer to the test folder [unit tests](./java/client/src/test/java/glide/api) and [integration tests](./java/integTest/src/test/java/glide).
+For more examples, you can refer to the test folder [unit tests](./client/src/test/java/glide/api) and [integration tests](./integTest/src/test/java/glide).
 
 ### Benchmarks
 
