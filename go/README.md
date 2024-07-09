@@ -1,6 +1,6 @@
-# C# wrapper
+# GO wrapper
 
-The C# wrapper is currently not in a usable state and is under development.
+The GO wrapper is currently not in a usable state and is under development.
 
 # Valkey GLIDE
 
@@ -12,27 +12,12 @@ Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valk
 
 ## Current Status
 
-We've made Valkey GLIDE an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
-This preview release is recommended for testing purposes only.
+# Getting Started - GO Wrapper
 
-# Getting Started - C# Wrapper
-
-## .net sdk supported version
-
-.net 6.0 or higher.
+## GO supported version
 
 ## Basic Example
 
-```csharp
-
-using Glide;
-
-AsyncClient glideClient = new (host, PORT, useTLS);
-await glideClient.SetAsync("foo", "bar");
-string? value = await glideClient.GetAsync("foo");
-glideClient.Dispose();
-```
-
 ### Building & Testing
 
-Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md#build-from-source) file.
+Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md) file.
