@@ -32,12 +32,23 @@ jobs:
     start-self-hosted-runner:
         if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
         steps:
+          - run: |
+                echo "Current repository: ${{ github.repository }}"
+                echo "Repository owner: ${{ github.repository_owner }}"
+                echo "Pull request head repo: ${{ github.event.pull_request.head.repo.full_name }}"
+                echo "Pull request base repo: ${{ github.event.pull_request.base.repo.full_name }}"
+            env:
+                OWNER: ${{ github.repository_owner }}
+
           - name: Checkout
             uses: actions/checkout@v4
             with:
                 fetch-depth: 0
+
+          - run: echo $OWNER 2
+            env:
+                OWNER: ${{ github.repository_owner }}
 
           - name: Start self hosted EC2 runner
             uses: ./.github/workflows/start-self-hosted-runner
@@ -73,7 +84,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}                   
+                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -85,7 +96,7 @@ jobs:
               run: |
                   apk update
                   apk add git
-              
+
             - name: Checkout
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/checkout@v4
@@ -100,7 +111,7 @@ jobs:
                   workspace: $GITHUB_WORKSPACE
                   npm-scope: ${{ vars.NPM_SCOPE }}
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
-                  arch: ${{ matrix.build.ARCH }}       
+                  arch: ${{ matrix.build.ARCH }}
 
             - name: Set the release version
               shell: bash
@@ -127,7 +138,7 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
-            
+
             - name: Setup node for publishing
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
               working-directory: ./node
@@ -135,7 +146,7 @@ jobs:
                 npm config set registry https://registry.npmjs.org/
                 npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
                 npm config set scope ${{ vars.NPM_SCOPE }}
-            
+
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
               with:
@@ -153,7 +164,7 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: "7.2.5"
-            
+
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
@@ -183,7 +194,7 @@ jobs:
                   set +e
                   # 2>&1 1>&3- redirects stderr to stdout and then redirects the original stdout to another file descriptor,
                   # effectively separating stderr and stdout. The 3>&1 at the end redirects the original stdout back to the console.
-                  # https://github.com/npm/npm/issues/118#issuecomment-325440 - ignoring notice messages since currentlly they are directed to stderr 
+                  # https://github.com/npm/npm/issues/118#issuecomment-325440 - ignoring notice messages since currentlly they are directed to stderr
                     { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3- | grep -v "notice") ;} 3>&1
                   if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
                   then
@@ -247,7 +258,7 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: "7.2.5"
-            
+
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
@@ -260,7 +271,7 @@ jobs:
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
-                  
+
             - name: Publish the base package
               if: github.event_name != 'pull_request'
               shell: bash
@@ -285,7 +296,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}                   
+                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
@@ -297,12 +308,12 @@ jobs:
                 apk update
                 apk add redis git
                 node -v
-            
+
             - name: install Redis and Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
                 sudo apt-get update
-                sudo apt-get install redis-server python3 
+                sudo apt-get install redis-server python3
 
             - name: install Redis, Python for macos
               if: ${{ contains(matrix.build.RUNNER, 'mac') }}
