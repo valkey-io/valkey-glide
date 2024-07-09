@@ -46,7 +46,7 @@ jobs:
                 
 
     start-self-hosted-runner:
-        if: ${{ github.event.pull_request.head.repo.owner.login }} == 'valkey-io'
+        if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
