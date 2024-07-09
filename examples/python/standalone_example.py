@@ -1,4 +1,5 @@
 import asyncio
+from typing import List, Tuple
 
 from glide import (
     ClosingError,
@@ -11,9 +12,28 @@ from glide import (
 )
 
 
-async def create_client(host: str = "localhost", port: int = 6379) -> GlideClient:
-    # Replicas can be added to the addresses list
-    addresses = [NodeAddress(host, port)]
+async def create_client(
+    nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]
+) -> GlideClient:
+    """
+    Creates and returns a GlideClient instance.
+
+    This function initializes a GlideClient with the provided list of nodes.
+    The nodes_list can contain either only primary nodes or a mix of primary
+    and replica nodes. The GlideClient will use these nodes to connect to
+    the Redis cluster or standalone server.
+
+    Args:
+        nodes_list (List[Tuple[str, int]]): A list of tuples where each tuple
+            contains a host (str) and port (int). Defaults to [("localhost", 6379)].
+
+    Returns:
+        GlideClient: An instance of GlideClient connected to the specified nodes.
+    """
+    addresses = []
+    for host, port in nodes_list:
+        addresses.append(NodeAddress(host, port))
+
     # Check `GlideClientConfiguration` for additional options.
     config = GlideClientConfiguration(
         addresses,
@@ -24,18 +44,30 @@ async def create_client(host: str = "localhost", port: int = 6379) -> GlideClien
 
 
 async def app_logic(client: GlideClient):
+    """
+    Executes the main logic of the application, performing basic operations
+    such as SET, GET, and PING using the provided GlideClient.
+
+    Args:
+        client (GlideClient): An instance of GlideClient.
+    """
     # Send SET and GET
     set_response = await client.set("foo", "bar")
-    print(f"Set response is = {set_response!r}")
+    Logger.log(LogLevel.INFO, "app", f"Set response is = {set_response!r}")
+
     get_response = await client.get("foo")
     assert isinstance(get_response, bytes)
-    print(f"Get response is = {get_response.decode()!r}")
+    Logger.log(LogLevel.INFO, "app", f"Get response is = {get_response.decode()!r}")
+
     # Send PING to the primary node
     pong = await client.ping()
-    print(f"PONG response is = {pong}")
+    Logger.log(LogLevel.INFO, "app", f"PING response is = {pong}")
 
 
 async def exec_app_logic():
+    """
+    Executes the application logic with exception handling.
+    """
     while True:
         try:
             client = await create_client()
@@ -46,20 +78,32 @@ async def exec_app_logic():
             # If the error message contains "NOAUTH", raise the exception
             # because it indicates a critical authentication issue.
             if "NOAUTH" in str(e):
+                Logger.log(
+                    LogLevel.ERROR,
+                    "glide",
+                    f"Authentication error encountered: {e}",
+                )
                 raise e
-            print(f"Client has closed and needs to be re-created: {e}")
+            Logger.log(
+                LogLevel.WARN,
+                "glide",
+                f"Client has closed and needs to be re-created: {e}",
+            )
         except RequestError as e:
-            print(f"RequestError encountered: {e}")
+            Logger.log(LogLevel.ERROR, "glide", f"RequestError encountered: {e}")
             raise e
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            Logger.log(LogLevel.ERROR, "glide", f"Unexpected error: {e}")
             raise e
         finally:
             try:
                 await client.close()
-            except Exception:
-                pass
-            # Optionally, handle or log closure errors
+            except Exception as e:
+                Logger.log(
+                    LogLevel.WARN,
+                    "glide",
+                    f"Encountered an error while closing the client: {e}",
+                )
 
 
 def main():
