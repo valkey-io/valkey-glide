@@ -33,7 +33,7 @@ inputs:
         description: "The NPM scope"
         required: false
         type: string
-        default: "@aws"
+        default: "@valkey"
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
