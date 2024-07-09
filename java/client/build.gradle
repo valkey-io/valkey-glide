@@ -177,15 +177,13 @@ sourceSets {
     }
 }
 
-// version is replaced during released workflow java-cd.yml
-
-
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
+            // version is replaced during released workflow java-cd.yml
             version = System.getenv("GLIDE_LOCAL_VERSION") ?: "255.255.255";
             pom {
                 name = 'valkey-glide'
