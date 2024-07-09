@@ -17,22 +17,6 @@
         "CONTAINER": "2_28"
     },
     {
-        "OS": "macos",
-        "NAMED_OS": "darwin",
-        "RUNNER": "macos-12",
-        "ARCH": "x64",
-        "TARGET": "x86_64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm"]
-    },
-    {
-        "OS": "macos",
-        "NAMED_OS": "darwin",
-        "RUNNER": "macos-latest",
-        "ARCH": "arm64",
-        "TARGET": "aarch64-apple-darwin",
-        "PACKAGE_MANAGERS": ["pypi", "npm"]
-    },
-    {
         "OS": "ubuntu",
         "NAMED_OS": "linux",
         "ARCH": "arm64",
