@@ -20,9 +20,6 @@ on:
           description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
           required: true
 
-env:
-    HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
-
 concurrency:
     group: pypi-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
@@ -49,7 +46,7 @@ jobs:
                 
 
     start-self-hosted-runner:
-        if: $HEAD_OWNER == 'valkey-io'
+        if: ${{ github.event.pull_request.head.repo.owner.login }} == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -64,7 +61,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
-        if: $HEAD_OWNER == 'valkey-io'
+        if: ${{ github.event.pull_request.head.repo.owner.login }} == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         timeout-minutes: 25
