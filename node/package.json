@@ -1,5 +1,5 @@
 {
-    "name": "@aws/glide-for-redis",
+    "name": "@valkey/valkey-glide",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",

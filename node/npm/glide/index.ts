@@ -17,26 +17,26 @@ function loadNativeBinding() {
                 case "x64":
                     switch (familySync()) {
                         case GLIBC:
-                            nativeBinding = require("@scope/glide-for-redis-linux-x64");
+                            nativeBinding = require("@scope/valkey-glide-linux-x64");
                             break;
                         case MUSL:
-                            nativeBinding = require("@scope/glide-for-redis-linux-musl-x64");
+                            nativeBinding = require("@scope/valkey-glide-linux-musl-x64");
                             break;
                         default:
-                            nativeBinding = require("@scope/glide-for-redis-linux-x64");
+                            nativeBinding = require("@scope/valkey-glide-linux-x64");
                             break;
                     }
                     break;
                 case "arm64":
                     switch (familySync()) {
                         case GLIBC:
-                            nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
                             break;
                         case MUSL:
-                            nativeBinding = require("@scope/glide-for-redis-linux-musl-arm64");
+                            nativeBinding = require("@scope/valkey-glide-linux-musl-arm64");
                             break;
                         default:
-                            nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
                             break;
                     }
                     break;
@@ -49,10 +49,10 @@ function loadNativeBinding() {
         case "darwin":
             switch (arch) {
                 case "x64":
-                    nativeBinding = require("@scope/glide-for-redis-darwin-x64");
+                    nativeBinding = require("@scope/valkey-glide-darwin-x64");
                     break;
                 case "arm64":
-                    nativeBinding = require("@scope/glide-for-redis-darwin-arm64");
+                    nativeBinding = require("@scope/valkey-glide-darwin-arm64");
                     break;
                 default:
                     throw new Error(
