@@ -207,7 +207,7 @@ jobs:
                 git config --global user.name "ort-bot"
                 git checkout -b ${BRANCH_NAME}
                 git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS
-                git commit -m "Updated attribution files"
+                git commit -m "Updated attribution files" -s
                 git push --set-upstream origin ${BRANCH_NAME} -f
                 title="Updated attribution files for ${BRANCH_NAME}"
                 gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'
