@@ -111,7 +111,7 @@ body:
     attributes:
       label: Cluster information
       description: |
-        Engine cluster information, cluster topology, number of shards, number of replicas, used data types.
+       Cluster information, cluster topology, number of shards, number of replicas, used data types.
     validations:
       required: false
 
