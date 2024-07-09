@@ -10,7 +10,7 @@ Valkey GLIDE is API-compatible with the following engine versions:
 | Redis                 |   V   |   V   |   V   |
 
 ## Current Status
-In this release, Valkey GLIDE is available for Python and Java. Support for Node.js is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
+In this release, Valkey GLIDE is available for Python and Java. Support for Node.js is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/valkey-io/projects/5).
 
 ## Getting Started
 -   [Java](./java/README.md)
