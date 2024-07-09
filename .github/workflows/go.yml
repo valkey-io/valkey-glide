@@ -108,7 +108,7 @@ jobs:
               run: make test
 
     build-amazonlinux-latest:
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         strategy:
             # Run all jobs
             fail-fast: false
