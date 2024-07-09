@@ -45,6 +45,9 @@ java -version
 
 ### Adding the client to your project
 
+_Note: Publishing to Maven is pending; the examples below will be available once artifacts are published. You can also download artifacts from the [GitHub release](https://github.com/valkey-io/valkey-glide/releases/tag/v1.0.0) and add the jar file to the project._
+
+
 Refer to https://central.sonatype.com/artifact/io.valkey/valkey-glide.
 Once set up, you can run the basic examples.
 
