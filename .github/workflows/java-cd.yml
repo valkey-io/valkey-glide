@@ -65,18 +65,18 @@ jobs:
                     CLASSIFIER: linux-aarch_64,
                     CONTAINER: "2_28"
                   }
-                  - {
-                    OS: macos,
-                    RUNNER: macos-12,
-                    TARGET: x86_64-apple-darwin,
-                    CLASSIFIER: osx-x86_64
-                  }
-                  - {
-                    OS: macos,
-                    RUNNER: macos-latest,
-                    TARGET: aarch64-apple-darwin,
-                    CLASSIFIER: osx-aarch_64
-                  }
+                  # - {
+                  #   OS: macos,
+                  #   RUNNER: macos-12,
+                  #   TARGET: x86_64-apple-darwin,
+                  #   CLASSIFIER: osx-x86_64
+                  # }
+                  # - {
+                  #   OS: macos,
+                  #   RUNNER: macos-latest,
+                  #   TARGET: aarch64-apple-darwin,
+                  #   CLASSIFIER: osx-aarch_64
+                  # }
 
         runs-on: ${{ matrix.host.RUNNER }}
 
