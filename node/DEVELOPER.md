@@ -1,6 +1,6 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test the GLIDE for Redis Node wrapper.
+This document describes how to set up your development environment to build and test the GLIDE for Valkey Node wrapper.
 
 ### Development Overview
 
@@ -64,7 +64,7 @@ Before starting this step, make sure you've installed all software requirments.
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
     git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
-    cd glide-for-redis
+    cd valkey-glide
     ```
 2. Initialize git submodule:
     ```bash
@@ -101,7 +101,7 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 5. Run tests:
-    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
+    1. Ensure that you have installed server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
         ```bash
         npm run build # make sure we have a debug build compiled first
@@ -119,7 +119,7 @@ Before starting this step, make sure you've installed all software requirments.
 
 ### Troubleshooting
 
--   If the build fails after running `npx tsc` because `glide-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
+-   If the build fails after running `npx tsc` because `redis-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
 
 ### Test
 
