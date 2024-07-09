@@ -20,7 +20,7 @@ on:
           description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
           required: true
 
-env:
+variables:
     HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
 
 concurrency:
