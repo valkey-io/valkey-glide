@@ -81,7 +81,7 @@ Get response is bar
 Set response is OK
 Get response is bar
 
-For complete examples, please refer to the [cluster example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/cluster_example.py) and the [standalone example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py).
+For complete examples with error handling, please refer to the [cluster example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/cluster_example.py) and the [standalone example](https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py).
 
 ## Documentation
 
