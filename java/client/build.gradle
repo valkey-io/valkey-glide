@@ -157,7 +157,7 @@ tasks.register('copyNativeLib', Copy) {
 }
 
 jar.dependsOn('copyNativeLib')
-copyNativeLib.dependsOn('buildRustRelease')
+copyNativeLib.dependsOn('buildRustReleaseStrip')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
 testFfi.dependsOn('buildRust')
