@@ -20,9 +20,10 @@ The Java client contains the following parts:
 
 1. `src`: Rust dynamic library FFI to integrate with [GLIDE core library](../glide-core/).
 2. `client`: A Java-wrapper around the GLIDE core rust library and unit tests for it.
-3. `examples`: An example app to test the client against a Valkey localhost.
-4. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of Valkey GLIDE and other Java clients.
-5. `integTest`: An integration test sub-project for API and E2E testing.
+3. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of Valkey GLIDE and other Java clients.
+4. `integTest`: An integration test sub-project for API and E2E testing.
+
+An example app (called glide.examples.ExamplesApp) is also available under `<project_root>/examples/java`.
 
 ## Supported Engine Versions
 

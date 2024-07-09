@@ -178,8 +178,7 @@ sourceSets {
 }
 
 // version is replaced during released workflow java-cd.yml
-ext.version = System.getenv('GLIDE_LOCAL_VERSION') ?: "255.255.255"
-ext.isReleaseVersion = !version.endsWith("SNAPSHOT") && version != "255.255.255"
+
 
 publishing {
     publications {
@@ -187,8 +186,7 @@ publishing {
             from components.java
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
-            System.out.println("IS RELEASE: " + isReleaseVersion);
-            System.out.println("VERSION: " + version);
+            version = System.getenv("GLIDE_LOCAL_VERSION") ?: "255.255.255";
             pom {
                 name = 'valkey-glide'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
@@ -221,6 +219,8 @@ publishing {
 }
 
 tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_LOCAL_VERSION") ?: "255.255.255";
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != "255.255.255";
     onlyIf("isReleaseVersion is set") { isReleaseVersion }
 }
 
