@@ -34,7 +34,7 @@ jobs:
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
-          - run: echo ${{ github.event.repository.full_name }}
+          - run: echo ${{ github.event.repository.owner.login }}
           - name: Checkout
             uses: actions/checkout@v4
             with:
