@@ -122,7 +122,7 @@ jobs:
               run: |
                 # Remove the glide-rs dependency to avoid duplication 
                 sed -i '/ "glide-rs":/d' ../../package.json
-                export pkg_name=glide-for-redis-base
+                export pkg_name=valkey-glide-base
                 export package_version="${{ env.RELEASE_VERSION }}"
                 export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
                 mv package.json package.json.tmpl
@@ -203,11 +203,11 @@ jobs:
               run: |
                 export BRANCH_NAME=`if [ "$EVENT_NAME" == 'schedule' ] || [ "$EVENT_NAME" == 'pull_request' ]; then echo 'scheduled-ort'; else echo "ort-v$INPUT_VERSION"; fi`
                 echo "Creating pull request from branch ${BRANCH_NAME} to branch ${{ env.BASE_BRANCH }}"
-                git config --global user.email "glide-for-redis@amazon.com"
+                git config --global user.email "valkey-glide@lists.valkey.io"
                 git config --global user.name "ort-bot"
                 git checkout -b ${BRANCH_NAME}
                 git add $PYTHON_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS
-                git commit -m "Updated attribution files"
+                git commit -m "Updated attribution files" -s
                 git push --set-upstream origin ${BRANCH_NAME} -f
                 title="Updated attribution files for ${BRANCH_NAME}"
                 gh pr create -B ${{ env.BASE_BRANCH }} -H ${BRANCH_NAME} --title "${title}" --body 'Created by Github action.\n${{ env.LICENSES_LIST }}'

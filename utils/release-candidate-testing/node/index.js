@@ -1,4 +1,4 @@
-import { RedisClient, RedisClusterClient } from "@aws/glide-for-redis";
+import { RedisClient, RedisClusterClient } from "@valkey/valkey-glide";
 import { RedisCluster } from "../../TestUtils.js";
 
 

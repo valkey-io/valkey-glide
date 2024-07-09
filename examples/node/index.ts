@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { GlideClient, GlideClusterClient, Logger } from "@aws/glide-for-redis";
+import { GlideClient, GlideClusterClient, Logger } from "@valkey/valkey-glide";
 
 async function sendPingToNode() {
     // When in Redis is in standalone mode, add address of the primary node, and any replicas you'd like to be able to read from.

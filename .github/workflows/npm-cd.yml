@@ -33,11 +33,13 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         steps:
+
           - run: |
                 echo "Current repository: ${{ github.repository }}"
                 echo "Repository owner: ${{ github.repository_owner }}"
                 echo "Pull request head repo: ${{ github.event.pull_request.head.repo.full_name }}"
                 echo "Pull request base repo: ${{ github.event.pull_request.base.repo.full_name }}"
+                echo "Pull request base repo: ${{ github.event.pull_request.head.repo.owner.login }}"
             env:
                 OWNER: ${{ github.repository_owner }}
 
@@ -239,7 +241,7 @@ jobs:
               shell: bash
               working-directory: ./node/npm/glide
               run: |
-                  export pkg_name=glide-for-redis
+                  export pkg_name=valkey-glide
                   echo "${GITHUB_REF:11}"
                   export package_version=${GITHUB_REF:11}
                   export scope=`if [ "$NPM_SCOPE" != ''  ]; then echo "$NPM_SCOPE/"; fi`
@@ -372,7 +374,7 @@ jobs:
               working-directory: ./utils/release-candidate-testing/node
               run: |
                   npm install
-                  npm install --no-save @aws/glide-for-redis@${{ env.NPM_TAG }}
+                  npm install --no-save @valkey/valkey-glide@${{ env.NPM_TAG }}
                   npm run test
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
