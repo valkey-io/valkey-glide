@@ -10,6 +10,11 @@ on:
     push:
         tags:
             - "v*.*"
+    workflow_dispatch:
+      inputs:
+        version:
+          description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
+          required: true
 
 concurrency:
     group: java-cd-${{ github.head_ref || github.ref }}
@@ -20,7 +25,7 @@ permissions:
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -38,18 +43,14 @@ jobs:
 
     create-binaries-to-publish:
         needs: start-self-hosted-runner
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
+        env:
+            JAVA_VERSION: '11'
         strategy:
             # Run all jobs
             fail-fast: false
             matrix:
-                java:
-                    - 11
-                    - 17
-                redis:
-                    - 6.2.14
-                    - 7.2.3
                 host:
                   - {
                     OS: ubuntu,
@@ -81,8 +82,15 @@ jobs:
 
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+              run: |
+                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
+                  if [ -d $GHA_HOME ]; then
+                    sudo chown -R $USER:$USER $GHA_HOME
+                    sudo rm -rf $GHA_HOME
+                    mkdir -p $GHA_HOME/valkey-glide
+                  else
+                    echo "No cleaning needed"
+                  fi
 
             - uses: actions/checkout@v4
               with:
@@ -91,14 +99,24 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
-                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  if ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ github.event_name == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "Release version detected: $R_VERSION"
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                INPUT_VERSION: ${{ github.event.inputs.version }}
 
-            - name: Set up JDK ${{ matrix.java }}
+            - name: Set up JDK
               uses: actions/setup-java@v4
               with:
                   distribution: "temurin"
-                  java-version: ${{ matrix.java }}
+                  java-version: ${{ env.JAVA_VERSION }}
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -137,7 +155,7 @@ jobs:
             - name: Bundle JAR
               working-directory: java
               run: |
-                  src_folder=~/.m2/repository/software/amazon/glide/glide-for-redis/${{ env.RELEASE_VERSION }}
+                  src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   cd $src_folder
                   jar -cvf bundle.jar *
                   ls -ltr
@@ -148,6 +166,6 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: java-bundle-${{ matrix.java }}-redis-${{ matrix.redis }}-${{ matrix.host.TARGET }}
+                  name: java-${{ matrix.host.TARGET }}
                   path: |
                       java/bundle.jar
