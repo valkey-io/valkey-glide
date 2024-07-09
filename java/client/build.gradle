@@ -177,14 +177,18 @@ sourceSets {
     }
 }
 
+// version is replaced during released workflow java-cd.yml
+ext.version = System.getenv('GLIDE_LOCAL_VERSION') ?: "255.255.255"
+ext.isReleaseVersion = !version.endsWith("SNAPSHOT") && version != "255.255.255"
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
-            // version is replaced during released workflow java-cd.yml
-            version = "255.255.255"
+            System.out.println("IS RELEASE: " + isReleaseVersion);
+            System.out.println("VERSION: " + version);
             pom {
                 name = 'valkey-glide'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
@@ -216,6 +220,10 @@ publishing {
     }
 }
 
+tasks.withType(Sign) {
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+}
+
 signing {
     sign publishing.publications
 }
@@ -231,7 +239,7 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "glide-for-redis"
+    archiveBaseName = "glide-valkey"
     // placeholder will be renamed by platform+arch on the release workflow java-cd.yml
     archiveClassifier = "placeholder"
 }
