@@ -73,10 +73,10 @@ body:
       required: true
 
   - type: input
-    id: redis-version
+    id: engine-version
     attributes:
-      label: Redis Version
-      description: E.g. 6.2, 7.0
+      label: Engine type and version
+      description: E.g. Valkey 7.0
     validations:
       required: true
 
@@ -111,7 +111,7 @@ body:
     attributes:
       label: Cluster information
       description: |
-        Redis cluster information, cluster topology, number of shards, number of replicas, used data types.
+        Engine cluster information, cluster topology, number of shards, number of replicas, used data types.
     validations:
       required: false
 
@@ -120,7 +120,7 @@ body:
     attributes:
       label: Logs
       description: |
-        Client and/or Redis logs.
+        Client and/or Engine logs.
     validations:
       required: false
 
