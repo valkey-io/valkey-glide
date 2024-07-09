@@ -14,7 +14,7 @@
         "@types/command-line-args": "^5.2.0",
         "@types/stats-lite": "^2.2.0",
         "command-line-args": "^5.2.1",
-        "glide-for-redis": "file:../../node",
+        "valkey-glide": "file:../../node",
         "ioredis": "5.3.2",
         "percentile": "^1.6.0",
         "redis": "4.6.13",
