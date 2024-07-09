@@ -20,6 +20,8 @@ on:
         version:
           description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
           required: true
+env:
+    HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
 
 concurrency:
     group: npm-${{ github.head_ref || github.ref }}
@@ -30,13 +32,10 @@ permissions:
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
+        if: ${{ env.HEAD_OWNER }} == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
-          - run: echo $OWNER
-            env:
-              OWNER: ${{ github.repository_owner }}
           - name: Checkout
             uses: actions/checkout@v4
             with:
@@ -67,7 +66,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
-        if: github.repository_owner == 'valkey-io'
+        if: ${{ env.HEAD_OWNER }} == 'valkey-io'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
         container:

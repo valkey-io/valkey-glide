@@ -15,6 +15,8 @@ on:
         version:
           description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
           required: true
+env:
+    HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
 
 concurrency:
     group: java-cd-${{ github.head_ref || github.ref }}
@@ -25,7 +27,7 @@ permissions:
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
+        if: ${{ env.HEAD_OWNER }} == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -43,7 +45,7 @@ jobs:
 
     create-binaries-to-publish:
         needs: start-self-hosted-runner
-        if: github.repository_owner == 'valkey-io'
+        if: ${{ env.HEAD_OWNER }} == 'valkey-io'
         timeout-minutes: 35
         env:
             JAVA_VERSION: '11'
