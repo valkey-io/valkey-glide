@@ -50,12 +50,11 @@ _Note: Publishing to Maven is pending; the examples below will be available once
 You can publish the release to local maven by downloading the artefacts from the latest [release](https://github.com/valkey-io/valkey-glide/releases). You can update to local maven using the following example for osx-aarch64:
 
 ```bash
-unzip java-aarch64-apple-darwin.zip
 jar xf bundle-java-aarch64-apple-darwin.jar
 mvn install:install-file -Dfile=valkey-glide-1.0.0-osx-aarch_64.jar -DgroupId=io.valkey -DartifactId=valkey-glide -Dversion=1.0.0 -Dpackaging=jar -DPom=valkey-glide-1.0.0.pom
 ```
 
-You can then add the valkey dependency via gradle:
+You can then add the valkey-glide dependency via gradle:
 ```gradle
 repositories {
     // Use Maven Central for resolving dependencies.
