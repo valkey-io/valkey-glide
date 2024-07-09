@@ -30,7 +30,7 @@ permissions:
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -64,7 +64,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
-        if: github.repository_owner == 'aws'
+        if: github.repository_owner == 'valkey-io'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
         container:
@@ -77,7 +77,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             # For MUSL on X64 we need to install git since we use the checkout action
             - name: Install git for musl
@@ -289,7 +289,7 @@ jobs:
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: install Redis and git for alpine
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
