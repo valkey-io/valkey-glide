@@ -17,7 +17,7 @@ from glide import (
 
 
 async def create_client(
-    nodes_list: List[Tuple[str, int]] = [("localhost", 47243)]
+    nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]
 ) -> GlideClusterClient:
     """
     Creates and returns a GlideClusterClient instance.
