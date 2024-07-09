@@ -2,7 +2,7 @@
 
 package api
 
-import "github.com/aws/glide-for-redis/go/glide/protobuf"
+import "github.com/valkey-io/valkey-glide/go/glide/protobuf"
 
 const (
 	defaultHost = "localhost"

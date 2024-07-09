@@ -1,4 +1,4 @@
-module github.com/aws/glide-for-redis/go/glide
+module github.com/valkey-io/valkey-glide/go/glide
 
 go 1.18
 

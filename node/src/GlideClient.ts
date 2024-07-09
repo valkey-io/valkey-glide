@@ -285,8 +285,8 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of the echo command
-     * const echoedMessage = await client.echo("Glide-for-Redis");
-     * console.log(echoedMessage); // Output: 'Glide-for-Redis'
+     * const echoedMessage = await client.echo("valkey-glide");
+     * console.log(echoedMessage); // Output: 'valkey-glide'
      * ```
      */
     public echo(message: string): Promise<string> {

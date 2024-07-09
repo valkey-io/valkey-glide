@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/glide-for-redis/go/glide/protobuf"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 )
 
 func TestDefaultStandaloneConfig(t *testing.T) {

@@ -518,14 +518,14 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of the echo command
-     * const echoedMessage = await client.echo("Glide-for-Redis");
-     * console.log(echoedMessage); // Output: "Glide-for-Redis"
+     * const echoedMessage = await client.echo("valkey-glide");
+     * console.log(echoedMessage); // Output: "valkey-glide"
      * ```
      * @example
      * ```typescript
      * // Example usage of the echo command with routing to all nodes
-     * const echoedMessage = await client.echo("Glide-for-Redis", "allNodes");
-     * console.log(echoedMessage); // Output: {'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'}
+     * const echoedMessage = await client.echo("valkey-glide", "allNodes");
+     * console.log(echoedMessage); // Output: {'addr': 'valkey-glide', 'addr2': 'valkey-glide', 'addr3': 'valkey-glide'}
      * ```
      */
     public echo(

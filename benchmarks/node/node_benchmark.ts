@@ -3,12 +3,12 @@
  */
 
 import { writeFileSync } from "fs";
-import { GlideClient, GlideClusterClient, Logger } from "glide-for-redis";
 import { Cluster, Redis } from "ioredis";
 import { parse } from "path";
 import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
+import { GlideClient, GlideClusterClient, Logger } from "valkey-glide";
 import {
     generateKeyGet,
     generateKeySet,

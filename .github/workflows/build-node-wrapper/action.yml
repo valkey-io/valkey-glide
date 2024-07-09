@@ -42,7 +42,7 @@ inputs:
         description: "The NPM scope"
         required: false
         type: string
-        default: "@aws"
+        default: "@valkey"
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
