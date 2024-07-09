@@ -101,7 +101,7 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 5. Run tests:
-    1. Ensure that you have installed server and valkey-cli on your host. You can find the Valkey installation guide at the following link: [Valkey Download page](https://valkey.io/download/).
+    1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
         ```bash
         npm run build # make sure we have a debug build compiled first
