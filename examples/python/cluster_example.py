@@ -4,6 +4,7 @@ from typing import List, Tuple
 from glide import (
     AllNodes,
     ClosingError,
+    ConnectionError,
     GlideClusterClient,
     GlideClusterClientConfiguration,
     InfoSection,
@@ -11,26 +12,26 @@ from glide import (
     LogLevel,
     NodeAddress,
     RequestError,
+    TimeoutError,
 )
 
 
 async def create_client(
-    nodes_list: List[Tuple[str, int]] = [("localhost", 6379)]
+    nodes_list: List[Tuple[str, int]] = [("localhost", 47243)]
 ) -> GlideClusterClient:
     """
     Creates and returns a GlideClusterClient instance.
 
     This function initializes a GlideClusterClient with the provided list of nodes.
-    In cluster mode, add the address of any node; the client will automatically
-    discover all nodes in the cluster.
-
+    The nodes_list may contain the address of one or more cluster nodes, and the
+    client will automatically discover all nodes in the cluster.
 
     Args:
         nodes_list (List[Tuple[str, int]]): A list of tuples where each tuple
             contains a host (str) and port (int). Defaults to [("localhost", 6379)].
 
     Returns:
-        GlideClusterClient: An instance of GlideClusterClient connected to the specified nodes.
+        GlideClusterClient: An instance of GlideClusterClient connected to the discovered nodes.
     """
     addresses = [NodeAddress(host, port) for host, port in nodes_list]
     # Check `GlideClusterClientConfiguration` for additional options.
@@ -97,7 +98,16 @@ async def exec_app_logic():
                 "glide",
                 f"Client has closed and needs to be re-created: {e}",
             )
+        except TimeoutError as e:
+            # A request timed out. You may choose to retry the execution based on your application's logic
+            Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
+            raise e
+        except ConnectionError as e:
+            # The client wasn't able to reestablish the connection within the given retries
+            Logger.log(LogLevel.ERROR, "glide", f"ConnectionError encountered: {e}")
+            raise e
         except RequestError as e:
+            # Other error reported during a request, such as a server response error
             Logger.log(LogLevel.ERROR, "glide", f"RequestError encountered: {e}")
             raise e
         except Exception as e:
@@ -115,6 +125,7 @@ async def exec_app_logic():
 
 
 def main():
+    # In this example, we will utilize the client's logger for all log messages
     Logger.set_logger_config(LogLevel.INFO)
     # Optional - set the logger to write to a file
     # Logger.set_logger_config(LogLevel.INFO, file)

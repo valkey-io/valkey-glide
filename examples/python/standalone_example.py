@@ -19,9 +19,9 @@ async def create_client(
     Creates and returns a GlideClient instance.
 
     This function initializes a GlideClient with the provided list of nodes.
-    The nodes_list can contain either only primary nodes or a mix of primary
-    and replica nodes. The GlideClient will use these nodes to connect to
-    the Redis cluster or standalone server.
+    The nodes_list may contain either only primary node or a mix of primary
+    and replica nodes. The GlideClient use these nodes to connect to
+    the Standalone setup servers.
 
     Args:
         nodes_list (List[Tuple[str, int]]): A list of tuples where each tuple
@@ -89,7 +89,16 @@ async def exec_app_logic():
                 "glide",
                 f"Client has closed and needs to be re-created: {e}",
             )
+        except TimeoutError as e:
+            # A request timed out. You may choose to retry the execution based on your application's logic
+            Logger.log(LogLevel.ERROR, "glide", f"TimeoutError encountered: {e}")
+            raise e
+        except ConnectionError as e:
+            # The client wasn't able to reestablish the connection within the given retries
+            Logger.log(LogLevel.ERROR, "glide", f"ConnectionError encountered: {e}")
+            raise e
         except RequestError as e:
+            # Other error reported during a request, such as a server response error
             Logger.log(LogLevel.ERROR, "glide", f"RequestError encountered: {e}")
             raise e
         except Exception as e:
@@ -107,6 +116,7 @@ async def exec_app_logic():
 
 
 def main():
+    # In this example, we will utilize the client's logger for all log messages
     Logger.set_logger_config(LogLevel.INFO)
     # Optional - set the logger to write to a file
     # Logger.set_logger_config(LogLevel.INFO, file)
