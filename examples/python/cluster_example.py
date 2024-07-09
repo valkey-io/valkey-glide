@@ -61,7 +61,7 @@ async def app_logic(client: GlideClusterClient):
 
     # Send PING to all primaries (according to Redis's PING request_policy)
     pong = await client.ping()
-    Logger.log(LogLevel.INFO, "app", f"PING response is = {pong}")
+    Logger.log(LogLevel.INFO, "app", f"PING response is = {pong!r}")
 
     # Send INFO REPLICATION with routing option to all nodes
     info_repl_resps = await client.info([InfoSection.REPLICATION], AllNodes())

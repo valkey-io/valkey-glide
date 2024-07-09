@@ -61,7 +61,7 @@ async def app_logic(client: GlideClient):
 
     # Send PING to the primary node
     pong = await client.ping()
-    Logger.log(LogLevel.INFO, "app", f"PING response is = {pong}")
+    Logger.log(LogLevel.INFO, "app", f"PING response is = {pong!r}")
 
 
 async def exec_app_logic():
