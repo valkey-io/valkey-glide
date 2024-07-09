@@ -120,7 +120,7 @@ body:
     attributes:
       label: Logs
       description: |
-        Client and/or Engine logs.
+        Client and/or server logs.
     validations:
       required: false
 
