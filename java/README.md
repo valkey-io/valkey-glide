@@ -47,6 +47,16 @@ java -version
 
 _Note: Publishing to Maven is pending; the examples below will be available once artifacts are published. You can also download artifacts from the [GitHub release](https://github.com/valkey-io/valkey-glide/releases/tag/v1.0.0) and add the jar file to the project._
 
+<<<<<<< Updated upstream
+=======
+You can publish the release to local maven by downloading the artefacts from the latest [release](https://github.com/valkey-io/valkey-glide/releases). You can update to local maven using the following example for osx-aarch64:
+
+```bash
+unzip java-linux-aarch_64-gnu.zip
+jar xf bundle.jar
+mvn install:install-file -Dfile=valkey-glide-1.0.0-osx-aarch_64.jar -DgroupId=io.valkey -DartifactId=valkey-glide -Dversion=1.0.0 -Dpackaging=jar -DPom=valkey-glide-1.0.0.pom
+```
+>>>>>>> Stashed changes
 
 Refer to https://central.sonatype.com/artifact/io.valkey/valkey-glide.
 Once set up, you can run the basic examples.
