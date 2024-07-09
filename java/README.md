@@ -1,4 +1,4 @@
-# GLIDE for Valkey
+# Valkey GLIDE
 
 Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, and it supports all Valkey commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
 
@@ -21,7 +21,7 @@ The Java client contains the following parts:
 1. `src`: Rust dynamic library FFI to integrate with [GLIDE core library](../glide-core/).
 2. `client`: A Java-wrapper around the GLIDE core rust library and unit tests for it.
 3. `examples`: An example app to test the client against a Valkey localhost.
-4. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Valkey and other Java clients.
+4. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of Valkey GLIDE and other Java clients.
 5. `integTest`: An integration test sub-project for API and E2E testing.
 
 ## Supported Engine Versions
@@ -51,7 +51,7 @@ Once set up, you can run the basic examples.
 Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
 
 ## Classifiers
-There are 4 types of classifiers for GLIDE for Valkey which are
+There are 4 types of classifiers for Valkey GLIDE which are
 ```
 osx-aarch_64
 osx-x86_64
@@ -124,7 +124,7 @@ Maven:
 
 ## Setting up the Java module
 
-To use Glide for Valkey in a Java project with modules, include a module-info.java in your project.
+To use Valkey GLIDE in a Java project with modules, include a module-info.java in your project.
 
 For example, if your program is called `App`, you can follow this path
 ```java
