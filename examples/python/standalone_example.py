@@ -3,12 +3,14 @@ from typing import List, Tuple
 
 from glide import (
     ClosingError,
+    ConnectionError,
     GlideClient,
     GlideClientConfiguration,
     Logger,
     LogLevel,
     NodeAddress,
     RequestError,
+    TimeoutError,
 )
 
 
