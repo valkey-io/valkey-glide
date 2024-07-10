@@ -175,11 +175,11 @@ export GLIDE_LOCAL_VERSION=1.0.0-SNAPSHOT
 You can then add the valkey-glide dependency to `<project_root>/examples/java/build.gradle`:
 ```gradle
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenLocal()
 }
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0'
+    // Update to use version defined in the previous step
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0-SNAPSHOT'
 }
 ```
 
