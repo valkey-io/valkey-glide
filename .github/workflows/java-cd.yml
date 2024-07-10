@@ -99,7 +99,15 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  echo "RELEASE_VERSION=1.0.0" >> $GITHUB_ENV
+                  if ${{ github.event_name == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ github.event_name == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "Release version detected: $R_VERSION"
               env:
                 EVENT_NAME: ${{ github.event_name }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
