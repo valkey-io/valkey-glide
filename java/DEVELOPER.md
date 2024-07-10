@@ -165,13 +165,6 @@ To publish to local maven run (default version `255.255.255`):
 ./gradlew publishToMavenLocal
 ```
 
-Optionally: you can specify a snapshot release:
-
-```bash
-export GLIDE_LOCAL_VERSION=1.0.0-SNAPSHOT
-./gradlew publishToMavenLocal
-```
-
 You can then add the valkey-glide dependency to `<project_root>/examples/java/build.gradle`:
 ```gradle
 repositories {
@@ -179,7 +172,26 @@ repositories {
 }
 dependencies {
     // Update to use version defined in the previous step
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0-SNAPSHOT'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '255.255.255'
+}
+```
+
+Optionally: you can specify a snapshot release and classifier:
+
+```bash
+export GLIDE_LOCAL_VERSION=1.0.0-SNAPSHOT
+export GLIDE_LOCAL_CLASSIFIER=osx-aarch_64
+./gradlew publishToMavenLocal
+```
+
+You can then add the valkey-glide dependency to `<project_root>/examples/java/build.gradle` with the version and classifier:
+```gradle
+repositories {
+    mavenLocal()
+}
+dependencies {
+    // Update to use version defined in the previous step
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0-SNAPSHOT', classifier='osx-aarch_64'
 }
 ```
 
