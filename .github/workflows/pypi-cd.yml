@@ -46,7 +46,7 @@ jobs:
                 
 
     start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
+        if: github.event.repository.owner.login == 'valkey-io'
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
@@ -61,7 +61,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, load-platform-matrix]
-        if: github.repository_owner == 'valkey-io'
+        if: github.event.repository.owner.login == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         timeout-minutes: 25
