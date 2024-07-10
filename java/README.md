@@ -46,9 +46,6 @@ java -version
 
 ### Adding the client to your project
 
-_Note: Publishing to Maven is pending; the examples below will be available once artifacts are published. You can also download artifacts from the [GitHub release](https://github.com/valkey-io/valkey-glide/releases/tag/v1.0.0) and add the jar file to the project._
-
-
 Refer to https://central.sonatype.com/artifact/io.valkey/valkey-glide.
 Once set up, you can run the basic examples.
 
@@ -67,7 +64,6 @@ Gradle:
 - Copy the snippet and paste it in the `build.gradle` dependencies section.
 - **IMPORTANT** must include a `classifier` to specify your platform.
 ```groovy
-
 // osx-aarch_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: 'osx-aarch_64'
@@ -86,6 +82,14 @@ dependencies {
 // linux-x86_64
 dependencies {
     implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: 'linux-x86_64'
+}
+
+// with osdetector
+plugins {
+    id "com.google.osdetector" version "1.7.3"
+}
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: osdetector.classifier
 }
 ```
 

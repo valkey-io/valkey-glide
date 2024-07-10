@@ -11,7 +11,7 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: osdetector.classifier
     implementation 'redis.clients:jedis:4.4.3'
     implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
     implementation 'commons-cli:commons-cli:1.5.0'
