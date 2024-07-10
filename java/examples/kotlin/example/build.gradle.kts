@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "1.9.23"
+    application
     id("com.google.osdetector") version "1.7.3"
 }
 
@@ -35,4 +36,8 @@ tasks.test {
 }
 kotlin {
     jvmToolchain(11)
+}
+
+application {
+    mainClass = "org.example.MainKt"
 }
