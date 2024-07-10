@@ -1192,6 +1192,39 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sunion test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}:${uuidv4()}`;
+                const key2 = `{key}:${uuidv4()}`;
+                const stringKey = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+                const memberList1 = ["a", "b", "c"];
+                const memberList2 = ["b", "c", "d", "e"];
+
+                expect(await client.sadd(key1, memberList1)).toEqual(3);
+                expect(await client.sadd(key2, memberList2)).toEqual(4);
+                checkSimple(await client.sunion([key1, key2])).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // invalid argument - key list must not be empty
+                await expect(client.sunion([])).rejects.toThrow();
+
+                // non-existing key returns the set of existing keys
+                checkSimple(
+                    await client.sunion([key1, nonExistingKey]),
+                ).toEqual(new Set(memberList1));
+
+                // key exists, but it is not a set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(client.sunion([stringKey])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sunionstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

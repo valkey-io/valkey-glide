@@ -617,6 +617,13 @@ export function createSInter(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSUnion(keys: string[]): command_request.Command {
+    return createCommand(RequestType.SUnion, keys);
+}
+
+/**
+ * @internal
+ */
 export function createSUnionStore(
     destination: string,
     keys: string[],
