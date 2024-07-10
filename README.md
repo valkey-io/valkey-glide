@@ -6,7 +6,7 @@ Valkey GLIDE is API-compatible with the following engine versions:
 
 | Engine Type           |  6.2  |  7.0  |  7.2  |
 |-----------------------|-------|-------|-------|
-| Valkey                |   V   |   V   |   V   |
+| Valkey                |   -   |   -   |   V   |
 | Redis                 |   V   |   V   |   V   |
 
 ## Current Status
