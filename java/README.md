@@ -257,7 +257,7 @@ public class Main {
 ```
 
 ### Scala and Kotlin Examples
-See []() for examples of how to use Valkey GLIDE in Scala and Kotlin projects.
+See [our Scala and Kotlin examples](./examples/) to learn how to use Valkey GLIDE in Scala and Kotlin projects.
 
 ### Accessing tests
 For more examples, you can refer to the test folder [unit tests](./client/src/test/java/glide/api) and [integration tests](./integTest/src/test/java/glide).
