@@ -17,7 +17,7 @@ on:
     workflow_dispatch:
       inputs:
         version:
-          description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
+          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
           required: true
 
 concurrency:
