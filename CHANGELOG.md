@@ -25,6 +25,7 @@
 
 #### Fixes
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
+* Java: Fix XRange/XRevRange with a negative count ([#TOODOO](TOODOO))
 
 ## 1.0.0 (2024-07-09)
 

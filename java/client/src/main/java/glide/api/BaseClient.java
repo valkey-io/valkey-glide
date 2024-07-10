@@ -2706,7 +2706,9 @@ public abstract class BaseClient
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key);
         return commandManager.submitNewCommand(
-                XRange, arguments, response -> castMapOf2DArray(handleMapResponse(response), String.class));
+                XRange,
+                arguments,
+                response -> castMapOf2DArray(handleMapOrNullResponse(response), String.class));
     }
 
     @Override
@@ -2719,7 +2721,8 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRange,
                 arguments,
-                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
+                response ->
+                        castMapOf2DArray(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2752,7 +2755,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRevRange,
                 arguments,
-                response -> castMapOf2DArray(handleMapResponse(response), String.class));
+                response -> castMapOf2DArray(handleMapOrNullResponse(response), String.class));
     }
 
     @Override
@@ -2765,7 +2768,8 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRevRange,
                 arguments,
-                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
+                response ->
+                        castMapOf2DArray(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
