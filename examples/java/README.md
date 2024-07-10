@@ -1,6 +1,6 @@
 ## Run
 
-Ensure that you have an instance of ValKey running on "localhost" on "6379". Otherwise, update glide.examples.ExamplesApp with a configuration that matches your server settings.
+Ensure that you have an instance of Valkey running on "localhost" on "6379". Otherwise, update glide.examples.ExamplesApp with a configuration that matches your server settings.
 
 To run the example:
 ```

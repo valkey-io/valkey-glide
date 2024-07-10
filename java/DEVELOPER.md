@@ -157,7 +157,7 @@ Some troubleshooting issues:
 
 ## Running Examples App
 
-An example app (`glide.examples.ExamplesApp`) is available under [examples project](../examples/java). To run the ExamplesApp against a local build of valkey-glide, you can publish your JAR to local Maven repository as a dependency.
+An example app (`glide.examples.ExamplesApp`) is available under [examples project](../examples/java). To run the ExamplesApp against a local build of valkey-glide client, you can publish your JAR to local Maven repository as a dependency.
 
 To publish to local maven run (default version `255.255.255`):
 ```bash
@@ -184,7 +184,7 @@ export GLIDE_LOCAL_CLASSIFIER=osx-aarch_64
 ./gradlew publishToMavenLocal
 ```
 
-You can then add the valkey-glide dependency to `<project_root>/examples/java/build.gradle` with the version and classifier:
+You can then add the valkey-glide dependency to [examples/java/build.gradle](../examples/java/build.gradle) with the version and classifier:
 ```gradle
 repositories {
     mavenLocal()

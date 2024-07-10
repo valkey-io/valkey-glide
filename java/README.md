@@ -23,7 +23,7 @@ The Java client contains the following parts:
 3. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of Valkey GLIDE and other Java clients.
 4. `integTest`: An integration test sub-project for API and E2E testing.
 
-An example app (called glide.examples.ExamplesApp) is also available under `<project_root>/examples/java`.
+An example app (called glide.examples.ExamplesApp) is also available under [examples app](../examples/java), to sanity check the project.
 
 ## Supported Engine Versions
 
