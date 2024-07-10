@@ -12,8 +12,8 @@ on:
         - .github/workflows/install-valkey/action.yml
         - .github/json_matrices/build-matrix.json
     push:
-        tags:
-            - "v*.*"
+        branches:
+            - "*"
     workflow_dispatch:
       inputs:
         version:
@@ -52,6 +52,18 @@ jobs:
         steps:
           - name: Checkout
             uses: actions/checkout@v4
+          - name: Print event details
+            run: |
+              echo "Event Name: ${{ github.event_name }}"
+              echo "Ref: ${{ github.ref }}"
+              echo "Before SHA: ${{ github.event.before }}"
+              echo "After SHA: ${{ github.event.after }}"
+              echo "Pusher Name: ${{ github.event.pusher.name }}"
+              echo "Repository Name: ${{ github.event.repository.name }}"
+              echo "Repository Full Name: ${{ github.event.repository.full_name }}"
+              echo "Repository Owner: ${{ github.event.repository.owner.login }}"
+              echo "Repository URL: ${{ github.event.repository.html_url }}"
+              echo "Default Branch: ${{ github.event.repository.default_branch }}"
           - name: Start self hosted EC2 runner
             uses: ./.github/workflows/start-self-hosted-runner
             with:
