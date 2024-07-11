@@ -88,9 +88,11 @@ jobs:
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./logger_core
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint logger
 
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./benchmarks/rust
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint benchmark
