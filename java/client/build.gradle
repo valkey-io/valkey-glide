@@ -248,7 +248,6 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "valkey-glide"
     archiveClassifier = osdetector.classifier
 }
 
@@ -260,10 +259,6 @@ sourcesJar {
 
 delombok {
     modulePath = classpath
-}
-
-lombok {
-    version = "1.18.34"
 }
 
 javadoc {
