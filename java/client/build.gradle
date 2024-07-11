@@ -216,6 +216,11 @@ publishing {
     }
 }
 
+java {
+    withSourcesJar()
+//    withJavadocJar()
+}
+
 signing {
     sign publishing.publications
 }
@@ -234,6 +239,12 @@ jar {
     archiveBaseName = "glide-for-redis"
     // placeholder will be renamed by platform+arch on the release workflow java-cd.yml
     archiveClassifier = "placeholder"
+}
+
+sourcesJar {
+    // suppress following error
+    // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 spotbugsMain {
