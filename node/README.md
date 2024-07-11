@@ -15,73 +15,11 @@ This preview release is recommended for testing purposes only.
 
 ## System Requirements
 
-The beta release of Valkey GLIDE was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
+In this release, Valkey GLIDE is available for Python and Java. Support for Node.js is actively under development, with plans to include more programming languages in the future. We're tracking future features on the [roadmap](https://github.com/orgs/aws/projects/187/).
 
 ## NodeJS supported version
 
 Node.js 16.20 or higher.
-
-## Installation and Setup
-
-### Installing via Package Manager (npm)
-
-To install GLIDE for Redis using `npm`, follow these steps:
-
-1. Open your terminal.
-2. Execute the command below:
-    ```bash
-    $ npm install @aws/glide-for-redis
-    ```
-3. After installation, confirm the client is installed by running:
-    ```bash
-    $ npm list
-    myApp@ /home/ubuntu/myApp
-    └── @aws/glide-for-redis@0.1.0
-    ```
-
-## Basic Examples
-
-#### Cluster Redis:
-
-```node
-import { GlideClusterClient } from "@aws/glide-for-redis";
-
-const addresses = [
-    {
-        host: "redis.example.com",
-        port: 6379,
-    },
-];
-const client = await GlideClusterClient.createClient({
-    addresses: addresses,
-});
-await client.set("foo", "bar");
-const value = await client.get("foo");
-client.close();
-```
-
-#### Standalone Redis:
-
-```node
-import { GlideClient } from "@aws/glide-for-redis";
-
-const addresses = [
-    {
-        host: "redis_primary.example.com",
-        port: 6379,
-    },
-    {
-        host: "redis_replica.example.com",
-        port: 6379,
-    },
-];
-const client = await GlideClient.createClient({
-    addresses: addresses,
-});
-await client.set("foo", "bar");
-const value = await client.get("foo");
-client.close();
-```
 
 ## Documentation
 

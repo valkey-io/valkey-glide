@@ -18,7 +18,7 @@ on:
     workflow_dispatch:
       inputs:
         version:
-          description: 'The release version of GLIDE, formatted as v*.*.* or v*.*.*-rc*'
+          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
           required: true
 
 concurrency:
@@ -34,9 +34,6 @@ jobs:
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
         steps:
-          - run: echo $OWNER
-            env:
-              OWNER: ${{ github.repository_owner }}
           - name: Checkout
             uses: actions/checkout@v4
             with:

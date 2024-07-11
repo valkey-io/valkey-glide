@@ -236,7 +236,7 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "glide-for-redis"
+    archiveBaseName = "valkey-glide"
     // placeholder will be renamed by platform+arch on the release workflow java-cd.yml
     archiveClassifier = "placeholder"
 }
