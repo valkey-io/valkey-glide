@@ -409,7 +409,7 @@ export function createHSet(
 /**
  * @internal
  */
-export function createHKeys(key: string): redis_request.Command {
+export function createHKeys(key: string): command_request.Command {
     return createCommand(RequestType.HKeys, [key]);
 }
 
