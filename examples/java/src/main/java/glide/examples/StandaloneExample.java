@@ -22,7 +22,7 @@ public class StandaloneExample {
      */
     public static GlideClient createClient() throws ExecutionException, InterruptedException {
         String host = "localhost";
-        Integer port = 6380;
+        Integer port = 6379;
 
         // Check GlideClusterClientConfiguration for additional options.
         GlideClientConfiguration config =
