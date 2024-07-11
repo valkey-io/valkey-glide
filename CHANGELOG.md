@@ -1,5 +1,6 @@
 #### Changes
 * Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))
+* Node: Added SDIFF command ([#1924](https://github.com/valkey-io/valkey-glide/pull/1924))
 
 ## 1.0.0 (2024-07-09)
 
