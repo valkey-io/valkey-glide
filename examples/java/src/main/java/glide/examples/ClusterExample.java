@@ -27,8 +27,8 @@ public class ClusterExample {
     public static GlideClusterClient createClient() throws ExecutionException, InterruptedException {
         String host = "localhost";
         Integer port1 = 6379;
-        // Multiple ports can be configured and GLIDE is able to detect all cluster nodes
-        // and connect to them automatically
+        // GLIDE is able to detect all cluster nodes and connect to them automatically
+        // even if only one of them was configured
 
         // Check GlideClusterClientConfiguration for additional options.
         GlideClusterClientConfiguration config =
