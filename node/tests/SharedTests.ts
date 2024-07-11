@@ -1217,7 +1217,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(new Set(memberList1));
 
                 // key exists, but it is not a set
-                expect(await client.set(stringKey, "value")).toEqual("OK");
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(client.sunion([stringKey])).rejects.toThrow();
             }, protocol);
         },
