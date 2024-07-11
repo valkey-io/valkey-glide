@@ -11,8 +11,7 @@ cd valkey-glide/examples/java
 You should expect to see the output:
 ```
 > Task :run
-PING: PONG
-PING(found you): found you
-SET(apples, oranges): OK
-GET(apples): oranges
+INFO logger_core: app - Set response is OK
+INFO logger_core: app - Get response is bar
+INFO logger_core: app - Ping response is PONG
 ```
