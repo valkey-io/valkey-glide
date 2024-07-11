@@ -365,6 +365,8 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.ltrim(key5, 0, 1);
     args.push("OK");
+    baseTransaction.lset(key5, 0, uuidv4());
+    args.push("OK");
     baseTransaction.lrange(key5, 0, -1);
     args.push([field + "3", field + "2"]);
     baseTransaction.lpopCount(key5, 2);

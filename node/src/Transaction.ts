@@ -56,6 +56,7 @@ import {
     createLPush,
     createLRange,
     createLRem,
+    createLSet,
     createLTrim,
     createMGet,
     createMSet,
@@ -579,6 +580,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public llen(key: string): T {
         return this.addAndReturn(createLLen(key));
+    }
+
+    /** Sets the list element at index to element.
+     * The index is zero-based, so 0 means the first element,1 the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, -1 means the last element, -2 means the penultimate and so forth.
+     * See https://valkey.io/commands/lset/ for details.
+     *
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @param element - The new element to set at the specified index.
+     *
+     * Command Response - always "OK".
+     */
+    public lset(key: string, index: number, element: string): T {
+        return this.addAndReturn(createLSet(key, index, element));
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.
