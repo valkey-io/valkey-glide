@@ -155,6 +155,46 @@ Some troubleshooting issues:
 - If build fails because of rust compiler fails, make sure submodules are updated using `git submodule update`.
 - If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
 
+## Running Examples App
+
+An example app (`glide.examples.ExamplesApp`) is available under [examples project](../examples/java). To run the ExamplesApp against a local build of valkey-glide client, you can publish your JAR to local Maven repository as a dependency.
+
+To publish to local maven run (default version `255.255.255`):
+```bash
+# Run from the `examples/java` folder
+./gradlew publishToMavenLocal
+```
+
+You can then add the valkey-glide dependency to [examples project](../examples/java/build.gradle):
+```gradle
+repositories {
+    mavenLocal()
+}
+dependencies {
+    // Update to use version defined in the previous step
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '255.255.255'
+}
+```
+
+Optionally: you can specify a snapshot release and classifier:
+
+```bash
+export GLIDE_LOCAL_VERSION=1.0.0-SNAPSHOT
+export GLIDE_LOCAL_CLASSIFIER=osx-aarch_64
+./gradlew publishToMavenLocal
+```
+
+You can then add the valkey-glide dependency to [examples/java/build.gradle](../examples/java/build.gradle) with the version and classifier:
+```gradle
+repositories {
+    mavenLocal()
+}
+dependencies {
+    // Update to use version defined in the previous step
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0-SNAPSHOT', classifier='osx-aarch_64'
+}
+```
+
 ### Test
 
 To run all tests, use the following command:
