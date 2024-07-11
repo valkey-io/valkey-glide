@@ -264,6 +264,7 @@ delombok {
 javadoc {
     dependsOn delombok
     source = delombok.outputs
+    options.tags = [ "example:a:Example:" ]
 }
 
 spotbugsMain {
