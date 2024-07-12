@@ -1547,7 +1547,7 @@ export function createLolwut(
     version?: number,
     parameters?: number[],
 ): command_request.Command {
-    let args: string[] = [];
+    const args: string[] = [];
 
     if (version != undefined) {
         args.push("VERSION", version.toString());
