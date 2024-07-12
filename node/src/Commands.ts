@@ -617,6 +617,13 @@ export function createSInter(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSDiff(keys: string[]): command_request.Command {
+    return createCommand(RequestType.SDiff, keys);
+}
+
+/**
+ * @internal
+ */
 export function createSUnion(keys: string[]): command_request.Command {
     return createCommand(RequestType.SUnion, keys);
 }
