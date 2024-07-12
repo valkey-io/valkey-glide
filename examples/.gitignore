@@ -1,5 +1,16 @@
+### Kotlin ###
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### Scala ###
 target
 *.class
+
+### Node ###
+*.js
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
