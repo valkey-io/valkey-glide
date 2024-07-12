@@ -582,10 +582,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createLLen(key));
     }
 
-    /** Sets the list element at index to element.
+    /**
+     * Sets the list element at index to element.
      * The index is zero-based, so 0 means the first element,1 the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of
      * the list. Here, -1 means the last element, -2 means the penultimate and so forth.
+     * 
      * See https://valkey.io/commands/lset/ for details.
      *
      * @param key The key of the list.
