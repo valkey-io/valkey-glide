@@ -262,7 +262,7 @@ public class Main {
 ```
 
 ### Scala and Kotlin Examples
-See [our Scala and Kotlin examples](./examples/) to learn how to use Valkey GLIDE in Scala and Kotlin projects.
+See [our Scala and Kotlin examples](../examples/) to learn how to use Valkey GLIDE in Scala and Kotlin projects.
 
 #### Scala
 To run the Scala example, from the `examples/scala/example` directory, execute:
