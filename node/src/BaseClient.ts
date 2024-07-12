@@ -74,6 +74,7 @@ import {
     createSAdd,
     createSCard,
     createSDiff,
+    createSDiffStore,
     createSInter,
     createSInterStore,
     createSIsMember,
@@ -1361,6 +1362,28 @@ export class BaseClient {
         return this.createWritePromise<string[]>(createSDiff(keys)).then(
             (sdiff) => new Set<string>(sdiff),
         );
+    }
+
+    /**
+     * Stores the difference between the first set and all the successive sets in `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sdiffstore/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param destination - The key of the destination set.
+     * @param keys - The keys of the sets to diff.
+     * @returns The number of elements in the resulting set.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["member1", "member2"]);
+     * await client.sadd("set2", ["member1"]);
+     * const result = await client.sdiffstore("set3", ["set1", "set2"]);
+     * console.log(result); // Output: 1 - One member was stored in "set3", and that member is the diff between "set1" and "set2".
+     * ```
+     */
+    public sdiffstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createSDiffStore(destination, keys));
     }
 
     /**
