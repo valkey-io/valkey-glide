@@ -129,6 +129,11 @@ To run tests, use the following command:
 npm test
 ```
 
+To run the integration tests with existing servers, run the following command:
+```bash
+npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
+```
+
 ### Submodules
 
 After pulling new changes, ensure that you update the submodules by running the following command:
@@ -164,6 +169,21 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
     cd node
     npx eslint . --max-warnings=0
     npx prettier --check .
+    ```
+
+    To automatically apply prettier recommendations, run the following command:
+    ```bash
+    npx prettier -w .
+    ```
+
+    To avoid getting ESLint warnings from protobuf generated files, run the following command:
+    ```bash
+    npx eslint --ignore-pattern ProtobufMessage.* .
+    ```
+
+    To automatically apply ESLint recommendations, run the following command:
+    ```bash
+    npx eslint --ignore-pattern ProtobufMessage.* --ignore-pattern 'build-ts/**' --fix .
     ```
 
 2. Rust
