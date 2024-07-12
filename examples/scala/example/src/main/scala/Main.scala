@@ -9,7 +9,16 @@ object Main {
         val port = 6379
         val useSsl = false
 
-        val config = GlideClientConfiguration.builder.address(NodeAddress.builder.host(host).port(port).build).useTLS(useSsl).build.asInstanceOf[GlideClientConfiguration]
+        val config = GlideClientConfiguration.builder
+            .address(NodeAddress.builder
+                .host(host)
+                .port(port)
+                .build)
+            .useTLS(useSsl)
+            .build
+            // This cast is required in order to pass the config to createClient because the Scala type system
+            // is unable to resolve the Lombok builder result type.
+            .asInstanceOf[GlideClientConfiguration]
 
         try {
             val client = GlideClient.createClient(config).get
