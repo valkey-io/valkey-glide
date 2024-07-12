@@ -5,6 +5,7 @@
 import { expect, it } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
+import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     ClosingError,
     ExpireOptions,
@@ -3968,6 +3969,43 @@ export function runBaseTests<Context>(config: {
                         new LPosOptions({ rank: -1, count: 0 }),
                     ),
                 ).toEqual([4, 1, 0]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `dbsize test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // flush all data
+                expect(await client.customCommand(["FLUSHALL"])).toBe("OK");
+
+                // check that DBSize is 0
+                expect(await client.dbsize()).toBe(0);
+
+                // set 10 random key-value pairs
+                for (let i = 0; i < 10; i++) {
+                    const key = `{key}:${uuidv4()}`;
+                    const value = "0".repeat(Math.random() * 7);
+
+                    expect(await client.set(key, value)).toBe("OK");
+                }
+
+                // check DBSIZE after setting
+                expect(await client.dbsize()).toBe(10);
+
+                // additional test for the cluster client
+                if (client instanceof GlideClusterClient) {
+                    expect(await client.customCommand(["FLUSHALL"])).toBe("OK");
+                    const key = uuidv4();
+                    expect(await client.set(key, "value")).toBe("OK");
+                    const primaryRoute: SingleNodeRoute = {
+                        type: "primarySlotKey",
+                        key: key
+                    };
+                    expect(await client.dbsize(primaryRoute)).toBe(1);
+                }
             }, protocol);
         },
         config.timeout,
