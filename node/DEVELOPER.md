@@ -130,6 +130,7 @@ npm test
 ```
 
 To run the integration tests with existing servers, run the following command:
+
 ```bash
 npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
@@ -172,16 +173,19 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
     ```
 
     To automatically apply prettier recommendations, run the following command:
+
     ```bash
     npx prettier -w .
     ```
 
     To avoid getting ESLint warnings from protobuf generated files, run the following command:
+
     ```bash
     npx eslint --ignore-pattern ProtobufMessage.* .
     ```
 
     To automatically apply ESLint recommendations, run the following command:
+
     ```bash
     npx eslint --ignore-pattern ProtobufMessage.* --ignore-pattern 'build-ts/**' --fix .
     ```
