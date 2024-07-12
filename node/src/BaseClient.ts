@@ -1070,7 +1070,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the lset method
-     * const response = await client.lset("test_key", 1, "two").get();
+     * const response = await client.lset("test_key", 1, "two");
      * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
      * ```
      */
