@@ -108,6 +108,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createSUnion,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -730,6 +731,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sinter(keys: string[]): T {
         return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * See https://valkey.io/commands/sunion/ for more details.
+     *
+     * @param keys - The keys of the sets.
+     *
+     * Command Response - A `Set` of members which are present in at least one of the given sets.
+     * If none of the sets exist, an empty `Set` will be returned.
+     */
+    public sunion(keys: string[]): T {
+        return this.addAndReturn(createSUnion(keys), true);
     }
 
     /**
