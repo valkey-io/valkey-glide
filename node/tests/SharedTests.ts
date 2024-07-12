@@ -874,11 +874,11 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `lset with nonexisting key`,
+        `lset test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = "test_key";
-                const non_existing_key = "nonexisting";
+                const nonExistingKey = "nonexisting";
                 const index = 0;
                 const oobIndex = 10;
                 const negativeIndex = -1;
@@ -890,7 +890,7 @@ export function runBaseTests<Context>(config: {
                 // key does not exist
                 try {
                     expect(
-                        await client.lset(non_existing_key, index, element),
+                        await client.lset(nonExistingKey, index, element),
                     ).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
@@ -910,18 +910,32 @@ export function runBaseTests<Context>(config: {
                 }
 
                 // assert lset result
-                expect(await client.lset(key, index, element)).toEqual("OK");
+                checkSimple(await client.lset(key, index, element)).toEqual(
+                    "OK",
+                );
                 checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
                     expectedList,
                 );
 
                 // assert lset with a negative index for the last element in the list
-                expect(await client.lset(key, negativeIndex, element)).toEqual(
-                    "OK",
-                );
+                checkSimple(
+                    await client.lset(key, negativeIndex, element),
+                ).toEqual("OK");
                 checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
                     expectedList2,
                 );
+
+                // assert lset against a non-list key
+                const nonListKey = "nonListKey";
+                expect(await client.sadd(nonListKey, ["a"]),).toEqual(1);
+
+                try {
+                    checkSimple(await client.lset(nonListKey, 0, "b"));
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "WRONGTYPE: Operation against a key holding the wrong kind of value",
+                    );
+                }
             }, protocol);
         },
         config.timeout,
