@@ -73,6 +73,7 @@ import {
     createRenameNX,
     createSAdd,
     createSCard,
+    createSDiff,
     createSInter,
     createSIsMember,
     createSMembers,
@@ -1314,6 +1315,30 @@ export class BaseClient {
     public sinter(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
+        );
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets in `keys`.
+     *
+     * See https://valkey.io/commands/sdiff/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets to diff.
+     * @returns A `Set` of elements representing the difference between the sets.
+     * If a key in `keys` does not exist, it is treated as an empty set.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["member1", "member2"]);
+     * await client.sadd("set2", ["member1"]);
+     * const result = await client.sdiff(["set1", "set2"]);
+     * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
+     * ```
+     */
+    public sdiff(keys: string[]): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSDiff(keys)).then(
+            (sdiff) => new Set<string>(sdiff),
         );
     }
 
