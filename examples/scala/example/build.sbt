@@ -19,18 +19,5 @@ val platformClassifier = {
   }
 }
 
-val nativeTransport = {
-  os match {
-    case mac if mac.contains("mac") => "netty-transport-native-kqueue"
-    case linux if linux.contains("linux") => "netty-transport-native-epoll"
-    case osName => throw new RuntimeException(s"Unknown operating system $osName")
-  }
-}
-
-libraryDependencies += "io.netty" % nativeTransport % "4.1.100.Final" classifier platformClassifier
-libraryDependencies += "com.google.protobuf" % "protobuf-java" % "4.27.1"
-libraryDependencies += "io.netty" % "netty-handler" % "4.1.100.Final"
-libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.13.0"
-libraryDependencies += "io.valkey" % "valkey-glide" % "1.0.0" classifier platformClassifier
-
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.0.1" classifier platformClassifier
 
