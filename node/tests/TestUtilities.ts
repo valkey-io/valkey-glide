@@ -538,5 +538,17 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.pfcount([key11]);
     args.push(3);
+    baseTransaction.rpush(key15, [
+        field + "1",
+        field + "1",
+        field + "2",
+        field + "3",
+        field + "3",
+    ]);
+    args.push(5);
+    baseTransaction.lpos(key15, field + "1", { rank: 2 });
+    args.push(1);
+    baseTransaction.lpos(key15, field + "1", { rank: 2, count: 0 });
+    args.push([0, 1]);
     return args;
 }

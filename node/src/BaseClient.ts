@@ -15,6 +15,7 @@ import {
     ExpireOptions,
     InsertPosition,
     KeyWeight,
+    LPosOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -51,6 +52,7 @@ import {
     createLInsert,
     createLLen,
     createLPop,
+    createLPos,
     createLPush,
     createLPushX,
     createLRange,
@@ -2843,6 +2845,36 @@ export class BaseClient {
      */
     public objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
+    }
+
+    /**
+     * Returns the index of the first occurrence of `element` inside the list specified by `key`. If no
+     * match is found, `null` is returned. If the `count` option is specified, then the function returns
+     * an `array` of indices of matching elements within a list.
+     *
+     * See https://valkey.io/commands/lpos/ for more details.
+     *
+     * since - Valkey version 6.0.6.
+     *
+     * @param key - The name of the list.
+     * @param element - The value to search for within the list.
+     * @param options - The LPOS options.
+     * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
+     * is specified, then the function returns an `array` of indices of matching elements within a list.
+     *
+     * @example
+     * ```typescript
+     * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
+     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurence of "e" is in the fifth element.
+     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5, 6 ] - the elements of the occurences of "e".
+     * ```
+     */
+    public lpos(
+        key: string,
+        element: string,
+        options?: LPosOptions,
+    ): Promise<number | number[]> {
+        return this.createWritePromise(createLPos(key, element, options));
     }
 
     /**

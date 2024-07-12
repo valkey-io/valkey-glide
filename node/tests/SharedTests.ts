@@ -3863,6 +3863,100 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpos test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}:${uuidv4()}`;
+                const valueArray = ["a", "a", "b", "c", "a", "b"];
+                expect(await client.rpush(key, valueArray)).toEqual(6);
+
+                // simplest case
+                expect(await client.lpos(key, "a")).toEqual(0);
+                expect(await client.lpos(key, "b", { rank: 2 })).toEqual(5);
+
+                // element doesn't exist
+                expect(await client.lpos(key, "e")).toBeNull();
+
+                // reverse traversal
+                expect(await client.lpos(key, "b", { rank: -2 })).toEqual(2);
+
+                // unlimited comparisons
+                expect(await client.lpos(key, "a", { rank: 1, maxLength:0 })).toEqual(0);
+
+                // limited comparisons
+                expect(await client.lpos(key, "c", { rank: 1, maxLength:2 })).toBeNull();
+
+                // invalid rank value
+                try {
+                    expect(await client.lpos(key, "a", {rank: 0})).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "An error was signalled by the server - ResponseError: RANK can't be zero: use 1 to start from the first match, 2 from the second ... or use negative to start from the end of the list",
+                    );
+                }
+
+                // invalid maxlen value
+                try {
+                    expect(await client.lpos(key, "a", { maxLength: -1 })).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "An error was signalled by the server - ResponseError: MAXLEN can't be negative",
+                    );
+                }
+
+                // non-existent key
+                expect(await client.lpos("non-existent_key", "e")).toBeNull();
+
+                // wrong key data type
+                const wrongDataType = `{key}:${uuidv4()}`;
+                expect(await client.sadd(wrongDataType, ["a", "b"])).toEqual(2);
+
+                try {
+                    expect(
+                        await client.lpos(wrongDataType, "a"),
+                    ).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "WRONGTYPE: Operation against a key holding the wrong kind of value",
+                    );
+                }
+
+                // invalid count value
+                try {
+                    expect(await client.lpos(key, "a", {count: -1})).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "An error was signalled by the server - ResponseError: COUNT can't be negative",
+                    );
+                }
+
+                // with count
+                expect(await client.lpos(key, "a", { count: 2 })).toEqual([
+                    0, 1,
+                ]);
+                expect(await client.lpos(key, "a", { count: 0 })).toEqual([
+                    0, 1, 4,
+                ]);
+                expect(await client.lpos(key, "a", { rank: 1, count: 0 })).toEqual([
+                    0, 1, 4,
+                ]);
+                expect(
+                    await client.lpos(key, "a", { rank: 2, count: 0 }),
+                ).toEqual([1, 4]);
+                expect(
+                    await client.lpos(key, "a", { rank: 3, count: 0 }),
+                ).toEqual([4]);
+
+                // reverse traversal
+                expect(
+                    await client.lpos(key, "a", { rank: -1, count: 0 }),
+                ).toEqual([4, 1, 0]);
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
