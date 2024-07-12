@@ -297,6 +297,67 @@ describe("GlideClient", () => {
         },
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lolwut test_%p",
+        async (protocol) => {
+            const client1 = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const client2 = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            // test with multi-node route
+            const result1 = await client1.lolwut(undefined, undefined);
+            expect(intoString(result1)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result2 = await client1.lolwut(undefined, []);
+            expect(intoString(result2)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // test with single-node route
+            const result3 = await client1.lolwut(undefined, [50, 20]);
+            expect(intoString(result3)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result4 = await client1.lolwut(6, undefined);
+            expect(intoString(result4)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result5 = await client1.lolwut(5, [30, 4, 4]);
+            expect(intoString(result5)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // transaction tests
+            const transaction = new Transaction();
+            transaction.lolwut(undefined, undefined);
+            transaction.lolwut(5, undefined);
+            transaction.lolwut(undefined, [1, 2]);
+            transaction.lolwut(6, [42]);
+            const results = await client2.exec(transaction);
+
+            if (results) {
+                for (const element of results) {
+                    expect(intoString(element)).toEqual(
+                        expect.stringContaining("Redis ver. "),
+                    );
+                }
+            } else {
+                throw new Error("Invalid LOLWUT transaction test results.");
+            }
+
+            client1.close();
+            client2.close();
+        },
+        TIMEOUT,
+    );
+
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
             const options = getClientConfigurationOption(

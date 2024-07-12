@@ -15,6 +15,7 @@ import {
     createCustomCommand,
     createEcho,
     createInfo,
+    createLolwut,
     createPing,
     createSelect,
     createTime,
@@ -309,5 +310,27 @@ export class GlideClient extends BaseClient {
      */
     public time(): Promise<[string, string]> {
         return this.createWritePromise(createTime());
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param version - An optional argument that can be used to specify the version of computer art to generate.
+     * @param parameters - An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     *
+     * @returns A piece of generative computer art along with the current server version.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.lolwut(6, [40, 20]);
+     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * ```
+     */
+    public lolwut(version?: number, parameters?: number[]): Promise<string> {
+        return this.createWritePromise(createLolwut(version, parameters));
     }
 }

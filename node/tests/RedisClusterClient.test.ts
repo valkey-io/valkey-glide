@@ -453,4 +453,45 @@ describe("GlideClusterClient", () => {
             client.close();
         },
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lolwut test routes_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            // test with multi-node route
+            const result1 = await client.lolwut(
+                undefined,
+                undefined,
+                "allNodes",
+            );
+            expect(intoString(result1)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result2 = await client.lolwut(2, [10, 20], "allNodes");
+            expect(intoString(result2)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // test with single-node route
+            const result3 = await client.lolwut(
+                undefined,
+                undefined,
+                "randomNode",
+            );
+            expect(intoString(result3)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result4 = await client.lolwut(2, [10, 20], "randomNode");
+            expect(intoString(result4)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+            client.close();
+        },
+        TIMEOUT,
+    );
 });

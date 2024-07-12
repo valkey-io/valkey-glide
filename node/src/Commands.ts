@@ -1539,3 +1539,23 @@ export function createObjectIdletime(key: string): command_request.Command {
 export function createObjectRefcount(key: string): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
 }
+
+/**
+ * @internal
+ */
+export function createLolwut(
+    version?: number,
+    parameters?: number[],
+): command_request.Command {
+    let args: string[] = [];
+
+    if (version != undefined) {
+        args.push("VERSION", version.toString());
+    }
+
+    if (parameters != undefined) {
+        args.push(...parameters.map((param) => param.toString()));
+    }
+
+    return createCommand(RequestType.Lolwut, args);
+}

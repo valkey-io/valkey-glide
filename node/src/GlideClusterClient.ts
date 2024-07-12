@@ -15,6 +15,7 @@ import {
     createCustomCommand,
     createEcho,
     createInfo,
+    createLolwut,
     createPing,
     createTime,
 } from "./Commands";
@@ -566,5 +567,36 @@ export class GlideClusterClient extends BaseClient {
      */
     public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), toProtobufRoute(route));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param version - An optional argument that can be used to specify the version of computer art to generate.
+     * @param parameters - An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *  case the client will route the command to the nodes defined by `route`.
+     *
+     * @returns A piece of generative computer art along with the current server version.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.lolwut(6, [40, 20], `allNodes`);
+     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * ```
+     */
+    public lolwut(
+        version?: number,
+        parameters?: number[],
+        route?: Routes,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise(
+            createLolwut(version, parameters),
+            toProtobufRoute(route),
+        );
     }
 }

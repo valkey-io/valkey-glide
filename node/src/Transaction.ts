@@ -57,6 +57,7 @@ import {
     createLRange,
     createLRem,
     createLTrim,
+    createLolwut,
     createMGet,
     createMSet,
     createObjectEncoding,
@@ -1551,6 +1552,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public objectRefcount(key: string): T {
         return this.addAndReturn(createObjectRefcount(key));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the Redis version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param version - An optional argument that can be used to specify the version of computer art to generate.
+     * @param parameters - An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     *
+     * Command Response - A piece of generative computer art along with the current server version.
+     */
+    public lolwut(version?: number, parameters?: number[]): T {
+        return this.addAndReturn(createLolwut(version, parameters));
     }
 }
 
