@@ -590,8 +590,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/lset/ for details.
      *
-     * @param key The key of the list.
-     * @param index The index of the element in the list to be set.
+     * @param key - The key of the list.
+     * @param index - The index of the element in the list to be set.
      * @param element - The new element to set at the specified index.
      *
      * Command Response - always "OK".
