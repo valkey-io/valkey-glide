@@ -76,6 +76,7 @@ import {
     createRenameNX,
     createSAdd,
     createSCard,
+    createSDiff,
     createSInter,
     createSIsMember,
     createSMembers,
@@ -731,6 +732,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sinter(keys: string[]): T {
         return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets in `keys`.
+     *
+     * See https://valkey.io/commands/sdiff/ for more details.
+     *
+     * @param keys - The keys of the sets to diff.
+     *
+     * Command Response - A `Set` of elements representing the difference between the sets.
+     * If a key in `keys` does not exist, it is treated as an empty set.
+     */
+    public sdiff(keys: string[]): T {
+        return this.addAndReturn(createSDiff(keys), true);
     }
 
     /**

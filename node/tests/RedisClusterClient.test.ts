@@ -304,6 +304,7 @@ describe("GlideClusterClient", () => {
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
+                client.sdiff(["abc", "zxy", "lkn"]),
                 // TODO all rest multi-key commands except ones tested below
             ];
 
