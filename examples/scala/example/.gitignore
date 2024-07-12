@@ -12,6 +12,7 @@ target
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+.bsp
 
 ### Eclipse ###
 .apt_generated

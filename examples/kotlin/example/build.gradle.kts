@@ -24,11 +24,7 @@ fun nettyTransport(): String {
 
 dependencies {
     testImplementation(kotlin("test"))
-    implementation("io.netty:netty-handler:4.1.100.Final")
-    implementation("com.google.protobuf:protobuf-java:4.27.1")
-    implementation("org.apache.commons:commons-lang3:3.13.0")
-    implementation("io.netty:${nettyTransport()}:4.1.100.Final:$classifier")
-    implementation("io.valkey:valkey-glide:1.0.0:$classifier")
+    implementation("io.valkey:valkey-glide:1.0.1:$classifier")
 }
 
 tasks.test {
