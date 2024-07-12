@@ -617,6 +617,16 @@ export function createSInter(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSInterStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.SInterStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
 export function createSDiff(keys: string[]): command_request.Command {
     return createCommand(RequestType.SDiff, keys);
 }

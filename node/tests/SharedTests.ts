@@ -1192,6 +1192,64 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sinterstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const nonExistingKey = `{key}-4-${uuidv4()}`;
+                const stringKey = `{key}-5-${uuidv4()}`;
+                const member1_list = ["a", "b", "c"];
+                const member2_list = ["c", "d", "e"];
+
+                expect(await client.sadd(key1, member1_list)).toEqual(3);
+                expect(await client.sadd(key2, member2_list)).toEqual(3);
+
+                // store in a new key
+                expect(await client.sinterstore(key3, [key1, key2])).toEqual(1);
+                checkSimple(await client.smembers(key3)).toEqual(
+                    new Set(["c"]),
+                );
+
+                // overwrite existing set, which is also a source set
+                expect(await client.sinterstore(key2, [key2, key3])).toEqual(1);
+                checkSimple(await client.smembers(key2)).toEqual(
+                    new Set(["c"]),
+                );
+
+                // source set is the same as the existing set
+                expect(await client.sinterstore(key2, [key2])).toEqual(1);
+                checkSimple(await client.smembers(key2)).toEqual(
+                    new Set(["c"]),
+                );
+
+                // intersection with non-existing key
+                expect(
+                    await client.sinterstore(key1, [key2, nonExistingKey]),
+                ).toEqual(0);
+                checkSimple(await client.smembers(key1)).toEqual(new Set());
+
+                // invalid argument - key list must not be empty
+                await expect(client.sinterstore(key3, [])).rejects.toThrow();
+
+                // non-set key
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sinterstore(key3, [stringKey]),
+                ).rejects.toThrow();
+
+                // overwrite non-set key
+                expect(await client.sinterstore(stringKey, [key2])).toEqual(1);
+                checkSimple(await client.smembers(stringKey)).toEqual(
+                    new Set("c"),
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sdiff test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
