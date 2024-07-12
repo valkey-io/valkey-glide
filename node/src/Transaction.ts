@@ -78,6 +78,7 @@ import {
     createSCard,
     createSDiff,
     createSInter,
+    createSInterStore,
     createSIsMember,
     createSMembers,
     createSMove,
@@ -732,6 +733,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sinter(keys: string[]): T {
         return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sinterstore/ for more details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sinterstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSInterStore(destination, keys));
     }
 
     /**
