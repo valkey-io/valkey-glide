@@ -893,12 +893,14 @@ export function runBaseTests<Context>(config: {
                         await client.lset(non_existing_key, index, element),
                     ).toThrow();
                 } catch (e) {
-                    expect((e as Error).message).toMatch("An error was signalled by the server - ResponseError: no such key");
+                    expect((e as Error).message).toMatch(
+                        "An error was signalled by the server - ResponseError: no such key",
+                    );
                 }
 
                 expect(await client.lpush(key, lpushArgs)).toEqual(4);
 
-                // index out of range -> error
+                // index out of range
                 try {
                     expect(await client.lset(key, oobIndex, element)).toThrow();
                 } catch (e) {
@@ -908,18 +910,16 @@ export function runBaseTests<Context>(config: {
                 }
 
                 // assert lset result
-                expect(await client.lset(key, index, element)).toEqual(
-                    "OK",
-                );
-                expect(await client.lrange(key, 0, -1)).toEqual(
+                expect(await client.lset(key, index, element)).toEqual("OK");
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
                     expectedList,
                 );
 
                 // assert lset with a negative index for the last element in the list
-                expect(await client.lset(key, index, element)).toEqual(
+                expect(await client.lset(key, negativeIndex, element)).toEqual(
                     "OK",
                 );
-                expect(await client.lrange(key, 0, -1)).toEqual(
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
                     expectedList2,
                 );
             }, protocol);

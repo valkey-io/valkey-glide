@@ -516,11 +516,7 @@ export function createLSet(
     index: number,
     element: string,
 ): redis_request.Command {
-    return createCommand(RequestType.LSet, [
-        key,
-        index.toString(),
-        element,
-    ]);
+    return createCommand(RequestType.LSet, [key, index.toString(), element]);
 }
 
 /**
