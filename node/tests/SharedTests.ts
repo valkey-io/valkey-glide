@@ -927,7 +927,7 @@ export function runBaseTests<Context>(config: {
 
                 // assert lset against a non-list key
                 const nonListKey = "nonListKey";
-                expect(await client.sadd(nonListKey, ["a"]),).toEqual(1);
+                expect(await client.sadd(nonListKey, ["a"])).toEqual(1);
 
                 try {
                     checkSimple(await client.lset(nonListKey, 0, "b"));
