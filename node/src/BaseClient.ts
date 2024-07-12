@@ -75,6 +75,7 @@ import {
     createSCard,
     createSDiff,
     createSInter,
+    createSInterStore,
     createSIsMember,
     createSMembers,
     createSMove,
@@ -1316,6 +1317,26 @@ export class BaseClient {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
         );
+    }
+
+    /**
+     * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sinterstore/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     * @returns The number of elements in the resulting set.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sinterstore("my_set", ["set1", "set2"]);
+     * console.log(result); // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
+     * ```
+     */
+    public sinterstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createSInterStore(destination, keys));
     }
 
     /**
