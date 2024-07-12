@@ -388,6 +388,8 @@ export async function transactionTest(
     args.push(2);
     baseTransaction.sunionstore(key7, [key7, key7]);
     args.push(2);
+    baseTransaction.sunion([key7, key7]);
+    args.push(new Set(["bar", "foo"]));
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
     baseTransaction.srem(key7, ["foo"]);

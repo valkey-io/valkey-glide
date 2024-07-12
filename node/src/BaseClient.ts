@@ -103,6 +103,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createSUnion,
 } from "./Commands";
 import {
     ClosingError,
@@ -1313,6 +1314,33 @@ export class BaseClient {
     public sinter(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
+        );
+    }
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * See https://valkey.io/commands/sunion/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets.
+     * @returns A `Set` of members which are present in at least one of the given sets.
+     * If none of the sets exist, an empty `Set` will be returned.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("my_set1", ["member1", "member2"]);
+     * await client.sadd("my_set2", ["member2", "member3"]);
+     * const result1 = await client.sunion(["my_set1", "my_set2"]);
+     * console.log(result1); // Output: Set {'member1', 'member2', 'member3'} - Sets "my_set1" and "my_set2" have three unique members.
+     *
+     * const result2 = await client.sunion(["my_set1", "non_existing_set"]);
+     * console.log(result2); // Output: Set {'member1', 'member2'}
+     * ```
+     */
+    public sunion(keys: string[]): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSUnion(keys)).then(
+            (sunion) => new Set<string>(sunion),
         );
     }
 

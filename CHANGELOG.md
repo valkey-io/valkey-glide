@@ -1,4 +1,9 @@
 #### Changes
+* Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))
+
+## 1.0.0 (2024-07-09)
+
+#### Changes
 * Node: Added ZINTERSTORE command ([#1513](https://github.com/valkey-io/valkey-glide/pull/1513))
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/valkey-io/valkey-glide/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/valkey-io/valkey-glide/pull/1472))
@@ -94,7 +99,7 @@
 #### Fixes
 * Python: fixing a bug with transaction exec ([#1796](https://github.com/valkey-io/valkey-glide/pull/1796))
 
-## 0.4.1 (2024-02-06)
+## 0.4.1 (2024-06-02)
 
 #### Fixes
 * Node: Fix set command bug with expiry option ([#1508](https://github.com/valkey-io/valkey-glide/pull/1508))
