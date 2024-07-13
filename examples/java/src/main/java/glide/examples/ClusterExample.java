@@ -21,12 +21,11 @@ public class ClusterExample {
      * Creates and returns a GlideClusterClient instance. This function initializes a
      * GlideClusterClient with the provided list of nodes.
      *
-     * @return <code>GlideClusterClient</code> An instance of <code>GlideClusterClient</code>
-     *     connected to the discovered nodes.
+     * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
      */
     public static GlideClusterClient createClient() throws ExecutionException, InterruptedException {
         String host = "localhost";
-        Integer port1 = 6379;
+        Integer port = 6379;
         // GLIDE is able to detect all cluster nodes and connect to them automatically
         // even if only one of them was configured
 
@@ -36,7 +35,7 @@ public class ClusterExample {
                         .address(
                                 NodeAddress.builder()
                                         .host(host)
-                                        .port(port1)
+                                        .port(port)
                                         .build())
                         .build();
 
@@ -112,6 +111,7 @@ public class ClusterExample {
                 if (e.getMessage().contains("NOAUTH")) {
                     Logger.log(
                             Logger.Level.ERROR, "glide", "Authentication error encountered: " + e.getMessage());
+                            throw e;
                 } else {
                     Logger.log(
                             Logger.Level.WARN,
@@ -121,10 +121,10 @@ public class ClusterExample {
             } catch (TimeoutException e) {
                 // A request timed out. You may choose to retry the execution based on your application's
                 // logic
-                Logger.log(Logger.Level.ERROR, "glide", "TimeoutError encountered: " + e.getMessage());
+                Logger.log(Logger.Level.ERROR, "glide", "TimeoutException encountered: " + e.getMessage());
             } catch (ConnectionException e) {
                 // The client wasn't able to reestablish the connection within the given retries
-                Logger.log(Logger.Level.ERROR, "glide", "ConnectionError encountered: " + e.getMessage());
+                Logger.log(Logger.Level.ERROR, "glide", "ConnectionException encountered: " + e.getMessage());
             } catch (Exception e) {
                 Logger.log(Logger.Level.ERROR, "glide", "Unexpected error: " + e.getMessage());
             } finally {

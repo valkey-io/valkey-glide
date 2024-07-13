@@ -14,17 +14,16 @@ import java.util.concurrent.ExecutionException;
 public class StandaloneExample {
 
     /**
-     * Creates and returns a GlideClusterClient instance. This function initializes a
-     * GlideClusterClient with the provided list of nodes.
+     * Creates and returns a GlideClient instance. This function initializes a
+     * GlideClient with the provided list of nodes.
      *
-     * @return <code>GlideClusterClient</code> An instance of <code>GlideClusterClient</code>
-     *     connected to the discovered nodes.
+     * @return A <code>GlideClient</code> connected to the discovered nodes.
      */
     public static GlideClient createClient() throws ExecutionException, InterruptedException {
         String host = "localhost";
         Integer port = 6379;
 
-        // Check GlideClusterClientConfiguration for additional options.
+        // Check GlideClientConfiguration for additional options.
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port).build())
@@ -89,6 +88,7 @@ public class StandaloneExample {
                 if (e.getMessage().contains("NOAUTH")) {
                     Logger.log(
                             Logger.Level.ERROR, "glide", "Authentication error encountered: " + e.getMessage());
+                    throw e;
                 } else {
                     Logger.log(
                             Logger.Level.WARN,
@@ -106,13 +106,15 @@ public class StandaloneExample {
                 Logger.log(Logger.Level.ERROR, "glide", "Unexpected error: " + e.getMessage());
 
             } finally {
-                try {
-                    client.close();
-                } catch (Exception e) {
-                    Logger.log(
-                            Logger.Level.ERROR,
-                            "glide",
-                            "Error encountered while closing the client: " + e.getMessage());
+                if (client != null) {
+                    try {
+                        client.close();
+                    } catch (Exception e) {
+                        Logger.log(
+                                Logger.Level.ERROR,
+                                "glide",
+                                "Error encountered while closing the client: " + e.getMessage());
+                    }
                 }
             }
         }
