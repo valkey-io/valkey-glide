@@ -656,6 +656,12 @@ export async function transactionTest(
 
     baseTransaction.smembers(key7);
     responseData.push(["smembers(key7)", new Set(["bar"])]);
+    baseTransaction.srandmember(key7);
+    responseData.push(["srandmember(key7)", "bar"]);
+    baseTransaction.srandmemberCount(key7, 2);
+    responseData.push(["srandmemberCount(key7, 2)", ["bar"]]);
+    baseTransaction.srandmemberCount(key7, -2);
+    responseData.push(["srandmemberCount(key7, -2)", ["bar", "bar"]]);
     baseTransaction.spop(key7);
     responseData.push(["spop(key7)", "bar"]);
     baseTransaction.spopCount(key7, 2);
