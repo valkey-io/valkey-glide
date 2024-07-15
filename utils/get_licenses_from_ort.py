@@ -36,6 +36,8 @@ APPROVED_LICENSES = [
     "PSF-2.0",
 ]
 
+SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
+
 
 class OrtResults:
     def __init__(self, name: str, ort_results_folder: str) -> None:
@@ -44,8 +46,7 @@ class OrtResults:
             name (str): the language name.
             ort_results_folder (str): The relative path to the ort results folder from the root of the glide-for-redis directory.
         """
-        script_path = os.path.dirname(os.path.realpath(__file__))
-        folder_path = f"{script_path}/../{ort_results_folder}"
+        folder_path = f"{SCRIPT_PATH}/../{ort_results_folder}"
         self.analyzer_result_file = f"{folder_path}/analyzer-result.json"
         self.notice_file = f"{folder_path}/NOTICE_DEFAULT"
         self.name = name
@@ -64,12 +65,13 @@ class PackageLicense:
 ort_results_per_lang = [
     OrtResults("Python", "python/ort_results"),
     OrtResults("Node", "node/ort_results"),
-    OrtResults("Rust", "glide-core/ort_results"),
     OrtResults("Java", "java/ort_results"),
+    OrtResults("Rust", "glide-core/ort_results"),
 ]
 
 all_licenses_set: Set = set()
 unknown_licenses: List[PackageLicense] = []
+final_packages: List[PackageLicense] = []
 
 for ort_result in ort_results_per_lang:
     with open(ort_result.analyzer_result_file, "r") as ort_results, open(
@@ -94,10 +96,13 @@ for ort_result in ort_results_per_lang:
                     else:
                         final_licenses = [license]
                     for license in final_licenses:
+                        package_license = PackageLicense(
+                            package["id"], ort_result.name, license
+                        )
                         if license not in APPROVED_LICENSES:
-                            unknown_licenses.append(
-                                PackageLicense(package["id"], ort_result.name, license)
-                            )
+                            unknown_licenses.append(package_license)
+                        else:
+                            final_packages.append(package_license)
                         all_licenses_set.add(license)
             except Exception:
                 print(
@@ -105,8 +110,12 @@ for ort_result in ort_results_per_lang:
                 )
                 raise
 
-print("\n\n#### Found Licenses #####\n")
+package_list_file_path = f"{SCRIPT_PATH}/packages_list.txt"
+with open(package_list_file_path, mode="wt", encoding="utf-8") as f:
+    f.writelines(f"{package}\n" for package in final_packages)
+
 all_licenses_set = set(sorted(all_licenses_set))
+print("\n\n#### Found Licenses #####\n")
 for license in all_licenses_set:
     print(f"{license}")
 
