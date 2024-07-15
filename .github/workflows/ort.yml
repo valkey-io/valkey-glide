@@ -215,4 +215,20 @@ jobs:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 EVENT_NAME: ${{ github.event_name }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
+
+            - name: Get current date
+              id: date
+              run: |
+                CURR_DATE=$(date +'%Y-%m-%d-%H')
+                echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
+
+            - name: Upload package list as artifact
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: packages-list-${{ steps.date.outputs.date }}
+                  path: |
+                      utils/packages_list.txt
+                  retention-days: 3
+
   
