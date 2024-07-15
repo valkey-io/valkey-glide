@@ -110,7 +110,7 @@ for ort_result in ort_results_per_lang:
                 )
                 raise
 
-package_list_file_path = f"{SCRIPT_PATH}/packages_list.txt"
+package_list_file_path = f"{SCRIPT_PATH}/package_list.txt"
 with open(package_list_file_path, mode="wt", encoding="utf-8") as f:
     f.writelines(f"{package}\n" for package in final_packages)
 
