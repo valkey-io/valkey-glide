@@ -222,7 +222,16 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
 
             Ok(obj.into_unknown())
         }
-        Value::Push { kind: _, data: _ } => todo!(),
+        Value::Push { kind, data } => {
+            let mut obj = js_env.create_object()?;
+            obj.set_named_property("kind", format!("{kind:?}"))?;
+            let js_array_view = data
+                .into_iter()
+                .map(|item| redis_value_to_js(item, js_env))
+                .collect::<Result<Vec<_>, _>>()?;
+            obj.set_named_property("values", js_array_view)?;
+            Ok(obj.into_unknown())
+        }
     }
 }
 
