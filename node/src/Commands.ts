@@ -1702,31 +1702,41 @@ function addLPosOptions(options: LPosOptions, args: string[]) {
     }
 }
 
+export type LPosOptions = {
+    rank?: number;
+    count?: number;
+    maxLength?: number;
+};
+
+function addLPosOptions(options: LPosOptions, args: string[]) {
+    if (options.rank !== undefined) {
+        args.push("RANK");
+        args.push(options.rank.toString());
+    }
+
+    if (options.count !== undefined) {
+        args.push("COUNT");
+        args.push(options.count.toString());
+    }
+
+    if (options.maxLength !== undefined) {
+        args.push("MAXLEN");
+        args.push(options.maxLength.toString());
+    }
+}
+
 /**
  * @internal
  */
 export function createLPos(
     key: string,
     element: string,
-    rank?: number,
-    count?: number,
-    maxLength?: number,
+    options?: LPosOptions,
 ): command_request.Command {
     const args: string[] = [key, element];
 
-    if (rank !== undefined) {
-        args.push("RANK");
-        args.push(rank.toString());
-    }
-
-    if (count !== undefined) {
-        args.push("COUNT");
-        args.push(count.toString());
-    }
-
-    if (maxLength !== undefined) {
-        args.push("MAXLEN");
-        args.push(maxLength.toString());
+    if (options) {
+        addLPosOptions(options, args);
     }
 
     return createCommand(RequestType.LPos, args);

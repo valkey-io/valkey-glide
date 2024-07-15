@@ -2858,9 +2858,7 @@ export class BaseClient {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param rank - The rank of the match to return.
-     * @param count - The number of matches wanted.
-     * @param maxLength - The maximum number of comparisons to make between the element and the items in the list.
+     * @param options - The LPOS options.
      * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
      * is specified, then the function returns an `array` of indices of matching elements within the list.
      *
@@ -2874,13 +2872,9 @@ export class BaseClient {
     public lpos(
         key: string,
         element: string,
-        rank?: number,
-        count?: number,
-        maxLength?: number,
+        options?: LPosOptions,
     ): Promise<number | number[] | null> {
-        return this.createWritePromise(
-            createLPos(key, element, rank, count, maxLength),
-        );
+        return this.createWritePromise(createLPos(key, element, options));
     }
 
     /**
