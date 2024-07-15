@@ -3883,14 +3883,18 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lpos(key, "b", { rank: -2 })).toEqual(2);
 
                 // unlimited comparisons
-                expect(await client.lpos(key, "a", { rank: 1, maxLength:0 })).toEqual(0);
+                expect(
+                    await client.lpos(key, "a", { rank: 1, maxLength: 0 }),
+                ).toEqual(0);
 
                 // limited comparisons
-                expect(await client.lpos(key, "c", { rank: 1, maxLength:2 })).toBeNull();
+                expect(
+                    await client.lpos(key, "c", { rank: 1, maxLength: 2 }),
+                ).toBeNull();
 
                 // invalid rank value
                 try {
-                    expect(await client.lpos(key, "a", {rank: 0})).toThrow();
+                    expect(await client.lpos(key, "a", { rank: 0 })).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "An error was signalled by the server - ResponseError: RANK can't be zero: use 1 to start from the first match, 2 from the second ... or use negative to start from the end of the list",
@@ -3899,7 +3903,9 @@ export function runBaseTests<Context>(config: {
 
                 // invalid maxlen value
                 try {
-                    expect(await client.lpos(key, "a", { maxLength: -1 })).toThrow();
+                    expect(
+                        await client.lpos(key, "a", { maxLength: -1 }),
+                    ).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "An error was signalled by the server - ResponseError: MAXLEN can't be negative",
@@ -3914,9 +3920,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.sadd(wrongDataType, ["a", "b"])).toEqual(2);
 
                 try {
-                    expect(
-                        await client.lpos(wrongDataType, "a"),
-                    ).toThrow();
+                    expect(await client.lpos(wrongDataType, "a")).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "WRONGTYPE: Operation against a key holding the wrong kind of value",
@@ -3925,7 +3929,9 @@ export function runBaseTests<Context>(config: {
 
                 // invalid count value
                 try {
-                    expect(await client.lpos(key, "a", {count: -1})).toThrow();
+                    expect(
+                        await client.lpos(key, "a", { count: -1 }),
+                    ).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "An error was signalled by the server - ResponseError: COUNT can't be negative",
@@ -3939,9 +3945,9 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lpos(key, "a", { count: 0 })).toEqual([
                     0, 1, 4,
                 ]);
-                expect(await client.lpos(key, "a", { rank: 1, count: 0 })).toEqual([
-                    0, 1, 4,
-                ]);
+                expect(
+                    await client.lpos(key, "a", { rank: 1, count: 0 }),
+                ).toEqual([0, 1, 4]);
                 expect(
                     await client.lpos(key, "a", { rank: 2, count: 0 }),
                 ).toEqual([1, 4]);

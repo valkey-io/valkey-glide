@@ -1708,12 +1708,25 @@ function addLPosOptions(options: LPosOptions, args: string[]) {
 export function createLPos(
     key: string,
     element: string,
-    options?: LPosOptions,
+    rank?: number,
+    count?: number,
+    maxLength?: number,
 ): command_request.Command {
     const args: string[] = [key, element];
 
-    if (options) {
-        addLPosOptions(options, args);
+    if (rank !== undefined) {
+        args.push("RANK");
+        args.push(rank.toString());
+    }
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    if (maxLength !== undefined) {
+        args.push("MAXLEN");
+        args.push(maxLength.toString());
     }
 
     return createCommand(RequestType.LPos, args);

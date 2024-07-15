@@ -2858,23 +2858,29 @@ export class BaseClient {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param rank - The rank of the match to return.
+     * @param count - The number of matches wanted.
+     * @param maxLength - The maximum number of comparisons to make between the element and the items in the list.
      * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
-     * is specified, then the function returns an `array` of indices of matching elements within a list.
+     * is specified, then the function returns an `array` of indices of matching elements within the list.
      *
      * @example
      * ```typescript
      * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
-     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurence of "e" is in the fifth element.
-     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5, 6 ] - the elements of the occurences of "e".
+     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurrence of "e" is in the fifth element.
+     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5, 6 ] - the elements of the occurrences of "e".
      * ```
      */
     public lpos(
         key: string,
         element: string,
-        options?: LPosOptions,
-    ): Promise<number | number[]> {
-        return this.createWritePromise(createLPos(key, element, options));
+        rank?: number,
+        count?: number,
+        maxLength?: number,
+    ): Promise<number | number[] | null> {
+        return this.createWritePromise(
+            createLPos(key, element, rank, count, maxLength),
+        );
     }
 
     /**

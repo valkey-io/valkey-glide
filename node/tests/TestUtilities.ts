@@ -549,6 +549,6 @@ export async function transactionTest(
     baseTransaction.lpos(key15, field + "1", { rank: 2 });
     args.push(1);
     baseTransaction.lpos(key15, field + "1", { rank: 2, count: 0 });
-    args.push([0, 1]);
+    args.push([1]);
     return args;
 }

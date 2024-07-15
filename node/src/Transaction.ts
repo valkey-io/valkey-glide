@@ -1709,10 +1709,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param rank - The rank of the match to return.
+     * @param count - The number of matches wanted.
+     * @param maxLength - The maximum number of comparisons to make between the element and the items in the list.
      *
      * Command Response -  The index of `element`, or `null` if `element` is not in the list. If the `count`
-     * option is specified, then the function returns an `array` of indices of matching elements within a list.
+     * option is specified, then the function returns an `array` of indices of matching elements within the list.
      */
     public lpos(key: string, element: string, options?: LPosOptions): T {
         return this.addAndReturn(createLPos(key, element, options));
