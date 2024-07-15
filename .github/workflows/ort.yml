@@ -100,7 +100,7 @@ jobs:
                 ort:
                   analyzer:
                     allowDynamicVersions: true
-                    enabledPackageManagers: [Cargo, NPM, PIP]
+                    enabledPackageManagers: [Cargo, NPM, PIP, MAVEN]
                 EOF
                 cat ~/.ort/config/config.yml
 
@@ -222,13 +222,13 @@ jobs:
                 CURR_DATE=$(date +'%Y-%m-%d-%H')
                 echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
 
-            - name: Upload package list as artifact
+            - name: Upload the package list
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
                   name: packages-list-${{ steps.date.outputs.date }}
                   path: |
-                      utils/packages_list.txt
+                      utils/package_list.txt
                   retention-days: 3
 
   
