@@ -1289,6 +1289,74 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sdiffstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const stringKey = `{key}-4-${uuidv4()}`;
+                const nonExistingKey = `{key}-5-${uuidv4()}`;
+                const member1_list = ["a", "b", "c"];
+                const member2_list = ["c", "d", "e"];
+
+                expect(await client.sadd(key1, member1_list)).toEqual(3);
+                expect(await client.sadd(key2, member2_list)).toEqual(3);
+
+                // store diff in new key
+                expect(await client.sdiffstore(key3, [key1, key2])).toEqual(2);
+                checkSimple(await client.smembers(key3)).toEqual(
+                    new Set(["a", "b"]),
+                );
+
+                // overwrite existing set
+                expect(await client.sdiffstore(key3, [key2, key1])).toEqual(2);
+                checkSimple(await client.smembers(key3)).toEqual(
+                    new Set(["d", "e"]),
+                );
+
+                // overwrite one of the source sets
+                expect(await client.sdiffstore(key3, [key2, key3])).toEqual(1);
+                checkSimple(await client.smembers(key3)).toEqual(
+                    new Set(["c"]),
+                );
+
+                // diff between non-empty set and empty set
+                expect(
+                    await client.sdiffstore(key3, [key1, nonExistingKey]),
+                ).toEqual(3);
+                checkSimple(await client.smembers(key3)).toEqual(
+                    new Set(["a", "b", "c"]),
+                );
+
+                // diff between empty set and non-empty set
+                expect(
+                    await client.sdiffstore(key3, [nonExistingKey, key1]),
+                ).toEqual(0);
+                checkSimple(await client.smembers(key3)).toEqual(new Set());
+
+                // invalid argument - key list must not be empty
+                await expect(client.sdiffstore(key3, [])).rejects.toThrow();
+
+                // source key exists, but it is not a set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sdiffstore(key3, [stringKey]),
+                ).rejects.toThrow();
+
+                // overwrite a key holding a non-set value
+                expect(
+                    await client.sdiffstore(stringKey, [key1, key2]),
+                ).toEqual(2);
+                checkSimple(await client.smembers(stringKey)).toEqual(
+                    new Set(["a", "b"]),
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sunion test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

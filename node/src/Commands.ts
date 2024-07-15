@@ -634,6 +634,16 @@ export function createSDiff(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.SDiffStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
 export function createSUnion(keys: string[]): command_request.Command {
     return createCommand(RequestType.SUnion, keys);
 }
