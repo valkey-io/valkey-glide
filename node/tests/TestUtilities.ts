@@ -396,6 +396,8 @@ export async function transactionTest(
     args.push(2);
     baseTransaction.sdiff([key7, key7]);
     args.push(new Set());
+    baseTransaction.sdiffstore(key7, [key7]);
+    args.push(2);
     baseTransaction.srem(key7, ["foo"]);
     args.push(1);
     baseTransaction.scard(key7);

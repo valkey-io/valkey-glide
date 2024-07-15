@@ -77,6 +77,7 @@ import {
     createSAdd,
     createSCard,
     createSDiff,
+    createSDiffStore,
     createSInter,
     createSInterStore,
     createSIsMember,
@@ -761,6 +762,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sdiff(keys: string[]): T {
         return this.addAndReturn(createSDiff(keys), true);
+    }
+
+    /**
+     * Stores the difference between the first set and all the successive sets in `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sdiffstore/ for more details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys of the sets to diff.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sdiffstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSDiffStore(destination, keys));
     }
 
     /**
