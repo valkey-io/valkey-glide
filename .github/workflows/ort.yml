@@ -76,15 +76,11 @@ jobs:
               with: 
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
-                  ref: "20.1.0"
+                  ref: "26.0.0"
                   submodules: recursive
 
-            # Temporary workaround until ORT releases a version newer than 22.1.0 addressing https://github.com/oss-review-toolkit/ort/issues/8571.
-            # Upon resolution, remove this section and install the updated version instead of "20.1.0".
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.76 
-              with:
-                targets: ${{ inputs.target }}
+              uses: dtolnay/rust-toolchain@1.78 
 
             - name: Install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
@@ -100,7 +96,7 @@ jobs:
                 ort:
                   analyzer:
                     allowDynamicVersions: true
-                    enabledPackageManagers: [Cargo, NPM, PIP, MAVEN]
+                    enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
                 EOF
                 cat ~/.ort/config/config.yml
 
