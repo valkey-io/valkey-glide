@@ -404,6 +404,12 @@ export async function transactionTest(
     args.push(true);
     baseTransaction.smembers(key7);
     args.push(new Set(["bar"]));
+    baseTransaction.srandmember(key7);
+    args.push("bar");
+    baseTransaction.srandmemberCount(key7, 2);
+    args.push(["bar"]);
+    baseTransaction.srandmemberCount(key7, -2);
+    args.push(["bar", "bar"]);
     baseTransaction.spop(key7);
     args.push("bar");
     baseTransaction.spopCount(key7, 2);

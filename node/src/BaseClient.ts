@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BulkString,
     ExpireOptions,
     InsertPosition,
     KeyWeight,
@@ -80,7 +81,9 @@ import {
     createSMembers,
     createSMove,
     createSPop,
+    createSRandMember,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSet,
     createStrlen,
@@ -105,7 +108,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnion,
 } from "./Commands";
 import {
     ClosingError,
@@ -1489,6 +1491,60 @@ export class BaseClient {
         return this.createWritePromise<string[]>(createSPop(key, count)).then(
             (spop) => new Set<string>(spop),
         );
+    }
+
+    /** Returns a random element from the set value stored at `key`.
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key from which to retrieve the set member.
+     * @returns a random element from the set, or null if `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmember method to return a random member from a set
+     * const result = await client.srandmember("my_set");
+     * console.log(result); // Output: 'member1' - A random member of "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmember method with non-existing key
+     * const result = await client.srandmember("non_existing_set");
+     * console.log(result); // Output: null
+     * ```
+     */
+    public srandmember(key: BulkString): Promise<BulkString | null> {
+        return this.createWritePromise(createSRandMember(key));
+    }
+
+    /** Returns one or more random elements from the set value stored at `key`.
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - The number of members to return.
+     *                If `count` is positive, returns unique members.
+     *                If `count` is negative, allows for duplicates members.
+     * @returns a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmemberCount method to return multiple random members from a set
+     * const result = await client.srandmemberCount("my_set", -3);
+     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmemberCount method with non-existing key
+     * const result = await client.srandmemberCount("non_existing_set", 3);
+     * console.log(result); // Output: [] - An empty list since the key does not exist.
+     * ```
+     */
+    public async srandmemberCount(
+        key: BulkString,
+        count: number,
+    ): Promise<BulkString[]> {
+        return this.createWritePromise(createSRandMember(key, count));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.

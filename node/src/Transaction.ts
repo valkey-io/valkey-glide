@@ -4,6 +4,7 @@
 
 import {
     AggregationType,
+    BulkString,
     ExpireOptions,
     InfoOptions,
     InsertPosition,
@@ -83,7 +84,9 @@ import {
     createSMembers,
     createSMove,
     createSPop,
+    createSRandMember,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSelect,
     createSet,
@@ -110,7 +113,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnion,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -829,6 +831,29 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public spopCount(key: string, count: number): T {
         return this.addAndReturn(createSPop(key, count), true);
+    }
+
+    /** Returns a random element from the set value stored at `key`.
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key from which to retrieve the set member.
+     * Command Response - a random element from the set, or null if `key` does not exist.
+     */
+    public srandmember(key: BulkString): T {
+        return this.addAndReturn(createSRandMember(key));
+    }
+
+    /** Returns one or more random elements from the set value stored at `key`.
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - The number of members to return.
+     *                If `count` is positive, returns unique members.
+     *                If `count` is negative, allows for duplicates members.
+     * Command Response - a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
+     */
+    public srandmemberCount(key: BulkString, count: number): T {
+        return this.addAndReturn(createSRandMember(key, count));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
