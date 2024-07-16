@@ -315,11 +315,9 @@ describe("SocketConnectionInternals", () => {
             await test_receiving_value("bar");
         });
 
-        // TODO: Because the maps are not arranged consistently, it is difficult to compare them.
-        //       After decoded class is implemented, remove the test from the comment.
-        // it("should pass maps received from socket", async () => {
-        //     await test_receiving_value({ foo: "bar", bar: "baz" });
-        // });
+        it("should pass maps received from socket", async () => {
+            await test_receiving_value({ foo: "bar", bar: "baz" });
+        });
 
         it("should pass arrays received from socket", async () => {
             await test_receiving_value(["foo", "bar", "baz"]);
