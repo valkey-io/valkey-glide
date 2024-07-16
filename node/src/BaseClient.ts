@@ -2208,14 +2208,12 @@ export class BaseClient {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
             createZAdd(
                 key,
                 membersScoresMap,
                 options,
-                changed ? "CH" : undefined,
             ),
         );
     }
@@ -2253,7 +2251,7 @@ export class BaseClient {
         options?: ZAddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 

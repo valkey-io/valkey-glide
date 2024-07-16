@@ -1118,14 +1118,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): T {
         return this.addAndReturn(
             createZAdd(
                 key,
                 membersScoresMap,
                 options,
-                changed ? "CH" : undefined,
             ),
         );
     }
@@ -1149,8 +1147,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         increment: number,
         options?: ZAddOptions,
     ): T {
+
         return this.addAndReturn(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 
