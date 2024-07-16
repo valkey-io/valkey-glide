@@ -76,6 +76,7 @@ import {
     createSDiff,
     createSDiffStore,
     createSInter,
+    createSInterCard,
     createSInterStore,
     createSIsMember,
     createSMembers,
@@ -1318,6 +1319,32 @@ export class BaseClient {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
         );
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets.
+     * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * await client.sadd("set2", ["b", "c", "d"]);
+     * const result1 = await client.sintercard(["set1", "set2"]);
+     * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+     *
+     * const result2 = await client.sintercard(["set1", "set2"], 1);
+     * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
+     * ```
+     */
+    public sintercard(keys: string[], limit?: number): Promise<number> {
+        return this.createWritePromise(createSInterCard(keys, limit));
     }
 
     /**

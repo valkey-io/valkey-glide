@@ -15,6 +15,7 @@ import {
     ProtocolVersion,
     Script,
     parseInfoResponse,
+    RequestError,
 } from "../";
 import {
     Client,
@@ -1186,6 +1187,65 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sintercard test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+                const member1_list = ["a", "b", "c", "d"];
+                const member2_list = ["b", "c", "d", "e"];
+
+                expect(await client.sadd(key1, member1_list)).toEqual(4);
+                expect(await client.sadd(key2, member2_list)).toEqual(4);
+
+                expect(await client.sintercard([key1, key2])).toEqual(3);
+
+                // returns limit as cardinality when the limit is reached partway through the computation
+                const limit = 2;
+                expect(await client.sintercard([key1, key2], limit)).toEqual(
+                    limit,
+                );
+
+                // returns actual cardinality if limit is higher
+                expect(await client.sintercard([key1, key2], 4)).toEqual(3);
+
+                // one of the keys is empty, intersection is empty, cardinality equals 0
+                expect(await client.sintercard([key1, nonExistingKey])).toEqual(
+                    0,
+                );
+
+                expect(
+                    await client.sintercard([nonExistingKey, nonExistingKey]),
+                ).toEqual(0);
+                expect(
+                    await client.sintercard(
+                        [nonExistingKey, nonExistingKey],
+                        2,
+                    ),
+                ).toEqual(0);
+
+                // invalid argument - key list must not be empty
+                await expect(client.sintercard([])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // source key exists, but it is not a set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sintercard([key1, stringKey]),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,

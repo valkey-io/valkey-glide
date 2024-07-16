@@ -79,6 +79,7 @@ import {
     createSDiff,
     createSDiffStore,
     createSInter,
+    createSInterCard,
     createSInterStore,
     createSIsMember,
     createSMembers,
@@ -734,6 +735,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sinter(keys: string[]): T {
         return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @param keys - The keys of the sets.
+     *
+     * Command Response - The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public sintercard(keys: string[], limit?: number): T {
+        return this.addAndReturn(createSInterCard(keys, limit));
     }
 
     /**

@@ -396,6 +396,14 @@ export async function transactionTest(
     args.push(new Set(["bar", "foo"]));
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.sintercard([key7, key7]);
+        args.push(2);
+        baseTransaction.sintercard([key7, key7], 1);
+        args.push(1);
+    }
+
     baseTransaction.sinterstore(key7, [key7, key7]);
     args.push(2);
     baseTransaction.sdiff([key7, key7]);

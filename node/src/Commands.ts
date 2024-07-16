@@ -617,6 +617,23 @@ export function createSInter(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSInterCard(
+    keys: string[],
+    limit?: number,
+): command_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.SInterCard, args);
+}
+
+/**
+ * @internal
+ */
 export function createSInterStore(
     destination: string,
     keys: string[],
