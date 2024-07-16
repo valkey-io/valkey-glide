@@ -3451,7 +3451,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bytes:1.6.0
+Package: bytes:1.6.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19207,7 +19207,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: redox_syscall:0.5.2
+Package: redox_syscall:0.5.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21179,7 +21179,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: security-framework:2.11.0
+Package: security-framework:2.11.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21408,7 +21408,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: security-framework-sys:2.11.0
+Package: security-framework-sys:2.11.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22969,7 +22969,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.70
+Package: syn:2.0.71
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23198,7 +23198,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror:1.0.61
+Package: thiserror:1.0.62
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23427,7 +23427,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: thiserror-impl:1.0.61
+Package: thiserror-impl:1.0.62
 
 The following copyrights and licenses were found in the source code of this package:
 
