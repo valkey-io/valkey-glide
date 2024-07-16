@@ -594,7 +594,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param index - The index of the element in the list to be set.
      * @param element - The new element to set at the specified index.
      *
-     * Command Response - always "OK".
+     * Command Response - Always "OK".
      */
     public lset(key: string, index: number, element: string): T {
         return this.addAndReturn(createLSet(key, index, element));
