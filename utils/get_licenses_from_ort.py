@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import List, Set
+from typing import List, Optional, Set
 
 """
 This script should be used after all specific langauge folders were scanned by the analyzer of the OSS review tool (ORT).
@@ -53,13 +53,18 @@ class OrtResults:
 
 
 class PackageLicense:
-    def __init__(self, package_name: str, language: str, license: str) -> None:
+    def __init__(
+        self, package_name: str, language: str, license: Optional[str] = None
+    ) -> None:
         self.package_name = package_name
         self.language = language
         self.license = license
 
     def __str__(self):
-        return f"Package_name: {self.package_name}, Language: {self.language}, License: {self.license}"
+        str_msg = f"Package_name: {self.package_name}, Language: {self.language}"
+        if license:
+            str_msg += f", License: {self.license}"
+        return str_msg
 
 
 ort_results_per_lang = [
@@ -72,6 +77,7 @@ ort_results_per_lang = [
 all_licenses_set: Set = set()
 unknown_licenses: List[PackageLicense] = []
 final_packages: List[PackageLicense] = []
+skipped_packages: List[PackageLicense] = []
 
 for ort_result in ort_results_per_lang:
     with open(ort_result.analyzer_result_file, "r") as ort_results, open(
@@ -83,7 +89,7 @@ for ort_result in ort_results_per_lang:
             package_name = package["id"].split(":")[2]
             if package_name not in notice_file_text:
                 # skip packages not in the final report
-                print(f"Skipping package {package_name}")
+                skipped_packages.append(PackageLicense(package["id"], ort_result.name))
                 continue
             try:
                 for license in package["declared_licenses_processed"].values():
@@ -110,12 +116,16 @@ for ort_result in ort_results_per_lang:
                 )
                 raise
 
-package_list_file_path = f"{SCRIPT_PATH}/package_list.txt"
+package_list_file_path = f"{SCRIPT_PATH}/final_package_list.txt"
 with open(package_list_file_path, mode="wt", encoding="utf-8") as f:
     f.writelines(f"{package}\n" for package in final_packages)
 
-all_licenses_set = set(sorted(all_licenses_set))
+skipped_list_file_path = f"{SCRIPT_PATH}/skipped_package_list.txt"
+with open(skipped_list_file_path, mode="wt", encoding="utf-8") as f:
+    f.writelines(f"{package}\n" for package in skipped_packages)
+
 print("\n\n#### Found Licenses #####\n")
+all_licenses_set = set(sorted(all_licenses_set))
 for license in all_licenses_set:
     print(f"{license}")
 

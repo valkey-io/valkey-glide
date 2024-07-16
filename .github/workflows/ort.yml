@@ -218,11 +218,20 @@ jobs:
                 CURR_DATE=$(date +'%Y-%m-%d-%H')
                 echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
 
-            - name: Upload the package list
+            - name: Upload the final package list
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: packages-list-${{ steps.date.outputs.date }}
+                  name: final-package-list-${{ steps.date.outputs.date }}
                   path: |
-                      utils/package_list.txt
+                      utils/final_package_list.txt
+                  retention-days: 3
+
+            - name: Upload the skipped package list
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: skipped-package-list-${{ steps.date.outputs.date }}
+                  path: |
+                      utils/skipped_package_list.txt
                   retention-days: 3
