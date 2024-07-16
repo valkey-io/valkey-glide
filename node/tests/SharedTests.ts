@@ -13,6 +13,7 @@ import {
     InfoOptions,
     InsertPosition,
     ProtocolVersion,
+    RequestError,
     Script,
     parseInfoResponse,
 } from "../";
@@ -1496,13 +1497,15 @@ export function runBaseTests<Context>(config: {
                 ]);
 
                 // invalid argument - member list must not be empty
-                await expect(client.smismember(key, [])).rejects.toThrow();
+                await expect(client.smismember(key, [])).rejects.toThrow(
+                    RequestError,
+                );
 
                 // key exists, but it is not a set
                 checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.smismember(stringKey, ["a"]),
-                ).rejects.toThrow();
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,

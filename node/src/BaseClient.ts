@@ -1470,7 +1470,7 @@ export class BaseClient {
      * @param members - A list of members to check for existence in the set.
      * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
      *
-     * since - Valkey version 6.2.0.
+     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
