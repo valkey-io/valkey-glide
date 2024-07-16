@@ -225,7 +225,7 @@ jobs:
                   name: final-package-list-${{ steps.date.outputs.date }}
                   path: |
                       utils/final_package_list.txt
-                  retention-days: 3
+                  retention-days: 30
 
             - name: Upload the skipped package list
               continue-on-error: true
@@ -234,4 +234,4 @@ jobs:
                   name: skipped-package-list-${{ steps.date.outputs.date }}
                   path: |
                       utils/skipped_package_list.txt
-                  retention-days: 3
+                  retention-days: 30
