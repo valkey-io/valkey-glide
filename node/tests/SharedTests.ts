@@ -911,14 +911,14 @@ export function runBaseTests<Context>(config: {
                 // key does not exist
                 await expect(
                     client.lset(nonExistingKey, index, element),
-                ).rejects.toThrow();
+                ).rejects.toThrow(RequestError);
 
                 expect(await client.lpush(key, lpushArgs)).toEqual(4);
 
                 // index out of range
                 await expect(
                     client.lset(key, oobIndex, element),
-                ).rejects.toThrow();
+                ).rejects.toThrow(RequestError);
 
                 // assert lset result
                 checkSimple(await client.lset(key, index, element)).toEqual(
@@ -940,7 +940,9 @@ export function runBaseTests<Context>(config: {
                 const nonListKey = "nonListKey";
                 expect(await client.sadd(nonListKey, ["a"])).toEqual(1);
 
-                await expect(client.lset(nonListKey, 0, "b")).rejects.toThrow();
+                await expect(client.lset(nonListKey, 0, "b")).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
