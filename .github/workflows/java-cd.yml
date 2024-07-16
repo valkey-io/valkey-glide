@@ -158,3 +158,4 @@ jobs:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
                       java/bundle.jar
+                      java/client/build/tmp/javadoc/javadoc.options
