@@ -315,8 +315,8 @@ describe("SocketConnectionInternals", () => {
             await test_receiving_value("bar");
         });
 
-        // TODO: Because the maps are not arranged consistently, it is difficult to compare them. 
-        //       After decoded class is implemented, remove the test from the comment. 
+        // TODO: Because the maps are not arranged consistently, it is difficult to compare them.
+        //       After decoded class is implemented, remove the test from the comment.
         // it("should pass maps received from socket", async () => {
         //     await test_receiving_value({ foo: "bar", bar: "baz" });
         // });
@@ -413,7 +413,9 @@ describe("SocketConnectionInternals", () => {
             const transaction = new Transaction();
             transaction.info([InfoOptions.Server]);
             const result = await connection.exec(transaction, "randomNode");
-            expect(intoString(result)).toEqual(expect.stringContaining("# Server"));
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Server"),
+            );
         });
     });
 
