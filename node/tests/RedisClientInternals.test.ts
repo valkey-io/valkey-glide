@@ -37,7 +37,7 @@ import {
     connection_request,
     response,
 } from "../src/ProtobufMessage";
-import { convertStringArrayToBuffer } from "./TestUtilities";
+import { convertStringArrayToBuffer, intoString } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 
 beforeAll(() => {
@@ -307,7 +307,7 @@ describe("SocketConnectionInternals", () => {
                     );
                 });
                 const result = await connection.get("foo");
-                expect(result).toEqual(expected);
+                expect(intoString(result)).toEqual(intoString(expected));
             });
         };
 
@@ -411,7 +411,9 @@ describe("SocketConnectionInternals", () => {
             const transaction = new Transaction();
             transaction.info([InfoOptions.Server]);
             const result = await connection.exec(transaction, "randomNode");
-            expect(result).toEqual(expect.stringContaining("# Server"));
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Server"),
+            );
         });
     });
 

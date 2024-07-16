@@ -44,7 +44,9 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
             intoArrayInternal(item, builder);
         }
     } else if (obj instanceof Map) {
-        for (const [key, value] of obj) {
+        const sortedArr = Array.from(obj.entries()).sort();
+
+        for (const [key, value] of sortedArr) {
             intoArrayInternal(key, builder);
             intoArrayInternal(value, builder);
         }
@@ -54,7 +56,9 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
             intoArrayInternal(item, builder);
         }
     } else {
-        for (const [k, v] of Object.entries(obj)) {
+        const sortedArr = Array.from(Object.entries(obj)).sort();
+
+        for (const [k, v] of sortedArr) {
             intoArrayInternal(k, builder);
             intoArrayInternal(v, builder);
         }
