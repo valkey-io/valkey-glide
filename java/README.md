@@ -134,7 +134,7 @@ SBT:
 - **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the build.sbt file.
 ```scala
 // osx-aarch_64
-libraryDependencies += "io.valkey" % "valkey-glide" % "1.0.0" classifier "osx-aarch_64"
+libraryDependencies += "io.valkey" % "valkey-glide" % "1.0.1" classifier "osx-aarch_64"
 
 // osx-x86_64
 libraryDependencies += "io.valkey" % "valkey-glide" % "1.0.0" classifier "osx-x86_64"
