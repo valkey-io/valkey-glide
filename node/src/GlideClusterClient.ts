@@ -6,6 +6,7 @@ import * as net from "net";
 import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    LolwutOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -574,10 +575,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/lolwut/ for more details.
      *
-     * @param version - An optional argument that can be used to specify the version of computer art to generate.
-     * @param parameters - An optional argument that can be used to specify the output:
-     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
-     *  For version `6`, those are number of columns and number of lines.
+     * @param options - The LOLWUT options
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *  case the client will route the command to the nodes defined by `route`.
      * @returns A piece of generative computer art along with the current server version.
@@ -589,12 +587,11 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public lolwut(
-        version?: number,
-        parameters?: number[],
+        options?: LolwutOptions,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(
-            createLolwut(version, parameters),
+            createLolwut(options),
             toProtobufRoute(route),
         );
     }

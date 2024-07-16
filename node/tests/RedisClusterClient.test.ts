@@ -462,31 +462,29 @@ describe("GlideClusterClient", () => {
             );
 
             // test with multi-node route
-            const result1 = await client.lolwut(
-                undefined,
-                undefined,
-                "allNodes",
-            );
+            const result1 = await client.lolwut({}, "allNodes");
             expect(intoString(result1)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result2 = await client.lolwut(2, [10, 20], "allNodes");
+            const result2 = await client.lolwut(
+                { version: 2, parameters: [10, 20] },
+                "allNodes",
+            );
             expect(intoString(result2)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
             // test with single-node route
-            const result3 = await client.lolwut(
-                undefined,
-                undefined,
-                "randomNode",
-            );
+            const result3 = await client.lolwut({}, "randomNode");
             expect(intoString(result3)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result4 = await client.lolwut(2, [10, 20], "randomNode");
+            const result4 = await client.lolwut(
+                { version: 2, parameters: [10, 20] },
+                "randomNode",
+            );
             expect(intoString(result4)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );

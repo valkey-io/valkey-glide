@@ -307,39 +307,40 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            // test with multi-node route
-            const result1 = await client1.lolwut(undefined, undefined);
+            const result1 = await client1.lolwut();
             expect(intoString(result1)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result2 = await client1.lolwut(undefined, []);
+            const result2 = await client1.lolwut({ parameters: [] });
             expect(intoString(result2)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            // test with single-node route
-            const result3 = await client1.lolwut(undefined, [50, 20]);
+            const result3 = await client1.lolwut({ parameters: [50, 20] });
             expect(intoString(result3)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result4 = await client1.lolwut(6, undefined);
+            const result4 = await client1.lolwut({ version: 6 });
             expect(intoString(result4)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result5 = await client1.lolwut(5, [30, 4, 4]);
+            const result5 = await client1.lolwut({
+                version: 5,
+                parameters: [30, 4, 4],
+            });
             expect(intoString(result5)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
             // transaction tests
             const transaction = new Transaction();
-            transaction.lolwut(undefined, undefined);
-            transaction.lolwut(5, undefined);
-            transaction.lolwut(undefined, [1, 2]);
-            transaction.lolwut(6, [42]);
+            transaction.lolwut();
+            transaction.lolwut({ version: 5 });
+            transaction.lolwut({ parameters: [1, 2] });
+            transaction.lolwut({ version: 6, parameters: [42] });
             const results = await client2.exec(transaction);
 
             if (results) {
