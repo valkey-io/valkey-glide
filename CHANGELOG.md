@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
 * Node: Added ZINTERSTORE command ([#1513](https://github.com/aws/glide-for-redis/pull/1513))
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
