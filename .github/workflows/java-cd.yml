@@ -157,4 +157,4 @@ jobs:
               with:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
-                      java/bundle.jar
+                      java/bundle*.jar
