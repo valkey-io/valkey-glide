@@ -149,7 +149,7 @@ jobs:
                   jar -cvf bundle.jar *
                   ls -ltr
                   cd -
-                  cp $src_folder/bundle-${{ matrix.host.TARGET }}.jar .
+                  cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
 
             - name: Upload artifacts to publish
               continue-on-error: true
