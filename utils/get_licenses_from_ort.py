@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import List, Set
+from typing import List, Optional, Set
 
 """
 This script should be used after all specific langauge folders were scanned by the analyzer of the OSS review tool (ORT).
@@ -36,6 +36,8 @@ APPROVED_LICENSES = [
     "PSF-2.0",
 ]
 
+SCRIPT_PATH = os.path.dirname(os.path.realpath(__file__))
+
 
 class OrtResults:
     def __init__(self, name: str, ort_results_folder: str) -> None:
@@ -44,32 +46,38 @@ class OrtResults:
             name (str): the language name.
             ort_results_folder (str): The relative path to the ort results folder from the root of the glide-for-redis directory.
         """
-        script_path = os.path.dirname(os.path.realpath(__file__))
-        folder_path = f"{script_path}/../{ort_results_folder}"
+        folder_path = f"{SCRIPT_PATH}/../{ort_results_folder}"
         self.analyzer_result_file = f"{folder_path}/analyzer-result.json"
         self.notice_file = f"{folder_path}/NOTICE_DEFAULT"
         self.name = name
 
 
 class PackageLicense:
-    def __init__(self, package_name: str, language: str, license: str) -> None:
+    def __init__(
+        self, package_name: str, language: str, license: Optional[str] = None
+    ) -> None:
         self.package_name = package_name
         self.language = language
         self.license = license
 
     def __str__(self):
-        return f"Package_name: {self.package_name}, Language: {self.language}, License: {self.license}"
+        str_msg = f"Package_name: {self.package_name}, Language: {self.language}"
+        if license:
+            str_msg += f", License: {self.license}"
+        return str_msg
 
 
 ort_results_per_lang = [
     OrtResults("Python", "python/ort_results"),
     OrtResults("Node", "node/ort_results"),
-    OrtResults("Rust", "glide-core/ort_results"),
     OrtResults("Java", "java/ort_results"),
+    OrtResults("Rust", "glide-core/ort_results"),
 ]
 
 all_licenses_set: Set = set()
 unknown_licenses: List[PackageLicense] = []
+final_packages: List[PackageLicense] = []
+skipped_packages: List[PackageLicense] = []
 
 for ort_result in ort_results_per_lang:
     with open(ort_result.analyzer_result_file, "r") as ort_results, open(
@@ -81,7 +89,7 @@ for ort_result in ort_results_per_lang:
             package_name = package["id"].split(":")[2]
             if package_name not in notice_file_text:
                 # skip packages not in the final report
-                print(f"Skipping package {package_name}")
+                skipped_packages.append(PackageLicense(package["id"], ort_result.name))
                 continue
             try:
                 for license in package["declared_licenses_processed"].values():
@@ -94,16 +102,27 @@ for ort_result in ort_results_per_lang:
                     else:
                         final_licenses = [license]
                     for license in final_licenses:
+                        package_license = PackageLicense(
+                            package["id"], ort_result.name, license
+                        )
                         if license not in APPROVED_LICENSES:
-                            unknown_licenses.append(
-                                PackageLicense(package["id"], ort_result.name, license)
-                            )
+                            unknown_licenses.append(package_license)
+                        else:
+                            final_packages.append(package_license)
                         all_licenses_set.add(license)
             except Exception:
                 print(
                     f"Received error for package {package} used by {ort_result.name}\n Found license={license}"
                 )
                 raise
+
+package_list_file_path = f"{SCRIPT_PATH}/final_package_list.txt"
+with open(package_list_file_path, mode="wt", encoding="utf-8") as f:
+    f.writelines(f"{package}\n" for package in final_packages)
+
+skipped_list_file_path = f"{SCRIPT_PATH}/skipped_package_list.txt"
+with open(skipped_list_file_path, mode="wt", encoding="utf-8") as f:
+    f.writelines(f"{package}\n" for package in skipped_packages)
 
 print("\n\n#### Found Licenses #####\n")
 all_licenses_set = set(sorted(all_licenses_set))
