@@ -165,13 +165,11 @@ jobs:
               run: |
                   yum install -y java-${{ matrix.java }}
 
-            - name: Build rust part
+            - name: Build java wrapper
               working-directory: java
-              run: cargo build --release
-
-            - name: Build java part
-              working-directory: java
-              run: ./gradlew -d javadoc
+              run: |
+                javadoc --version
+                ./gradlew -d javadoc
 #              run: ./gradlew --continue build
 
             - name: Upload test & spotbugs reports

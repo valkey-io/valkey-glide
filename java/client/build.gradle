@@ -265,7 +265,8 @@ javadoc {
     dependsOn delombok
     source = delombok.outputs
     options.tags = [ "example:a:Example:" ]
-    failOnError = false // TODO fix all javadoc errors and warnings and remove that
+    // failOnError = false // TODO fix all javadoc errors and warnings and remove that
+    options.addBooleanOption("Xdoclint:all", true)
 }
 
 spotbugsMain {
