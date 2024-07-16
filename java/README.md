@@ -66,22 +66,22 @@ Gradle:
 ```groovy
 // osx-aarch_64
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: 'osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'osx-aarch_64'
 }
 
 // osx-x86_64
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: 'osx-x86_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'osx-x86_64'
 }
 
 // linux-aarch_64
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: 'linux-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'linux-aarch_64'
 }
 
 // linux-x86_64
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: 'linux-x86_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'linux-x86_64'
 }
 
 // with osdetector
@@ -89,7 +89,7 @@ plugins {
     id "com.google.osdetector" version "1.7.3"
 }
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: osdetector.classifier
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: osdetector.classifier
 }
 ```
 
@@ -102,7 +102,7 @@ Maven:
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>osx-aarch_64</classifier>
-   <version>1.0.0</version>
+   <version>1.0.1</version>
 </dependency>
 
 <!--osx-x86_64-->
@@ -110,7 +110,7 @@ Maven:
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>osx-x86_64</classifier>
-   <version>1.0.0</version>
+   <version>1.0.1</version>
 </dependency>
 
 <!--linux-aarch_64-->
@@ -118,7 +118,7 @@ Maven:
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>linux-aarch_64</classifier>
-   <version>1.0.0</version>
+   <version>1.0.1</version>
 </dependency>
 
 <!--linux-x86_64-->
@@ -126,7 +126,7 @@ Maven:
    <groupId>io.valkey</groupId>
    <artifactId>valkey-glide</artifactId>
    <classifier>linux-x86_64</classifier>
-   <version>1.0.0</version>
+   <version>1.0.1</version>
 </dependency>
 ```
 
