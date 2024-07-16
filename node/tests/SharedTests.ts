@@ -874,6 +874,58 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lset test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const index = 0;
+                const oobIndex = 10;
+                const negativeIndex = -1;
+                const element = "zero";
+                const lpushArgs = ["four", "three", "two", "one"];
+                const expectedList = ["zero", "two", "three", "four"];
+                const expectedList2 = ["zero", "two", "three", "zero"];
+
+                // key does not exist
+                await expect(
+                    client.lset(nonExistingKey, index, element),
+                ).rejects.toThrow();
+
+                expect(await client.lpush(key, lpushArgs)).toEqual(4);
+
+                // index out of range
+                await expect(
+                    client.lset(key, oobIndex, element),
+                ).rejects.toThrow();
+
+                // assert lset result
+                checkSimple(await client.lset(key, index, element)).toEqual(
+                    "OK",
+                );
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                    expectedList,
+                );
+
+                // assert lset with a negative index for the last element in the list
+                checkSimple(
+                    await client.lset(key, negativeIndex, element),
+                ).toEqual("OK");
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                    expectedList2,
+                );
+
+                // assert lset against a non-list key
+                const nonListKey = "nonListKey";
+                expect(await client.sadd(nonListKey, ["a"])).toEqual(1);
+
+                await expect(client.lset(nonListKey, 0, "b")).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `ltrim with existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
