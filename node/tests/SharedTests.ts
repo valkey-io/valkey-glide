@@ -1477,6 +1477,10 @@ export function runBaseTests<Context>(config: {
         `smismember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
                 const key = uuidv4();
                 const stringKey = uuidv4();
                 const nonExistingKey = uuidv4();

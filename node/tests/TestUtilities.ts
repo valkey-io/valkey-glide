@@ -408,8 +408,12 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.sismember(key7, "bar");
     args.push(true);
-    baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
-    args.push([true, true, false]);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
+        args.push([true, true, false]);
+    }
+
     baseTransaction.smembers(key7);
     args.push(new Set(["bar"]));
     baseTransaction.spop(key7);

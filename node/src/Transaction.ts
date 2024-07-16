@@ -830,6 +830,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param members - A list of members to check for existence in the set.
      *
      * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * since - Valkey version 6.2.0.
      */
     public smismember(key: string, members: string[]): T {
         return this.addAndReturn(createSMIsMember(key, members));
