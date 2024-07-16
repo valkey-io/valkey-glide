@@ -582,7 +582,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * const response = await client.lolwut(6, [40, 20], "allNodes");
+     * const response = await client.lolwut({ version: 6, parameters: [40, 20] }, "allNodes");
      * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
      * ```
      */

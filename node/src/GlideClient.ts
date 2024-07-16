@@ -323,7 +323,7 @@ export class GlideClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * const response = await client.lolwut(6, [40, 20]);
+     * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
      * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
      * ```
      */
