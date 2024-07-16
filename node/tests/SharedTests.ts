@@ -13,9 +13,9 @@ import {
     InfoOptions,
     InsertPosition,
     ProtocolVersion,
+    RequestError,
     Script,
     parseInfoResponse,
-    RequestError,
 } from "../";
 import {
     Client,
