@@ -1474,6 +1474,37 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `smismember test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistingKey = uuidv4();
+
+                expect(await client.sadd(key, ["a", "b"])).toEqual(2);
+                expect(await client.smismember(key, ["b", "c"])).toEqual([
+                    true,
+                    false,
+                ]);
+
+                expect(await client.smismember(nonExistingKey, ["b"])).toEqual([
+                    false,
+                ]);
+
+                // invalid argument - member list must not be empty
+                await expect(client.smismember(key, [])).rejects.toThrow();
+
+                // key exists, but it is not a set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.smismember(stringKey, ["a"]),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `spop and spopCount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

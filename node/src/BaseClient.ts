@@ -79,6 +79,7 @@ import {
     createSInterStore,
     createSIsMember,
     createSMembers,
+    createSMIsMember,
     createSMove,
     createSPop,
     createSRem,
@@ -1458,6 +1459,26 @@ export class BaseClient {
      */
     public sismember(key: string, member: string): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * const result = await client.smismember("set1", ["b", "c", "d"]);
+     * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
+     * ```
+     */
+    public smismember(key: string, members: string[]): Promise<boolean[]> {
+        return this.createWritePromise(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.

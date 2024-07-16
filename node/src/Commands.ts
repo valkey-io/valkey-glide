@@ -671,6 +671,16 @@ export function createSIsMember(
 /**
  * @internal
  */
+export function createSMIsMember(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.SMIsMember, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
 export function createSPop(
     key: string,
     count?: number,

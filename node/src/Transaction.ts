@@ -82,6 +82,7 @@ import {
     createSInterStore,
     createSIsMember,
     createSMembers,
+    createSMIsMember,
     createSMove,
     createSPop,
     createSRem,
@@ -818,6 +819,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sismember(key: string, member: string): T {
         return this.addAndReturn(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     *
+     * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     */
+    public smismember(key: string, members: string[]): T {
+        return this.addAndReturn(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
