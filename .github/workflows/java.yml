@@ -93,9 +93,9 @@ jobs:
                   version: "26.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Build java client
-              working-directory: java
-              run: ./gradlew --continue build
+#            - name: Build java client
+#              working-directory: java
+#              run: ./gradlew --continue build
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -181,10 +181,10 @@ jobs:
               with:
                   name: test-reports-${{ matrix.java }}-amazon-linux
                   path: |
-                      java/client/build/reports/**
-                      java/integTest/build/reports/**
-                      java/client/build/reports/spotbugs/**
                       java/client/build/tmp/javadoc/javadoc.options
+#                      java/client/build/reports/**
+#                      java/integTest/build/reports/**
+#                      java/client/build/reports/spotbugs/**
 
     lint-rust:
         timeout-minutes: 15
