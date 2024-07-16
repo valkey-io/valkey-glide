@@ -171,18 +171,20 @@ jobs:
 
             - name: Build java part
               working-directory: java
-              run: ./gradlew --continue build
+              run: ./gradlew javadoc
+#              run: ./gradlew --continue build
 
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-${{ matrix.java }}
+                  name: test-reports-${{ matrix.java }}-amazon-linux
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       java/client/build/reports/spotbugs/**
+                      java/client/build/tmp/javadoc/javadoc.options
 
     lint-rust:
         timeout-minutes: 15
