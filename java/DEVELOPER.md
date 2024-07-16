@@ -176,11 +176,10 @@ dependencies {
 }
 ```
 
-Optionally: you can specify a snapshot release and classifier:
+Optionally: you can specify a snapshot release:
 
 ```bash
-export GLIDE_LOCAL_VERSION=1.0.0-SNAPSHOT
-export GLIDE_LOCAL_CLASSIFIER=osx-aarch_64
+export GLIDE_RELEASE_VERSION=1.0.0-SNAPSHOT
 ./gradlew publishToMavenLocal
 ```
 
