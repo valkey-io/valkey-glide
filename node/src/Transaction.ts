@@ -84,6 +84,7 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSelect,
     createSet,
@@ -110,7 +111,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnion,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1555,7 +1555,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
      *

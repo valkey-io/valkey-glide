@@ -570,7 +570,7 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
      *
@@ -580,12 +580,11 @@ export class GlideClusterClient extends BaseClient {
      *  For version `6`, those are number of columns and number of lines.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *  case the client will route the command to the nodes defined by `route`.
-     *
      * @returns A piece of generative computer art along with the current server version.
      *
      * @example
      * ```typescript
-     * const response = await client.lolwut(6, [40, 20], `allNodes`);
+     * const response = await client.lolwut(6, [40, 20], "allNodes");
      * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
      * ```
      */

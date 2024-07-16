@@ -313,7 +313,7 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Displays a piece of generative computer art and the Redis version.
+     * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
      *
@@ -321,7 +321,6 @@ export class GlideClient extends BaseClient {
      * @param parameters - An optional argument that can be used to specify the output:
      *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
      *  For version `6`, those are number of columns and number of lines.
-     *
      * @returns A piece of generative computer art along with the current server version.
      *
      * @example
