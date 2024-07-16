@@ -511,6 +511,17 @@ export function createLLen(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createLSet(
+    key: string,
+    index: number,
+    element: string,
+): redis_request.Command {
+    return createCommand(RequestType.LSet, [key, index.toString(), element]);
+}
+
+/**
+ * @internal
+ */
 export function createLTrim(
     key: string,
     start: number,

@@ -874,6 +874,74 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lset test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = "test_key";
+                const nonExistingKey = "nonexisting";
+                const index = 0;
+                const oobIndex = 10;
+                const negativeIndex = -1;
+                const element = "zero";
+                const lpushArgs = ["four", "three", "two", "one"];
+                const expectedList = ["zero", "two", "three", "four"];
+                const expectedList2 = ["zero", "two", "three", "zero"];
+
+                // key does not exist
+                try {
+                    expect(
+                        await client.lset(nonExistingKey, index, element),
+                    ).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "An error was signalled by the server - ResponseError: no such key",
+                    );
+                }
+
+                expect(await client.lpush(key, lpushArgs)).toEqual(4);
+
+                // index out of range
+                try {
+                    expect(await client.lset(key, oobIndex, element)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "An error was signalled by the server - ResponseError: index out of range",
+                    );
+                }
+
+                // assert lset result
+                checkSimple(await client.lset(key, index, element)).toEqual(
+                    "OK",
+                );
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                    expectedList,
+                );
+
+                // assert lset with a negative index for the last element in the list
+                checkSimple(
+                    await client.lset(key, negativeIndex, element),
+                ).toEqual("OK");
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                    expectedList2,
+                );
+
+                // assert lset against a non-list key
+                const nonListKey = "nonListKey";
+                expect(await client.sadd(nonListKey, ["a"])).toEqual(1);
+
+                try {
+                    checkSimple(await client.lset(nonListKey, 0, "b"));
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "WRONGTYPE: Operation against a key holding the wrong kind of value",
+                    );
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `ltrim with existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
