@@ -488,6 +488,25 @@ describe("GlideClusterClient", () => {
             expect(intoString(result4)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
+
+            // transaction tests
+            const transaction = new ClusterTransaction();
+            transaction.lolwut();
+            transaction.lolwut({ version: 5 });
+            transaction.lolwut({ parameters: [1, 2] });
+            transaction.lolwut({ version: 6, parameters: [42] });
+            const results = await client.exec(transaction);
+
+            if (results) {
+                for (const element of results) {
+                    expect(intoString(element)).toEqual(
+                        expect.stringContaining("Redis ver. "),
+                    );
+                }
+            } else {
+                throw new Error("Invalid LOLWUT transaction test results.");
+            }
+
             client.close();
         },
         TIMEOUT,

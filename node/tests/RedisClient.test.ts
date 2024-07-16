@@ -300,34 +300,31 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "lolwut test_%p",
         async (protocol) => {
-            const client1 = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const client2 = await GlideClient.createClient(
+            const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const result1 = await client1.lolwut();
-            expect(intoString(result1)).toEqual(
+            const result = await client.lolwut();
+            expect(intoString(result)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result2 = await client1.lolwut({ parameters: [] });
+            const result2 = await client.lolwut({ parameters: [] });
             expect(intoString(result2)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result3 = await client1.lolwut({ parameters: [50, 20] });
+            const result3 = await client.lolwut({ parameters: [50, 20] });
             expect(intoString(result3)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result4 = await client1.lolwut({ version: 6 });
+            const result4 = await client.lolwut({ version: 6 });
             expect(intoString(result4)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result5 = await client1.lolwut({
+            const result5 = await client.lolwut({
                 version: 5,
                 parameters: [30, 4, 4],
             });
@@ -341,7 +338,7 @@ describe("GlideClient", () => {
             transaction.lolwut({ version: 5 });
             transaction.lolwut({ parameters: [1, 2] });
             transaction.lolwut({ version: 6, parameters: [42] });
-            const results = await client2.exec(transaction);
+            const results = await client.exec(transaction);
 
             if (results) {
                 for (const element of results) {
@@ -353,8 +350,7 @@ describe("GlideClient", () => {
                 throw new Error("Invalid LOLWUT transaction test results.");
             }
 
-            client1.close();
-            client2.close();
+            client.close();
         },
         TIMEOUT,
     );
