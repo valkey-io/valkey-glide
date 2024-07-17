@@ -1680,52 +1680,6 @@ export function createFlushAll(mode?: FlushMode): command_request.Command {
     }
 }
 
-export type LPosOptions = {
-    rank?: number;
-    count?: number;
-    maxLength?: number;
-};
-
-function addLPosOptions(options: LPosOptions, args: string[]) {
-    if (options.rank !== undefined) {
-        args.push("RANK");
-        args.push(options.rank.toString());
-    }
-
-    if (options.count !== undefined) {
-        args.push("COUNT");
-        args.push(options.count.toString());
-    }
-
-    if (options.maxLength !== undefined) {
-        args.push("MAXLEN");
-        args.push(options.maxLength.toString());
-    }
-}
-
-export type LPosOptions = {
-    rank?: number;
-    count?: number;
-    maxLength?: number;
-};
-
-function addLPosOptions(options: LPosOptions, args: string[]) {
-    if (options.rank !== undefined) {
-        args.push("RANK");
-        args.push(options.rank.toString());
-    }
-
-    if (options.count !== undefined) {
-        args.push("COUNT");
-        args.push(options.count.toString());
-    }
-
-    if (options.maxLength !== undefined) {
-        args.push("MAXLEN");
-        args.push(options.maxLength.toString());
-    }
-}
-
 /**
  * @internal
  */
