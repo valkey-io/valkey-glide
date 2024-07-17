@@ -980,7 +980,7 @@ export class BaseClient {
     }
 
     /**
-     * Inserts specified values at the head of the`list`, only if `key` already
+     * Inserts specified values at the head of the `list`, only if `key` already
      * exists and holds a list.
      *
      * See https://valkey.io/commands/lpushx/ for details.
