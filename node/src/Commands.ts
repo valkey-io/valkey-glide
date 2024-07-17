@@ -484,6 +484,16 @@ export function createLPush(
 /**
  * @internal
  */
+export function createLPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.LPushX, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
 export function createLPop(
     key: string,
     count?: number,
@@ -548,6 +558,16 @@ export function createRPush(
     elements: string[],
 ): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
+export function createRPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.RPushX, [key].concat(elements));
 }
 
 /**
