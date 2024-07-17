@@ -189,11 +189,10 @@ dependencies {
 }
 ```
 
-Optionally: you can specify a snapshot release and classifier:
+Optionally: you can specify a snapshot release:
 
 ```bash
-export GLIDE_LOCAL_VERSION=1.0.0-SNAPSHOT
-export GLIDE_LOCAL_CLASSIFIER=osx-aarch_64
+export GLIDE_RELEASE_VERSION=1.0.1-SNAPSHOT
 ./gradlew publishToMavenLocal
 ```
 
@@ -204,7 +203,7 @@ repositories {
 }
 dependencies {
     // Update to use version defined in the previous step
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0-SNAPSHOT', classifier='osx-aarch_64'
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1-SNAPSHOT', classifier='osx-aarch_64'
 }
 ```
 
