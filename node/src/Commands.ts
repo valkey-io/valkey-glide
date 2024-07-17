@@ -91,6 +91,13 @@ export function createGet(key: string): command_request.Command {
     return createCommand(RequestType.Get, [key]);
 }
 
+/**
+ * @internal
+ */
+export function createGetDel(key: string): command_request.Command {
+    return createCommand(RequestType.GetDel, [key]);
+}
+
 export type SetOptions = {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.

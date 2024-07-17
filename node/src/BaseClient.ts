@@ -494,7 +494,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = client.getdel("key");
-     * console.log(result); //Output: 'value'
+     * console.log(result); // Output: 'value'
      *
      * const value = client.getdel("key");  // value is null
      * ```
