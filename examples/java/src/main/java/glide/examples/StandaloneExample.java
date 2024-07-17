@@ -17,8 +17,8 @@ import java.util.concurrent.ExecutionException;
 public class StandaloneExample {
 
     /**
-     * Creates and returns a GlideClient instance. This function initializes a
-     * GlideClient with the provided node address.
+     * Creates and returns a <code>GlideClient</code> instance. This function initializes a
+     * <code>GlideClient</code> with the provided node address.
      *
      * @return A <code>GlideClient</code> connected to the provided node address.
      * @throws CancellationException if the operation is cancelled.
@@ -43,7 +43,7 @@ public class StandaloneExample {
 
     /**
      * Executes the main logic of the application, performing basic operations such as SET, GET, and
-     * PING using the provided GlideClient.
+     * PING using the provided <code>GlideClient</code>.
      *
      * @param client An instance of <code>GlideClient</code>.
      * @throws ExecutionException if an execution error occurs during operations.
@@ -80,7 +80,7 @@ public class StandaloneExample {
                 Logger.log(Logger.Level.ERROR, "glide", "Request cancelled: " + e.getMessage());
                 throw e;
             } catch (InterruptedException e) {
-                Logger.log(Logger.Level.ERROR, "glide", "Client creation interrupted: " + e.getMessage());
+                Logger.log(Logger.Level.ERROR, "glide", "Client interrupted: " + e.getMessage());
                 Thread.currentThread().interrupt(); // Restore interrupt status
                 throw new CancellationException("Interrupted while creating client");
             } catch (ExecutionException e) {

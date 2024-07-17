@@ -21,8 +21,8 @@ import java.util.concurrent.ExecutionException;
 public class ClusterExample {
 
     /**
-     * Creates and returns a GlideClusterClient instance. This function initializes a
-     * GlideClusterClient with the provided list of nodes.
+     * Creates and returns a <code>GlideClusterClient</code> instance. This function initializes a
+     * <code>GlideClusterClient</code> with the provided list of nodes.
      *
      * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
      * @throws CancellationException if the operation is cancelled.
@@ -53,7 +53,7 @@ public class ClusterExample {
 
     /**
      * Executes the main logic of the application, performing basic operations such as SET, GET, PING,
-     * and INFO REPLICATION using the provided GlideClusterClient.
+     * and INFO REPLICATION using the provided <code>GlideClusterClient</code>.
      *
      * @param client An instance of <code>GlideClusterClient</code>.
      * @throws ExecutionException if an execution error occurs during operations.
@@ -99,7 +99,7 @@ public class ClusterExample {
                 Logger.log(Logger.Level.ERROR, "glide", "Request cancelled: " + e.getMessage());
                 throw e;
             } catch (InterruptedException e) {
-                Logger.log(Logger.Level.ERROR, "glide", "Client creation interrupted: " + e.getMessage());
+                Logger.log(Logger.Level.ERROR, "glide", "Client interrupted: " + e.getMessage());
                 Thread.currentThread().interrupt(); // Restore interrupt status
                 throw new CancellationException("Interrupted while creating client");
             } catch (ExecutionException e) {
