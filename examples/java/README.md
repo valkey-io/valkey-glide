@@ -2,10 +2,15 @@
 
 Ensure that you have an instance of Valkey running on "localhost" on "6379". Otherwise, update glide.examples.ExamplesApp with a configuration that matches your server settings.
 
-To run the examples for standalone and cluster:
+To run a standalone example:
 ```
 cd valkey-glide/examples/java
-./gradlew :run
+./gradlew :runStandlone
+```
+To run a cluster example:
+```
+cd valkey-glide/examples/java
+./gradlew :runCluster
 ```
 
 You should expect to see the output:

@@ -16,5 +16,22 @@ dependencies {
 
 application {
     // Define the main class for the application.
-    mainClass = 'glide.examples.ExamplesApp'
+    // Default is standalone
+    mainClassName = project.hasProperty('Cluster') ?
+        'glide.examples.ClusterExample' :
+        'glide.examples.StandaloneExample'
+}
+
+task runStandalone(type: JavaExec) {
+    group = 'application'
+    description = 'Run the standalone example'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'glide.examples.StandaloneExample'
+}
+
+task runCluster(type: JavaExec) {
+    group = 'application'
+    description = 'Run the cluster example'
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'glide.examples.ClusterExample'
 }

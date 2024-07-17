@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.examples;
 
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.*;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 
 import glide.api.GlideClusterClient;
 import glide.api.logging.Logger;
@@ -11,7 +11,10 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
+import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.TimeoutException;
+
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -23,7 +26,7 @@ public class ClusterExample {
      *
      * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
      */
-    public static GlideClusterClient createClient() throws ExecutionException, InterruptedException {
+    public static GlideClusterClient createClient() throws CancellationException, ExecutionException, InterruptedException {
         String host = "localhost";
         Integer port = 6379;
         // GLIDE is able to detect all cluster nodes and connect to them automatically
@@ -37,15 +40,12 @@ public class ClusterExample {
                                         .host(host)
                                         .port(port)
                                         .build())
+                        // Enable this field if the servers are configured with TLS.
+                        //.useTLS(true);
                         .build();
 
-        try {
-            GlideClusterClient client = GlideClusterClient.createClient(config).get();
-            return client;
-        } catch (ExecutionException | InterruptedException e) {
-            Logger.log(Logger.Level.ERROR, "glide", "Failed to create client: " + e.getMessage());
-        }
-        return null;
+        GlideClusterClient client = GlideClusterClient.createClient(config).get();
+        return client;
     }
 
     /**
@@ -54,43 +54,27 @@ public class ClusterExample {
      *
      * @param client An instance of <code>GlideClusterClient</code>.
      */
-    public static void appLogic(GlideClusterClient client) {
+    public static void appLogic(GlideClusterClient client) throws ExecutionException, InterruptedException {
 
         // Send SET and GET
-        try {
-            CompletableFuture<String> setResponse = client.set("foo", "bar");
-            Logger.log(Logger.Level.INFO, "app", "Set response is " + setResponse.get());
-        } catch (ExecutionException | InterruptedException e) {
-            Logger.log(Logger.Level.ERROR, "glide", "Error during SET: " + e.getMessage());
-        }
+        CompletableFuture<String> setResponse = client.set("foo", "bar");
+        Logger.log(Logger.Level.INFO, "app", "Set response is " + setResponse.get());
 
-        try {
-            CompletableFuture<String> getResponse = client.get("foo");
-            Logger.log(Logger.Level.INFO, "app", "Get response is " + getResponse.get());
-        } catch (ExecutionException | InterruptedException e) {
-            Logger.log(Logger.Level.ERROR, "glide", "Error during GET: " + e.getMessage());
-        }
+        CompletableFuture<String> getResponse = client.get("foo");
+        Logger.log(Logger.Level.INFO, "app", "Get response is " + getResponse.get());
 
         // Send PING to all primaries (according to Valkey's PING request_policy)
-        try {
-            CompletableFuture<String> pong = client.ping();
-            Logger.log(Logger.Level.INFO, "app", "Ping response is " + pong.get());
-        } catch (ExecutionException | InterruptedException e) {
-            Logger.log(Logger.Level.ERROR, "glide", "Error during PING: " + e.getMessage());
-        }
+        CompletableFuture<String> pong = client.ping();
+        Logger.log(Logger.Level.INFO, "app", "Ping response is " + pong.get());
 
         // Send INFO REPLICATION with routing option to all nodes
-        try {
-            ClusterValue<String> infoResponse =
-                    client.info(
-                            InfoOptions.builder().section(InfoOptions.Section.REPLICATION).build(), ALL_NODES).get();
-            Logger.log(
-                    Logger.Level.INFO,
-                    "app",
-                    "INFO REPLICATION responses from all nodes are " + infoResponse.getMultiValue());
-        } catch (ExecutionException | InterruptedException e) {
-            Logger.log(Logger.Level.ERROR, "glide", "Error during INFO: " + e.getMessage());
-        }
+        ClusterValue<String> infoResponse =
+                client.info(
+                        InfoOptions.builder().section(InfoOptions.Section.REPLICATION).build(), ALL_NODES).get();
+        Logger.log(
+                Logger.Level.INFO,
+                "app",
+                "INFO REPLICATION responses from all nodes are " + infoResponse.getMultiValue());
     }
 
     /** Executes the application logic with exception handling. */
@@ -100,40 +84,48 @@ public class ClusterExample {
             GlideClusterClient client = null;
             try {
                 client = createClient();
-
-                assert client != null;
                 appLogic(client);
-                return;
 
-            } catch (ClosingException e) {
-                // If the error message contains "NOAUTH", raise the exception
-                // because it indicates a critical authentication issue.
-                if (e.getMessage().contains("NOAUTH")) {
-                    Logger.log(
+            } catch (CancellationException e) {
+                Logger.log(Logger.Level.ERROR, "glide", "Request cancelled: " + e.getMessage());
+                throw e;
+            } catch (InterruptedException e) {
+                Logger.log(Logger.Level.ERROR, "glide", "Client creation interrupted: " + e.getMessage());
+                Thread.currentThread().interrupt(); // Restore interrupt status
+                throw new CancellationException("Interrupted while creating client");
+            } catch (ExecutionException e) {
+                // All Glide errors will be handled as ExecutionException
+                if (e.getCause() instanceof ClosingException) {
+                    // If the error message contains "NOAUTH", raise the exception
+                    // because it indicates a critical authentication issue.
+                    if (e.getMessage().contains("NOAUTH")) {
+                        Logger.log(
                             Logger.Level.ERROR, "glide", "Authentication error encountered: " + e.getMessage());
-                            throw e;
-                } else {
-                    Logger.log(
+                    } else {
+                        Logger.log(
                             Logger.Level.WARN,
                             "glide",
                             "Client has closed and needs to be re-created: " + e.getMessage());
+                    }
+                } else if (e.getCause() instanceof ConnectionException) {
+                    // The client wasn't able to reestablish the connection within the given retries
+                    Logger.log(Logger.Level.ERROR, "glide", "Connection error encountered: " + e.getMessage());
+                } else if (e.getCause() instanceof TimeoutException) {
+                    // A request timed out. You may choose to retry the execution based on your application's
+                    // logic
+                    Logger.log(Logger.Level.ERROR, "glide", "Timeout encountered: " + e.getMessage());
+                } else if (e.getCause() instanceof ExecAbortException) {
+                    Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: " + e.getMessage());
+                } else {
+                    Logger.log(Logger.Level.ERROR, "glide", "Execution error during client creation: " + e.getCause());
                 }
-            } catch (TimeoutException e) {
-                // A request timed out. You may choose to retry the execution based on your application's
-                // logic
-                Logger.log(Logger.Level.ERROR, "glide", "TimeoutException encountered: " + e.getMessage());
-            } catch (ConnectionException e) {
-                // The client wasn't able to reestablish the connection within the given retries
-                Logger.log(Logger.Level.ERROR, "glide", "ConnectionException encountered: " + e.getMessage());
-            } catch (Exception e) {
-                Logger.log(Logger.Level.ERROR, "glide", "Unexpected error: " + e.getMessage());
             } finally {
                 if (client != null) {
                     try {
                         client.close();
                     } catch (Exception e) {
                         Logger.log(
-                                Logger.Level.ERROR,
+                                Logger.Level.WARN,
                                 "glide",
                                 "Error encountered while closing the client: " + e.getMessage());
                     }
