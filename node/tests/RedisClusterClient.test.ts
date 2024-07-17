@@ -47,7 +47,7 @@ describe("GlideClusterClient", () => {
             ? RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
-            : await RedisCluster.createCluster(true, 3, 0);
+            : await RedisCluster.createCluster(true, 3, 1);
     }, 20000);
 
     afterEach(async () => {
