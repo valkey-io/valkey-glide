@@ -5,6 +5,7 @@
 import * as net from "net";
 import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
+    FlushMode,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -15,6 +16,7 @@ import {
     createConfigSet,
     createCustomCommand,
     createEcho,
+    createFlushAll,
     createInfo,
     createLolwut,
     createPing,
@@ -592,6 +594,29 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(
             createLolwut(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link FlushMode#ASYNC}.
+     * @param route The command will be routed to all primaries, unless `route` is provided, in which
+     *   case the client will route the command to the nodes defined by `route`.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushall(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFlushAll(mode),
             toProtobufRoute(route),
         );
     }
