@@ -527,6 +527,17 @@ export function createLLen(key: string): command_request.Command {
 /**
  * @internal
  */
+export function createLSet(
+    key: string,
+    index: number,
+    element: string,
+): command_request.Command {
+    return createCommand(RequestType.LSet, [key, index.toString(), element]);
+}
+
+/**
+ * @internal
+ */
 export function createLTrim(
     key: string,
     start: number,
