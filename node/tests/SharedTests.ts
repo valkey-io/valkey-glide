@@ -878,7 +878,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.lpush(key1, ["0"])).toEqual(1);
                 expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
-                expect(await client.lrange(key1, 0, -1)).toEqual([
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
                     "3",
                     "2",
                     "1",
@@ -886,11 +886,11 @@ export function runBaseTests<Context>(config: {
                 ]);
 
                 expect(await client.lpushx(key2, ["1"])).toEqual(0);
-                expect(await client.lrange(key2, 0, -1)).toEqual([]);
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
 
                 // Key exists, but is not a list
                 checkSimple(await client.set(key3, "bar"));
-                await expect(client.lpushx(key3, "_")).rejects.toThrow(
+                await expect(client.lpushx(key3, ["_"])).rejects.toThrow(
                     RequestError,
                 );
 
