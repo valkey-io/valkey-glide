@@ -1689,7 +1689,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/flushall/ for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode#SYNC} or {@link FlushMode#ASYNC}.
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * Command Response - `OK`.
      */
     public flushall(mode?: FlushMode): T {
