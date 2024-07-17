@@ -303,6 +303,7 @@ describe("GlideClusterClient", () => {
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
+                client.sintercard(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
@@ -459,131 +460,201 @@ describe("GlideClusterClient", () => {
         },
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lolwut test_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            // test with multi-node route
+            const result1 = await client.lolwut({}, "allNodes");
+            expect(intoString(result1)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result2 = await client.lolwut(
+                { version: 2, parameters: [10, 20] },
+                "allNodes",
+            );
+            expect(intoString(result2)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // test with single-node route
+            const result3 = await client.lolwut({}, "randomNode");
+            expect(intoString(result3)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result4 = await client.lolwut(
+                { version: 2, parameters: [10, 20] },
+                "randomNode",
+            );
+            expect(intoString(result4)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // transaction tests
+            const transaction = new ClusterTransaction();
+            transaction.lolwut();
+            transaction.lolwut({ version: 5 });
+            transaction.lolwut({ parameters: [1, 2] });
+            transaction.lolwut({ version: 6, parameters: [42] });
+            const results = await client.exec(transaction);
+
+            if (results) {
+                for (const element of results) {
+                    expect(intoString(element)).toEqual(
+                        expect.stringContaining("Redis ver. "),
+                    );
+                }
+            } else {
+                throw new Error("Invalid LOLWUT transaction test results.");
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
     describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Protocol is RESP2 = %s",
         (protocol) => {
             describe.each([true, false])(
                 "Single node route = %s",
                 (singleNodeRoute) => {
-                    it("function load", async () => {
-                        if (await checkIfServerVersionLessThan("7.0.0")) return;
+                    it(
+                        "function load",
+                        async () => {
+                            if (await checkIfServerVersionLessThan("7.0.0"))
+                                return;
 
-                        const client = await GlideClusterClient.createClient(
-                            getClientConfigurationOption(
-                                cluster.getAddresses(),
-                                protocol,
-                            ),
-                        );
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
 
-                        try {
-                            const libName =
-                                "mylib1C" + uuidv4().replace(/-/g, ""); //.replaceAll("-", "");
-                            const funcName =
-                                "myfunc1c" + uuidv4().replace(/-/g, ""); //.replaceAll("-", "");
-                            const code = generateLuaLibCode(
-                                libName,
-                                new Map([[funcName, "return args[1]"]]),
-                                true,
-                            );
-                            const route: Routes = singleNodeRoute
-                                ? { type: "primarySlotKey", key: "1" }
-                                : "allPrimaries";
-                            // TODO use commands instead of customCommand once implemented
-                            // verify function does not yet exist
-                            const functionList = await client.customCommand([
-                                "FUNCTION",
-                                "LIST",
-                                "LIBRARYNAME",
-                                libName,
-                            ]);
-                            checkClusterResponse(
-                                functionList as object,
-                                singleNodeRoute,
-                                (value) => expect(value).toEqual([]),
-                            );
-                            // load the library
-                            expect(await client.functionLoad(code)).toEqual(
-                                Buffer.from(libName),
-                            );
-                            // call functions from that library to confirm that it works
-                            let fcall = await client.customCommand(
-                                ["FCALL", funcName, "0", "one", "two"],
-                                route,
-                            );
-                            checkClusterResponse(
-                                fcall as object,
-                                singleNodeRoute,
-                                (value) =>
-                                    expect(value).toEqual(Buffer.from("one")),
-                            );
+                            try {
+                                const libName =
+                                    "mylib1C" + uuidv4().replace(/-/g, ""); //.replaceAll("-", "");
+                                const funcName =
+                                    "myfunc1c" + uuidv4().replace(/-/g, ""); //.replaceAll("-", "");
+                                const code = generateLuaLibCode(
+                                    libName,
+                                    new Map([[funcName, "return args[1]"]]),
+                                    true,
+                                );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not yet exist
+                                const functionList = await client.customCommand(
+                                    [
+                                        "FUNCTION",
+                                        "LIST",
+                                        "LIBRARYNAME",
+                                        libName,
+                                    ],
+                                );
+                                checkClusterResponse(
+                                    functionList as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+                                // load the library
+                                expect(await client.functionLoad(code)).toEqual(
+                                    Buffer.from(libName),
+                                );
+                                // call functions from that library to confirm that it works
+                                let fcall = await client.customCommand(
+                                    ["FCALL", funcName, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        expect(value).toEqual(
+                                            Buffer.from("one"),
+                                        ),
+                                );
 
-                            fcall = await client.customCommand(
-                                ["FCALL_RO", funcName, "0", "one", "two"],
-                                route,
-                            );
-                            checkClusterResponse(
-                                fcall as object,
-                                singleNodeRoute,
-                                (value) =>
-                                    expect(value).toEqual(Buffer.from("one")),
-                            );
+                                fcall = await client.customCommand(
+                                    ["FCALL_RO", funcName, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        expect(value).toEqual(
+                                            Buffer.from("one"),
+                                        ),
+                                );
 
-                            // re-load library without replace
-                            await expect(
-                                client.functionLoad(code),
-                            ).rejects.toThrow(
-                                `Library '${libName}' already exists`,
-                            );
+                                // re-load library without replace
+                                await expect(
+                                    client.functionLoad(code),
+                                ).rejects.toThrow(
+                                    `Library '${libName}' already exists`,
+                                );
 
-                            // re-load library with replace
-                            expect(
-                                await client.functionLoad(code, true),
-                            ).toEqual(Buffer.from(libName));
+                                // re-load library with replace
+                                expect(
+                                    await client.functionLoad(code, true),
+                                ).toEqual(Buffer.from(libName));
 
-                            // overwrite lib with new code
-                            const func2Name =
-                                "myfunc2c" + uuidv4().replaceAll("-", "");
-                            const newCode = generateLuaLibCode(
-                                libName,
-                                new Map([
-                                    [funcName, "return args[1]"],
-                                    [func2Name, "return #args"],
-                                ]),
-                                true,
-                            );
-                            expect(
-                                await client.functionLoad(newCode, true),
-                            ).toEqual(Buffer.from(libName));
+                                // overwrite lib with new code
+                                const func2Name =
+                                    "myfunc2c" + uuidv4().replaceAll("-", "");
+                                const newCode = generateLuaLibCode(
+                                    libName,
+                                    new Map([
+                                        [funcName, "return args[1]"],
+                                        [func2Name, "return #args"],
+                                    ]),
+                                    true,
+                                );
+                                expect(
+                                    await client.functionLoad(newCode, true),
+                                ).toEqual(Buffer.from(libName));
 
-                            fcall = await client.customCommand(
-                                ["FCALL", func2Name, "0", "one", "two"],
-                                route,
-                            );
-                            checkClusterResponse(
-                                fcall as object,
-                                singleNodeRoute,
-                                (value) => expect(value).toEqual(2),
-                            );
+                                fcall = await client.customCommand(
+                                    ["FCALL", func2Name, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual(2),
+                                );
 
-                            fcall = await client.customCommand(
-                                ["FCALL_RO", func2Name, "0", "one", "two"],
-                                route,
-                            );
-                            checkClusterResponse(
-                                fcall as object,
-                                singleNodeRoute,
-                                (value) => expect(value).toEqual(2),
-                            );
-                        } finally {
-                            expect(
-                                await client.customCommand([
-                                    "FUNCTION",
-                                    "FLUSH",
-                                ]),
-                            ).toEqual("OK");
-                            client.close();
-                        }
-                    });
+                                fcall = await client.customCommand(
+                                    ["FCALL_RO", func2Name, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual(2),
+                                );
+                            } finally {
+                                expect(
+                                    await client.customCommand([
+                                        "FUNCTION",
+                                        "FLUSH",
+                                    ]),
+                                ).toEqual("OK");
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
                 },
             );
         },

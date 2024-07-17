@@ -484,6 +484,16 @@ export function createLPush(
 /**
  * @internal
  */
+export function createLPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.LPushX, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
 export function createLPop(
     key: string,
     count?: number,
@@ -512,6 +522,17 @@ export function createLRange(
  */
 export function createLLen(key: string): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createLSet(
+    key: string,
+    index: number,
+    element: string,
+): command_request.Command {
+    return createCommand(RequestType.LSet, [key, index.toString(), element]);
 }
 
 /**
@@ -548,6 +569,16 @@ export function createRPush(
     elements: string[],
 ): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
+export function createRPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.RPushX, [key].concat(elements));
 }
 
 /**
@@ -617,6 +648,23 @@ export function createSInter(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSInterCard(
+    keys: string[],
+    limit?: number,
+): command_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.SInterCard, args);
+}
+
+/**
+ * @internal
+ */
 export function createSInterStore(
     destination: string,
     keys: string[],
@@ -666,6 +714,16 @@ export function createSIsMember(
     member: string,
 ): command_request.Command {
     return createCommand(RequestType.SIsMember, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createSMIsMember(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.SMIsMember, [key].concat(members));
 }
 
 /**
@@ -1572,4 +1630,36 @@ export function createObjectIdletime(key: string): command_request.Command {
  */
 export function createObjectRefcount(key: string): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
+}
+
+export type LolwutOptions = {
+    /**
+     * An optional argument that can be used to specify the version of computer art to generate.
+     */
+    version?: number;
+    /**
+     * An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     */
+    parameters?: number[];
+};
+
+/**
+ * @internal
+ */
+export function createLolwut(options?: LolwutOptions): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.version !== undefined) {
+            args.push("VERSION", options.version.toString());
+        }
+
+        if (options.parameters !== undefined) {
+            args.push(...options.parameters.map((param) => param.toString()));
+        }
+    }
+
+    return createCommand(RequestType.Lolwut, args);
 }

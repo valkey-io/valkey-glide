@@ -347,6 +347,7 @@ export async function transactionTest(
     const key12 = "{key}" + uuidv4();
     const key13 = "{key}" + uuidv4();
     const key14 = "{key}" + uuidv4(); // sorted set
+    const key15 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -407,6 +408,8 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.ltrim(key5, 0, 1);
     args.push("OK");
+    baseTransaction.lset(key5, 0, field + "3");
+    args.push("OK");
     baseTransaction.lrange(key5, 0, -1);
     args.push([field + "3", field + "2"]);
     baseTransaction.lpopCount(key5, 2);
@@ -426,6 +429,10 @@ export async function transactionTest(
     args.push(field + "3");
     baseTransaction.rpopCount(key6, 2);
     args.push([field + "2", field + "1"]);
+    baseTransaction.rpushx(key15, ["_"]); // key15 is empty
+    args.push(0);
+    baseTransaction.lpushx(key15, ["_"]);
+    args.push(0);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -434,6 +441,14 @@ export async function transactionTest(
     args.push(new Set(["bar", "foo"]));
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.sintercard([key7, key7]);
+        args.push(2);
+        baseTransaction.sintercard([key7, key7], 1);
+        args.push(1);
+    }
+
     baseTransaction.sinterstore(key7, [key7, key7]);
     args.push(2);
     baseTransaction.sdiff([key7, key7]);
@@ -446,6 +461,12 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.sismember(key7, "bar");
     args.push(true);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
+        args.push([true, true, false]);
+    }
+
     baseTransaction.smembers(key7);
     args.push(new Set(["bar"]));
     baseTransaction.spop(key7);

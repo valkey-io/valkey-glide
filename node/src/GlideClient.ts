@@ -6,6 +6,7 @@ import * as net from "net";
 import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    LolwutOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -16,6 +17,7 @@ import {
     createEcho,
     createFunctionLoad,
     createInfo,
+    createLolwut,
     createPing,
     createSelect,
     createTime,
@@ -310,6 +312,24 @@ export class GlideClient extends BaseClient {
      */
     public time(): Promise<[string, string]> {
         return this.createWritePromise(createTime());
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options
+     * @returns A piece of generative computer art along with the current server version.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
+     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * ```
+     */
+    public lolwut(options?: LolwutOptions): Promise<string> {
+        return this.createWritePromise(createLolwut(options));
     }
 
     /**

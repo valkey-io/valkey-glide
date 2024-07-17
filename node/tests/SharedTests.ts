@@ -13,6 +13,7 @@ import {
     InfoOptions,
     InsertPosition,
     ProtocolVersion,
+    RequestError,
     Script,
     parseInfoResponse,
 } from "../";
@@ -848,6 +849,41 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpushx list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key3 = uuidv4();
+
+                expect(await client.lpush(key1, ["0"])).toEqual(1);
+                expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "3",
+                    "2",
+                    "1",
+                    "0",
+                ]);
+
+                expect(await client.lpushx(key2, ["1"])).toEqual(0);
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
+
+                // Key exists, but is not a list
+                checkSimple(await client.set(key3, "bar"));
+                await expect(client.lpushx(key3, ["_"])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Empty element list
+                await expect(client.lpushx(key2, [])).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `llen with existing, non-existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -868,6 +904,60 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lset test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const index = 0;
+                const oobIndex = 10;
+                const negativeIndex = -1;
+                const element = "zero";
+                const lpushArgs = ["four", "three", "two", "one"];
+                const expectedList = ["zero", "two", "three", "four"];
+                const expectedList2 = ["zero", "two", "three", "zero"];
+
+                // key does not exist
+                await expect(
+                    client.lset(nonExistingKey, index, element),
+                ).rejects.toThrow(RequestError);
+
+                expect(await client.lpush(key, lpushArgs)).toEqual(4);
+
+                // index out of range
+                await expect(
+                    client.lset(key, oobIndex, element),
+                ).rejects.toThrow(RequestError);
+
+                // assert lset result
+                checkSimple(await client.lset(key, index, element)).toEqual(
+                    "OK",
+                );
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                    expectedList,
+                );
+
+                // assert lset with a negative index for the last element in the list
+                checkSimple(
+                    await client.lset(key, negativeIndex, element),
+                ).toEqual("OK");
+                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                    expectedList2,
+                );
+
+                // assert lset against a non-list key
+                const nonListKey = "nonListKey";
+                expect(await client.sadd(nonListKey, ["a"])).toEqual(1);
+
+                await expect(client.lset(nonListKey, 0, "b")).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
@@ -980,6 +1070,41 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `rpushx list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key3 = uuidv4();
+
+                expect(await client.rpush(key1, ["0"])).toEqual(1);
+                expect(await client.rpushx(key1, ["1", "2", "3"])).toEqual(4);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                ]);
+
+                expect(await client.rpushx(key2, ["1"])).toEqual(0);
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
+
+                // Key exists, but is not a list
+                checkSimple(await client.set(key3, "bar"));
+                await expect(client.rpushx(key3, ["_"])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Empty element list
+                await expect(client.rpushx(key2, [])).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
@@ -1186,6 +1311,65 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sintercard test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+                const member1_list = ["a", "b", "c", "d"];
+                const member2_list = ["b", "c", "d", "e"];
+
+                expect(await client.sadd(key1, member1_list)).toEqual(4);
+                expect(await client.sadd(key2, member2_list)).toEqual(4);
+
+                expect(await client.sintercard([key1, key2])).toEqual(3);
+
+                // returns limit as cardinality when the limit is reached partway through the computation
+                const limit = 2;
+                expect(await client.sintercard([key1, key2], limit)).toEqual(
+                    limit,
+                );
+
+                // returns actual cardinality if limit is higher
+                expect(await client.sintercard([key1, key2], 4)).toEqual(3);
+
+                // one of the keys is empty, intersection is empty, cardinality equals 0
+                expect(await client.sintercard([key1, nonExistingKey])).toEqual(
+                    0,
+                );
+
+                expect(
+                    await client.sintercard([nonExistingKey, nonExistingKey]),
+                ).toEqual(0);
+                expect(
+                    await client.sintercard(
+                        [nonExistingKey, nonExistingKey],
+                        2,
+                    ),
+                ).toEqual(0);
+
+                // invalid argument - key list must not be empty
+                await expect(client.sintercard([])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // source key exists, but it is not a set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sintercard([key1, stringKey]),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
@@ -1468,6 +1652,43 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.sismember(key2, "member1"),
                 ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `smismember test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistingKey = uuidv4();
+
+                expect(await client.sadd(key, ["a", "b"])).toEqual(2);
+                expect(await client.smismember(key, ["b", "c"])).toEqual([
+                    true,
+                    false,
+                ]);
+
+                expect(await client.smismember(nonExistingKey, ["b"])).toEqual([
+                    false,
+                ]);
+
+                // invalid argument - member list must not be empty
+                await expect(client.smismember(key, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.smismember(stringKey, ["a"]),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,

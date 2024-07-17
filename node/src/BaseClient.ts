@@ -52,8 +52,10 @@ import {
     createLLen,
     createLPop,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
+    createLSet,
     createLTrim,
     createMGet,
     createMSet,
@@ -69,6 +71,7 @@ import {
     createPfCount,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
     createRenameNX,
     createSAdd,
@@ -76,9 +79,11 @@ import {
     createSDiff,
     createSDiffStore,
     createSInter,
+    createSInterCard,
     createSInterStore,
     createSIsMember,
     createSMembers,
+    createSMIsMember,
     createSMove,
     createSPop,
     createSRem,
@@ -955,6 +960,25 @@ export class BaseClient {
         return this.createWritePromise(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     * @returns The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
+     * console.log(result); // Output: 2 - Indicates that the list has two elements.
+     * ```
+     */
+    public lpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
      * See https://valkey.io/commands/lpop/ for details.
@@ -1064,6 +1088,30 @@ export class BaseClient {
         return this.createWritePromise(createLLen(key));
     }
 
+    /**
+     * Sets the list element at `index` to `element`.
+     * The index is zero-based, so `0` means the first element, `1` the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, `-1` means the last element, `-2` means the penultimate and so forth.
+     *
+     * See https://valkey.io/commands/lset/ for details.
+     *
+     * @param key - The key of the list.
+     * @param index - The index of the element in the list to be set.
+     * @param element - The new element to set at the specified index.
+     * @returns Always "OK".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lset method
+     * const response = await client.lset("test_key", 1, "two");
+     * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
+     * ```
+     */
+    public lset(key: string, index: number, element: string): Promise<"OK"> {
+        return this.createWritePromise(createLSet(key, index, element));
+    }
+
     /** Trim an existing list so that it will contain only the specified range of elements specified.
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
@@ -1136,6 +1184,25 @@ export class BaseClient {
      */
     public rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
+    }
+
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     * @returns The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const result = await client.rpushx("my_list", ["value1", "value2"]);
+     * console.log(result);  // Output: 2 - Indicates that the list has two elements.
+     * ```
+     * */
+    public rpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createRPushX(key, elements));
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
@@ -1321,6 +1388,32 @@ export class BaseClient {
     }
 
     /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets.
+     * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * await client.sadd("set2", ["b", "c", "d"]);
+     * const result1 = await client.sintercard(["set1", "set2"]);
+     * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+     *
+     * const result2 = await client.sintercard(["set1", "set2"], 1);
+     * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
+     * ```
+     */
+    public sintercard(keys: string[], limit?: number): Promise<number> {
+        return this.createWritePromise(createSInterCard(keys, limit));
+    }
+
+    /**
      * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
      *
      * See https://valkey.io/commands/sinterstore/ for more details.
@@ -1458,6 +1551,28 @@ export class BaseClient {
      */
     public sismember(key: string, member: string): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * const result = await client.smismember("set1", ["b", "c", "d"]);
+     * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
+     * ```
+     */
+    public smismember(key: string, members: string[]): Promise<boolean[]> {
+        return this.createWritePromise(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.

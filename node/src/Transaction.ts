@@ -8,6 +8,7 @@ import {
     InfoOptions,
     InsertPosition,
     KeyWeight,
+    LolwutOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -54,9 +55,12 @@ import {
     createLLen,
     createLPop,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
+    createLSet,
     createLTrim,
+    createLolwut,
     createMGet,
     createMSet,
     createObjectEncoding,
@@ -72,6 +76,7 @@ import {
     createPing,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
     createRenameNX,
     createSAdd,
@@ -79,12 +84,15 @@ import {
     createSDiff,
     createSDiffStore,
     createSInter,
+    createSInterCard,
     createSInterStore,
     createSIsMember,
     createSMembers,
+    createSMIsMember,
     createSMove,
     createSPop,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSelect,
     createSet,
@@ -111,7 +119,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnion,
     createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -529,6 +536,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     *
+     * Command Response - The length of the list after the push operation.
+     */
+    public lpushx(key: string, elements: string[]): T {
+        return this.addAndReturn(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
      * See https://valkey.io/commands/lpop/ for details.
@@ -586,6 +608,24 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createLLen(key));
     }
 
+    /**
+     * Sets the list element at `index` to `element`.
+     * The index is zero-based, so `0` means the first element, `1` the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, `-1` means the last element, `-2` means the penultimate and so forth.
+     *
+     * See https://valkey.io/commands/lset/ for details.
+     *
+     * @param key - The key of the list.
+     * @param index - The index of the element in the list to be set.
+     * @param element - The new element to set at the specified index.
+     *
+     * Command Response - Always "OK".
+     */
+    public lset(key: string, index: number, element: string): T {
+        return this.addAndReturn(createLSet(key, index, element));
+    }
+
     /** Trim an existing list so that it will contain only the specified range of elements specified.
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
@@ -633,6 +673,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public rpush(key: string, elements: string[]): T {
         return this.addAndReturn(createRPush(key, elements));
+    }
+
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     *
+     * Command Response - The length of the list after the push operation.
+     */
+    public rpushx(key: string, elements: string[]): T {
+        return this.addAndReturn(createRPushX(key, elements));
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
@@ -738,6 +793,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @param keys - The keys of the sets.
+     *
+     * Command Response - The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public sintercard(keys: string[], limit?: number): T {
+        return this.addAndReturn(createSInterCard(keys, limit));
+    }
+
+    /**
      * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
      *
      * See https://valkey.io/commands/sinterstore/ for more details.
@@ -819,6 +889,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sismember(key: string, member: string): T {
         return this.addAndReturn(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     *
+     * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public smismember(key: string, members: string[]): T {
+        return this.addAndReturn(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
@@ -1582,6 +1668,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public objectRefcount(key: string): T {
         return this.addAndReturn(createObjectRefcount(key));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options.
+     *
+     * Command Response - A piece of generative computer art along with the current server version.
+     */
+    public lolwut(options?: LolwutOptions): T {
+        return this.addAndReturn(createLolwut(options));
     }
 
     /**

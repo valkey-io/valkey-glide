@@ -6,6 +6,7 @@ import * as net from "net";
 import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
     InfoOptions,
+    LolwutOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -16,6 +17,7 @@ import {
     createEcho,
     createFunctionLoad,
     createInfo,
+    createLolwut,
     createPing,
     createTime,
 } from "./Commands";
@@ -567,6 +569,32 @@ export class GlideClusterClient extends BaseClient {
      */
     public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), toProtobufRoute(route));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *  case the client will route the command to the nodes defined by `route`.
+     * @returns A piece of generative computer art along with the current server version.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.lolwut({ version: 6, parameters: [40, 20] }, "allNodes");
+     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * ```
+     */
+    public lolwut(
+        options?: LolwutOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise(
+            createLolwut(options),
+            toProtobufRoute(route),
+        );
     }
 
     /**

@@ -11,7 +11,7 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.0', classifier: osdetector.classifier
+    implementation "io.valkey:valkey-glide:1.0.1:${osdetector.classifier}"
 }
 
 application {
