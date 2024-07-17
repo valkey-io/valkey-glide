@@ -575,8 +575,8 @@ export async function transactionTest(
     baseTransaction.pfcount([key11]);
     args.push(3);
 
-    const libName = "mylib1C" + uuidv4();
-    const funcName = "myfunc1c" + uuidv4();
+    const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+    const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
     const code = generateLuaLibCode(
         libName,
         new Map([[funcName, "return args[1]"]]),
