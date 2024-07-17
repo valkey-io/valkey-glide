@@ -313,6 +313,8 @@ export async function transactionTest(
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
+    baseTransaction.flushall();
+    args.push("OK");
     baseTransaction.set(key1, "bar");
     args.push("OK");
     baseTransaction.objectEncoding(key1);

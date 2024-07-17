@@ -5,6 +5,7 @@
 import {
     AggregationType,
     ExpireOptions,
+    FlushMode,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -34,6 +35,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createFlushAll,
     createGet,
     createHDel,
     createHExists,
@@ -1680,6 +1682,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `OK`.
+     */
+    public flushall(mode?: FlushMode): T {
+        return this.addAndReturn(createFlushAll(mode));
     }
 }
 
