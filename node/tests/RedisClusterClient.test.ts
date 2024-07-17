@@ -455,7 +455,7 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `lolwut test routes_%p`,
+        `lolwut test_%p`,
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),

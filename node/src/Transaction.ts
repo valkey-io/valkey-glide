@@ -1560,7 +1560,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/lolwut/ for more details.
      *
-     * @param options - The LOLWUT options
+     * @param options - The LOLWUT options.
      *
      * Command Response - A piece of generative computer art along with the current server version.
      */

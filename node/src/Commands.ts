@@ -1560,11 +1560,11 @@ export function createLolwut(options?: LolwutOptions): command_request.Command {
     const args: string[] = [];
 
     if (options) {
-        if (options.version != undefined) {
+        if (options.version !== undefined) {
             args.push("VERSION", options.version.toString());
         }
 
-        if (options.parameters != undefined) {
+        if (options.parameters !== undefined) {
             args.push(...options.parameters.map((param) => param.toString()));
         }
     }

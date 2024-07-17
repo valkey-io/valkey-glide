@@ -575,7 +575,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/lolwut/ for more details.
      *
-     * @param options - The LOLWUT options
+     * @param options - The LOLWUT options.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *  case the client will route the command to the nodes defined by `route`.
      * @returns A piece of generative computer art along with the current server version.
