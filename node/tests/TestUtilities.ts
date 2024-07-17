@@ -309,6 +309,7 @@ export async function transactionTest(
     const key12 = "{key}" + uuidv4();
     const key13 = "{key}" + uuidv4();
     const key14 = "{key}" + uuidv4(); // sorted set
+    const key15 = "{key}" + uuidv4(); // pushx
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -394,6 +395,10 @@ export async function transactionTest(
     args.push(field + "3");
     baseTransaction.rpopCount(key6, 2);
     args.push([field + "2", field + "1"]);
+    baseTransaction.rpushx(key15, ["_"]);
+    args.push(0);
+    baseTransaction.lpushx(key15, ["_"]);
+    args.push(0);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
     baseTransaction.sunionstore(key7, [key7, key7]);
