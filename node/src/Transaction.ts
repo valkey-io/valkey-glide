@@ -54,6 +54,7 @@ import {
     createLLen,
     createLPop,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
     createLSet,
@@ -73,6 +74,7 @@ import {
     createPing,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
     createRenameNX,
     createSAdd,
@@ -529,6 +531,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     *
+     * Command Response - The length of the list after the push operation.
+     */
+    public lpushx(key: string, elements: string[]): T {
+        return this.addAndReturn(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
      * See https://valkey.io/commands/lpop/ for details.
@@ -651,6 +668,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public rpush(key: string, elements: string[]): T {
         return this.addAndReturn(createRPush(key, elements));
+    }
+
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     *
+     * Command Response - The length of the list after the push operation.
+     */
+    public rpushx(key: string, elements: string[]): T {
+        return this.addAndReturn(createRPushX(key, elements));
     }
 
     /** Removes and returns the last elements of the list stored at `key`.

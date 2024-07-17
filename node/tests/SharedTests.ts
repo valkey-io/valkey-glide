@@ -849,6 +849,41 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpushx list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key3 = uuidv4();
+
+                expect(await client.lpush(key1, ["0"])).toEqual(1);
+                expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "3",
+                    "2",
+                    "1",
+                    "0",
+                ]);
+
+                expect(await client.lpushx(key2, ["1"])).toEqual(0);
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
+
+                // Key exists, but is not a list
+                checkSimple(await client.set(key3, "bar"));
+                await expect(client.lpushx(key3, ["_"])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Empty element list
+                await expect(client.lpushx(key2, [])).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `llen with existing, non-existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1035,6 +1070,41 @@ export function runBaseTests<Context>(config: {
                         "Operation against a key holding the wrong kind of value",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `rpushx list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key3 = uuidv4();
+
+                expect(await client.rpush(key1, ["0"])).toEqual(1);
+                expect(await client.rpushx(key1, ["1", "2", "3"])).toEqual(4);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                ]);
+
+                expect(await client.rpushx(key2, ["1"])).toEqual(0);
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
+
+                // Key exists, but is not a list
+                checkSimple(await client.set(key3, "bar"));
+                await expect(client.rpushx(key3, ["_"])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Empty element list
+                await expect(client.rpushx(key2, [])).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
