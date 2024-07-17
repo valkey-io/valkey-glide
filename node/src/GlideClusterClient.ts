@@ -629,9 +629,8 @@ export class GlideClusterClient extends BaseClient {
 
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
-     *
      * @returns The number of keys in the database.
-     *     If the query is routed to multiple nodes, returns the sum of the number of keys across all routed nodes.
+     *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
      *
      * @example
      * ```typescript
