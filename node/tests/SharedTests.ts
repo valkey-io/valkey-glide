@@ -869,6 +869,41 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpushx list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key3 = uuidv4();
+
+                expect(await client.lpush(key1, ["0"])).toEqual(1);
+                expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
+                expect(await client.lrange(key1, 0, -1)).toEqual([
+                    "3",
+                    "2",
+                    "1",
+                    "0",
+                ]);
+
+                expect(await client.lpushx(key2, ["1"])).toEqual(0);
+                expect(await client.lrange(key2, 0, -1)).toEqual([]);
+
+                // Key exists, but is not a list
+                checkSimple(await client.set(key3, "bar"));
+                await expect(client.lpushx(key3, "_")).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Empty element list
+                await expect(client.lpushx(key2, [])).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `llen with existing, non-existing key and key that holds a value that is not a list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

@@ -53,6 +53,7 @@ import {
     createLLen,
     createLPop,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
     createLSet,
@@ -71,6 +72,7 @@ import {
     createPfCount,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
     createRenameNX,
     createSAdd,
@@ -977,6 +979,25 @@ export class BaseClient {
         return this.createWritePromise(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the`list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     * @returns - The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
+     * console.log(result); // Output: 2 - Indicates that the list has two elements.
+     * ```
+     */
+    public lpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
      * See https://valkey.io/commands/lpop/ for details.
@@ -1182,6 +1203,24 @@ export class BaseClient {
      */
     public rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
+    }
+
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     * @returns - The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const result = await client.rpushx("my_list", ["value1", "value2"]);
+     * console.log(result);  // Output: 2 - Indicates that the list has two elements.
+     * ```
+     * */
+    public rpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createRPushX(key, elements));
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
