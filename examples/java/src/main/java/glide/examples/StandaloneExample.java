@@ -111,7 +111,7 @@ public class StandaloneExample {
                     Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: " + e.getMessage());
                     throw e;
                 } else {
-                    Logger.log(Logger.Level.ERROR, "glide", "Execution error during client creation: " + e.getCause());
+                    Logger.log(Logger.Level.ERROR, "glide", "Execution error encountered: " + e.getCause());
                     throw e;
                 }
             } finally {
