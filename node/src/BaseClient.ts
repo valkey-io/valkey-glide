@@ -33,6 +33,7 @@ import {
     createExpire,
     createExpireAt,
     createGet,
+    createGetDel,
     createHDel,
     createHExists,
     createHGet,
@@ -82,6 +83,7 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSet,
     createStrlen,
@@ -106,7 +108,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnion,
 } from "./Commands";
 import {
     ClosingError,
@@ -480,6 +481,26 @@ export class BaseClient {
      */
     public get(key: string): Promise<string | null> {
         return this.createWritePromise(createGet(key));
+    }
+
+    /**
+     * Gets a string value associated with the given `key`and deletes the key.
+     *
+     * See https://valkey.io/commands/getdel/ for details.
+     *
+     * @param key - The key to retrieve from the database.
+     * @returns - If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = client.getdel("key");
+     * console.log(result); //Output: 'value'
+     *
+     * const value = client.getdel("key");  // value is null
+     * ```
+     */
+    public getdel(key: string): Promise<string | null> {
+        return this.createWritePromise(createGetDel(key));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
