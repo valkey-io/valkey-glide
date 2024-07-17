@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
     ExpireOptions,
+    FlushMode,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
@@ -26,6 +27,7 @@ import {
     intoArray,
     intoString,
 } from "./TestUtilities";
+import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -3811,6 +3813,52 @@ export function runBaseTests<Context>(config: {
                 expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
                     1,
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `flushall test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Test FLUSHALL SYNC
+                expect(await client.flushall(FlushMode.SYNC)).toBe("OK");
+
+                // TODO: replace with KEYS command when implemented
+                const keysAfter = (await client.customCommand([
+                    "keys",
+                    "*",
+                ])) as string[];
+                expect(keysAfter.length).toBe(0);
+
+                // Test various FLUSHALL calls
+                expect(await client.flushall()).toBe("OK");
+                expect(await client.flushall(FlushMode.ASYNC)).toBe("OK");
+
+                if (client instanceof GlideClusterClient) {
+                    const key = uuidv4();
+                    const primaryRoute: SingleNodeRoute = {
+                        type: "primarySlotKey",
+                        key: key,
+                    };
+                    expect(await client.flushall(undefined, primaryRoute)).toBe(
+                        "OK",
+                    );
+                    expect(
+                        await client.flushall(FlushMode.ASYNC, primaryRoute),
+                    ).toBe("OK");
+
+                    //Test FLUSHALL on replica (should fail)
+                    const key2 = uuidv4();
+                    const replicaRoute: SingleNodeRoute = {
+                        type: "replicaSlotKey",
+                        key: key2,
+                    };
+                    await expect(
+                        client.flushall(undefined, replicaRoute),
+                    ).rejects.toThrowError();
+                }
             }, protocol);
         },
         config.timeout,
