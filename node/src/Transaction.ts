@@ -532,14 +532,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Inserts specified values at the head of the`list`, only if `key` already
+     * Inserts specified values at the head of the `list`, only if `key` already
      * exists and holds a list.
      *
      * See https://valkey.io/commands/lpushx/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
-     * @returns - The length of the list after the push operation.
+     *
+     * Command Response - The length of the list after the push operation.
      */
     public lpushx(key: string, elements: string[]): T {
         return this.addAndReturn(createLPushX(key, elements));
@@ -672,11 +673,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Inserts specified values at the tail of the `list`, only if `key` already
      * exists and holds a list.
+     *
      * See https://valkey.io/commands/rpushx/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
-     * @returns - The length of the list after the push operation.
+     *
+     * Command Response - The length of the list after the push operation.
      */
     public rpushx(key: string, elements: string[]): T {
         return this.addAndReturn(createRPushX(key, elements));
