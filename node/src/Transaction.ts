@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { LPosOptions } from "./command-options/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,

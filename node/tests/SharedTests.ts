@@ -28,6 +28,7 @@ import {
     intoString,
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
+import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -3874,43 +3875,45 @@ export function runBaseTests<Context>(config: {
 
                 // simplest case
                 expect(await client.lpos(key, "a")).toEqual(0);
-                expect(await client.lpos(key, "b", { rank: 2 })).toEqual(5);
+                expect(
+                    await client.lpos(key, "b", new LPosOptions({ rank: 2 })),
+                ).toEqual(5);
 
                 // element doesn't exist
                 expect(await client.lpos(key, "e")).toBeNull();
 
                 // reverse traversal
-                expect(await client.lpos(key, "b", { rank: -2 })).toEqual(2);
+                expect(
+                    await client.lpos(key, "b", new LPosOptions({ rank: -2 })),
+                ).toEqual(2);
 
                 // unlimited comparisons
                 expect(
-                    await client.lpos(key, "a", { rank: 1, maxLength: 0 }),
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 1, maxLength: 0 }),
+                    ),
                 ).toEqual(0);
 
                 // limited comparisons
                 expect(
-                    await client.lpos(key, "c", { rank: 1, maxLength: 2 }),
+                    await client.lpos(
+                        key,
+                        "c",
+                        new LPosOptions({ rank: 1, maxLength: 2 }),
+                    ),
                 ).toBeNull();
 
                 // invalid rank value
-                try {
-                    expect(await client.lpos(key, "a", { rank: 0 })).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "An error was signalled by the server - ResponseError: RANK can't be zero: use 1 to start from the first match, 2 from the second ... or use negative to start from the end of the list",
-                    );
-                }
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ rank: 0 })),
+                ).rejects.toThrow(RequestError);
 
                 // invalid maxlen value
-                try {
-                    expect(
-                        await client.lpos(key, "a", { maxLength: -1 }),
-                    ).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "An error was signalled by the server - ResponseError: MAXLEN can't be negative",
-                    );
-                }
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ maxLength: -1 })),
+                ).rejects.toThrow(RequestError);
 
                 // non-existent key
                 expect(await client.lpos("non-existent_key", "e")).toBeNull();
@@ -3919,45 +3922,51 @@ export function runBaseTests<Context>(config: {
                 const wrongDataType = `{key}:${uuidv4()}`;
                 expect(await client.sadd(wrongDataType, ["a", "b"])).toEqual(2);
 
-                try {
-                    expect(await client.lpos(wrongDataType, "a")).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "WRONGTYPE: Operation against a key holding the wrong kind of value",
-                    );
-                }
+                await expect(client.lpos(wrongDataType, "a")).rejects.toThrow(
+                    RequestError,
+                );
 
                 // invalid count value
-                try {
-                    expect(
-                        await client.lpos(key, "a", { count: -1 }),
-                    ).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "An error was signalled by the server - ResponseError: COUNT can't be negative",
-                    );
-                }
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ count: -1 })),
+                ).rejects.toThrow(RequestError);
 
                 // with count
-                expect(await client.lpos(key, "a", { count: 2 })).toEqual([
-                    0, 1,
-                ]);
-                expect(await client.lpos(key, "a", { count: 0 })).toEqual([
-                    0, 1, 4,
-                ]);
                 expect(
-                    await client.lpos(key, "a", { rank: 1, count: 0 }),
+                    await client.lpos(key, "a", new LPosOptions({ count: 2 })),
+                ).toEqual([0, 1]);
+                expect(
+                    await client.lpos(key, "a", new LPosOptions({ count: 0 })),
                 ).toEqual([0, 1, 4]);
                 expect(
-                    await client.lpos(key, "a", { rank: 2, count: 0 }),
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 1, count: 0 }),
+                    ),
+                ).toEqual([0, 1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 2, count: 0 }),
+                    ),
                 ).toEqual([1, 4]);
                 expect(
-                    await client.lpos(key, "a", { rank: 3, count: 0 }),
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 3, count: 0 }),
+                    ),
                 ).toEqual([4]);
 
                 // reverse traversal
                 expect(
-                    await client.lpos(key, "a", { rank: -1, count: 0 }),
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: -1, count: 0 }),
+                    ),
                 ).toEqual([4, 1, 0]);
             }, protocol);
         },

@@ -19,6 +19,7 @@ import {
     Transaction,
 } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
+import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 
 beforeAll(() => {
     Logger.init("info");
@@ -546,9 +547,13 @@ export async function transactionTest(
         field + "3",
     ]);
     args.push(5);
-    baseTransaction.lpos(key15, field + "1", { rank: 2 });
+    baseTransaction.lpos(key15, field + "1", new LPosOptions({ rank: 2 }));
     args.push(1);
-    baseTransaction.lpos(key15, field + "1", { rank: 2, count: 0 });
+    baseTransaction.lpos(
+        key15,
+        field + "1",
+        new LPosOptions({ rank: 2, count: 0 }),
+    );
     args.push([1]);
     return args;
 }

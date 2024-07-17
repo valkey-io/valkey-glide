@@ -4,6 +4,7 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
+import { LPosOptions } from "./command-options/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
 
@@ -1733,10 +1734,10 @@ export function createLPos(
     element: string,
     options?: LPosOptions,
 ): command_request.Command {
-    const args: string[] = [key, element];
+    let args: string[] = [key, element];
 
     if (options) {
-        addLPosOptions(options, args);
+        args = args.concat(options.toArgs());
     }
 
     return createCommand(RequestType.LPos, args);

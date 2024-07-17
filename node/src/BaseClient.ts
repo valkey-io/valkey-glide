@@ -10,12 +10,12 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
+import { LPosOptions } from "./command-options/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
     InsertPosition,
     KeyWeight,
-    LPosOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -2865,8 +2865,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
-     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurrence of "e" is in the fifth element.
-     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5, 6 ] - the elements of the occurrences of "e".
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ rank: 2 }))); // Output: 5 - the second occurrence of "e" is at index 5.
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ count: 3 }))); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
      * ```
      */
     public lpos(
