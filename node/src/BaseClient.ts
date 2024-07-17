@@ -987,7 +987,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
-     * @returns - The length of the list after the push operation.
+     * @returns The length of the list after the push operation.
      * @example
      * ```typescript
      * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
@@ -1208,11 +1208,12 @@ export class BaseClient {
     /**
      * Inserts specified values at the tail of the `list`, only if `key` already
      * exists and holds a list.
+     *
      * See https://valkey.io/commands/rpushx/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
-     * @returns - The length of the list after the push operation.
+     * @returns The length of the list after the push operation.
      * @example
      * ```typescript
      * const result = await client.rpushx("my_list", ["value1", "value2"]);
