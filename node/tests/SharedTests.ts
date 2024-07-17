@@ -5,7 +5,6 @@
 import { expect, it } from "@jest/globals";
 import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
-import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     ClosingError,
     ExpireOptions,
@@ -3994,6 +3993,17 @@ export function runBaseTests<Context>(config: {
 
                 // check DBSIZE after setting
                 expect(await client.dbsize()).toBe(10);
+
+                // additional test for the standalone client
+                if (client instanceof GlideClient) {
+                    expect(await client.flushall()).toBe("OK");
+                    const key = uuidv4();
+                    expect(await client.set(key, "value")).toBe("OK");
+                    expect(await client.dbsize()).toBe(1);
+                    // switching to another db to check size
+                    expect(await client.select(1)).toBe("OK");
+                    expect(await client.dbsize()).toBe(0);
+                }
 
                 // additional test for the cluster client
                 if (client instanceof GlideClusterClient) {
