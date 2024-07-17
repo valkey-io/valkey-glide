@@ -112,6 +112,7 @@ import {
     createZRemRangeByScore,
     createZScore,
     createSUnion,
+    createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1581,6 +1582,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public objectRefcount(key: string): T {
         return this.addAndReturn(createObjectRefcount(key));
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * See https://valkey.io/commands/function-load/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The source code that implements the library.
+     * @param replace - Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * Command Response - The library name that was loaded.
+     */
+    public functionLoad(libraryCode: string, replace?: boolean): T {
+        return this.addAndReturn(createFunctionLoad(libraryCode, replace));
     }
 }
 
