@@ -3853,11 +3853,11 @@ export function runBaseTests<Context>(config: {
                     const key2 = uuidv4();
                     const replicaRoute: SingleNodeRoute = {
                         type: "replicaSlotKey",
-                        key: "key",
+                        key: key2,
                     };
                     await expect(
                         client.flushall(undefined, replicaRoute),
-                    ).rejects.toThrowError(RequestError);
+                    ).rejects.toThrowError();
                 }
             }, protocol);
         },

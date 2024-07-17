@@ -10,7 +10,6 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
-    FlushMode,
     GlideClient,
     GlideClusterClient,
     InsertPosition,

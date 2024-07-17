@@ -1654,11 +1654,11 @@ export enum FlushMode {
     /**
      * Flushes synchronously.
      *
-     * @since Valkey 6.2 and above.
+     * since Valkey 6.2 and above.
      */
-    SYNC,
+    SYNC = "SYNC",
     /** Flushes asynchronously. */
-    ASYNC,
+    ASYNC = "ASYNC",
 }
 
 /**
