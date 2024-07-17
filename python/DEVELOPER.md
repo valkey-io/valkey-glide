@@ -87,7 +87,7 @@ Before starting this step, make sure you've installed all software requirments.
 1. Clone the repository:
     ```bash
     git clone https://github.com/valkey-io/valkey-glide.git
-    cd glide-for-redis
+    cd valkey-glide
     ```
 2. Initialize git submodule:
     ```bash
