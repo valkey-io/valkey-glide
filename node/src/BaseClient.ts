@@ -172,6 +172,8 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
+export type GlideString = string | Uint8Array;
+
 type RedisCredentials = {
     /**
      * The username that will be used for authenticating connections to the Redis servers.
