@@ -95,7 +95,7 @@ jobs:
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build
+              run: ./gradlew --continue build -x javadoc
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -163,22 +163,18 @@ jobs:
 
             - name: Install Java
               run: |
-                  yum install -y java-${{ matrix.java }}
+                  yum install -y java-${{ matrix.java }}-amazon-corretto-devel.x86_64
 
-            - name: Build rust part
+            - name: Build java wrapper
               working-directory: java
-              run: cargo build --release
-
-            - name: Build java part
-              working-directory: java
-              run: ./gradlew --continue build
+              run: ./gradlew --continue build -x javadoc
 
             - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-${{ matrix.java }}
+                  name: test-reports-${{ matrix.java }}-amazon-linux
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**

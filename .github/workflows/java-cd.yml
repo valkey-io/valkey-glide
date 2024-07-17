@@ -56,26 +56,21 @@ jobs:
                     OS: ubuntu,
                     RUNNER: ubuntu-latest,
                     TARGET: x86_64-unknown-linux-gnu,
-                    CLASSIFIER: linux-x86_64
                   }
                   - {
                     OS: ubuntu,
                     RUNNER: ["self-hosted", "Linux", "ARM64"],
                     TARGET: aarch64-unknown-linux-gnu,
-                    CLASSIFIER: linux-aarch_64,
-                    CONTAINER: "2_28"
                   }
                   - {
                     OS: macos,
                     RUNNER: macos-12,
                     TARGET: x86_64-apple-darwin,
-                    CLASSIFIER: osx-x86_64
                   }
                   - {
                     OS: macos,
                     RUNNER: macos-latest,
                     TARGET: aarch64-apple-darwin,
-                    CLASSIFIER: osx-aarch_64
                   }
 
         runs-on: ${{ matrix.host.RUNNER }}
@@ -139,18 +134,12 @@ jobs:
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
-            - name: Replace placeholders and version in build.gradle
-              shell: bash
-              working-directory: ./java/client
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.host.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
-                  sed -i $SED_FOR_MACOS "s/255.255.255/${{ env.RELEASE_VERSION }}/g" build.gradle
-
             - name: Build java client
               working-directory: java
               run: |
                   ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
 
             - name: Bundle JAR
               working-directory: java
@@ -160,7 +149,7 @@ jobs:
                   jar -cvf bundle.jar *
                   ls -ltr
                   cd -
-                  cp $src_folder/bundle.jar .
+                  cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -168,4 +157,4 @@ jobs:
               with:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
-                      java/bundle.jar
+                      java/bundle*.jar

@@ -11,7 +11,8 @@ repositories {
 }
 
 dependencies {
-    implementation project(':client')
+    implementation "io.valkey:valkey-glide:1.0.1:${osdetector.classifier}"
+
     implementation 'redis.clients:jedis:4.4.3'
     implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
     implementation 'commons-cli:commons-cli:1.5.0'

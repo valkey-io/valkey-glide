@@ -4,7 +4,9 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'signing'
-    id ("com.github.spotbugs") version "6.0.18"
+    id 'io.freefair.lombok' version '8.6'
+    id 'com.github.spotbugs' version '6.0.18'
+    id 'com.google.osdetector' version '1.7.3'
 }
 
 repositories {
@@ -156,7 +158,11 @@ tasks.register('copyNativeLib', Copy) {
     into sourceSets.main.output.resourcesDir
 }
 
+def defaultReleaseVersion = "255.255.255";
+
+delombok.dependsOn('compileJava')
 jar.dependsOn('copyNativeLib')
+javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
 compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
@@ -183,8 +189,7 @@ publishing {
             from components.java
             groupId = 'io.valkey'
             artifactId = 'valkey-glide'
-            // version is replaced during released workflow java-cd.yml
-            version = "255.255.255"
+            version = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
             pom {
                 name = 'valkey-glide'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
@@ -217,8 +222,15 @@ publishing {
 }
 
 java {
+    modularity.inferModulePath = true
     withSourcesJar()
-//    withJavadocJar()
+    withJavadocJar()
+}
+
+tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != defaultReleaseVersion;
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
 }
 
 signing {
@@ -236,15 +248,24 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "valkey-glide"
-    // placeholder will be renamed by platform+arch on the release workflow java-cd.yml
-    archiveClassifier = "placeholder"
+    archiveClassifier = osdetector.classifier
 }
 
 sourcesJar {
     // suppress following error
     // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+delombok {
+    modulePath = classpath
+}
+
+javadoc {
+    dependsOn delombok
+    source = delombok.outputs
+    options.tags = [ "example:a:Example:" ]
+    failOnError = false // TODO fix all javadoc errors and warnings and remove that
 }
 
 spotbugsMain {
