@@ -98,6 +98,7 @@
 * Python: Added FUNCTION STATS command ([#1794](https://github.com/valkey-io/valkey-glide/pull/1794))
 * Python: Added XINFO STREAM command ([#1816](https://github.com/valkey-io/valkey-glide/pull/1816))
 * Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/valkey-io/valkey-glide/pull/1814))
+* Node: Added FlushAll command ([#1958](https://github.com/valkey-io/valkey-glide/pull/1958))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))
