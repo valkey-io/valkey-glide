@@ -17,7 +17,9 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Supports commands and transactions for the "Stream Commands" group for standalone and cluster
@@ -53,11 +55,43 @@ public interface StreamBaseCommands {
      * @return The id of the added entry.
      * @example
      *     <pre>{@code
+     * String streamId = client.xadd("key", List.of(Pair.of("name", "Sara"), Pair.of("surname", "OConnor")).get();
+     * System.out.println("Stream: " + streamId);
+     * }</pre>
+     */
+    CompletableFuture<String> xadd(String key, List<Pair<String, String>> values);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return The id of the added entry.
+     * @example
+     *     <pre>{@code
      * String streamId = client.xadd(gs("key"), Map.of(gs("name"), gs("Sara"), gs("surname"), gs("OConnor")).get();
      * System.out.println("Stream: " + streamId);
      * }</pre>
      */
     CompletableFuture<GlideString> xadd(GlideString key, Map<GlideString, GlideString> values);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return The id of the added entry.
+     * @example
+     *     <pre>{@code
+     * String streamId = client.xadd(gs("key"), List.of(Pair.of(gs("name"), gs("Sara")), Pair.of(gs("surname"), gs("OConnor"))).get();
+     * System.out.println("Stream: " + streamId);
+     * }</pre>
+     */
+    CompletableFuture<String> xadd(String key, List<Pair<GlideString, GlideString>> values);
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
@@ -91,6 +125,29 @@ public interface StreamBaseCommands {
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options {@link StreamAddOptions}.
      * @return The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
+     * @example
+     *     <pre>{@code
+     * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
+     * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
+     * String streamId = client.xadd("key", List.of(Pair.of("name", "Sara"), Pair.of("surname", "OConnor")), options).get();
+     * if (streamId != null) {
+     *     assert streamId.equals("sid");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<String> xadd(String key, List<Pair<String, String>> values, StreamAddOptions options);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options {@link StreamAddOptions}.
+     * @return The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBinaryBuilder#makeStream(Boolean)} is set to <code>false</code> and no
      *     stream with the matching <code>key</code> exists.
      * @example
@@ -105,6 +162,30 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<GlideString> xadd(
             GlideString key, Map<GlideString, GlideString> values, StreamAddOptionsBinary options);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options {@link StreamAddOptions}.
+     * @return The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBinaryBuilder#makeStream(Boolean)} is set to <code>false</code> and no
+     *     stream with the matching <code>key</code> exists.
+     * @example
+     *     <pre>{@code
+     * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
+     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
+     * String streamId = client.xadd(gs("key"), List.of(Pair.of(gs("name"), gs("Sara")), Pair.of(gs("surname"), gs("OConnor"))), options).get();
+     * if (streamId != null) {
+     *     assert streamId.equals("sid");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<GlideString> xadd(
+        GlideString key, List<Pair<GlideString, GlideString>> values, StreamAddOptionsBinary options);
 
     /**
      * Reads entries from the given streams.

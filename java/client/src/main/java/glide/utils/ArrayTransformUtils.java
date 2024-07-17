@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.tuple.Pair;
 
 /** Utility methods for data conversion. */
 public class ArrayTransformUtils {
@@ -42,6 +43,32 @@ public class ArrayTransformUtils {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getKey(), GlideString.gs(entry.getValue().toString())))
                 .toArray(GlideString[]::new);
+    }
+
+    /**
+     * Converts a list of pairs of string keys and values of any type that can be converted in to an array of
+     * strings with alternating keys and values.
+     *
+     * @param args List of pairs of string keys to values of any type to convert.
+     * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
+     */
+    public static String[] convertListToKeyValueStringArray(List<Pair<String, ?>> args) {
+        return args.stream()
+            .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+            .toArray(String[]::new);
+    }
+
+    /**
+     * Converts a list of pairs of GlideString keys and values of any type in to an array of GlideStrings with
+     * alternating keys and values.
+     *
+     * @param args List of pairs of GlideString keys to values of any type to convert.
+     * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
+     */
+    public static GlideString[] convertListToKeyValueGlideStringArray(List<Pair<GlideString, ?>> args) {
+        return args.stream()
+            .flatMap(entry -> Stream.of(entry.getKey(), GlideString.gs(entry.getValue().toString())))
+            .toArray(GlideString[]::new);
     }
 
     /**
@@ -248,6 +275,20 @@ public class ArrayTransformUtils {
                 .flatMap(
                         entry -> Stream.of(GlideString.of(entry.getKey()), GlideString.of(entry.getValue())))
                 .toArray(GlideString[]::new);
+    }
+
+    /**
+     * Converts a list of pairs of any type of keys and values in to an array of GlideString with alternating
+     * keys and values.
+     *
+     * @param args List of pairs of keys to values of any type to convert.
+     * @return Array of GlideString [key1, value1, key2, value2, ...].
+     */
+    public static GlideString[] flattenListToGlideStringArray(List<Pair<?, ?>> args) {
+        return args.stream()
+            .flatMap(
+                entry -> Stream.of(GlideString.of(entry.getKey()), GlideString.of(entry.getValue())))
+            .toArray(GlideString[]::new);
     }
 
     /**

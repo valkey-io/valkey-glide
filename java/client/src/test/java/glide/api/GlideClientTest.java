@@ -7176,6 +7176,34 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
+    public void xadd_list_of_pairs_returns_success() {
+        // setup
+        String key = "testKey";
+        List<Pair<String, String>> fieldValues = new ArrayList<>();
+        fieldValues.add(Pair.of("testField1", "testValue1"));
+        fieldValues.add(Pair.of("testField2", "testValue2"));
+        String[] fieldValuesArgs = convertListToKeyValueStringArray(fieldValues);
+        String[] arguments = new String[] {key, "*"};
+        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
+        String returnId = "testId";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xadd(key, fieldValues);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void xadd_binary_returns_success() {
         // setup
         GlideString key = gs("testKey");
@@ -7193,6 +7221,34 @@ public class GlideClientTest {
         // match on protobuf request
         when(commandManager.<GlideString>submitNewCommand(eq(XAdd), eq(arguments), any()))
                 .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.xadd(key, fieldValues);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void xadd_list_of_pairs_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        List<Pair<GlideString, GlideString>> fieldValues = new ArrayList<>();
+        fieldValues.add(Pair.of(gs("testField1"), gs("testValue1")));
+        fieldValues.add(Pair.of(gs("testField2"), gs("testValue2")));
+        GlideString[] fieldValuesArgs = convertListToKeyValueGlideStringArray(fieldValues);
+        GlideString[] arguments = new GlideString[] {key, gs("*")};
+        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
+        GlideString returnId = gs("testId");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(XAdd), eq(arguments), any()))
+            .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<GlideString> response = service.xadd(key, fieldValues);

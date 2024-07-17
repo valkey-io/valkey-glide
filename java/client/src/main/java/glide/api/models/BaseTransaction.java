@@ -294,8 +294,10 @@ import glide.api.models.configuration.ReadFrom;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Map;
+import java.util.List;
 import lombok.Getter;
 import lombok.NonNull;
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Base class encompassing shared commands for both standalone and cluster server installations.
@@ -3365,6 +3367,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
+     * @return Command Response - The id of the added entry.
+     */
+    public <ArgType> T xadd(@NonNull ArgType key, @NonNull List<Pair<ArgType, ArgType>> values) {
+        return xadd(key, values, StreamAddOptions.builder().build());
+    }
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options {@link StreamAddOptions}.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
@@ -3382,6 +3399,35 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(key)
                                 .add(options.toArgs())
                                 .add(flattenMapToGlideStringArray(values))));
+        return getThis();
+    }
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options {@link StreamAddOptions}.
+     * @return Command Response - The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
+     */
+    public <ArgType> T xadd(
+        @NonNull ArgType key,
+        @NonNull List<Pair<ArgType, ArgType>> values,
+        @NonNull StreamAddOptions options) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+            buildCommand(
+                XAdd,
+                newArgsBuilder()
+                    .add(key)
+                    .add(options.toArgs())
+                    .add(flattenListToGlideStringArray(values))));
         return getThis();
     }
 

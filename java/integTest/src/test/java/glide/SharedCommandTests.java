@@ -5772,6 +5772,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        String foo1 = "foo1";
+        String bar1 = "bar1";
+
+        String timestamp = "0-1";
+        assertEquals(
+            timestamp,
+            client
+                .xadd(
+                    key,
+                    List.of(Pair.of(field, foo1), Pair.of(field, bar1)),
+                    StreamAddOptions.builder().id(timestamp).build())
+                .get());
+
+        // get everything from the stream
+        Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(2, result.size());
+        String[][] entry = result.get(key);
+        assertNotNull(entry);
+        assertEquals(key, entry[0][0]);
+        assertEquals(foo1, entry[0][1]);
+        assertEquals(key, entry[1][0]);
+        assertEquals(bar1, entry[1][1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xadd_xlen_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
