@@ -6,6 +6,7 @@
 * Node: Added SINTERSTORE command ([#1929](https://github.com/valkey-io/valkey-glide/pull/1929))
 * Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))
 * Node: Added SDIFF command ([#1924](https://github.com/valkey-io/valkey-glide/pull/1924))
+* Node: Added LOLWUT command ([#1934](https://github.com/valkey-io/valkey-glide/pull/1934))
 
 ## 1.0.0 (2024-07-09)
 

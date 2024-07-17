@@ -1607,3 +1607,35 @@ export function createObjectIdletime(key: string): command_request.Command {
 export function createObjectRefcount(key: string): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
 }
+
+export type LolwutOptions = {
+    /**
+     * An optional argument that can be used to specify the version of computer art to generate.
+     */
+    version?: number;
+    /**
+     * An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     */
+    parameters?: number[];
+};
+
+/**
+ * @internal
+ */
+export function createLolwut(options?: LolwutOptions): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.version !== undefined) {
+            args.push("VERSION", options.version.toString());
+        }
+
+        if (options.parameters !== undefined) {
+            args.push(...options.parameters.map((param) => param.toString()));
+        }
+    }
+
+    return createCommand(RequestType.Lolwut, args);
+}
