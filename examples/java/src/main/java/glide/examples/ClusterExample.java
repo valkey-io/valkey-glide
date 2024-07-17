@@ -25,6 +25,9 @@ public class ClusterExample {
      * GlideClusterClient with the provided list of nodes.
      *
      * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
+     * @throws CancellationException if the operation is cancelled.
+     * @throws ExecutionException if the client creation fails due to execution errors.
+     * @throws InterruptedException if the operation is interrupted.
      */
     public static GlideClusterClient createClient() throws CancellationException, ExecutionException, InterruptedException {
         String host = "localhost";
@@ -53,6 +56,8 @@ public class ClusterExample {
      * and INFO REPLICATION using the provided GlideClusterClient.
      *
      * @param client An instance of <code>GlideClusterClient</code>.
+     * @throws ExecutionException if an execution error occurs during operations.
+     * @throws InterruptedException if the operation is interrupted.
      */
     public static void appLogic(GlideClusterClient client) throws ExecutionException, InterruptedException {
 
@@ -77,8 +82,12 @@ public class ClusterExample {
                 "INFO REPLICATION responses from all nodes are " + infoResponse.getMultiValue());
     }
 
-    /** Executes the application logic with exception handling. */
-    private static void execAppLogic() {
+    /**
+     * Executes the application logic with exception handling.
+     *
+     * @throws ExecutionException if an execution error occurs during operations.
+     */
+    private static void execAppLogic() throws ExecutionException {
 
         while (true) {
             GlideClusterClient client = null;
@@ -101,6 +110,7 @@ public class ClusterExample {
                     if (e.getMessage().contains("NOAUTH")) {
                         Logger.log(
                             Logger.Level.ERROR, "glide", "Authentication error encountered: " + e.getMessage());
+                        throw e;
                     } else {
                         Logger.log(
                             Logger.Level.WARN,
@@ -110,14 +120,18 @@ public class ClusterExample {
                 } else if (e.getCause() instanceof ConnectionException) {
                     // The client wasn't able to reestablish the connection within the given retries
                     Logger.log(Logger.Level.ERROR, "glide", "Connection error encountered: " + e.getMessage());
+                    throw e;
                 } else if (e.getCause() instanceof TimeoutException) {
                     // A request timed out. You may choose to retry the execution based on your application's
                     // logic
                     Logger.log(Logger.Level.ERROR, "glide", "Timeout encountered: " + e.getMessage());
+                    throw e;
                 } else if (e.getCause() instanceof ExecAbortException) {
                     Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: " + e.getMessage());
+                    throw e;
                 } else {
                     Logger.log(Logger.Level.ERROR, "glide", "Execution error during client creation: " + e.getCause());
+                    throw e;
                 }
             } finally {
                 if (client != null) {
@@ -134,7 +148,14 @@ public class ClusterExample {
         }
     }
 
-    public static void main(String[] args) {
+    /**
+     * The entry point of the cluster example. This method sets up the logger configuration
+     * and executes the main application logic.
+     *
+     * @param args Command-line arguments passed to the application.
+     * @throws ExecutionException if an error occurs during execution of the application logic.
+     */
+    public static void main(String[] args) throws ExecutionException {
         // In this example, we will utilize the client's logger for all log messages
         Logger.setLoggerConfig(Logger.Level.INFO);
         // Optional - set the logger to write to a file

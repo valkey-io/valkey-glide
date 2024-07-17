@@ -20,7 +20,10 @@ public class StandaloneExample {
      * Creates and returns a GlideClient instance. This function initializes a
      * GlideClient with the provided node address.
      *
-     * @return A <code>GlideClient</code> connected to the provided nodes address.
+     * @return A <code>GlideClient</code> connected to the provided node address.
+     * @throws CancellationException if the operation is cancelled.
+     * @throws ExecutionException if the client creation fails due to execution errors.
+     * @throws InterruptedException if the operation is interrupted.
      */
     public static GlideClient createClient() throws CancellationException, ExecutionException, InterruptedException {
         String host = "localhost";
@@ -43,6 +46,8 @@ public class StandaloneExample {
      * PING using the provided GlideClient.
      *
      * @param client An instance of <code>GlideClient</code>.
+     * @throws ExecutionException if an execution error occurs during operations.
+     * @throws InterruptedException if the operation is interrupted.
      */
     public static void appLogic(GlideClient client) throws ExecutionException, InterruptedException {
 
@@ -58,8 +63,12 @@ public class StandaloneExample {
         Logger.log(Logger.Level.INFO, "app", "Ping response is " + pong.get());
     }
 
-    /** Executes the application logic with exception handling. */
-    private static void execAppLogic() {
+    /**
+     * Executes the application logic with exception handling.
+     *
+     * @throws ExecutionException if an execution error occurs during operations.
+     */
+    private static void execAppLogic() throws ExecutionException {
 
         while (true) {
             GlideClient client = null;
@@ -82,6 +91,7 @@ public class StandaloneExample {
                     if (e.getMessage().contains("NOAUTH")) {
                         Logger.log(
                             Logger.Level.ERROR, "glide", "Authentication error encountered: " + e.getMessage());
+                        throw e;
                     } else {
                         Logger.log(
                             Logger.Level.WARN,
@@ -91,14 +101,18 @@ public class StandaloneExample {
                 } else if (e.getCause() instanceof ConnectionException) {
                     // The client wasn't able to reestablish the connection within the given retries
                     Logger.log(Logger.Level.ERROR, "glide", "Connection error encountered: " + e.getMessage());
+                    throw e;
                 } else if (e.getCause() instanceof TimeoutException) {
                     // A request timed out. You may choose to retry the execution based on your application's
                     // logic
                     Logger.log(Logger.Level.ERROR, "glide", "Timeout encountered: " + e.getMessage());
+                    throw e;
                 } else if (e.getCause() instanceof ExecAbortException) {
                     Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: " + e.getMessage());
+                    throw e;
                 } else {
                     Logger.log(Logger.Level.ERROR, "glide", "Execution error during client creation: " + e.getCause());
+                    throw e;
                 }
             } finally {
                 if (client != null) {
@@ -115,7 +129,14 @@ public class StandaloneExample {
         }
     }
 
-    public static void main(String[] args) {
+    /**
+     * The entry point of the standalone example. This method sets up the logger configuration
+     * and executes the main application logic.
+     *
+     * @param args Command-line arguments passed to the application.
+     * @throws ExecutionException if an error occurs during execution of the application logic.
+     */
+    public static void main(String[] args) throws ExecutionException {
         // In this example, we will utilize the client's logger for all log messages
         Logger.setLoggerConfig(Logger.Level.INFO);
         // Optional - set the logger to write to a file
