@@ -311,6 +311,7 @@ export async function transactionTest(
     const key13 = "{key}" + uuidv4();
     const key14 = "{key}" + uuidv4(); // sorted set
     const key15 = "{key}" + uuidv4(); // list
+    const key16 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -398,6 +399,22 @@ export async function transactionTest(
     args.push(0);
     baseTransaction.lpushx(key15, ["_"]);
     args.push(0);
+    baseTransaction.rpush(key16, [
+        field + "1",
+        field + "1",
+        field + "2",
+        field + "3",
+        field + "3",
+    ]);
+    args.push(5);
+    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
+    args.push(1);
+    baseTransaction.lpos(
+        key16,
+        field + "1",
+        new LPosOptions({ rank: 2, count: 0 }),
+    );
+    args.push([1]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -539,21 +556,5 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.pfcount([key11]);
     args.push(3);
-    baseTransaction.rpush(key15, [
-        field + "1",
-        field + "1",
-        field + "2",
-        field + "3",
-        field + "3",
-    ]);
-    args.push(5);
-    baseTransaction.lpos(key15, field + "1", new LPosOptions({ rank: 2 }));
-    args.push(1);
-    baseTransaction.lpos(
-        key15,
-        field + "1",
-        new LPosOptions({ rank: 2, count: 0 }),
-    );
-    args.push([1]);
     return args;
 }

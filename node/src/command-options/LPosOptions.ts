@@ -13,7 +13,6 @@ export class LPosOptions {
     /** Redis API keyword used to extract specific number of matching indices from a list. */
     public static COUNT_REDIS_API = "COUNT";
     /** Redis API keyword used to determine the maximum number of list items to compare. */
-
     public static MAXLEN_REDIS_API = "MAXLEN";
     /** The rank of the match to return. */
     private rank?: number;
