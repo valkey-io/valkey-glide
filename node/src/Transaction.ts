@@ -8,6 +8,7 @@ import {
     InfoOptions,
     InsertPosition,
     KeyWeight,
+    LolwutOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -60,6 +61,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLolwut,
     createMGet,
     createMSet,
     createObjectEncoding,
@@ -90,6 +92,7 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSelect,
     createSet,
@@ -116,7 +119,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnion,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1662,6 +1664,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public objectRefcount(key: string): T {
         return this.addAndReturn(createObjectRefcount(key));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options.
+     *
+     * Command Response - A piece of generative computer art along with the current server version.
+     */
+    public lolwut(options?: LolwutOptions): T {
+        return this.addAndReturn(createLolwut(options));
     }
 }
 
