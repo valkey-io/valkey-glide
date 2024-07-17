@@ -4002,7 +4002,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.set(key, "value")).toBe("OK");
                     const primaryRoute: SingleNodeRoute = {
                         type: "primarySlotKey",
-                        key: key
+                        key: key,
                     };
                     expect(await client.dbsize(primaryRoute)).toBe(1);
                 }
