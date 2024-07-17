@@ -540,9 +540,9 @@ describe("GlideClusterClient", () => {
 
                             try {
                                 const libName =
-                                    "mylib1C" + uuidv4().replace(/-/g, ""); //.replaceAll("-", "");
+                                    "mylib1C" + uuidv4().replaceAll("-", "");
                                 const funcName =
-                                    "myfunc1c" + uuidv4().replace(/-/g, ""); //.replaceAll("-", "");
+                                    "myfunc1c" + uuidv4().replaceAll("-", "");
                                 const code = generateLuaLibCode(
                                     libName,
                                     new Map([[funcName, "return args[1]"]]),
