@@ -339,7 +339,7 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/flushall/ for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode#SYNC} or {@link FlushMode#ASYNC}.
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns `OK`.
      *
      * @example

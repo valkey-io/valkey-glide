@@ -1650,6 +1650,13 @@ export function createLolwut(options?: LolwutOptions): command_request.Command {
     return createCommand(RequestType.Lolwut, args);
 }
 
+/**
+ * Defines flushing mode for:
+ *
+ * `FLUSHALL` command.
+ *
+ * See https://valkey.io/commands/flushall/ for details.
+ */
 export enum FlushMode {
     /**
      * Flushes synchronously.

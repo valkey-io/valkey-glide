@@ -603,7 +603,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/flushall/ for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode#SYNC} or {@link FlushMode#ASYNC}.
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns `OK`.
