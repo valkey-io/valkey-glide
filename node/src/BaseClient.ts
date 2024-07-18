@@ -2868,6 +2868,8 @@ export class BaseClient {
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
      *
+     * since - Redis version 7.2.0.
+     * 
      * @example
      * ```typescript
      * const result = await client.zrevankWithScore("my_sorted_set", "member2");
