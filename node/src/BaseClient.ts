@@ -103,6 +103,8 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZDiff,
+    createZDiffWithScores,
     createZInterCard,
     createZInterstore,
     createZPopMax,
@@ -2274,6 +2276,58 @@ export class BaseClient {
      */
     public zintercard(keys: string[], limit?: number): Promise<number> {
         return this.createWritePromise(createZInterCard(keys, limit));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     * To get the elements with their scores, see {@link zdiffWithScores}.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @returns An `array` of elements representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0, "member3": 3.0});
+     * await client.zadd("zset2", {"member2": 2.0});
+     * await client.zadd("zset3", {"member3": 3.0});
+     * const result = await client.zdiff(["zset1", "zset2", "zset3"]);
+     * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
+     * ```
+     */
+    public zdiff(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZDiff(keys));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets, with the associated
+     * scores.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @returns A map of elements and their scores representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0, "member3": 3.0});
+     * await client.zadd("zset2", {"member2": 2.0});
+     * await client.zadd("zset3", {"member3": 3.0});
+     * const result = await client.zdiffWithScores(["zset1", "zset2", "zset3"]);
+     * console.log(result); // Output: {"member1": 1.0} - "member1" is in "zset1" but not "zset2" or "zset3".
+     * ```
+     */
+    public zdiffWithScores(keys: string[]): Promise<Record<string, number>> {
+        return this.createWritePromise(createZDiffWithScores(keys));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
