@@ -215,6 +215,7 @@ import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
+import static glide.utils.ArrayTransformUtils.flattenNestedArrayToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
 import command_request.CommandRequestOuterClass.Command;
@@ -294,10 +295,8 @@ import glide.api.models.configuration.ReadFrom;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Map;
-import java.util.List;
 import lombok.Getter;
 import lombok.NonNull;
-import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Base class encompassing shared commands for both standalone and cluster server installations.
@@ -3369,7 +3368,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param values Field-value pairs to be added to the entry.
      * @return Command Response - The id of the added entry.
      */
-    public <ArgType> T xadd(@NonNull ArgType key, @NonNull List<Pair<ArgType, ArgType>> values) {
+    public <ArgType> T xadd(@NonNull ArgType key, @NonNull ArgType[][] values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
 
@@ -3417,17 +3416,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     with the matching <code>key</code> exists.
      */
     public <ArgType> T xadd(
-        @NonNull ArgType key,
-        @NonNull List<Pair<ArgType, ArgType>> values,
-        @NonNull StreamAddOptions options) {
+            @NonNull ArgType key, @NonNull ArgType[][] values, @NonNull StreamAddOptions options) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
-            buildCommand(
-                XAdd,
-                newArgsBuilder()
-                    .add(key)
-                    .add(options.toArgs())
-                    .add(flattenListToGlideStringArray(values))));
+                buildCommand(
+                        XAdd,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add(flattenNestedArrayToGlideStringArray(values))));
         return getThis();
     }
 

@@ -5780,13 +5780,13 @@ public class SharedCommandTests {
 
         String timestamp = "0-1";
         assertEquals(
-            timestamp,
-            client
-                .xadd(
-                    key,
-                    List.of(Pair.of(field, foo1), Pair.of(field, bar1)),
-                    StreamAddOptions.builder().id(timestamp).build())
-                .get());
+                timestamp,
+                client
+                        .xadd(
+                                key,
+                                new String[][] {new String[] {field, foo1}, new String[] {field, bar1}},
+                                StreamAddOptions.builder().id(timestamp).build())
+                        .get());
 
         // get everything from the stream
         Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
@@ -5797,6 +5797,38 @@ public class SharedCommandTests {
         assertEquals(foo1, entry[0][1]);
         assertEquals(key, entry[1][0]);
         assertEquals(bar1, entry[1][1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_wrong_length_entries(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String timestamp = "0-1";
+
+        // Entry too long
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client
+                                .xadd(
+                                        key,
+                                        new String[][] {
+                                            new String[] {"field1", "foo1"}, new String[] {"field2", "bar2", "oh no"}
+                                        },
+                                        StreamAddOptions.builder().id(timestamp).build())
+                                .get());
+
+        // Entry too short
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client
+                                .xadd(
+                                        key,
+                                        new String[][] {new String[] {"field1", "foo1"}, new String[] {"oh no"}},
+                                        StreamAddOptions.builder().id(timestamp).build())
+                                .get());
     }
 
     @SneakyThrows

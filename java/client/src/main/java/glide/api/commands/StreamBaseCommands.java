@@ -17,9 +17,7 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Supports commands and transactions for the "Stream Commands" group for standalone and cluster
@@ -55,11 +53,11 @@ public interface StreamBaseCommands {
      * @return The id of the added entry.
      * @example
      *     <pre>{@code
-     * String streamId = client.xadd("key", List.of(Pair.of("name", "Sara"), Pair.of("surname", "OConnor")).get();
+     * String streamId = client.xadd("key", {{"name", "Sara"}, {"surname", "OConnor"}}).get();
      * System.out.println("Stream: " + streamId);
      * }</pre>
      */
-    CompletableFuture<String> xadd(String key, List<Pair<String, String>> values);
+    CompletableFuture<String> xadd(String key, String[][] values);
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
@@ -87,11 +85,11 @@ public interface StreamBaseCommands {
      * @return The id of the added entry.
      * @example
      *     <pre>{@code
-     * String streamId = client.xadd(gs("key"), List.of(Pair.of(gs("name"), gs("Sara")), Pair.of(gs("surname"), gs("OConnor"))).get();
+     * String streamId = client.xadd(gs("key"), {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}).get();
      * System.out.println("Stream: " + streamId);
      * }</pre>
      */
-    CompletableFuture<String> xadd(String key, List<Pair<GlideString, GlideString>> values);
+    CompletableFuture<GlideString> xadd(GlideString key, GlideString[][] values);
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
@@ -131,13 +129,13 @@ public interface StreamBaseCommands {
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
      * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
-     * String streamId = client.xadd("key", List.of(Pair.of("name", "Sara"), Pair.of("surname", "OConnor")), options).get();
+     * String streamId = client.xadd("key", {{"name", "Sara"}, {"surname", "OConnor"}}, options).get();
      * if (streamId != null) {
      *     assert streamId.equals("sid");
      * }
      * }</pre>
      */
-    CompletableFuture<String> xadd(String key, List<Pair<String, String>> values, StreamAddOptions options);
+    CompletableFuture<String> xadd(String key, String[][] values, StreamAddOptions options);
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
@@ -178,14 +176,14 @@ public interface StreamBaseCommands {
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
      * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
-     * String streamId = client.xadd(gs("key"), List.of(Pair.of(gs("name"), gs("Sara")), Pair.of(gs("surname"), gs("OConnor"))), options).get();
+     * String streamId = client.xadd(gs("key"), {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}, options).get();
      * if (streamId != null) {
      *     assert streamId.equals("sid");
      * }
      * }</pre>
      */
     CompletableFuture<GlideString> xadd(
-        GlideString key, List<Pair<GlideString, GlideString>> values, StreamAddOptionsBinary options);
+            GlideString key, GlideString[][] values, StreamAddOptionsBinary options);
 
     /**
      * Reads entries from the given streams.

@@ -187,6 +187,8 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArr
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideStringArray;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
@@ -284,7 +286,6 @@ import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.tuple.Pair;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -2590,7 +2591,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> xadd(@NonNull String key, @NonNull List<Pair<String, String>> values) {
+    public CompletableFuture<String> xadd(@NonNull String key, @NonNull String[][] values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
 
@@ -2602,7 +2603,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<GlideString> xadd(
-        @NonNull GlideString key, @NonNull List<Pair<GlideString, GlideString>> values) {
+            @NonNull GlideString key, @NonNull GlideString[][] values) {
         return xadd(key, values, StreamAddOptionsBinary.builder().build());
     }
 
@@ -2617,10 +2618,11 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xadd(
-        @NonNull String key, @NonNull List<Pair<String, String>> values, @NonNull StreamAddOptions options) {
+            @NonNull String key, @NonNull String[][] values, @NonNull StreamAddOptions options) {
         String[] arguments =
-            ArrayUtils.addAll(
-                ArrayUtils.addFirst(options.toArgs(), key), convertListToKeyValueStringArray(values));
+                ArrayUtils.addAll(
+                        ArrayUtils.addFirst(options.toArgs(), key),
+                        convertNestedArrayToKeyValueStringArray(values));
         return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
     }
 
@@ -2641,15 +2643,15 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<GlideString> xadd(
-        @NonNull GlideString key,
-        @NonNull List<Pair<GlideString, GlideString>> values,
-        @NonNull StreamAddOptionsBinary options) {
+            @NonNull GlideString key,
+            @NonNull GlideString[][] values,
+            @NonNull StreamAddOptionsBinary options) {
         GlideString[] arguments =
-            new ArgsBuilder()
-                .add(key)
-                .add(options.toArgs())
-                .add(convertListToKeyValueGlideStringArray(values))
-                .toArray();
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add(convertNestedArrayToKeyValueGlideStringArray(values))
+                        .toArray();
 
         return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
     }

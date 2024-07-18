@@ -271,6 +271,8 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArr
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideStringArray;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -7179,10 +7181,8 @@ public class GlideClientTest {
     public void xadd_list_of_pairs_returns_success() {
         // setup
         String key = "testKey";
-        List<Pair<String, String>> fieldValues = new ArrayList<>();
-        fieldValues.add(Pair.of("testField1", "testValue1"));
-        fieldValues.add(Pair.of("testField2", "testValue2"));
-        String[] fieldValuesArgs = convertListToKeyValueStringArray(fieldValues);
+        String[][] fieldValues = {{"testField1", "testValue1"}, {"testField2", "testValue2"}};
+        String[] fieldValuesArgs = convertNestedArrayToKeyValueStringArray(fieldValues);
         String[] arguments = new String[] {key, "*"};
         arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
         String returnId = "testId";
@@ -7192,7 +7192,7 @@ public class GlideClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.xadd(key, fieldValues);
@@ -7235,10 +7235,10 @@ public class GlideClientTest {
     public void xadd_list_of_pairs_binary_returns_success() {
         // setup
         GlideString key = gs("testKey");
-        List<Pair<GlideString, GlideString>> fieldValues = new ArrayList<>();
-        fieldValues.add(Pair.of(gs("testField1"), gs("testValue1")));
-        fieldValues.add(Pair.of(gs("testField2"), gs("testValue2")));
-        GlideString[] fieldValuesArgs = convertListToKeyValueGlideStringArray(fieldValues);
+        GlideString[][] fieldValues = {
+            {gs("testField1"), gs("testValue1")}, {gs("testField2"), gs("testValue2")}
+        };
+        GlideString[] fieldValuesArgs = convertNestedArrayToKeyValueGlideStringArray(fieldValues);
         GlideString[] arguments = new GlideString[] {key, gs("*")};
         arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
         GlideString returnId = gs("testId");
@@ -7248,7 +7248,7 @@ public class GlideClientTest {
 
         // match on protobuf request
         when(commandManager.<GlideString>submitNewCommand(eq(XAdd), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<GlideString> response = service.xadd(key, fieldValues);
