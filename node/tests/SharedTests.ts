@@ -514,6 +514,26 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getdel test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const value1 = uuidv4();
+                const key2 = uuidv4();
+
+                expect(await client.set(key1, value1)).toEqual("OK");
+                checkSimple(await client.getdel(key1)).toEqual(value1);
+                expect(await client.getdel(key1)).toEqual(null);
+
+                // key isn't a string
+                expect(await client.sadd(key2, ["a"])).toEqual(1);
+                await expect(client.getdel(key2)).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `testing hset and hget with multiple existing fields and one non existing field_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
