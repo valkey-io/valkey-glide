@@ -3,7 +3,12 @@
  */
 
 import * as net from "net";
-import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
+import {
+    BaseClient,
+    BaseClientConfiguration,
+    PubSubMsg,
+    ReturnType,
+} from "./BaseClient";
 import {
     FlushMode,
     InfoOptions,
@@ -21,11 +26,50 @@ import {
     createInfo,
     createLolwut,
     createPing,
+    createPublish,
     createSelect,
     createTime,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
+
+/* eslint-disable-next-line @typescript-eslint/no-namespace */
+export namespace GlideClientConfiguration {
+    /**
+     * Enum representing pubsub subscription modes.
+     * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
+     */
+    export enum PubSubChannelModes {
+        /**
+         * Use exact channel names.
+         */
+        Exact = 0,
+
+        /**
+         * Use channel name patterns.
+         */
+        Pattern = 1,
+    }
+
+    export type PubSubSubscriptions = {
+        /**
+         * Channels and patterns by modes.
+         */
+        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
+
+        /**
+         * Optional callback to accept the incoming messages.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        callback?: (msg: PubSubMsg, context: any) => void;
+
+        /**
+         * Arbitrary context to pass to the callback.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        context?: any;
+    };
+}
 
 export type GlideClientConfiguration = BaseClientConfiguration & {
     /**
@@ -57,6 +101,11 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
          */
         exponentBase: number;
     };
+    /**
+     * PubSub subscriptions to be used for the client.
+     * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
+     */
+    pubsubSubscriptions?: GlideClientConfiguration.PubSubSubscriptions;
 };
 
 /**
@@ -74,6 +123,7 @@ export class GlideClient extends BaseClient {
         const configuration = super.createClientRequest(options);
         configuration.databaseId = options.databaseId;
         configuration.connectionRetryStrategy = options.connectionBackoff;
+        this.configurePubsub(options, configuration);
         return configuration;
     }
 
@@ -82,7 +132,8 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket) => new GlideClient(socket),
+            (socket: net.Socket, options?: GlideClientConfiguration) =>
+                new GlideClient(socket, options),
         );
     }
 
@@ -372,5 +423,24 @@ export class GlideClient extends BaseClient {
      */
     public dbsize(): Promise<number> {
         return this.createWritePromise(createDBSize());
+    }
+
+    /** Publish a message on pubsub channel.
+     * See https://valkey.io/commands/publish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     * @returns -  Number of subscriptions in primary node that received the message.
+     * Note that this value does not include subscriptions that configured on replicas.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of publish command
+     * const result = await client.publish("Hi all!", "global-channel");
+     * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
+     * ```
+     */
+    public publish(message: string, channel: string): Promise<number> {
+        return this.createWritePromise(createPublish(message, channel));
     }
 }
