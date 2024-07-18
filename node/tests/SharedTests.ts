@@ -2172,6 +2172,76 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zdiff test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const key3 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+
+                const entries1 = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                };
+                const entries2 = { two: 2.0 };
+                const entries3 = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                    four: 4.0,
+                };
+
+                expect(await client.zadd(key1, entries1)).toEqual(3);
+                expect(await client.zadd(key2, entries2)).toEqual(1);
+                expect(await client.zadd(key3, entries3)).toEqual(4);
+
+                checkSimple(await client.zdiff([key1, key2])).toEqual([
+                    "one",
+                    "three",
+                ]);
+                checkSimple(await client.zdiff([key1, key3])).toEqual([]);
+                checkSimple(await client.zdiff([nonExistingKey, key3])).toEqual(
+                    [],
+                );
+
+                let result = await client.zdiffWithScores([key1, key2]);
+                const expected = {
+                    one: 1.0,
+                    three: 3.0,
+                };
+                expect(compareMaps(result, expected)).toBe(true);
+
+                result = await client.zdiffWithScores([key1, key3]);
+                expect(compareMaps(result, {})).toBe(true);
+
+                result = await client.zdiffWithScores([nonExistingKey, key3]);
+                expect(compareMaps(result, {})).toBe(true);
+
+                // invalid arg - key list must not be empty
+                await expect(client.zdiff([])).rejects.toThrow(RequestError);
+                await expect(client.zdiffWithScores([])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a sorted set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(client.zdiff([stringKey, key1])).rejects.toThrow();
+                await expect(
+                    client.zdiffWithScores([stringKey, key1]),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
