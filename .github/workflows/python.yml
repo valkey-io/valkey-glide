@@ -40,18 +40,18 @@ permissions:
 
 jobs:
     load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
+        runs-on: ubuntu-latest
+        outputs:
+          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+        
+            - name: Load the engine matrix
+              id: load-engine-matrix
+              shell: bash
+              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+        
     test:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: load-engine-matrix
@@ -137,19 +137,19 @@ jobs:
                       benchmarks/results/**
 
     test-pubsub:
-      runs-on: ${{ matrix.host.RUNNER }}
-      needs: load-engine-matrix
-      timeout-minutes: 35
-      strategy:
-          fail-fast: false
-          matrix:
-              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-              python:
-                # - "3.8"
-                # - "3.9"
-                # - "3.10"
-                # - "3.11"
-                  - "3.12"
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: load-engine-matrix
+        timeout-minutes: 35
+        strategy:
+            fail-fast: false
+            matrix:
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+                python:
+                  # - "3.8"
+                  # - "3.9"
+                  # - "3.10"
+                  # - "3.11"
+                    - "3.12"
                 host:
                     - {
                         OS: ubuntu,
