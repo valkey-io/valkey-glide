@@ -521,6 +521,13 @@ export async function transactionTest(
         baseTransaction.zrankWithScore(key8, "member1");
         args.push([0, 1]);
     }
+    baseTransaction.zrevrank(key8, "member5");
+    args.push(0);
+
+    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+        baseTransaction.zrevrankWithScore(key8, "member5");
+        args.push([0, 5]);
+    }
 
     baseTransaction.zaddIncr(key8, "member2", 1);
     args.push(3);

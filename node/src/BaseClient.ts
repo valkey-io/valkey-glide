@@ -118,6 +118,7 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
+    createZRevRank,
     createZScore,
 } from "./Commands";
 import {
@@ -132,6 +133,7 @@ import {
 import { GlideClientConfiguration } from "./GlideClient";
 import { ClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
+import { createZRevRankWithScore } from "./Commands";
 import {
     command_request,
     connection_request,
@@ -2830,6 +2832,51 @@ export class BaseClient {
         member: string,
     ): Promise<number[] | null> {
         return this.createWritePromise(createZRank(key, member, true));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key`, where
+     * scores are ordered from the highest to lowest, starting from 0.
+     * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevrank("my_sorted_set", "member2");
+     * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
+     */
+    public zrevrank(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZRevRank(key, member));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key` with its
+     * score, where scores are ordered from the highest to lowest, starting from 0.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return A list containing the rank and score of `member` in the sorted set, where ranks
+     *     are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevankWithScore("my_sorted_set", "member2");
+     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
+     */
+    public zrevrankWithScore(
+        key: string,
+        member: string,
+    ): Promise<(number[] | null)[]> {
+        return this.createWritePromise(createZRevRankWithScore(key, member));
     }
 
     /**
