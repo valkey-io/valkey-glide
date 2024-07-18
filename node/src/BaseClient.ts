@@ -750,7 +750,7 @@ export class BaseClient {
      * See https://valkey.io/commands/getdel/ for details.
      *
      * @param key - The key to retrieve from the database.
-     * @returns - If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
+     * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
      * ```typescript
