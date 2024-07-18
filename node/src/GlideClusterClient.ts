@@ -628,7 +628,7 @@ export class GlideClusterClient extends BaseClient {
      * See https://valkey.io/commands/dbsize/ for more details.
 
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns The number of keys in the database.
      *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
      *
