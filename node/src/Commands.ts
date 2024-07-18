@@ -1696,3 +1696,10 @@ export function createLPos(
 
     return createCommand(RequestType.LPos, args);
 }
+
+/**
+ * @internal
+ */
+export function createDBSize(): command_request.Command {
+    return createCommand(RequestType.DBSize, []);
+}
