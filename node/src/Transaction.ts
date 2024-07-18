@@ -39,6 +39,7 @@ import {
     createExpireAt,
     createFlushAll,
     createGet,
+    createGetDel,
     createHDel,
     createHExists,
     createHGet,
@@ -187,6 +188,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public get(key: string): T {
         return this.addAndReturn(createGet(key));
+    }
+
+    /**
+     * Gets a string value associated with the given `key`and deletes the key.
+     *
+     * See https://valkey.io/commands/getdel/ for details.
+     *
+     * @param key - The key to retrieve from the database.
+     *
+     * Command Response - If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
+     */
+    public getdel(key: string): T {
+        return this.addAndReturn(createGetDel(key));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
