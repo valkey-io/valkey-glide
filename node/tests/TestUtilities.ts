@@ -521,7 +521,7 @@ export async function transactionTest(
         baseTransaction.zrankWithScore(key8, "member1");
         args.push([0, 1]);
     }
-    
+
     baseTransaction.zrevrank(key8, "member5");
     args.push(0);
 
