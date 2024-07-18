@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 #[cfg(not(target_env = "msvc"))]
@@ -10,10 +10,13 @@ use tikv_jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 use byteorder::{LittleEndian, WriteBytesExt};
+use bytes::Bytes;
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 #[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
+use napi::bindgen_prelude::Either;
+use napi::bindgen_prelude::Uint8Array;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
@@ -65,7 +68,8 @@ impl AsyncClient {
             .build()?;
         let _runtime_handle = runtime.enter();
         let client = to_js_result(redis::Client::open(connection_address))?;
-        let connection = to_js_result(runtime.block_on(client.get_multiplexed_async_connection()))?;
+        let connection =
+            to_js_result(runtime.block_on(client.get_multiplexed_async_connection(None)))?;
         Ok(AsyncClient {
             connection,
             runtime,
@@ -159,15 +163,12 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
 fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
-        Value::SimpleString(str) => js_env
-            .create_string_from_std(str)
-            .map(|val| val.into_unknown()),
+        Value::SimpleString(str) => Ok(js_env
+            .create_buffer_with_data(str.as_bytes().to_vec())?
+            .into_unknown()),
         Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
         Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
-        Value::BulkString(data) => {
-            let str = to_js_result(std::str::from_utf8(data.as_ref()))?;
-            js_env.create_string(str).map(|val| val.into_unknown())
-        }
+        Value::BulkString(data) => Ok(js_env.create_buffer_with_data(data)?.into_unknown()),
         Value::Array(array) => {
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
@@ -190,9 +191,12 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
         // "Normal client libraries may ignore completely the difference between this"
         // "type and the String type, and return a string in both cases.""
         // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
-        Value::VerbatimString { format: _, text } => js_env
-            .create_string_from_std(text)
-            .map(|val| val.into_unknown()),
+        Value::VerbatimString { format: _, text } => {
+            // VerbatimString is binary safe -> convert it into such
+            Ok(js_env
+                .create_buffer_with_data(text.as_bytes().to_vec())?
+                .into_unknown())
+        }
         Value::BigNumber(num) => {
             let sign = num.is_negative();
             let words = num.iter_u64_digits().collect();
@@ -218,11 +222,22 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
 
             Ok(obj.into_unknown())
         }
-        Value::Push { kind: _, data: _ } => todo!(),
+        Value::Push { kind, data } => {
+            let mut obj = js_env.create_object()?;
+            obj.set_named_property("kind", format!("{kind:?}"))?;
+            let js_array_view = data
+                .into_iter()
+                .map(|item| redis_value_to_js(item, js_env))
+                .collect::<Result<Vec<_>, _>>()?;
+            obj.set_named_property("values", js_array_view)?;
+            Ok(obj.into_unknown())
+        }
     }
 }
 
-#[napi(ts_return_type = "null | string | number | {} | Boolean | BigInt | Set<any> | any[]")]
+#[napi(
+    ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[]"
+)]
 pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])
@@ -256,8 +271,10 @@ pub fn create_leaked_string(message: String) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
-pub fn create_leaked_string_vec(message: Vec<String>) -> [u32; 2] {
-    let pointer = Box::leak(Box::new(message)) as *mut Vec<String>;
+pub fn create_leaked_string_vec(message: Vec<Uint8Array>) -> [u32; 2] {
+    // Convert the string vec -> Bytes vector
+    let bytes_vec: Vec<Bytes> = message.iter().map(|v| Bytes::from(v.to_vec())).collect();
+    let pointer = Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes>;
     split_pointer(pointer)
 }
 
@@ -343,8 +360,11 @@ impl Script {
     /// Construct with the script's code.
     #[napi(constructor)]
     #[allow(dead_code)]
-    pub fn new(code: String) -> Self {
-        let hash = glide_core::scripts_container::add_script(&code);
+    pub fn new(code: Either<String, Uint8Array>) -> Self {
+        let hash = match code {
+            Either::A(code_str) => glide_core::scripts_container::add_script(code_str.as_bytes()),
+            Either::B(code_bytes) => glide_core::scripts_container::add_script(&code_bytes),
+        };
         Self { hash }
     }
 

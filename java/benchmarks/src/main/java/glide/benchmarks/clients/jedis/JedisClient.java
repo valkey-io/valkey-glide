@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.jedis;
 
 import glide.benchmarks.clients.SyncClient;
@@ -32,7 +32,7 @@ public class JedisClient implements SyncClient {
     }
 
     @Override
-    public void connectToRedis(ConnectionSettings connectionSettings) {
+    public void connectToValkey(ConnectionSettings connectionSettings) {
         isClusterMode = connectionSettings.clusterMode;
         if (isClusterMode) {
             jedisCluster =

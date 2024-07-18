@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.clients.lettuce;
 
 import glide.benchmarks.clients.AsyncClient;
@@ -23,7 +23,7 @@ public class LettuceAsyncClient implements AsyncClient<String> {
     private StatefulConnection<String, String> connection;
 
     @Override
-    public void connectToRedis(ConnectionSettings connectionSettings) {
+    public void connectToValkey(ConnectionSettings connectionSettings) {
         RedisURI uri =
                 RedisURI.builder()
                         .withHost(connectionSettings.host)

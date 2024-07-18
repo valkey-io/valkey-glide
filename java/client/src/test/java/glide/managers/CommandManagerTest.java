@@ -1,6 +1,7 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -15,8 +16,11 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 
+import com.google.protobuf.ByteString;
+import command_request.CommandRequestOuterClass.CommandRequest;
+import command_request.CommandRequestOuterClass.SimpleRoutes;
+import command_request.CommandRequestOuterClass.SlotTypes;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -39,9 +43,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import redis_request.RedisRequestOuterClass.RedisRequest;
-import redis_request.RedisRequestOuterClass.SimpleRoutes;
-import redis_request.RedisRequestOuterClass.SlotTypes;
 import response.ResponseOuterClass.Response;
 
 public class CommandManagerTest {
@@ -75,7 +76,7 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
+                        new BaseResponseResolver((ptr) -> ptr == pointer ? respObject : null));
         Object respPointer = result.get();
 
         // verify
@@ -97,7 +98,9 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseCommandResponseResolver((p) -> new RuntimeException("")));
+                        new BaseResponseResolver(
+                                (p) ->
+                                        new RuntimeException("Testing: something went wrong if you see this error")));
         Object respPointer = result.get();
 
         // verify
@@ -124,7 +127,7 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
+                        new BaseResponseResolver((p) -> p == pointer ? testString : null));
         Object respPointer = result.get();
 
         // verify
@@ -143,8 +146,8 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
 
-        ArgumentCaptor<RedisRequest.Builder> captor =
-                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+        ArgumentCaptor<CommandRequest.Builder> captor =
+                ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         service.submitNewCommand(CustomCommand, new String[0], routeType, r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
@@ -174,8 +177,8 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
 
-        ArgumentCaptor<RedisRequest.Builder> captor =
-                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+        ArgumentCaptor<CommandRequest.Builder> captor =
+                ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         service.submitNewCommand(
                 CustomCommand, new String[0], new SlotIdRoute(42, slotType), r -> null);
@@ -207,8 +210,8 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
 
-        ArgumentCaptor<RedisRequest.Builder> captor =
-                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+        ArgumentCaptor<CommandRequest.Builder> captor =
+                ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         service.submitNewCommand(
                 CustomCommand, new String[0], new SlotKeyRoute("TEST", slotType), r -> null);
@@ -239,8 +242,8 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
 
-        ArgumentCaptor<RedisRequest.Builder> captor =
-                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+        ArgumentCaptor<CommandRequest.Builder> captor =
+                ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         service.submitNewCommand(
                 CustomCommand, new String[0], new ByAddressRoute("testhost", 6379), r -> null);
@@ -284,11 +287,11 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
 
-        ArgumentCaptor<RedisRequest.Builder> captor =
-                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+        ArgumentCaptor<CommandRequest.Builder> captor =
+                ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
         // exercise
-        service.submitNewCommand(trans, r -> null);
+        service.submitNewTransaction(trans, r -> null);
 
         // verify
         verify(channelHandler).write(captor.capture(), anyBoolean());
@@ -298,14 +301,14 @@ public class CommandManagerTest {
         assertTrue(requestBuilder.hasTransaction());
         assertEquals(3, requestBuilder.getTransaction().getCommandsCount());
 
-        LinkedList<String> resultPayloads = new LinkedList<>();
-        resultPayloads.add("one");
-        resultPayloads.add("two");
-        resultPayloads.add("three");
-        for (redis_request.RedisRequestOuterClass.Command command :
+        LinkedList<ByteString> resultPayloads = new LinkedList<>();
+        resultPayloads.add(ByteString.copyFromUtf8("one"));
+        resultPayloads.add(ByteString.copyFromUtf8("two"));
+        resultPayloads.add(ByteString.copyFromUtf8("three"));
+        for (command_request.CommandRequestOuterClass.Command command :
                 requestBuilder.getTransaction().getCommandsList()) {
             assertEquals(CustomCommand, command.getRequestType());
-            assertEquals("GETSTRING", command.getArgsArray().getArgs(0));
+            assertEquals(ByteString.copyFromUtf8("GETSTRING"), command.getArgsArray().getArgs(0));
             assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
         }
     }
@@ -325,10 +328,10 @@ public class CommandManagerTest {
         when(channelHandler.write(any(), anyBoolean())).thenReturn(future);
         when(channelHandler.isClosed()).thenReturn(false);
 
-        ArgumentCaptor<RedisRequest.Builder> captor =
-                ArgumentCaptor.forClass(RedisRequest.Builder.class);
+        ArgumentCaptor<CommandRequest.Builder> captor =
+                ArgumentCaptor.forClass(CommandRequest.Builder.class);
 
-        service.submitNewCommand(trans, Optional.of(routeType), r -> null);
+        service.submitNewTransaction(trans, Optional.of(routeType), r -> null);
         verify(channelHandler).write(captor.capture(), anyBoolean());
         var requestBuilder = captor.getValue();
 

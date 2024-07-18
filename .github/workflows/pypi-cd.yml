@@ -1,6 +1,6 @@
 # The cross platform build was created based on the [Packaging Rust Applications for the NPM Registry blog](https://blog.orhun.dev/packaging-rust-for-npm/).
 
-name: Continuous Deployment
+name: PyPI - Continuous Deployment
 
 on:
     pull_request:
@@ -8,31 +8,60 @@ on:
         - .github/workflows/pypi-cd.yml
         - .github/workflows/build-python-wrapper/action.yml
         - .github/workflows/start-self-hosted-runner/action.yml
+        - .github/workflows/install-shared-dependencies/action.yml
+        - .github/workflows/install-valkey/action.yml
+        - .github/json_matrices/build-matrix.json
     push:
         tags:
             - "v*.*"
+    workflow_dispatch:
+      inputs:
+        version:
+          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
+          required: true
 
 concurrency:
     group: pypi-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
+permissions:
+      id-token: write
+
 jobs:
-    start-self-hosted-runner:
+    load-platform-matrix:
         runs-on: ubuntu-latest
+        outputs:
+            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: load-platform-matrix
+              id: load-platform-matrix
+              shell: bash
+              run: |
+                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"])))' < .github/json_matrices/build-matrix.json | jq -c .)"
+                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                
+
+    start-self-hosted-runner:
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         steps:
           - name: Checkout
             uses: actions/checkout@v4
           - name: Start self hosted EC2 runner
             uses: ./.github/workflows/start-self-hosted-runner
             with:
-                aws-access-key-id: ${{ secrets.AWS_EC2_ACCESS_KEY_ID }}
-                aws-secret-access-key: ${{ secrets.AWS_EC2_SECRET_ACCESS_KEY }}
+                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
                 aws-region: ${{ secrets.AWS_REGION }}
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: start-self-hosted-runner
-        if: github.repository_owner == 'aws'
+        needs: [start-self-hosted-runner, load-platform-matrix]
+        if: github.repository_owner == 'valkey-io'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
         timeout-minutes: 25
@@ -40,39 +69,11 @@ jobs:
             fail-fast: false
             matrix:
                 build:
-                    - {
-                          OS: ubuntu-latest,
-                          NAMED_OS: linux,
-                          RUNNER: ubuntu-latest,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: ubuntu-latest,
-                          NAMED_OS: linux,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-gnu,
-                          CONTAINER: "2_28",
-                      }
-                    - {
-                          OS: macos-latest,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-latest,
-                          ARCH: x64,
-                          TARGET: x86_64-apple-darwin,
-                      }
-                    - {
-                          OS: macos-latest,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-13-xlarge,
-                          arch: arm64,
-                          TARGET: aarch64-apple-darwin,
-                      }
+                    ${{fromJson( needs.load-platform-matrix.outputs.PLATFORM_MATRIX )}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
             - name: Checkout
               uses: actions/checkout@v4
@@ -82,8 +83,24 @@ jobs:
             - name: Set the release version
               shell: bash
               run: |
-                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
-                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  if ${{ env.EVENT_NAME == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ env.EVENT_NAME == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                INPUT_VERSION: ${{ github.event.inputs.version }}
+
+            - name: Check that the release version dont have typo init
+              if: ${{ github.event_name != 'pull_request' && contains(env.RELEASE_VERSION, '-') && !contains(env.RELEASE_VERSION, 'rc') }}
+              run: |
+                echo "The release version "${{ env.RELEASE_VERSION }}" contains a typo, please fix it"
+                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+                exit 1
 
             - name: Set the package version for Python
               working-directory: ./python
@@ -126,6 +143,7 @@ jobs:
                   target: ${{ matrix.build.TARGET }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "7.2.5"
 
             - name: Include protobuf files in the package
               working-directory: ./python
@@ -141,20 +159,29 @@ jobs:
               with:
                   working-directory: ./python
                   target: ${{ matrix.build.TARGET }}
-                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }} 
+                  args: --release --strip --out wheels -i ${{ github.event_name != 'pull_request' && 'python3.8 python3.9 python3.10 python3.11 python3.12' || 'python3.10' }}
                   manylinux: auto
                   container: ${{ matrix.build.CONTAINER != '' && matrix.build.CONTAINER || '2014' }}
                   before-script-linux: |
                       # Install protobuf compiler
                       if [[ $(`which apt`) != '' ]]
-                      then 
-                        apt install protobuf-compiler -y
-                      else
-                        PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-                        curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-x86_64.zip
-                        unzip protoc-3.15.8-linux-x86_64.zip -d $HOME/.local
-                        export PATH="$PATH:$HOME/.local/bin"
+                      then
+                        echo "installing unzip and curl"
+                        apt install unzip curl -y
                       fi
+                      PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+                      ARCH=`uname -p`
+                      if [[ $ARCH == 'x86_64' ]]; then 
+                        PROTOC_ARCH="x86_64"
+                      elif [[ $ARCH == 'aarch64' ]]; then 
+                        PROTOC_ARCH="aarch_64"
+                      else 
+                        echo "Running on unsupported architecture: $ARCH. Expected one of: ['x86_64', 'aarch64']"
+                        exit 1 
+                      fi
+                      curl -LO $PB_REL/download/v3.20.3/protoc-3.20.3-linux-${PROTOC_ARCH}.zip
+                      unzip protoc-3.20.3-linux-${PROTOC_ARCH}.zip -d $HOME/.local
+                      export PATH="$PATH:$HOME/.local/bin"
 
             - name: Build Python wheels (macos)
               if: startsWith(matrix.build.NAMED_OS, 'darwin')

@@ -1,8 +1,14 @@
 module glide.api {
     exports glide.api;
     exports glide.api.commands;
+    exports glide.api.logging;
     exports glide.api.models;
     exports glide.api.models.commands;
+    exports glide.api.models.commands.bitmap;
+    exports glide.api.models.commands.geospatial;
+    exports glide.api.models.commands.function;
+    exports glide.api.models.commands.scan;
+    exports glide.api.models.commands.stream;
     exports glide.api.models.configuration;
     exports glide.api.models.exceptions;
 

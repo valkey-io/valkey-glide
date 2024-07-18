@@ -1,8 +1,13 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from enum import Enum
-from typing import List, Optional, Union
+from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum, IntEnum
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+from glide.async_commands.core import CoreCommands
+from glide.exceptions import ConfigurationError
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -45,11 +50,11 @@ class ProtocolVersion(Enum):
 
     RESP2 = SentProtocolVersion.RESP2
     """
-    Communicate using Redis RESP2.
+    Communicate using RESP2.
     """
     RESP3 = SentProtocolVersion.RESP3
     """
-    Communicate using Redis RESP3.
+    Communicate using RESP3.
     """
 
 
@@ -74,18 +79,18 @@ class BackoffStrategy:
         self.exponent_base = exponent_base
 
 
-class RedisCredentials:
+class ServerCredentials:
     def __init__(
         self,
         password: str,
         username: Optional[str] = None,
     ):
         """
-        Represents the credentials for connecting to a Redis server.
+        Represents the credentials for connecting to a server.
 
         Args:
-            password (str): The password that will be used for authenticating connections to the Redis servers.
-            username (Optional[str]): The username that will be used for authenticating connections to the Redis servers.
+            password (str): The password that will be used for authenticating connections to the servers.
+            username (Optional[str]): The username that will be used for authenticating connections to the servers.
                 If not supplied, "default" will be used.
         """
         self.password = password
@@ -124,14 +129,14 @@ class BaseClientConfiguration:
         self,
         addresses: List[NodeAddress],
         use_tls: bool = False,
-        credentials: Optional[RedisCredentials] = None,
+        credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
     ):
         """
-        Represents the configuration settings for a Redis client.
+        Represents the configuration settings for a Glide client.
 
         Args:
             addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
@@ -146,7 +151,7 @@ class BaseClientConfiguration:
                     ].
             use_tls (bool): True if communication with the cluster should use Transport Level Security.
                 Should match the TLS configuration of the server/cluster, otherwise the connection attempt will fail
-            credentials (RedisCredentials): Credentials for authentication process.
+            credentials (ServerCredentials): Credentials for authentication process.
                     If none are set, the client will not authenticate itself with the server.
             read_from (ReadFrom): If not set, `PRIMARY` will be used.
             request_timeout (Optional[int]): The duration in milliseconds that the client should wait for a request to complete.
@@ -194,10 +199,18 @@ class BaseClientConfiguration:
 
         return request
 
+    def _is_pubsub_configured(self) -> bool:
+        return False
 
-class RedisClientConfiguration(BaseClientConfiguration):
+    def _get_pubsub_callback_and_context(
+        self,
+    ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
+        return None, None
+
+
+class GlideClientConfiguration(BaseClientConfiguration):
     """
-    Represents the configuration settings for a Standalone Redis client.
+    Represents the configuration settings for a Standalone Glide client.
 
     Args:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
@@ -208,7 +221,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
                     {address: sample-address-0002.use2.cache.amazonaws.com, port:6379}
                 ].
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-        credentials (RedisCredentials): Credentials for authentication process.
+        credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
@@ -220,20 +233,53 @@ class RedisClientConfiguration(BaseClientConfiguration):
             If not set, a default backoff strategy will be used.
         database_id (Optional[int]): index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
-        protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
+        protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+                Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
     """
+
+    class PubSubChannelModes(IntEnum):
+        """
+        Describes pubsub subsciption modes.
+        See https://valkey.io/docs/topics/pubsub/ for more details
+        """
+
+        Exact = 0
+        """ Use exact channel names """
+        Pattern = 1
+        """ Use channel name patterns """
+
+    @dataclass
+    class PubSubSubscriptions:
+        """Describes pubsub configuration for standalone mode client.
+
+        Attributes:
+            channels_and_patterns (Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]]):
+                Channels and patterns by modes.
+            callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
+                Optional callback to accept the incomming messages.
+            context (Any):
+                Arbitrary context to pass to the callback.
+        """
+
+        channels_and_patterns: Dict[
+            GlideClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
+        context: Any
 
     def __init__(
         self,
         addresses: List[NodeAddress],
         use_tls: bool = False,
-        credentials: Optional[RedisCredentials] = None,
+        credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         reconnect_strategy: Optional[BackoffStrategy] = None,
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
+        pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -246,6 +292,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
+        self.pubsub_subscriptions = pubsub_subscriptions
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -263,12 +310,44 @@ class RedisClientConfiguration(BaseClientConfiguration):
         if self.database_id:
             request.database_id = self.database_id
 
+        if self.pubsub_subscriptions:
+            if self.protocol == ProtocolVersion.RESP2:
+                raise ConfigurationError(
+                    "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
+                )
+            if (
+                self.pubsub_subscriptions.context is not None
+                and not self.pubsub_subscriptions.callback
+            ):
+                raise ConfigurationError(
+                    "PubSub subscriptions with a context require a callback function to be configured."
+                )
+            for (
+                channel_type,
+                channels_patterns,
+            ) in self.pubsub_subscriptions.channels_and_patterns.items():
+                entry = request.pubsub_subscriptions.channels_or_patterns_by_type[
+                    int(channel_type)
+                ]
+                for channel_pattern in channels_patterns:
+                    entry.channels_or_patterns.append(str.encode(channel_pattern))
+
         return request
 
+    def _is_pubsub_configured(self) -> bool:
+        return self.pubsub_subscriptions is not None
 
-class ClusterClientConfiguration(BaseClientConfiguration):
+    def _get_pubsub_callback_and_context(
+        self,
+    ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
+        if self.pubsub_subscriptions:
+            return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
+        return None, None
+
+
+class GlideClusterClientConfiguration(BaseClientConfiguration):
     """
-    Represents the configuration settings for a Cluster Redis client.
+    Represents the configuration settings for a Cluster Glide client.
 
     Args:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
@@ -278,29 +357,63 @@ class ClusterClientConfiguration(BaseClientConfiguration):
                     {address:configuration-endpoint.use1.cache.amazonaws.com, port:6379}
                 ].
         use_tls (bool): True if communication with the cluster should use Transport Level Security.
-        credentials (RedisCredentials): Credentials for authentication process.
+        credentials (ServerCredentials): Credentials for authentication process.
                 If none are set, the client will not authenticate itself with the server.
         read_from (ReadFrom): If not set, `PRIMARY` will be used.
         request_timeout (Optional[int]):  The duration in milliseconds that the client should wait for a request to complete.
             This duration encompasses sending the request, awaiting for a response from the server, and any required reconnections or retries.
             If the specified timeout is exceeded for a pending request, it will result in a timeout error. If not set, a default value will be used.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
-        protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
+        protocol (ProtocolVersion): The version of the RESP protocol to communicate with the server.
         periodic_checks (Union[PeriodicChecksStatus, PeriodicChecksManualInterval]): Configure the periodic topology checks.
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
 
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
     """
 
+    class PubSubChannelModes(IntEnum):
+        """
+        Describes pubsub subsciption modes.
+        See https://valkey.io/docs/topics/pubsub/ for more details
+        """
+
+        Exact = 0
+        """ Use exact channel names """
+        Pattern = 1
+        """ Use channel name patterns """
+        Sharded = 2
+        """ Use sharded pubsub. Available since Valkey version 7.0. """
+
+    @dataclass
+    class PubSubSubscriptions:
+        """Describes pubsub configuration for cluster mode client.
+
+        Attributes:
+            channels_and_patterns (Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]]):
+                Channels and patterns by modes.
+            callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
+                Optional callback to accept the incoming messages.
+            context (Any):
+                Arbitrary context to pass to the callback.
+        """
+
+        channels_and_patterns: Dict[
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
+        context: Any
+
     def __init__(
         self,
         addresses: List[NodeAddress],
         use_tls: bool = False,
-        credentials: Optional[RedisCredentials] = None,
+        credentials: Optional[ServerCredentials] = None,
         read_from: ReadFrom = ReadFrom.PRIMARY,
         request_timeout: Optional[int] = None,
         client_name: Optional[str] = None,
@@ -308,6 +421,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
+        pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -319,6 +433,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             protocol=protocol,
         )
         self.periodic_checks = periodic_checks
+        self.pubsub_subscriptions = pubsub_subscriptions
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -332,4 +447,36 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         elif self.periodic_checks == PeriodicChecksStatus.DISABLED:
             request.periodic_checks_disabled.SetInParent()
 
+        if self.pubsub_subscriptions:
+            if self.protocol == ProtocolVersion.RESP2:
+                raise ConfigurationError(
+                    "PubSub subscriptions require RESP3 protocol, but RESP2 was configured."
+                )
+            if (
+                self.pubsub_subscriptions.context is not None
+                and not self.pubsub_subscriptions.callback
+            ):
+                raise ConfigurationError(
+                    "PubSub subscriptions with a context require a callback function to be configured."
+                )
+            for (
+                channel_type,
+                channels_patterns,
+            ) in self.pubsub_subscriptions.channels_and_patterns.items():
+                entry = request.pubsub_subscriptions.channels_or_patterns_by_type[
+                    int(channel_type)
+                ]
+                for channel_pattern in channels_patterns:
+                    entry.channels_or_patterns.append(str.encode(channel_pattern))
+
         return request
+
+    def _is_pubsub_configured(self) -> bool:
+        return self.pubsub_subscriptions is not None
+
+    def _get_pubsub_callback_and_context(
+        self,
+    ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
+        if self.pubsub_subscriptions:
+            return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
+        return None, None

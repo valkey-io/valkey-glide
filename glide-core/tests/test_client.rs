@@ -1,12 +1,12 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 mod utilities;
 
 #[cfg(test)]
 pub(crate) mod shared_client_tests {
     use super::*;
-    use glide_core::client::Client;
+    use glide_core::client::{Client, DEFAULT_RESPONSE_TIMEOUT};
     use redis::{
         cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
         FromRedisValue, InfoDict, RedisConnectionInfo, Value,
@@ -21,6 +21,31 @@ pub(crate) mod shared_client_tests {
         client: Client,
     }
 
+    async fn create_client(server: &BackingServer, configuration: TestConfiguration) -> Client {
+        match server {
+            BackingServer::Standalone(server) => {
+                let connection_addr = server
+                    .as_ref()
+                    .map(|server| server.get_client_addr())
+                    .unwrap_or(get_shared_server_address(configuration.use_tls));
+
+                // TODO - this is a patch, handling the situation where the new server
+                // still isn't available to connection. This should be fixed in [RedisServer].
+                repeat_try_create(|| async {
+                    Client::new(
+                        create_connection_request(&[connection_addr.clone()], &configuration)
+                            .into(),
+                        None,
+                    )
+                    .await
+                    .ok()
+                })
+                .await
+            }
+            BackingServer::Cluster(cluster) => create_cluster_client(cluster, configuration).await,
+        }
+    }
+
     async fn setup_test_basics(use_cluster: bool, configuration: TestConfiguration) -> TestBasics {
         if use_cluster {
             let cluster_basics = cluster::setup_test_basics_internal(configuration).await;
@@ -30,32 +55,14 @@ pub(crate) mod shared_client_tests {
             }
         } else {
             let test_basics = utilities::setup_test_basics_internal(&configuration).await;
-
-            let connection_addr = test_basics
-                .server
-                .as_ref()
-                .map(|server| server.get_client_addr())
-                .unwrap_or(get_shared_server_address(configuration.use_tls));
-
-            // TODO - this is a patch, handling the situation where the new server
-            // still isn't available to connection. This should be fixed in [RedisServer].
-            let client = repeat_try_create(|| async {
-                Client::new(
-                    create_connection_request(&[connection_addr.clone()], &configuration).into(),
-                )
-                .await
-                .ok()
-            })
-            .await;
-
-            TestBasics {
-                server: BackingServer::Standalone(test_basics.server),
-                client,
-            }
+            let server = BackingServer::Standalone(test_basics.server);
+            let client = create_client(&server, configuration).await;
+            TestBasics { server, client }
         }
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_set_and_get(
         #[values(false, true)] use_tls: bool,
@@ -77,6 +84,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_pipeline_is_not_routed() {
         // This test checks that a transaction without user routing isn't routed to a random node before reaching its target.
@@ -159,6 +167,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_resp_support(#[values(false, true)] use_cluster: bool, #[values(2, 3)] protocol: i64) {
         let protocol_enum = match protocol {
@@ -217,6 +226,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_client_handle_concurrent_workload_without_dropping_or_changing_values(
         #[values(false, true)] use_tls: bool,
@@ -246,6 +256,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_report_closing_when_server_closes(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -271,6 +282,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -292,6 +304,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password_and_username(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -314,21 +327,31 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
-                    request_timeout: Some(1),
-                    shared_server: true,
+                    request_timeout: Some(1), // milliseconds
+                    shared_server: false,
                     ..Default::default()
                 },
             )
             .await;
-
             let mut cmd = redis::Cmd::new();
-            cmd.arg("BLPOP").arg("foo").arg(0); // 0 timeout blocks indefinitely
+            // Create a long running command to ensure we get into timeout
+            cmd.arg("EVAL")
+                .arg(
+                    r#"
+                    while (true)
+                    do
+                    redis.call('ping')
+                    end
+                "#,
+                )
+                .arg("0");
             let result = test_basics.client.send_command(&cmd, None).await;
             assert!(result.is_err());
             let err = result.unwrap_err();
@@ -337,6 +360,89 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_blocking_command_doesnt_raise_timeout_error(#[values(false, true)] use_cluster: bool) {
+        // We test that the request timeout is based on the value specified in the blocking command argument,
+        // and not on the one set in the client configuration. To achieve this, we execute a command designed to
+        // be blocked until it reaches the specified command timeout. We set the client's request timeout to
+        // a shorter duration than the blocking command's timeout. Subsequently, we confirm that we receive
+        // a response from the server instead of encountering a timeout error.
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(1), // milliseconds
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let mut cmd = redis::Cmd::new();
+            cmd.arg("BLPOP").arg(generate_random_string(10)).arg(0.3); // server should return null after 300 millisecond
+            let result = test_basics.client.send_command(&cmd, None).await;
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), Value::Nil);
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_blocking_command_with_negative_timeout_returns_error(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // We test that when blocking command is passed with a negative timeout the command will return with an error
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(1), // milliseconds
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut cmd = redis::Cmd::new();
+            cmd.arg("BLPOP").arg(generate_random_string(10)).arg(-1);
+            let result = test_basics.client.send_command(&cmd, None).await;
+            assert!(result.is_err());
+            let err = result.unwrap_err();
+            assert_eq!(err.kind(), redis::ErrorKind::ResponseError);
+            assert!(err.to_string().contains("negative"));
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_blocking_command_with_zero_timeout_blocks_indefinitely(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        // We test that when a blocking command is passed with a timeout duration of 0, it will block the client indefinitely
+        block_on_all(async {
+            let config = TestConfiguration {
+                request_timeout: Some(1), // millisecond
+                shared_server: true,
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, config).await;
+            let key = generate_random_string(10);
+            let future = async move {
+                let mut cmd = redis::Cmd::new();
+                cmd.arg("BLPOP").arg(key).arg(0); // `0` should block indefinitely
+                test_basics.client.send_command(&cmd, None).await
+            };
+            // We execute the command with Tokio's timeout wrapper to prevent the test from hanging indefinitely.
+            let tokio_timeout_result =
+                tokio::time::timeout(DEFAULT_RESPONSE_TIMEOUT * 2, future).await;
+            assert!(tokio_timeout_result.is_err());
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_transaction_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -375,6 +481,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_client_name_after_reconnection(#[values(false, true)] use_cluster: bool) {
         const CLIENT_NAME: &str = "TEST_CLIENT_NAME";
@@ -424,6 +531,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_transaction_and_convert_all_values(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {

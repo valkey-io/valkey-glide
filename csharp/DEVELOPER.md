@@ -83,8 +83,8 @@ Before starting this step, make sure you've installed all software requirments.
 
 ```bash
 VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
-cd glide-for-redis
+git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
+cd valkey-glide
 ```
 
 2. Initialize git submodule

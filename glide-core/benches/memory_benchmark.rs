@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::{
     client::Client,
@@ -26,7 +26,7 @@ where
 {
     let runtime = Builder::new_current_thread().enable_all().build().unwrap();
     runtime.block_on(async {
-        let client = Client::new(create_connection_request().into())
+        let client = Client::new(create_connection_request().into(), None)
             .await
             .unwrap();
         f(client).await;

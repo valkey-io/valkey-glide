@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.benchmarks.utils;
 
 import glide.benchmarks.BenchmarkingApp;
@@ -137,7 +137,7 @@ public class Benchmarking {
                     List<Client> clients = new LinkedList<>();
                     for (int cc = 0; cc < clientCount; cc++) {
                         Client newClient = clientCreator.get();
-                        newClient.connectToRedis(
+                        newClient.connectToValkey(
                                 new ConnectionSettings(
                                         config.host, config.port, config.tls, config.clusterModeEnabled));
                         clients.add(newClient);

@@ -1,0 +1,300 @@
+syntax = "proto3";
+package command_request;
+
+enum SimpleRoutes {
+    AllNodes=0;
+    AllPrimaries=1;
+    Random=2;
+}
+
+enum SlotTypes {
+    Primary=0;
+    Replica=1;
+}
+
+message SlotIdRoute {
+    SlotTypes slot_type = 1;
+    int32 slot_id = 2;
+}
+
+message SlotKeyRoute {
+    SlotTypes slot_type = 1;
+    string slot_key = 2;
+}
+
+message ByAddressRoute {
+    string host = 1;
+    int32 port = 2;
+}
+
+message Routes {
+    oneof value {
+        SimpleRoutes simple_routes = 1;
+        SlotKeyRoute slot_key_route = 2;
+        SlotIdRoute slot_id_route = 3;
+        ByAddressRoute by_address_route = 4;
+    }
+}
+
+enum RequestType {
+    /// Invalid request type
+    InvalidRequest = 0;
+    /// An unknown command, where all arguments are defined by the user.
+    CustomCommand = 1;
+    Get = 2;
+    Set = 3;
+    Ping = 4;
+    Info = 5;
+    Del = 6;
+    Select = 7;
+    ConfigGet = 8;
+    ConfigSet = 9;
+    ConfigResetStat = 10;
+    ConfigRewrite = 11;
+    ClientGetName = 12;
+    ClientGetRedir = 13;
+    ClientId = 14;
+    ClientInfo = 15;
+    ClientKill = 16;
+    ClientList = 17;
+    ClientNoEvict = 18;
+    ClientNoTouch = 19;
+    ClientPause = 20;
+    ClientReply = 21;
+    ClientSetInfo = 22;
+    ClientSetName = 23;
+    ClientUnblock = 24;
+    ClientUnpause = 25;
+    Expire = 26;
+    HSet = 27;
+    HGet = 28;
+    HDel = 29;
+    HExists = 30;
+    MGet=31;
+    MSet=32;
+    Incr=33;
+    IncrBy=34;
+    Decr=35;
+    IncrByFloat=36;
+    DecrBy=37;
+    HGetAll=38;
+    HMSet=39;
+    HMGet=40;
+    HIncrBy = 41;
+    HIncrByFloat = 42;
+    LPush = 43;
+    LPop = 44;
+    RPush = 45;
+    RPop = 46;
+    LLen = 47;
+    LRem = 48;
+    LRange = 49;
+    LTrim = 50;
+    SAdd = 51;
+    SRem = 52;
+    SMembers = 53;
+    SCard = 54;
+    PExpireAt = 55;
+    PExpire = 56;
+    ExpireAt = 57;
+    Exists = 58;
+    Unlink = 59;
+    TTL = 60;
+    ZAdd = 61;
+    ZRem = 62;
+    ZRange = 63;
+    ZCard = 64;
+    ZCount = 65;
+    ZIncrBy = 66;
+    ZScore = 67;
+    Type = 68;
+    HLen = 69;
+    Echo = 70;
+    ZPopMin = 71;
+    Strlen = 72;
+    LIndex = 73;
+    ZPopMax = 74;
+    XRead = 75;
+    XAdd = 76;
+    XReadGroup = 77;
+    XAck = 78;
+    XTrim = 79;
+    XGroupCreate = 80;
+    XGroupDestroy = 81;
+    HSetNX = 82;
+    SIsMember = 83;
+    HVals = 84;
+    PTTL = 85;
+    ZRemRangeByRank = 86;
+    Persist = 87;
+    ZRemRangeByScore = 88;
+    Time = 89;
+    ZRank = 90;
+    Rename = 91;
+    DBSize = 92;
+    BRPop = 93;
+    HKeys = 94;
+    SPop = 95;
+    PfAdd = 96;
+    PfCount = 97;
+    PfMerge = 98;
+    BLPop = 100;
+    LInsert = 101;
+    RPushX = 102;
+    LPushX = 103;
+    ZMScore = 104;
+    ZDiff = 105;
+    ZDiffStore = 106;
+    SetRange = 107;
+    ZRemRangeByLex = 108;
+    ZLexCount = 109;
+    Append = 110;
+    SUnionStore = 111;
+    SDiffStore = 112;
+    SInter = 113;
+    SInterStore = 114;
+    ZRangeStore = 115;
+    GetRange = 116;
+    SMove = 117;
+    SMIsMember = 118;
+    ZUnionStore = 119;
+    LastSave = 120;
+    GeoAdd = 121;
+    GeoHash = 122;
+    ObjectEncoding = 123;
+    SDiff = 124;
+    ObjectIdleTime = 125;
+    ObjectRefCount = 126;
+    Lolwut = 100500;
+    GeoDist = 127;
+    GeoPos = 128;
+    BZPopMax = 129;
+    ObjectFreq = 130;
+    RenameNX = 131;
+    Touch = 132;
+    ZRevRank = 133;
+    ZInterStore = 134;
+    HRandField = 135;
+    ZUnion = 136;
+    BZPopMin = 137;
+    FlushAll = 138;
+    ZRandMember = 139;
+    BitCount = 140;
+    BZMPop = 141;
+    SetBit = 142;
+    ZInterCard = 143;
+    ZMPop = 144;
+    GetBit = 145;
+    ZInter = 146;
+    BitPos = 147;
+    BitOp = 148;
+    HStrlen = 149;
+    FunctionLoad = 150;
+    FunctionList = 151;
+    FunctionDelete = 152;
+    FunctionFlush = 153;
+    FCall = 154;
+    LMPop = 155;
+    ExpireTime = 156;
+    PExpireTime = 157;
+    BLMPop = 158;
+    XLen = 159;
+    Sort = 160;
+    FunctionKill = 161;
+    FunctionStats = 162;
+    FCallReadOnly = 163;
+    FlushDB = 164;
+    LSet = 165;
+    XDel = 166;
+    XRange = 167;
+    LMove = 168;
+    BLMove = 169;
+    GetDel = 170;
+    SRandMember = 171;
+    BitField = 172;
+    BitFieldReadOnly = 173;
+    Move = 174;
+    SInterCard = 175;
+    XRevRange = 176;
+    Copy = 178;
+    MSetNX = 179;
+    LPos = 180;
+    LCS = 181;
+    GeoSearch = 182;
+    Watch = 183;
+    UnWatch = 184;
+    GeoSearchStore = 185;
+    SUnion = 186;
+    Publish = 187;
+    SPublish = 188;
+    XGroupCreateConsumer = 189;
+    XGroupDelConsumer = 190;
+    RandomKey = 191;
+    GetEx = 192;
+    Dump = 193;
+    Restore = 194;
+    SortReadOnly = 195;
+    FunctionDump = 196;
+    FunctionRestore = 197;
+    XPending = 198;
+    XGroupSetId = 199;
+    SScan = 200;
+    ZScan = 201;
+    HScan = 202;
+    XAutoClaim = 203;
+    XInfoGroups = 204;
+    XInfoConsumers = 205;
+    XInfoStream = 207;
+    Scan = 206;
+    Wait = 208;
+    XClaim = 209;
+}
+
+message Command {
+    message ArgsArray {
+        repeated bytes args = 1;
+    }
+
+    RequestType request_type = 1;
+    oneof args {
+        ArgsArray args_array = 2;
+        uint64 args_vec_pointer = 3;
+    }
+}
+
+// Used for script requests with large keys or args vectors
+message ScriptInvocationPointers {
+    string hash = 1;
+    optional uint64 keys_pointer = 2;
+    optional uint64 args_pointer = 3;
+}
+
+message ScriptInvocation {
+    string hash = 1;
+    repeated bytes keys = 2;
+    repeated bytes args = 3;
+}
+
+message Transaction {
+    repeated Command commands = 1;
+}
+
+message ClusterScan {
+    string cursor = 1;
+    optional bytes match_pattern = 2;
+    optional int64 count = 3;
+    optional string object_type = 4;
+}
+
+message CommandRequest {
+    uint32 callback_idx = 1;
+
+    oneof command {
+        Command single_command = 2;
+        Transaction transaction = 3;
+        ScriptInvocation script_invocation = 4;
+        ScriptInvocationPointers script_invocation_pointers = 5;
+        ClusterScan cluster_scan = 6;
+    }
+    Routes route = 7;
+}

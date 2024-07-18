@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 #[cfg(not(target_env = "msvc"))]
@@ -236,7 +236,7 @@ async fn get_connection(args: &Args) -> Client {
         ..Default::default()
     };
 
-    glide_core::client::Client::new(connection_request)
+    glide_core::client::Client::new(connection_request, None)
         .await
         .unwrap()
 }

@@ -1,26 +1,27 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use super::rotating_buffer::RotatingBuffer;
 use crate::client::Client;
+use crate::cluster_scan_container::get_cluster_scan_cursor;
+use crate::command_request::{
+    command, command_request, ClusterScan, Command, CommandRequest, Routes, SlotTypes, Transaction,
+};
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
-use crate::redis_request::{
-    command, redis_request, Command, RedisRequest, Routes, ScriptInvocation, SlotTypes, Transaction,
-};
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
+use bytes::Bytes;
 use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
-use protobuf::Message;
+use protobuf::{Chars, Message};
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
-use redis::RedisError;
-use redis::{Cmd, Value};
+use redis::{Cmd, PushInfo, RedisError, ScanStateRC, Value};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::{env, str};
@@ -29,6 +30,7 @@ use thiserror::Error;
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
@@ -43,6 +45,13 @@ const SOCKET_FILE_NAME: &str = "glide-socket";
 /// The maximum length of a request's arguments to be passed as a vector of
 /// strings instead of a pointer
 pub const MAX_REQUEST_ARGS_LENGTH: usize = 2_i32.pow(12) as usize; // TODO: find the right number
+
+pub const STRING: &str = "string";
+pub const LIST: &str = "list";
+pub const SET: &str = "set";
+pub const ZSET: &str = "zset";
+pub const HASH: &str = "hash";
+pub const STREAM: &str = "stream";
 
 /// struct containing all objects needed to bind to a socket and clean it.
 struct SocketListener {
@@ -108,9 +117,15 @@ impl UnixStreamListener {
                     return ReadSocketClosed.into();
                 }
                 Ok(_) => {
-                    return match self.rotating_buffer.get_requests() {
-                        Ok(requests) => ReceivedValues(requests),
-                        Err(err) => UnhandledError(err.into()).into(),
+                    match self.rotating_buffer.get_requests() {
+                        Ok(requests) => {
+                            if !requests.is_empty() {
+                                return ReceivedValues(requests);
+                            }
+                            // continue to read from socket
+                            continue;
+                        }
+                        Err(err) => return UnhandledError(err.into()).into(),
                     };
                 }
                 Err(ref e)
@@ -183,6 +198,7 @@ async fn write_result(
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
+    response.is_push = false;
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
@@ -198,13 +214,13 @@ async fn write_result(
                 None
             }
         }
-        Err(ClienUsageError::Internal(error_message)) => {
+        Err(ClientUsageError::Internal(error_message)) => {
             log_error("internal error", &error_message);
             Some(response::response::Value::ClosingError(
                 error_message.into(),
             ))
         }
-        Err(ClienUsageError::User(error_message)) => {
+        Err(ClientUsageError::User(error_message)) => {
             log_error("user error", &error_message);
             let request_error = response::RequestError {
                 type_: response::RequestErrorType::Unspecified.into(),
@@ -213,7 +229,7 @@ async fn write_result(
             };
             Some(response::response::Value::RequestError(request_error))
         }
-        Err(ClienUsageError::Redis(err)) => {
+        Err(ClientUsageError::Redis(err)) => {
             let error_message = error_message(&err);
             log_warn("received error", error_message.as_str());
             log_debug("received error", format!("for callback {}", callback_index));
@@ -261,9 +277,9 @@ fn get_command(request: &Command) -> Option<Cmd> {
     request_type.get_command()
 }
 
-fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
+fn get_redis_command(command: &Command) -> Result<Cmd, ClientUsageError> {
     let Some(mut cmd) = get_command(command) else {
-        return Err(ClienUsageError::Internal(format!(
+        return Err(ClientUsageError::Internal(format!(
             "Received invalid request type: {:?}",
             command.request_type
         )));
@@ -272,24 +288,24 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
     match &command.args {
         Some(command::Args::ArgsArray(args_vec)) => {
             for arg in args_vec.args.iter() {
-                cmd.arg(arg.as_bytes());
+                cmd.arg(arg.as_ref());
             }
         }
         Some(command::Args::ArgsVecPointer(pointer)) => {
-            let res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
+            let res = *unsafe { Box::from_raw(*pointer as *mut Vec<Bytes>) };
             for arg in res {
-                cmd.arg(arg.as_bytes());
+                cmd.arg(arg.as_ref());
             }
         }
         None => {
-            return Err(ClienUsageError::Internal(
+            return Err(ClientUsageError::Internal(
                 "Failed to get request arguments, no arguments are set".to_string(),
             ));
         }
     };
 
     if cmd.args_iter().next().is_none() {
-        return Err(ClienUsageError::User(
+        return Err(ClientUsageError::User(
             "Received command without a command name or arguments".into(),
         ));
     }
@@ -308,13 +324,66 @@ async fn send_command(
         .map_err(|err| err.into())
 }
 
+// Parse the cluster scan command parameters from protobuf and send the command to redis-rs.
+async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUsageResult<Value> {
+    // Since we don't send the cluster scan as a usual command, but through a special function in redis-rs library,
+    // we need to handle the command separately.
+    // Specifically, we need to handle the cursor, which is not the cursor returned from the server,
+    // but the ID of the ScanStateRC, stored in the cluster scan container.
+    // We need to get the ref from the table or create a new one if the cursor is empty.
+    let cursor: String = cluster_scan.cursor.into();
+    let cluster_scan_cursor = if cursor.is_empty() {
+        ScanStateRC::new()
+    } else {
+        get_cluster_scan_cursor(cursor)?
+    };
+
+    let match_pattern = cluster_scan.match_pattern.map(|pattern| pattern.into());
+    let count = cluster_scan.count.map(|count| count as usize);
+
+    let object_type = match cluster_scan.object_type {
+        Some(char_object_type) => match char_object_type.to_string().to_lowercase().as_str() {
+            STRING => Some(redis::ObjectType::String),
+            LIST => Some(redis::ObjectType::List),
+            SET => Some(redis::ObjectType::Set),
+            ZSET => Some(redis::ObjectType::ZSet),
+            HASH => Some(redis::ObjectType::Hash),
+            STREAM => Some(redis::ObjectType::Stream),
+            _ => {
+                return Err(ClientUsageError::Internal(format!(
+                    "Received invalid object type: {:?}",
+                    char_object_type
+                )))
+            }
+        },
+        None => None,
+    };
+
+    client
+        .cluster_scan(&cluster_scan_cursor, &match_pattern, count, object_type)
+        .await
+        .map_err(|err| err.into())
+}
+
 async fn invoke_script(
-    script: ScriptInvocation,
+    hash: Chars,
+    keys: Option<Vec<Bytes>>,
+    args: Option<Vec<Bytes>>,
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
+    // convert Vec<bytes> to vec<[u8]>
+    let keys: Vec<&[u8]> = keys
+        .as_ref()
+        .map(|keys| keys.iter().map(|e| e.as_ref()).collect())
+        .unwrap_or_default();
+    let args: Vec<&[u8]> = args
+        .as_ref()
+        .map(|keys| keys.iter().map(|e| e.as_ref()).collect())
+        .unwrap_or_default();
+
     client
-        .invoke_script(&script.hash, script.keys, script.args, routing)
+        .invoke_script(&hash, &keys, &args, routing)
         .await
         .map_err(|err| err.into())
 }
@@ -343,14 +412,14 @@ fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageR
             SlotTypes::Primary => SlotAddr::Master,
             SlotTypes::Replica => SlotAddr::ReplicaRequired,
         })
-        .map_err(|id| ClienUsageError::Internal(format!("Received unexpected slot id type {id}")))
+        .map_err(|id| ClientUsageError::Internal(format!("Received unexpected slot id type {id}")))
 }
 
 fn get_route(
     route: Option<Box<Routes>>,
     cmd: Option<&Cmd>,
 ) -> ClientUsageResult<Option<RoutingInfo>> {
-    use crate::redis_request::routes::Value;
+    use crate::command_request::routes::Value;
     let Some(route) = route.and_then(|route| route.value) else {
         return Ok(None);
     };
@@ -363,20 +432,19 @@ fn get_route(
     match route {
         Value::SimpleRoutes(simple_route) => {
             let simple_route = simple_route.enum_value().map_err(|id| {
-                ClienUsageError::Internal(format!("Received unexpected simple route type {id}"))
+                ClientUsageError::Internal(format!("Received unexpected simple route type {id}"))
             })?;
             match simple_route {
-                crate::redis_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode((
-                    MultipleNodeRoutingInfo::AllNodes,
-                    get_response_policy(cmd),
-                )))),
-                crate::redis_request::SimpleRoutes::AllPrimaries => {
+                crate::command_request::SimpleRoutes::AllNodes => Ok(Some(RoutingInfo::MultiNode(
+                    (MultipleNodeRoutingInfo::AllNodes, get_response_policy(cmd)),
+                ))),
+                crate::command_request::SimpleRoutes::AllPrimaries => {
                     Ok(Some(RoutingInfo::MultiNode((
                         MultipleNodeRoutingInfo::AllMasters,
                         get_response_policy(cmd),
                     ))))
                 }
-                crate::redis_request::SimpleRoutes::Random => {
+                crate::command_request::SimpleRoutes::Random => {
                     Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
                 }
             }
@@ -408,11 +476,14 @@ fn get_route(
     }
 }
 
-fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
+fn handle_request(request: CommandRequest, client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
         let result = match request.command {
             Some(action) => match action {
-                redis_request::Command::SingleCommand(command) => {
+                command_request::Command::ClusterScan(cluster_scan_command) => {
+                    cluster_scan(cluster_scan_command, client).await
+                }
+                command_request::Command::SingleCommand(command) => {
                     match get_redis_command(&command) {
                         Ok(cmd) => match get_route(request.route.0, Some(&cmd)) {
                             Ok(routes) => send_command(cmd, client, routes).await,
@@ -421,15 +492,36 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
                         Err(e) => Err(e),
                     }
                 }
-                redis_request::Command::Transaction(transaction) => {
+                command_request::Command::Transaction(transaction) => {
                     match get_route(request.route.0, None) {
                         Ok(routes) => send_transaction(transaction, client, routes).await,
                         Err(e) => Err(e),
                     }
                 }
-                redis_request::Command::ScriptInvocation(script) => {
+                command_request::Command::ScriptInvocation(script) => {
                     match get_route(request.route.0, None) {
-                        Ok(routes) => invoke_script(script, client, routes).await,
+                        Ok(routes) => {
+                            invoke_script(
+                                script.hash,
+                                Some(script.keys),
+                                Some(script.args),
+                                client,
+                                routes,
+                            )
+                            .await
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::ScriptInvocationPointers(script) => {
+                    let keys = script
+                        .keys_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    let args = script
+                        .args_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => invoke_script(script.hash, keys, args, client, routes).await,
                         Err(e) => Err(e),
                     }
                 }
@@ -442,7 +534,7 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
                         request.callback_idx
                     ),
                 );
-                Err(ClienUsageError::Internal(
+                Err(ClientUsageError::Internal(
                     "Received empty request".to_string(),
                 ))
             }
@@ -453,7 +545,7 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
 }
 
 async fn handle_requests(
-    received_requests: Vec<RedisRequest>,
+    received_requests: Vec<CommandRequest>,
     client: &Client,
     writer: &Rc<Writer>,
 ) {
@@ -472,8 +564,9 @@ pub fn close_socket(socket_path: &String) {
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
+    push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request.into()).await {
+    let client = match Client::new(request.into(), push_tx).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
@@ -484,13 +577,14 @@ async fn create_client(
 async fn wait_for_connection_configuration_and_create_client(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
+    push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
     // Wait for the server's address
     match client_listener.next_values::<ConnectionRequest>().await {
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
         ReceivedValues(mut received_requests) => {
             if let Some(request) = received_requests.pop() {
-                create_client(writer, request).await
+                create_client(writer, request, push_tx).await
             } else {
                 Err(ClientCreationError::UnhandledError(
                     "No received requests".to_string(),
@@ -517,6 +611,35 @@ async fn read_values_loop(
     }
 }
 
+async fn push_manager_loop(mut push_rx: mpsc::UnboundedReceiver<PushInfo>, writer: Rc<Writer>) {
+    loop {
+        let result = push_rx.recv().await;
+        match result {
+            None => {
+                log_error("push manager loop", "got None from push manager");
+                return;
+            }
+            Some(push_msg) => {
+                log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+                let mut response = Response::new();
+                response.callback_idx = 0; // callback_idx is not used with push notifications
+                response.is_push = true;
+                response.value = {
+                    let push_val = Value::Push {
+                        kind: (push_msg.kind),
+                        data: (push_msg.data),
+                    };
+                    let pointer = Box::leak(Box::new(push_val));
+                    let raw_pointer = pointer as *mut redis::Value;
+                    Some(response::response::Value::RespPointer(raw_pointer as u64))
+                };
+
+                _ = write_to_writer(response, &writer).await;
+            }
+        }
+    }
+}
+
 async fn listen_on_client_stream(socket: UnixStream) {
     let socket = Rc::new(socket);
     // Spawn a new task to listen on this client's stream
@@ -524,14 +647,18 @@ async fn listen_on_client_stream(socket: UnixStream) {
     let mut client_listener = UnixStreamListener::new(socket.clone());
     let accumulated_outputs = Cell::new(Vec::new());
     let (sender, mut receiver) = channel(1);
+    let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
     let writer = Rc::new(Writer {
         socket,
         lock: write_lock,
         accumulated_outputs,
         closing_sender: sender,
     });
-    let client_creation =
-        wait_for_connection_configuration_and_create_client(&mut client_listener, &writer);
+    let client_creation = wait_for_connection_configuration_and_create_client(
+        &mut client_listener,
+        &writer,
+        Some(push_tx),
+    );
     let client = match client_creation.await {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {
@@ -582,6 +709,9 @@ async fn listen_on_client_stream(socket: UnixStream) {
                 } else {
                     log_trace("client closing", "writer closed");
                 }
+            },
+            _ = push_manager_loop(push_rx, writer.clone()) => {
+                log_trace("client closing", "push manager closed");
             }
     }
     log_trace("client closing", "closing connection");
@@ -722,7 +852,7 @@ enum ClientCreationError {
 
 /// Enum describing errors received during client usage.
 #[derive(Debug, Error)]
-enum ClienUsageError {
+enum ClientUsageError {
     #[error("Redis error: {0}")]
     Redis(#[from] RedisError),
     /// An error that stems from wrong behavior of the client.
@@ -733,7 +863,7 @@ enum ClienUsageError {
     User(String),
 }
 
-type ClientUsageResult<T> = Result<T, ClienUsageError>;
+type ClientUsageResult<T> = Result<T, ClientUsageError>;
 
 /// Defines errors caused the connection to close.
 #[derive(Debug, Clone)]

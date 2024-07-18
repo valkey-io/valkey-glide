@@ -1,8 +1,11 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_HOST;
 import static glide.api.models.configuration.NodeAddress.DEFAULT_PORT;
+import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.EXACT;
+import static glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode.PATTERN;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -13,20 +16,25 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.protobuf.ByteString;
 import connection_request.ConnectionRequestOuterClass;
 import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRetryStrategy;
+import connection_request.ConnectionRequestOuterClass.PubSubChannelsOrPatterns;
+import connection_request.ConnectionRequestOuterClass.PubSubSubscriptions;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ReadFrom;
-import glide.api.models.configuration.RedisClientConfiguration;
-import glide.api.models.configuration.RedisClusterClientConfiguration;
-import glide.api.models.configuration.RedisCredentials;
+import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.ChannelHandler;
 import io.netty.channel.ChannelFuture;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -69,7 +77,7 @@ public class ConnectionManagerTest {
     @Test
     public void connection_request_protobuf_generation_default_standalone_configuration() {
         // setup
-        RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
+        GlideClientConfiguration glideClientConfiguration = GlideClientConfiguration.builder().build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
                         .setTlsMode(TlsMode.NoTls)
@@ -82,7 +90,7 @@ public class ConnectionManagerTest {
 
         // execute
         when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
 
         // verify
         // no exception
@@ -93,8 +101,8 @@ public class ConnectionManagerTest {
     @Test
     public void connection_request_protobuf_generation_default_cluster_configuration() {
         // setup
-        RedisClusterClientConfiguration redisClusterClientConfiguration =
-                RedisClusterClientConfiguration.builder().build();
+        GlideClusterClientConfiguration glideClusterClientConfiguration =
+                GlideClusterClientConfiguration.builder().build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
                         .setTlsMode(TlsMode.NoTls)
@@ -108,7 +116,7 @@ public class ConnectionManagerTest {
         // execute
         when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
         CompletableFuture<Void> result =
-                connectionManager.connectToRedis(redisClusterClientConfiguration);
+                connectionManager.connectToValkey(glideClusterClientConfiguration);
 
         // verify
         assertNull(result.get());
@@ -119,13 +127,13 @@ public class ConnectionManagerTest {
     @Test
     public void connection_request_protobuf_generation_with_all_fields_set() {
         // setup
-        RedisClientConfiguration redisClientConfiguration =
-                RedisClientConfiguration.builder()
+        GlideClientConfiguration glideClientConfiguration =
+                GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(HOST).port(PORT).build())
                         .address(NodeAddress.builder().host(DEFAULT_HOST).port(DEFAULT_PORT).build())
                         .useTLS(true)
                         .readFrom(ReadFrom.PREFER_REPLICA)
-                        .credentials(RedisCredentials.builder().username(USERNAME).password(PASSWORD).build())
+                        .credentials(ServerCredentials.builder().username(USERNAME).password(PASSWORD).build())
                         .requestTimeout(REQUEST_TIMEOUT)
                         .reconnectStrategy(
                                 BackoffStrategy.builder()
@@ -135,6 +143,12 @@ public class ConnectionManagerTest {
                                         .build())
                         .databaseId(DATABASE_ID)
                         .clientName(CLIENT_NAME)
+                        .subscriptionConfiguration(
+                                StandaloneSubscriptionConfiguration.builder()
+                                        .subscription(EXACT, gs("channel_1"))
+                                        .subscription(EXACT, gs("channel_2"))
+                                        .subscription(PATTERN, gs("*chatRoom*"))
+                                        .build())
                         .build();
         ConnectionRequest expectedProtobufConnectionRequest =
                 ConnectionRequest.newBuilder()
@@ -162,6 +176,23 @@ public class ConnectionManagerTest {
                                         .build())
                         .setDatabaseId(DATABASE_ID)
                         .setClientName(CLIENT_NAME)
+                        .setPubsubSubscriptions(
+                                PubSubSubscriptions.newBuilder()
+                                        .putAllChannelsOrPatternsByType(
+                                                Map.of(
+                                                        EXACT.ordinal(),
+                                                                PubSubChannelsOrPatterns.newBuilder()
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("channel_1").getBytes()))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("channel_2").getBytes()))
+                                                                        .build(),
+                                                        PATTERN.ordinal(),
+                                                                PubSubChannelsOrPatterns.newBuilder()
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("*chatRoom*").getBytes()))
+                                                                        .build()))
+                                        .build())
                         .build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
@@ -169,7 +200,7 @@ public class ConnectionManagerTest {
 
         // execute
         when(channel.connect(eq(expectedProtobufConnectionRequest))).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
 
         // verify
         assertNull(result.get());
@@ -180,14 +211,14 @@ public class ConnectionManagerTest {
     @Test
     public void response_validation_on_constant_response_returns_successfully() {
         // setup
-        RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
+        GlideClientConfiguration glideClientConfiguration = GlideClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().setConstantResponse(ConstantResponse.OK).build();
         completedFuture.complete(response);
 
         // execute
         when(channel.connect(any())).thenReturn(completedFuture);
-        CompletableFuture<Void> result = connectionManager.connectToRedis(redisClientConfiguration);
+        CompletableFuture<Void> result = connectionManager.connectToValkey(glideClientConfiguration);
 
         // verify
         assertNull(result.get());
@@ -197,7 +228,7 @@ public class ConnectionManagerTest {
     @Test
     public void connection_on_empty_response_throws_ClosingException() {
         // setup
-        RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
+        GlideClientConfiguration glideClientConfiguration = GlideClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().build();
         completedFuture.complete(response);
@@ -207,7 +238,7 @@ public class ConnectionManagerTest {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> connectionManager.connectToRedis(redisClientConfiguration).get());
+                        () -> connectionManager.connectToValkey(glideClientConfiguration).get());
 
         assertTrue(executionException.getCause() instanceof ClosingException);
         assertEquals("Unexpected empty data in response", executionException.getCause().getMessage());
@@ -217,7 +248,7 @@ public class ConnectionManagerTest {
     @Test
     public void connection_on_resp_pointer_throws_ClosingException() {
         // setup
-        RedisClientConfiguration redisClientConfiguration = RedisClientConfiguration.builder().build();
+        GlideClientConfiguration glideClientConfiguration = GlideClientConfiguration.builder().build();
         CompletableFuture<Response> completedFuture = new CompletableFuture<>();
         Response response = Response.newBuilder().setRespPointer(42).build();
         completedFuture.complete(response);
@@ -227,7 +258,7 @@ public class ConnectionManagerTest {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> connectionManager.connectToRedis(redisClientConfiguration).get());
+                        () -> connectionManager.connectToValkey(glideClientConfiguration).get());
 
         assertTrue(executionException.getCause() instanceof ClosingException);
         assertEquals("Unexpected data in response", executionException.getCause().getMessage());

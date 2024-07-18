@@ -1,13 +1,16 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { MAX_REQUEST_ARGS_LEN, createLeakedStringVec } from "glide-rs";
+import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
-import { redis_request } from "./ProtobufMessage";
-import RequestType = redis_request.RequestType;
+import { LPosOptions } from "./command-options/LPosOptions";
 
-function isLargeCommand(args: string[]) {
+import { command_request } from "./ProtobufMessage";
+
+import RequestType = command_request.RequestType;
+
+function isLargeCommand(args: BulkString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
@@ -19,6 +22,25 @@ function isLargeCommand(args: string[]) {
     }
 
     return false;
+}
+
+type BulkString = string | Uint8Array;
+
+/**
+ * Convert a string array into Uint8Array[]
+ */
+function toBuffersArray(args: BulkString[]) {
+    const argsBytes: Uint8Array[] = [];
+
+    for (const arg of args) {
+        if (typeof arg == "string") {
+            argsBytes.push(Buffer.from(arg));
+        } else {
+            argsBytes.push(arg);
+        }
+    }
+
+    return argsBytes;
 }
 
 /**
@@ -40,21 +62,23 @@ export function parseInfoResponse(response: string): Record<string, string> {
 }
 
 function createCommand(
-    requestType: redis_request.RequestType,
-    args: string[],
-): redis_request.Command {
-    const singleCommand = redis_request.Command.create({
+    requestType: command_request.RequestType,
+    args: BulkString[],
+): command_request.Command {
+    const singleCommand = command_request.Command.create({
         requestType,
     });
 
+    const argsBytes = toBuffersArray(args);
+
     if (isLargeCommand(args)) {
         // pass as a pointer
-        const pointerArr = createLeakedStringVec(args);
+        const pointerArr = createLeakedStringVec(argsBytes);
         const pointer = new Long(pointerArr[0], pointerArr[1]);
         singleCommand.argsVecPointer = pointer;
     } else {
-        singleCommand.argsArray = redis_request.Command.ArgsArray.create({
-            args: args,
+        singleCommand.argsArray = command_request.Command.ArgsArray.create({
+            args: argsBytes,
         });
     }
 
@@ -64,20 +88,22 @@ function createCommand(
 /**
  * @internal
  */
-export function createGet(key: string): redis_request.Command {
-    return createCommand(RequestType.GetString, [key]);
+export function createGet(key: string): command_request.Command {
+    return createCommand(RequestType.Get, [key]);
 }
 
 export type SetOptions = {
     /**
-     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
-     * `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
-     * if `conditional` is not set the value will be set regardless of prior value existence.
-     * If value isn't set because of the condition, return null.
+     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+     * Equivalent to `NX` in the Redis API. `onlyIfExists` - Only set the key if
+     * it already exist. Equivalent to `EX` in the Redis API. if `conditional` is
+     * not set the value will be set regardless of prior value existence. If value
+     * isn't set because of the condition, return null.
      */
     conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
     /**
-     * Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string.
+     * Return the old string stored at key, or nil if key did not exist. An error
+     * is returned and SET aborted if the value stored at key is not a string.
      * Equivalent to `GET` in the Redis API.
      */
     returnOldValue?: boolean;
@@ -85,24 +111,29 @@ export type SetOptions = {
      * If not set, no expiry time will be set for the value.
      */
     expiry?: /**
-     * Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
+     * Retain the time to live associated with the key. Equivalent to
+     * `KEEPTTL` in the Redis API.
      */
     | "keepExisting"
         | {
               type: /**
-               * Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+               * Set the specified expire time, in seconds. Equivalent to
+               * `EX` in the Redis API.
                */
               | "seconds"
                   /**
-                   * Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+                   * Set the specified expire time, in milliseconds. Equivalent
+                   * to `PX` in the Redis API.
                    */
                   | "milliseconds"
                   /**
-                   * Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+                   * Set the specified Unix time at which the key will expire,
+                   * in seconds. Equivalent to `EXAT` in the Redis API.
                    */
                   | "unixSeconds"
                   /**
-                   * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
+                   * Set the specified Unix time at which the key will expire,
+                   * in milliseconds. Equivalent to `PXAT` in the Redis API.
                    */
                   | "unixMilliseconds";
               count: number;
@@ -113,10 +144,10 @@ export type SetOptions = {
  * @internal
  */
 export function createSet(
-    key: string,
-    value: string,
+    key: BulkString,
+    value: BulkString,
     options?: SetOptions,
-): redis_request.Command {
+): command_request.Command {
     const args = [key, value];
 
     if (options) {
@@ -145,17 +176,17 @@ export function createSet(
         if (options.expiry === "keepExisting") {
             args.push("KEEPTTL");
         } else if (options.expiry?.type === "seconds") {
-            args.push("EX " + options.expiry.count);
+            args.push("EX", options.expiry.count.toString());
         } else if (options.expiry?.type === "milliseconds") {
-            args.push("PX " + options.expiry.count);
+            args.push("PX", options.expiry.count.toString());
         } else if (options.expiry?.type === "unixSeconds") {
-            args.push("EXAT " + options.expiry.count);
+            args.push("EXAT", options.expiry.count.toString());
         } else if (options.expiry?.type === "unixMilliseconds") {
-            args.push("PXAT " + options.expiry.count);
+            args.push("PXAT", options.expiry.count.toString());
         }
     }
 
-    return createCommand(RequestType.SetString, args);
+    return createCommand(RequestType.Set, args);
 }
 
 /**
@@ -236,7 +267,7 @@ export enum InfoOptions {
 /**
  * @internal
  */
-export function createPing(str?: string): redis_request.Command {
+export function createPing(str?: string): command_request.Command {
     const args: string[] = str == undefined ? [] : [str];
     return createCommand(RequestType.Ping, args);
 }
@@ -244,7 +275,7 @@ export function createPing(str?: string): redis_request.Command {
 /**
  * @internal
  */
-export function createInfo(options?: InfoOptions[]): redis_request.Command {
+export function createInfo(options?: InfoOptions[]): command_request.Command {
     const args: string[] = options == undefined ? [] : options;
     return createCommand(RequestType.Info, args);
 }
@@ -252,42 +283,42 @@ export function createInfo(options?: InfoOptions[]): redis_request.Command {
 /**
  * @internal
  */
-export function createDel(keys: string[]): redis_request.Command {
+export function createDel(keys: string[]): command_request.Command {
     return createCommand(RequestType.Del, keys);
 }
 
 /**
  * @internal
  */
-export function createSelect(index: number): redis_request.Command {
+export function createSelect(index: number): command_request.Command {
     return createCommand(RequestType.Select, [index.toString()]);
 }
 
 /**
  * @internal
  */
-export function createClientGetName(): redis_request.Command {
+export function createClientGetName(): command_request.Command {
     return createCommand(RequestType.ClientGetName, []);
 }
 
 /**
  * @internal
  */
-export function createConfigRewrite(): redis_request.Command {
+export function createConfigRewrite(): command_request.Command {
     return createCommand(RequestType.ConfigRewrite, []);
 }
 
 /**
  * @internal
  */
-export function createConfigResetStat(): redis_request.Command {
+export function createConfigResetStat(): command_request.Command {
     return createCommand(RequestType.ConfigResetStat, []);
 }
 
 /**
  * @internal
  */
-export function createMGet(keys: string[]): redis_request.Command {
+export function createMGet(keys: string[]): command_request.Command {
     return createCommand(RequestType.MGet, keys);
 }
 
@@ -296,14 +327,14 @@ export function createMGet(keys: string[]): redis_request.Command {
  */
 export function createMSet(
     keyValueMap: Record<string, string>,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.MSet, Object.entries(keyValueMap).flat());
 }
 
 /**
  * @internal
  */
-export function createIncr(key: string): redis_request.Command {
+export function createIncr(key: string): command_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
 
@@ -313,7 +344,7 @@ export function createIncr(key: string): redis_request.Command {
 export function createIncrBy(
     key: string,
     amount: number,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.IncrBy, [key, amount.toString()]);
 }
 
@@ -323,21 +354,21 @@ export function createIncrBy(
 export function createIncrByFloat(
     key: string,
     amount: number,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
 }
 
 /**
  * @internal
  */
-export function createClientId(): redis_request.Command {
+export function createClientId(): command_request.Command {
     return createCommand(RequestType.ClientId, []);
 }
 
 /**
  * @internal
  */
-export function createConfigGet(parameters: string[]): redis_request.Command {
+export function createConfigGet(parameters: string[]): command_request.Command {
     return createCommand(RequestType.ConfigGet, parameters);
 }
 
@@ -346,7 +377,7 @@ export function createConfigGet(parameters: string[]): redis_request.Command {
  */
 export function createConfigSet(
     parameters: Record<string, string>,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(
         RequestType.ConfigSet,
         Object.entries(parameters).flat(),
@@ -356,8 +387,11 @@ export function createConfigSet(
 /**
  * @internal
  */
-export function createHGet(key: string, field: string): redis_request.Command {
-    return createCommand(RequestType.HashGet, [key, field]);
+export function createHGet(
+    key: string,
+    field: string,
+): command_request.Command {
+    return createCommand(RequestType.HGet, [key, field]);
 }
 
 /**
@@ -366,9 +400,9 @@ export function createHGet(key: string, field: string): redis_request.Command {
 export function createHSet(
     key: string,
     fieldValueMap: Record<string, string>,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(
-        RequestType.HashSet,
+        RequestType.HSet,
         [key].concat(Object.entries(fieldValueMap).flat()),
     );
 }
@@ -380,14 +414,14 @@ export function createHSetNX(
     key: string,
     field: string,
     value: string,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.HSetNX, [key, field, value]);
 }
 
 /**
  * @internal
  */
-export function createDecr(key: string): redis_request.Command {
+export function createDecr(key: string): command_request.Command {
     return createCommand(RequestType.Decr, [key]);
 }
 
@@ -397,7 +431,7 @@ export function createDecr(key: string): redis_request.Command {
 export function createDecrBy(
     key: string,
     amount: number,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
 }
 
@@ -407,8 +441,8 @@ export function createDecrBy(
 export function createHDel(
     key: string,
     fields: string[],
-): redis_request.Command {
-    return createCommand(RequestType.HashDel, [key].concat(fields));
+): command_request.Command {
+    return createCommand(RequestType.HDel, [key].concat(fields));
 }
 
 /**
@@ -417,8 +451,8 @@ export function createHDel(
 export function createHMGet(
     key: string,
     fields: string[],
-): redis_request.Command {
-    return createCommand(RequestType.HashMGet, [key].concat(fields));
+): command_request.Command {
+    return createCommand(RequestType.HMGet, [key].concat(fields));
 }
 
 /**
@@ -427,15 +461,15 @@ export function createHMGet(
 export function createHExists(
     key: string,
     field: string,
-): redis_request.Command {
-    return createCommand(RequestType.HashExists, [key, field]);
+): command_request.Command {
+    return createCommand(RequestType.HExists, [key, field]);
 }
 
 /**
  * @internal
  */
-export function createHGetAll(key: string): redis_request.Command {
-    return createCommand(RequestType.HashGetAll, [key]);
+export function createHGetAll(key: string): command_request.Command {
+    return createCommand(RequestType.HGetAll, [key]);
 }
 
 /**
@@ -444,14 +478,27 @@ export function createHGetAll(key: string): redis_request.Command {
 export function createLPush(
     key: string,
     elements: string[],
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.LPush, [key].concat(elements));
 }
 
 /**
  * @internal
  */
-export function createLPop(key: string, count?: number): redis_request.Command {
+export function createLPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.LPushX, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
+export function createLPop(
+    key: string,
+    count?: number,
+): command_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
@@ -463,7 +510,7 @@ export function createLRange(
     key: string,
     start: number,
     end: number,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.LRange, [
         key,
         start.toString(),
@@ -474,8 +521,19 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): redis_request.Command {
+export function createLLen(key: string): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createLSet(
+    key: string,
+    index: number,
+    element: string,
+): command_request.Command {
+    return createCommand(RequestType.LSet, [key, index.toString(), element]);
 }
 
 /**
@@ -485,7 +543,7 @@ export function createLTrim(
     key: string,
     start: number,
     end: number,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.LTrim, [
         key,
         start.toString(),
@@ -500,7 +558,7 @@ export function createLRem(
     key: string,
     count: number,
     element: string,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.LRem, [key, count.toString(), element]);
 }
 
@@ -510,14 +568,27 @@ export function createLRem(
 export function createRPush(
     key: string,
     elements: string[],
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
 
 /**
  * @internal
  */
-export function createRPop(key: string, count?: number): redis_request.Command {
+export function createRPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.RPushX, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
+export function createRPop(
+    key: string,
+    count?: number,
+): command_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
@@ -528,7 +599,7 @@ export function createRPop(key: string, count?: number): redis_request.Command {
 export function createSAdd(
     key: string,
     members: string[],
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.SAdd, [key].concat(members));
 }
 
@@ -538,40 +609,133 @@ export function createSAdd(
 export function createSRem(
     key: string,
     members: string[],
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.SRem, [key].concat(members));
 }
 
 /**
  * @internal
  */
-export function createSMembers(key: string): redis_request.Command {
+export function createSMembers(key: string): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
+}
+
+/**
+ *
+ * @internal
+ */
+export function createSMove(
+    source: string,
+    destination: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.SMove, [source, destination, member]);
 }
 
 /**
  * @internal
  */
-export function createSCard(key: string): redis_request.Command {
+export function createSCard(key: string): command_request.Command {
     return createCommand(RequestType.SCard, [key]);
 }
 
 /**
  * @internal
  */
-export function createSismember(
+export function createSInter(keys: string[]): command_request.Command {
+    return createCommand(RequestType.SInter, keys);
+}
+
+/**
+ * @internal
+ */
+export function createSInterCard(
+    keys: string[],
+    limit?: number,
+): command_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.SInterCard, args);
+}
+
+/**
+ * @internal
+ */
+export function createSInterStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.SInterStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
+export function createSDiff(keys: string[]): command_request.Command {
+    return createCommand(RequestType.SDiff, keys);
+}
+
+/**
+ * @internal
+ */
+export function createSDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.SDiffStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
+export function createSUnion(keys: string[]): command_request.Command {
+    return createCommand(RequestType.SUnion, keys);
+}
+
+/**
+ * @internal
+ */
+export function createSUnionStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.SUnionStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
+export function createSIsMember(
     key: string,
     member: string,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.SIsMember, [key, member]);
 }
 
 /**
  * @internal
  */
-export function createSPop(key: string, count?: number): redis_request.Command {
+export function createSMIsMember(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.SMIsMember, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
+export function createSPop(
+    key: string,
+    count?: number,
+): command_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
-    return createCommand(RequestType.Spop, args);
+    return createCommand(RequestType.SPop, args);
 }
 
 /**
@@ -588,12 +752,8 @@ export function createHIncrBy(
     key: string,
     field: string,
     amount: number,
-): redis_request.Command {
-    return createCommand(RequestType.HashIncrBy, [
-        key,
-        field,
-        amount.toString(),
-    ]);
+): command_request.Command {
+    return createCommand(RequestType.HIncrBy, [key, field, amount.toString()]);
 }
 
 /**
@@ -603,8 +763,8 @@ export function createHIncrByFloat(
     key: string,
     field: string,
     amount: number,
-): redis_request.Command {
-    return createCommand(RequestType.HashIncrByFloat, [
+): command_request.Command {
+    return createCommand(RequestType.HIncrByFloat, [
         key,
         field,
         amount.toString(),
@@ -614,28 +774,28 @@ export function createHIncrByFloat(
 /**
  * @internal
  */
-export function createHLen(key: string): redis_request.Command {
+export function createHLen(key: string): command_request.Command {
     return createCommand(RequestType.HLen, [key]);
 }
 
 /**
  * @internal
  */
-export function createHvals(key: string): redis_request.Command {
-    return createCommand(RequestType.Hvals, [key]);
+export function createHVals(key: string): command_request.Command {
+    return createCommand(RequestType.HVals, [key]);
 }
 
 /**
  * @internal
  */
-export function createExists(keys: string[]): redis_request.Command {
+export function createExists(keys: string[]): command_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
 
 /**
  * @internal
  */
-export function createUnlink(keys: string[]): redis_request.Command {
+export function createUnlink(keys: string[]): command_request.Command {
     return createCommand(RequestType.Unlink, keys);
 }
 
@@ -649,11 +809,13 @@ export enum ExpireOptions {
      */
     HasExistingExpiry = "XX",
     /**
-     * `NewExpiryGreaterThanCurrent` - Sets expiry only when the new expiry is greater than current one.
+     * `NewExpiryGreaterThanCurrent` - Sets expiry only when the new expiry is
+     * greater than current one.
      */
     NewExpiryGreaterThanCurrent = "GT",
     /**
-     * `NewExpiryLessThanCurrent` - Sets expiry only when the new expiry is less than current one.
+     * `NewExpiryLessThanCurrent` - Sets expiry only when the new expiry is less
+     * than current one.
      */
     NewExpiryLessThanCurrent = "LT",
 }
@@ -665,7 +827,7 @@ export function createExpire(
     key: string,
     seconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] =
         option == undefined
             ? [key, seconds.toString()]
@@ -680,7 +842,7 @@ export function createExpireAt(
     key: string,
     unixSeconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] =
         option == undefined
             ? [key, unixSeconds.toString()]
@@ -695,7 +857,7 @@ export function createPExpire(
     key: string,
     milliseconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] =
         option == undefined
             ? [key, milliseconds.toString()]
@@ -710,7 +872,7 @@ export function createPExpireAt(
     key: string,
     unixMilliseconds: number,
     option?: ExpireOptions,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] =
         option == undefined
             ? [key, unixMilliseconds.toString()]
@@ -721,21 +883,23 @@ export function createPExpireAt(
 /**
  * @internal
  */
-export function createTTL(key: string): redis_request.Command {
+export function createTTL(key: string): command_request.Command {
     return createCommand(RequestType.TTL, [key]);
 }
 
-export type ZaddOptions = {
+export type ZAddOptions = {
     /**
-     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Redis API.
-     * `onlyIfExists` - Only update elements that already exist. Don't add new elements. Equivalent to `XX` in the Redis API.
+     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing
+     * elements. Equivalent to `NX` in the Redis API. `onlyIfExists` - Only update
+     * elements that already exist. Don't add new elements. Equivalent to `XX` in
+     * the Redis API.
      */
     conditionalChange?: "onlyIfExists" | "onlyIfDoesNotExist";
     /**
-     * `scoreLessThanCurrent` - Only update existing elements if the new score is less than the current score.
-     *  Equivalent to `LT` in the Redis API.
-     * `scoreGreaterThanCurrent` - Only update existing elements if the new score is greater than the current score.
-     *  Equivalent to `GT` in the Redis API.
+     * `scoreLessThanCurrent` - Only update existing elements if the new score is
+     * less than the current score. Equivalent to `LT` in the Redis API.
+     * `scoreGreaterThanCurrent` - Only update existing elements if the new score
+     * is greater than the current score. Equivalent to `GT` in the Redis API.
      */
     updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
 };
@@ -743,12 +907,12 @@ export type ZaddOptions = {
 /**
  * @internal
  */
-export function createZadd(
+export function createZAdd(
     key: string,
     membersScoresMap: Record<string, number>,
-    options?: ZaddOptions,
+    options?: ZAddOptions,
     changedOrIncr?: "CH" | "INCR",
-): redis_request.Command {
+): command_request.Command {
     let args = [key];
 
     if (options) {
@@ -781,33 +945,94 @@ export function createZadd(
             key,
         ]),
     );
-    return createCommand(RequestType.Zadd, args);
+    return createCommand(RequestType.ZAdd, args);
+}
+
+/**
+ * `KeyWeight` - pair of variables represents a weighted key for the `ZINTERSTORE` and `ZUNIONSTORE` sorted sets commands.
+ */
+export type KeyWeight = [string, number];
+/**
+ * `AggregationType` - representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
+ */
+export type AggregationType = "SUM" | "MIN" | "MAX";
+
+/**
+ * @internal
+ */
+export function createZInterstore(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): command_request.Command {
+    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    return createCommand(RequestType.ZInterStore, args);
+}
+
+function createZCmdStoreArgs(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): string[] {
+    const args: string[] = [destination, keys.length.toString()];
+
+    if (typeof keys[0] === "string") {
+        args.push(...(keys as string[]));
+    } else {
+        const weightsKeys = keys.map(([key]) => key);
+        args.push(...(weightsKeys as string[]));
+        const weights = keys.map(([, weight]) => weight.toString());
+        args.push("WEIGHTS", ...weights);
+    }
+
+    if (aggregationType) {
+        args.push("AGGREGATE", aggregationType);
+    }
+
+    return args;
 }
 
 /**
  * @internal
  */
-export function createZrem(
+export function createZRem(
     key: string,
     members: string[],
-): redis_request.Command {
-    return createCommand(RequestType.Zrem, [key].concat(members));
+): command_request.Command {
+    return createCommand(RequestType.ZRem, [key].concat(members));
 }
 
 /**
  * @internal
  */
-export function createZcard(key: string): redis_request.Command {
-    return createCommand(RequestType.Zcard, [key]);
+export function createZCard(key: string): command_request.Command {
+    return createCommand(RequestType.ZCard, [key]);
 }
 
 /**
  * @internal
  */
-export function createZscore(
+export function createZInterCard(
+    keys: string[],
+    limit?: number,
+): command_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.ZInterCard, args);
+}
+
+/**
+ * @internal
+ */
+export function createZScore(
     key: string,
     member: string,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.ZScore, [key, member]);
 }
 
@@ -865,10 +1090,10 @@ type SortedSetRange<T> = {
     /**
      * The limit argument for a range query.
      * Represents a limit argument for a range query in a sorted set to
-     * be used in [ZRANGE](https://redis.io/commands/zrange) command.
+     * be used in [ZRANGE](https://valkey.io/commands/zrange) command.
      *
-     * The optional LIMIT argument can be used to obtain a sub-range from the matching elements
-     * (similar to SELECT LIMIT offset, count in SQL).
+     * The optional LIMIT argument can be used to obtain a sub-range from the
+     * matching elements (similar to SELECT LIMIT offset, count in SQL).
      */
     limit?: {
         /**
@@ -888,9 +1113,12 @@ export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
 /**
  * Returns a string representation of a score boundary in Redis protocol format.
- * @param score - The score boundary object containing value and inclusivity information.
- * @param isLex - Indicates whether to return lexical representation for positive/negative infinity.
- * @returns A string representation of the score boundary in Redis protocol format.
+ * @param score - The score boundary object containing value and inclusivity
+ *     information.
+ * @param isLex - Indicates whether to return lexical representation for
+ *     positive/negative infinity.
+ * @returns A string representation of the score boundary in Redis protocol
+ *     format.
  */
 function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
@@ -910,7 +1138,7 @@ function getScoreBoundaryArg(
     return value;
 }
 
-function createZrangeArgs(
+function createZRangeArgs(
     key: string,
     rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
     reverse: boolean,
@@ -951,72 +1179,98 @@ function createZrangeArgs(
 /**
  * @internal
  */
-export function createZcount(
+export function createZCount(
     key: string,
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
-): redis_request.Command {
+): command_request.Command {
     const args = [key];
     args.push(getScoreBoundaryArg(minScore));
     args.push(getScoreBoundaryArg(maxScore));
-    return createCommand(RequestType.Zcount, args);
+    return createCommand(RequestType.ZCount, args);
 }
 
 /**
  * @internal
  */
-export function createZrange(
+export function createZRange(
     key: string,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
-): redis_request.Command {
-    const args = createZrangeArgs(key, rangeQuery, reverse, false);
-    return createCommand(RequestType.Zrange, args);
+): command_request.Command {
+    const args = createZRangeArgs(key, rangeQuery, reverse, false);
+    return createCommand(RequestType.ZRange, args);
 }
 
 /**
  * @internal
  */
-export function createZrangeWithScores(
+export function createZRangeWithScores(
     key: string,
     rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
     reverse: boolean = false,
-): redis_request.Command {
-    const args = createZrangeArgs(key, rangeQuery, reverse, true);
-    return createCommand(RequestType.Zrange, args);
+): command_request.Command {
+    const args = createZRangeArgs(key, rangeQuery, reverse, true);
+    return createCommand(RequestType.ZRange, args);
 }
 
 /**
  * @internal
  */
-export function createType(key: string): redis_request.Command {
+export function createType(key: string): command_request.Command {
     return createCommand(RequestType.Type, [key]);
 }
 
 /**
  * @internal
  */
-export function createStrlen(key: string): redis_request.Command {
+export function createStrlen(key: string): command_request.Command {
     return createCommand(RequestType.Strlen, [key]);
 }
 
 /**
  * @internal
  */
-export function createLindex(
+export function createLIndex(
     key: string,
     index: number,
-): redis_request.Command {
-    return createCommand(RequestType.Lindex, [key, index.toString()]);
+): command_request.Command {
+    return createCommand(RequestType.LIndex, [key, index.toString()]);
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export enum InsertPosition {
+    /**
+     * Insert new element before the pivot.
+     */
+    Before = "before",
+    /**
+     * Insert new element after the pivot.
+     */
+    After = "after",
 }
 
 /**
  * @internal
  */
-export function createZpopmin(
+export function createLInsert(
+    key: string,
+    position: InsertPosition,
+    pivot: string,
+    element: string,
+): command_request.Command {
+    return createCommand(RequestType.LInsert, [key, position, pivot, element]);
+}
+
+/**
+ * @internal
+ */
+export function createZPopMin(
     key: string,
     count?: number,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMin, args);
 }
@@ -1024,10 +1278,10 @@ export function createZpopmin(
 /**
  * @internal
  */
-export function createZpopmax(
+export function createZPopMax(
     key: string,
     count?: number,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.ZPopMax, args);
 }
@@ -1035,25 +1289,25 @@ export function createZpopmax(
 /**
  * @internal
  */
-export function createEcho(message: string): redis_request.Command {
+export function createEcho(message: string): command_request.Command {
     return createCommand(RequestType.Echo, [message]);
 }
 
 /**
  * @internal
  */
-export function createPttl(key: string): redis_request.Command {
+export function createPTTL(key: string): command_request.Command {
     return createCommand(RequestType.PTTL, [key]);
 }
 
 /**
  * @internal
  */
-export function createZremRangeByRank(
+export function createZRemRangeByRank(
     key: string,
     start: number,
     stop: number,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.ZRemRangeByRank, [
         key,
         start.toString(),
@@ -1064,33 +1318,33 @@ export function createZremRangeByRank(
 /**
  * @internal
  */
-export function createZremRangeByScore(
+export function createZRemRangeByScore(
     key: string,
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
-): redis_request.Command {
+): command_request.Command {
     const args = [key];
     args.push(getScoreBoundaryArg(minScore));
     args.push(getScoreBoundaryArg(maxScore));
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
-export function createPersist(key: string): redis_request.Command {
+export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
-export function createZrank(
+export function createZRank(
     key: string,
     member: string,
     withScores?: boolean,
-): redis_request.Command {
+): command_request.Command {
     const args = [key, member];
 
     if (withScores) {
         args.push("WITHSCORE");
     }
 
-    return createCommand(RequestType.Zrank, args);
+    return createCommand(RequestType.ZRank, args);
 }
 
 export type StreamTrimOptions = (
@@ -1112,7 +1366,9 @@ export type StreamTrimOptions = (
       }
 ) & {
     /**
-     * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the Redis API. Otherwise the stream will be trimmed in a near-exact manner, which is more efficient, equivalent to `~` in the Redis API.
+     * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
+     * Redis API. Otherwise the stream will be trimmed in a near-exact manner,
+     * which is more efficient, equivalent to `~` in the Redis API.
      */
     exact: boolean;
     /**
@@ -1127,8 +1383,8 @@ export type StreamAddOptions = {
      */
     id?: string;
     /**
-     * If set to `false`, a new stream won't be created if no stream matches the given key.
-     * Equivalent to `NOMKSTREAM` in the Redis API.
+     * If set to `false`, a new stream won't be created if no stream matches the
+     * given key. Equivalent to `NOMKSTREAM` in the Redis API.
      */
     makeStream?: boolean;
     /**
@@ -1162,11 +1418,11 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
     }
 }
 
-export function createXadd(
+export function createXAdd(
     key: string,
     values: [string, string][],
     options?: StreamAddOptions,
-): redis_request.Command {
+): command_request.Command {
     const args = [key];
 
     if (options?.makeStream === false) {
@@ -1194,10 +1450,10 @@ export function createXadd(
 /**
  * @internal
  */
-export function createXtrim(
+export function createXTrim(
     key: string,
     options: StreamTrimOptions,
-): redis_request.Command {
+): command_request.Command {
     const args = [key];
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
@@ -1206,25 +1462,49 @@ export function createXtrim(
 /**
  * @internal
  */
-export function createTime(): redis_request.Command {
+export function createTime(): command_request.Command {
     return createCommand(RequestType.Time, []);
 }
 
 /**
  * @internal
  */
-export function createBrpop(
+export function createPublish(
+    message: string,
+    channel: string,
+    sharded: boolean = false,
+): command_request.Command {
+    const request = sharded ? RequestType.SPublish : RequestType.Publish;
+    return createCommand(request, [channel, message]);
+}
+
+/**
+ * @internal
+ */
+export function createBRPop(
     keys: string[],
     timeout: number,
-): redis_request.Command {
+): command_request.Command {
     const args = [...keys, timeout.toString()];
-    return createCommand(RequestType.Brpop, args);
+    return createCommand(RequestType.BRPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBLPop(
+    keys: string[],
+    timeout: number,
+): command_request.Command {
+    const args = [...keys, timeout.toString()];
+    return createCommand(RequestType.BLPop, args);
 }
 
 export type StreamReadOptions = {
     /**
-     * If set, the read request will block for the set amount of milliseconds or until the server has the required number of entries.
-     * Equivalent to `BLOCK` in the Redis API.
+     * If set, the read request will block for the set amount of milliseconds or
+     * until the server has the required number of entries. Equivalent to `BLOCK`
+     * in the Redis API.
      */
     block?: number;
     /**
@@ -1263,10 +1543,10 @@ function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
 /**
  * @internal
  */
-export function createXread(
+export function createXRead(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
-): redis_request.Command {
+): command_request.Command {
     const args: string[] = [];
 
     if (options) {
@@ -1281,9 +1561,157 @@ export function createXread(
 /**
  * @internal
  */
+export function createXLen(key: string): command_request.Command {
+    return createCommand(RequestType.XLen, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createRename(
     key: string,
     newKey: string,
-): redis_request.Command {
+): command_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
+}
+
+/**
+ * @internal
+ */
+export function createRenameNX(
+    key: string,
+    newKey: string,
+): command_request.Command {
+    return createCommand(RequestType.RenameNX, [key, newKey]);
+}
+
+/**
+ * @internal
+ */
+export function createPfAdd(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    const args = [key, ...elements];
+    return createCommand(RequestType.PfAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createPfCount(keys: string[]): command_request.Command {
+    return createCommand(RequestType.PfCount, keys);
+}
+
+/**
+ * @internal
+ */
+export function createObjectEncoding(key: string): command_request.Command {
+    return createCommand(RequestType.ObjectEncoding, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectFreq(key: string): command_request.Command {
+    return createCommand(RequestType.ObjectFreq, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectIdletime(key: string): command_request.Command {
+    return createCommand(RequestType.ObjectIdleTime, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectRefcount(key: string): command_request.Command {
+    return createCommand(RequestType.ObjectRefCount, [key]);
+}
+
+export type LolwutOptions = {
+    /**
+     * An optional argument that can be used to specify the version of computer art to generate.
+     */
+    version?: number;
+    /**
+     * An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     */
+    parameters?: number[];
+};
+
+/**
+ * @internal
+ */
+export function createLolwut(options?: LolwutOptions): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.version !== undefined) {
+            args.push("VERSION", options.version.toString());
+        }
+
+        if (options.parameters !== undefined) {
+            args.push(...options.parameters.map((param) => param.toString()));
+        }
+    }
+
+    return createCommand(RequestType.Lolwut, args);
+}
+
+/**
+ * Defines flushing mode for:
+ *
+ * `FLUSHALL` command.
+ *
+ * See https://valkey.io/commands/flushall/ for details.
+ */
+export enum FlushMode {
+    /**
+     * Flushes synchronously.
+     *
+     * since Valkey 6.2 and above.
+     */
+    SYNC = "SYNC",
+    /** Flushes asynchronously. */
+    ASYNC = "ASYNC",
+}
+
+/**
+ * @internal
+ */
+export function createFlushAll(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushAll, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushAll, []);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createLPos(
+    key: string,
+    element: string,
+    options?: LPosOptions,
+): command_request.Command {
+    let args: string[] = [key, element];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    return createCommand(RequestType.LPos, args);
+}
+
+/**
+ * @internal
+ */
+export function createDBSize(): command_request.Command {
+    return createCommand(RequestType.DBSize, []);
 }

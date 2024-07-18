@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+        "target": "ES6" /* Set the JavaScript language version for emitted JavaScript and include compatible library declarations. */,
+        "module": "CommonJS" /* Specify what module code is generated. */,
+        "forceConsistentCasingInFileNames": true /* Ensure that casing is correct in imports. */,
+        "strict": true /* Enable all strict type-checking options. */,
+        "allowJs": true /* Allow JavaScript files to be a part of your program. Use the 'checkJS' option to get errors from these files. */,
+        "allowSyntheticDefaultImports": true /* Allow 'import x from y' when a module doesn't have a default export. */,
+        "baseUrl": "./" /* Specify the base directory to resolve non-relative module names. */,
+        "esModuleInterop": true /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables 'allowSyntheticDefaultImports' for type compatibility. */,
+        "moduleResolution": "Node" /* Specify how TypeScript looks up a file from a given module specifier. */,
+        "noFallthroughCasesInSwitch": true /* Enable error reporting for fallthrough cases in switch statements. */,
+        "pretty": true,
+        "resolveJsonModule": true /* Enable importing .json files. */,
+        "rootDir": "./" /* Specify the root folder within your source files. */,
+        "traceResolution": false /* true to have TypeScript print information about its resolution process for each processed file */
+    },
+    "compileOnSave": false,
+    "include": ["./*.ts"],
+    "exclude": ["node_modules"]
+}

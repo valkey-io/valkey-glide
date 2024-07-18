@@ -3,7 +3,7 @@ name = "glide-rs"
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-authors = ["Amazon Web Services"]
+authors = ["Valkey GLIDE Maintainers"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -17,6 +17,7 @@ logger_core = {path = "../logger_core"}
 tracing-subscriber = "0.3.16"
 jni = "0.21.1"
 log = "0.4.20"
+bytes = { version = "1.6.0" }
 
 [profile.release]
 lto = true

@@ -1,5 +1,5 @@
 /*
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 #![cfg(feature = "socket-layer")]
@@ -22,13 +22,13 @@ mod socket_listener {
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use glide_core::redis_request::command::{Args, ArgsArray};
-    use glide_core::redis_request::{Command, Transaction};
+    use command_request::{CommandRequest, RequestType};
+    use glide_core::command_request::command::{Args, ArgsArray};
+    use glide_core::command_request::{Command, Transaction};
     use glide_core::response::{response, ConstantResponse, Response};
     use glide_core::scripts_container::add_script;
     use protobuf::{EnumOrUnknown, Message};
     use redis::{Cmd, ConnectionAddr, FromRedisValue, Value};
-    use redis_request::{RedisRequest, RequestType};
     use rstest::rstest;
     use std::mem::size_of;
     use tokio::{net::UnixListener, runtime::Builder};
@@ -89,7 +89,7 @@ mod socket_listener {
     }
 
     struct CommandComponents {
-        args: Vec<String>,
+        args: Vec<bytes::Bytes>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
     }
@@ -241,11 +241,11 @@ mod socket_listener {
         command.request_type = components.request_type;
         if components.args_pointer {
             command.args = Some(Args::ArgsVecPointer(Box::leak(Box::new(components.args))
-                as *mut Vec<String>
+                as *mut Vec<bytes::Bytes>
                 as u64));
         } else {
             let mut args_array = ArgsArray::new();
-            args_array.args = components.args.into_iter().map(|str| str.into()).collect();
+            args_array.args.clone_from(&components.args);
             command.args = Some(Args::ArgsArray(args_array));
         }
         command
@@ -253,14 +253,14 @@ mod socket_listener {
 
     fn get_command_request(
         callback_index: u32,
-        args: Vec<String>,
+        args: Vec<bytes::Bytes>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
-    ) -> RedisRequest {
-        let mut request = RedisRequest::new();
+    ) -> CommandRequest {
+        let mut request = CommandRequest::new();
         request.callback_idx = callback_index;
 
-        request.command = Some(redis_request::redis_request::Command::SingleCommand(
+        request.command = Some(command_request::command_request::Command::SingleCommand(
             get_command(CommandComponents {
                 args,
                 request_type,
@@ -270,7 +270,7 @@ mod socket_listener {
         request
     }
 
-    fn write_request(buffer: &mut Vec<u8>, socket: &mut UnixStream, request: RedisRequest) {
+    fn write_request(buffer: &mut Vec<u8>, socket: &mut UnixStream, request: CommandRequest) {
         write_message(buffer, request);
         socket.write_all(buffer).unwrap();
     }
@@ -279,7 +279,7 @@ mod socket_listener {
         buffer: &mut Vec<u8>,
         socket: &mut UnixStream,
         callback_index: u32,
-        args: Vec<String>,
+        args: Vec<bytes::Bytes>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
     ) {
@@ -294,7 +294,7 @@ mod socket_listener {
         callback_index: u32,
         commands_components: Vec<CommandComponents>,
     ) {
-        let mut request = RedisRequest::new();
+        let mut request = CommandRequest::new();
         request.callback_idx = callback_index;
         let mut transaction = Transaction::new();
         transaction.commands.reserve(commands_components.len());
@@ -303,7 +303,7 @@ mod socket_listener {
             transaction.commands.push(get_command(components));
         }
 
-        request.command = Some(redis_request::redis_request::Command::Transaction(
+        request.command = Some(command_request::command_request::Command::Transaction(
             transaction,
         ));
 
@@ -321,8 +321,8 @@ mod socket_listener {
             buffer,
             socket,
             callback_index,
-            vec![key.to_string()],
-            RequestType::GetString.into(),
+            vec![key.to_string().into()],
+            RequestType::Get.into(),
             args_pointer,
         )
     }
@@ -339,8 +339,8 @@ mod socket_listener {
             buffer,
             socket,
             callback_index,
-            vec![key.to_string(), value],
-            RequestType::SetString.into(),
+            vec![key.to_string().into(), value.into()],
+            RequestType::Set.into(),
             args_pointer,
         )
     }
@@ -575,6 +575,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_set_and_get(
         #[values((false, Tls::NoTls), (true, Tls::NoTls), (false, Tls::UseTls))]
@@ -621,6 +622,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_pass_custom_command(
         #[values(false, true)] args_pointer: bool,
@@ -640,7 +642,11 @@ mod socket_listener {
             &mut buffer,
             &mut test_basics.socket,
             CALLBACK1_INDEX,
-            vec!["SET".to_string(), key.to_string(), value.clone()],
+            vec![
+                "SET".to_string().into(),
+                key.to_string().into(),
+                value.clone().into(),
+            ],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
@@ -652,7 +658,7 @@ mod socket_listener {
             &mut buffer,
             &mut test_basics.socket,
             CALLBACK2_INDEX,
-            vec!["GET".to_string(), key],
+            vec!["GET".to_string().into(), key.into()],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
@@ -675,12 +681,12 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut request = get_command_request(
             CALLBACK1_INDEX,
-            vec!["ECHO".to_string(), "foo".to_string()],
+            vec!["ECHO".to_string().into(), "foo".to_string().into()],
             RequestType::CustomCommand.into(),
             false,
         );
-        let mut routes = redis_request::Routes::default();
-        routes.set_simple_routes(redis_request::SimpleRoutes::AllPrimaries);
+        let mut routes = command_request::Routes::default();
+        routes.set_simple_routes(command_request::SimpleRoutes::AllPrimaries);
         request.route = Some(routes).into();
         write_request(&mut buffer, &mut test_basics.socket, request);
 
@@ -723,12 +729,12 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut request = get_command_request(
             CALLBACK_INDEX,
-            vec!["CLUSTER".to_string(), "NODES".to_string()],
+            vec!["CLUSTER".to_string().into(), "NODES".to_string().into()],
             RequestType::CustomCommand.into(),
             false,
         );
-        let mut routes = redis_request::Routes::default();
-        routes.set_simple_routes(redis_request::SimpleRoutes::Random);
+        let mut routes = command_request::Routes::default();
+        routes.set_simple_routes(command_request::SimpleRoutes::Random);
         request.route = Some(routes).into();
         write_request(&mut buffer, &mut test_basics.socket, request.clone());
 
@@ -749,8 +755,8 @@ mod socket_listener {
             .unwrap();
 
         buffer.clear();
-        let mut routes = redis_request::Routes::default();
-        let by_address_route = glide_core::redis_request::ByAddressRoute {
+        let mut routes = command_request::Routes::default();
+        let by_address_route = glide_core::command_request::ByAddressRoute {
             host: host.into(),
             port,
             ..Default::default()
@@ -809,7 +815,7 @@ mod socket_listener {
             &mut buffer,
             &mut test_basics.socket,
             CALLBACK_INDEX,
-            vec![key],
+            vec![key.into()],
             EnumOrUnknown::from_i32(request_type),
             false,
         );
@@ -828,6 +834,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_send_and_receive_long_values(
         #[values((false, Tls::NoTls), (true, Tls::NoTls), (false, Tls::UseTls))]
@@ -891,6 +898,7 @@ mod socket_listener {
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_send_and_receive_multiple_long_inputs(
         #[values((false, Tls::NoTls), (true, Tls::NoTls), (false, Tls::UseTls))]
@@ -946,7 +954,6 @@ mod socket_listener {
                                     assert_eq!(results[callback_index], State::ReceivedNull);
 
                                     let values = values_for_read.lock().unwrap();
-
                                     assert_value(
                                         pointer,
                                         Some(Value::BulkString(values[callback_index].clone())),
@@ -1026,6 +1033,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_does_not_close_when_server_closes() {
         let mut test_basics =
@@ -1054,6 +1062,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
         let test_basics = setup_server_test_basics(Tls::NoTls, TestServer::Unique);
@@ -1098,6 +1107,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_handle_request_after_reporting_disconnet() {
         let test_basics = setup_server_test_basics(Tls::NoTls, TestServer::Unique);
@@ -1141,6 +1151,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_transaction_and_get_array_of_results(
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
@@ -1152,24 +1163,24 @@ mod socket_listener {
         let key = generate_random_string(KEY_LENGTH);
         let commands = vec![
             CommandComponents {
-                args: vec![key.clone(), "bar".to_string()],
+                args: vec![key.clone().into(), "bar".to_string().into()],
                 args_pointer: true,
-                request_type: RequestType::SetString.into(),
+                request_type: RequestType::Set.into(),
             },
             CommandComponents {
-                args: vec!["GET".to_string(), key.clone()],
+                args: vec!["GET".to_string().into(), key.clone().into()],
                 args_pointer: false,
                 request_type: RequestType::CustomCommand.into(),
             },
             CommandComponents {
-                args: vec!["FLUSHALL".to_string()],
+                args: vec!["FLUSHALL".to_string().into()],
                 args_pointer: false,
                 request_type: RequestType::CustomCommand.into(),
             },
             CommandComponents {
-                args: vec![key],
+                args: vec![key.into()],
                 args_pointer: false,
-                request_type: RequestType::GetString.into(),
+                request_type: RequestType::Get.into(),
             },
         ];
         let mut buffer = Vec::with_capacity(200);
@@ -1189,6 +1200,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_script(
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
@@ -1199,15 +1211,15 @@ mod socket_listener {
         let key = generate_random_string(KEY_LENGTH);
         let value = generate_random_string(VALUE_LENGTH);
         let script = r#"redis.call("SET", KEYS[1], ARGV[1]); return redis.call("GET", KEYS[1])"#;
-        let hash = add_script(script);
+        let hash = add_script(script.as_bytes());
 
         let approx_message_length = hash.len() + value.len() + key.len() + APPROX_RESP_HEADER_LEN;
         let mut buffer = Vec::with_capacity(approx_message_length);
 
-        let mut request = RedisRequest::new();
+        let mut request = CommandRequest::new();
         request.callback_idx = CALLBACK_INDEX;
-        request.command = Some(redis_request::redis_request::Command::ScriptInvocation(
-            redis_request::ScriptInvocation {
+        request.command = Some(command_request::command_request::Command::ScriptInvocation(
+            command_request::ScriptInvocation {
                 hash: hash.into(),
                 keys: vec![key.into()],
                 args: vec![value.clone().into()],
@@ -1226,6 +1238,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_empty_custom_command_is_an_error(
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,

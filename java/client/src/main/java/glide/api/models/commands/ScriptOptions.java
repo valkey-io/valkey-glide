@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
 import glide.api.commands.GenericBaseCommands;
@@ -11,7 +11,7 @@ import lombok.Singular;
 /**
  * Optional arguments for {@link GenericBaseCommands#invokeScript(Script, ScriptOptions)} command.
  *
- * @see <a href="https://redis.io/commands/evalsha/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/evalsha/">valkey.io</a>
  */
 @Builder
 public final class ScriptOptions {

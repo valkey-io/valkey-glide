@@ -1,7 +1,7 @@
 {
     "type": "module",
     "dependencies": {
-        "@aws/glide-for-redis": "^0.1.0",
+        "@valkey/valkey-glide": "^1.0.0",
         "@types/node": "^20.4.8"
     },
     "devDependencies": {

@@ -1,19 +1,29 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
+import static command_request.CommandRequestOuterClass.RequestType.Copy;
+import static command_request.CommandRequestOuterClass.RequestType.Move;
+import static command_request.CommandRequestOuterClass.RequestType.Scan;
+import static command_request.CommandRequestOuterClass.RequestType.Select;
+import static command_request.CommandRequestOuterClass.RequestType.Sort;
+import static command_request.CommandRequestOuterClass.RequestType.SortReadOnly;
+import static glide.api.commands.GenericBaseCommands.REPLACE_VALKEY_API;
+import static glide.api.commands.GenericCommands.DB_VALKEY_API;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 
-import lombok.AllArgsConstructor;
-import redis_request.RedisRequestOuterClass;
+import glide.api.GlideClient;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.scan.ScanOptions;
+import lombok.NonNull;
 
 /**
- * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
- * a group of commands in a single step.
+ * Transaction implementation for standalone {@link GlideClient}. Transactions allow the execution
+ * of a group of commands in a single step.
  *
- * <p>Command Response: An array of command responses is returned by the client <code>exec</code>
- * command, in the order they were given. Each element in the array represents a command given to
- * the <code>Transaction</code>. The response for each command depends on the executed Redis
- * command. Specific response types are documented alongside each method.
+ * <p>Transaction Response: An <code>array</code> of command responses is returned by the client
+ * {@link GlideClient#exec} API, in the order they were given. Each element in the array represents
+ * a command given to the {@link Transaction}. The response for each command depends on the executed
+ * Valkey command. Specific response types are documented alongside each method.
  *
  * @example
  *     <pre>{@code
@@ -26,24 +36,199 @@ import redis_request.RedisRequestOuterClass;
  * assert result[1].equals("value");
  * }</pre>
  */
-@AllArgsConstructor
 public class Transaction extends BaseTransaction<Transaction> {
+
     @Override
     protected Transaction getThis() {
         return this;
     }
 
     /**
-     * Changes the currently selected Redis database.
+     * Changes the currently selected server database.
      *
-     * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/select/">valkey.io</a> for details.
      * @param index The index of the database to select.
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs = buildArgs(Long.toString(index));
+        protobufTransaction.addCommands(buildCommand(Select, newArgsBuilder().add(index)));
+        return this;
+    }
 
-        protobufTransaction.addCommands(buildCommand(Select, commandArgs));
+    /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
+     *     </code> if the <code>key</code> already exists in the destination database or does not
+     *     exist in the source database.
+     */
+    public <ArgType> Transaction move(ArgType key, long dbIndex) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(buildCommand(Move, newArgsBuilder().add(key).add(dbIndex)));
+        return this;
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Valkey 6.2.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public <ArgType> Transaction copy(
+            @NonNull ArgType source, @NonNull ArgType destination, long destinationDB) {
+        return copy(source, destination, destinationDB, false);
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Valkey 6.2.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public <ArgType> Transaction copy(
+            @NonNull ArgType source, @NonNull ArgType destination, long destinationDB, boolean replace) {
+        checkTypeOrThrow(source);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Copy,
+                        newArgsBuilder()
+                                .add(source)
+                                .add(destination)
+                                .add(DB_VALKEY_API)
+                                .add(destinationDB)
+                                .addIf(REPLACE_VALKEY_API, replace)));
+        return this;
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(ArgType, ArgType, SortOptions)}.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public <ArgType> Transaction sort(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(Sort, newArgsBuilder().add(key).add(sortOptions.toArgs())));
+        return this;
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     *
+     * @since Valkey 7.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort_ro">valkey.io</a> for details.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public <ArgType> Transaction sortReadOnly(
+            @NonNull ArgType key, @NonNull SortOptions sortOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortOptions.toArgs())));
+        return this;
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(ArgType, SortOptions)}.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/sort">valkey.io</a> for details.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @param destination The key where the sorted result will be stored.
+     * @return Command Response - The number of elements in the sorted key stored at <code>destination
+     *     </code>.
+     */
+    public <ArgType> Transaction sortStore(
+            @NonNull ArgType key, @NonNull ArgType destination, @NonNull SortOptions sortOptions) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(sortOptions.toArgs())
+                                .add(STORE_COMMAND_STRING)
+                                .add(destination)));
+        return this;
+    }
+
+    /**
+     * Iterates incrementally over a database for matching keys.
+     *
+     * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
+     *     the <code>cursor</code> returned on the last iteration of the scan.<br>
+     *     The second element is always an <code>Array</code> of matched keys from the database.
+     */
+    public <ArgType> Transaction scan(@NonNull ArgType cursor) {
+        checkTypeOrThrow(cursor);
+        protobufTransaction.addCommands(buildCommand(Scan, newArgsBuilder().add(cursor)));
+        return this;
+    }
+
+    /**
+     * Iterates incrementally over a database for matching keys.
+     *
+     * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param options The {@link ScanOptions}.
+     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
+     *     the <code>cursor</code> returned on the last iteration of the scan.<br>
+     *     The second element is always an <code>Array</code> of matched keys from the database.
+     */
+    public <ArgType> Transaction scan(@NonNull ArgType cursor, @NonNull ScanOptions options) {
+        checkTypeOrThrow(cursor);
+        protobufTransaction.addCommands(
+                buildCommand(Scan, newArgsBuilder().add(cursor).add(options.toArgs())));
         return this;
     }
 }

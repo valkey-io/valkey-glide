@@ -85,10 +85,15 @@ brew install go make git gcc pkgconfig protobuf@3 openssl
 export PATH="$PATH:$HOME/go/bin"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
-protoc --version
 # Check that the Rust compiler is installed
 rustc --version
+# Verify the Protobuf compiler installation
+protoc --version
+
+# If protoc is not found or does not work correctly, update the PATH
+echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
+source /Users/$USER/.bash_profile
+protoc --version
 ```
 
 #### Building and installation steps
@@ -98,7 +103,7 @@ Before starting this step, make sure you've installed all software requirements.
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
+    git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
     cd glide-for-redis
     ```
 2. Initialize git submodule:

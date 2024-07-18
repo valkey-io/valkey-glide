@@ -1,30 +1,33 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static command_request.CommandRequestOuterClass.RequestType.CustomCommand;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static org.mockito.Mockito.mockStatic;
 import static response.ResponseOuterClass.RequestErrorType.Disconnect;
 import static response.ResponseOuterClass.RequestErrorType.ExecAbort;
 import static response.ResponseOuterClass.RequestErrorType.Timeout;
 import static response.ResponseOuterClass.RequestErrorType.Unspecified;
 
+import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass;
-import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.logging.Logger;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
-import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.GlideException;
 import glide.api.models.exceptions.RequestException;
 import glide.api.models.exceptions.TimeoutException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
-import glide.managers.BaseCommandResponseResolver;
+import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import io.netty.channel.ChannelFuture;
@@ -33,26 +36,34 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import redis_request.RedisRequestOuterClass.RedisRequest;
+import org.mockito.MockedStatic;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.RequestErrorType;
 import response.ResponseOuterClass.Response;
 
 public class ExceptionHandlingTests {
+    private MockedStatic<Logger> mockedLogger;
+
     @BeforeEach
     public void init() {
+        mockedLogger = mockStatic(Logger.class);
         var threadPoolResource = ThreadPoolResourceAllocator.getOrCreate(() -> null);
         if (threadPoolResource != null) {
             threadPoolResource.getEventLoopGroup().shutdownGracefully();
             ThreadPoolResourceAllocator.getOrCreate(() -> null);
         }
+    }
+
+    @AfterEach
+    public void teardown() {
+        mockedLogger.close();
     }
 
     /**
@@ -77,7 +88,7 @@ public class ExceptionHandlingTests {
         var callbackDispatcher = new TestCallbackDispatcher(new ClosingException("TEST"));
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
-        var future = connectionManager.connectToRedis(createDummyConfig());
+        var future = connectionManager.connectToValkey(createDummyConfig());
 
         callbackDispatcher.completeRequest(null);
         var exception = assertThrows(ExecutionException.class, future::get);
@@ -123,7 +134,7 @@ public class ExceptionHandlingTests {
 
     @Test
     @SneakyThrows
-    public void command_manager_rethrows_non_RedisException_too() {
+    public void command_manager_rethrows_non_GlideException_too() {
         var callbackDispatcher = new TestCallbackDispatcher(new IOException("TEST"));
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var commandManager = new CommandManager(channelHandler);
@@ -141,12 +152,12 @@ public class ExceptionHandlingTests {
 
     @Test
     @SneakyThrows
-    public void connection_manager_rethrows_non_RedisException_too() {
+    public void connection_manager_rethrows_non_GlideException_too() {
         var callbackDispatcher = new TestCallbackDispatcher(new IOException("TEST"));
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
-        var future = connectionManager.connectToRedis(createDummyConfig());
+        var future = connectionManager.connectToValkey(createDummyConfig());
         callbackDispatcher.completeRequest(null);
 
         var exception = assertThrows(ExecutionException.class, future::get);
@@ -163,12 +174,12 @@ public class ExceptionHandlingTests {
     public void close_connection_on_response_with_closing_error() {
         // CallbackDispatcher throws ClosingException which causes ConnectionManager and CommandManager
         // to close the channel
-        var callbackDispatcher = new CallbackDispatcher();
+        var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
-        var future1 = connectionManager.connectToRedis(createDummyConfig());
-        var future2 = connectionManager.connectToRedis(createDummyConfig());
+        var future1 = connectionManager.connectToValkey(createDummyConfig());
+        var future2 = connectionManager.connectToValkey(createDummyConfig());
         var response = Response.newBuilder().setClosingError("TEST").build();
         callbackDispatcher.completeRequest(response);
 
@@ -204,8 +215,8 @@ public class ExceptionHandlingTests {
     public void dont_close_connection_when_callback_dispatcher_receives_response_with_closing_error(
             // CallbackDispatcher throws a corresponding exception which should not cause
             // ConnectionManager and CommandManager to close the channel
-            RequestErrorType errorType, Class<? extends RedisException> exceptionType) {
-        var callbackDispatcher = new CallbackDispatcher();
+            RequestErrorType errorType, Class<? extends GlideException> exceptionType) {
+        var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var commandManager = new CommandManager(channelHandler);
 
@@ -218,7 +229,7 @@ public class ExceptionHandlingTests {
         callbackDispatcher.completeRequest(response);
 
         var exception = assertThrows(ExecutionException.class, future::get);
-        // a RedisException thrown from CallbackDispatcher::completeRequest and then
+        // a GlideException thrown from CallbackDispatcher::completeRequest and then
         // rethrown by CommandManager::exceptionHandler
         assertEquals(exceptionType, exception.getCause().getClass());
         assertEquals("TEST", exception.getCause().getMessage());
@@ -230,12 +241,12 @@ public class ExceptionHandlingTests {
     @SneakyThrows
     public void close_connection_on_response_without_error_but_with_incorrect_callback_id() {
         // CallbackDispatcher does the same as it received closing error
-        var callbackDispatcher = new CallbackDispatcher();
+        var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
-        var future1 = connectionManager.connectToRedis(createDummyConfig());
-        var future2 = connectionManager.connectToRedis(createDummyConfig());
+        var future1 = connectionManager.connectToValkey(createDummyConfig());
+        var future2 = connectionManager.connectToValkey(createDummyConfig());
 
         var response = Response.newBuilder().setCallbackIdx(42).build();
         callbackDispatcher.completeRequest(response);
@@ -260,7 +271,7 @@ public class ExceptionHandlingTests {
 
     @Test
     public void response_resolver_does_not_expect_errors() {
-        var resolver = new BaseCommandResponseResolver(null);
+        var resolver = new BaseResponseResolver(null);
 
         var response1 =
                 Response.newBuilder()
@@ -274,9 +285,11 @@ public class ExceptionHandlingTests {
         assertEquals("Unhandled response closing error", exception.getMessage());
     }
 
+    // TODO add tests for error handling in MessageHandler
+
     /** Create a config which causes connection failure. */
-    private static RedisClientConfiguration createDummyConfig() {
-        return RedisClientConfiguration.builder().build();
+    private static GlideClientConfiguration createDummyConfig() {
+        return GlideClientConfiguration.builder().build();
     }
 
     /** Test ChannelHandler extension which allows to validate whether the channel was closed. */
@@ -298,7 +311,7 @@ public class ExceptionHandlingTests {
         }
 
         @Override
-        public CompletableFuture<Response> write(RedisRequest.Builder request, boolean flush) {
+        public CompletableFuture<Response> write(CommandRequest.Builder request, boolean flush) {
             var commandId = callbackDispatcher.registerRequest();
             return commandId.getValue();
         }
@@ -311,10 +324,14 @@ public class ExceptionHandlingTests {
     }
 
     /** Test ChannelHandler extension which aborts futures for all commands. */
-    @RequiredArgsConstructor
     private static class TestCallbackDispatcher extends CallbackDispatcher {
 
         public final Throwable exceptionToThrow;
+
+        private TestCallbackDispatcher(Throwable exceptionToThrow) {
+            super(null);
+            this.exceptionToThrow = exceptionToThrow;
+        }
 
         @Override
         public void completeRequest(Response response) {

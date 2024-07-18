@@ -1,10 +1,16 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { LPosOptions } from "./command-options/LPosOptions";
 import {
+    AggregationType,
     ExpireOptions,
+    FlushMode,
     InfoOptions,
+    InsertPosition,
+    KeyWeight,
+    LolwutOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -13,8 +19,9 @@ import {
     StreamAddOptions,
     StreamReadOptions,
     StreamTrimOptions,
-    ZaddOptions,
-    createBrpop,
+    ZAddOptions,
+    createBLPop,
+    createBRPop,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -22,6 +29,7 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createDBSize,
     createDecr,
     createDecrBy,
     createDel,
@@ -29,6 +37,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createFlushAll,
     createGet,
     createHDel,
     createHExists,
@@ -40,58 +49,83 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
-    createHvals,
+    createHVals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
     createInfo,
+    createLIndex,
+    createLInsert,
     createLLen,
     createLPop,
+    createLPos,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
+    createLSet,
     createLTrim,
-    createLindex,
+    createLolwut,
     createMGet,
     createMSet,
+    createObjectEncoding,
+    createObjectFreq,
+    createObjectIdletime,
+    createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPTTL,
     createPersist,
+    createPfAdd,
+    createPfCount,
     createPing,
-    createPttl,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
+    createSDiff,
+    createSDiffStore,
+    createSInter,
+    createSInterCard,
+    createSInterStore,
+    createSIsMember,
     createSMembers,
+    createSMIsMember,
+    createSMove,
     createSPop,
     createSRem,
+    createSUnion,
+    createSUnionStore,
     createSelect,
     createSet,
-    createSismember,
     createStrlen,
     createTTL,
     createTime,
     createType,
     createUnlink,
-    createXadd,
-    createXread,
-    createXtrim,
-    createZadd,
-    createZcard,
-    createZcount,
-    createZpopmax,
-    createZpopmin,
-    createZrange,
-    createZrangeWithScores,
-    createZrank,
-    createZrem,
-    createZremRangeByRank,
-    createZremRangeByScore,
-    createZscore,
+    createXAdd,
+    createXLen,
+    createXRead,
+    createXTrim,
+    createZAdd,
+    createZCard,
+    createZCount,
+    createZInterCard,
+    createZInterstore,
+    createZPopMax,
+    createZPopMin,
+    createZRange,
+    createZRangeWithScores,
+    createZRank,
+    createZRem,
+    createZRemRangeByRank,
+    createZRemRangeByScore,
+    createZScore,
 } from "./Commands";
-import { redis_request } from "./ProtobufMessage";
+import { command_request } from "./ProtobufMessage";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -104,25 +138,46 @@ import { redis_request } from "./ProtobufMessage";
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new BaseTransaction()
- *          .set("key", "value")
- *          .get("key");
- *       await client.exec(transaction);
- *       [OK , "value"]
+ * ```typescript
+ * const transaction = new BaseTransaction()
+ *    .set("key", "value")
+ *    .get("key");
+ * const result = await client.exec(transaction);
+ * console.log(result); // Output: ['OK', 'value']
+ * ```
  */
 export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * @internal
      */
-    readonly commands: redis_request.Command[] = [];
+    readonly commands: command_request.Command[] = [];
+    /**
+     * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
+     * @internal
+     */
+    readonly setCommandsIndexes: number[] = [];
 
-    protected addAndReturn(command: redis_request.Command): T {
+    /**
+     * Adds a command to the transaction and returns the transaction instance.
+     * @param command - The command to add.
+     * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
+     * @returns The updated transaction instance.
+     */
+    protected addAndReturn(
+        command: command_request.Command,
+        shouldConvertToSet: boolean = false,
+    ): T {
+        if (shouldConvertToSet) {
+            // The command's index within the transaction is saved for later conversion of its response to a Set type.
+            this.setCommandsIndexes.push(this.commands.length);
+        }
+
         this.commands.push(command);
         return this as unknown as T;
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
-     * See https://redis.io/commands/get/ for details.
+     * See https://valkey.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
      *
@@ -133,7 +188,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
-     * See https://redis.io/commands/set/ for details.
+     * See https://valkey.io/commands/set/ for details.
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
@@ -148,7 +203,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Ping the Redis server.
-     * See https://redis.io/commands/ping/ for details.
+     * See https://valkey.io/commands/ping/ for details.
      *
      * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
@@ -161,7 +216,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Get information and statistics about the Redis server.
-     * See https://redis.io/commands/info/ for details.
+     * See https://valkey.io/commands/info/ for details.
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      * When no parameter is provided, the default option is assumed.
@@ -173,7 +228,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Remove the specified keys. A key is ignored if it does not exist.
-     * See https://redis.io/commands/del/ for details.
+     * See https://valkey.io/commands/del/ for details.
      *
      * @param keys - A list of keys to be deleted from the database.
      *
@@ -184,7 +239,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Get the name of the connection on which the transaction is being executed.
-     * See https://redis.io/commands/client-getname/ for more details.
+     * See https://valkey.io/commands/client-getname/ for more details.
      *
      * Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
      */
@@ -193,7 +248,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Rewrite the configuration file with the current configuration.
-     * See https://redis.io/commands/select/ for details.
+     * See https://valkey.io/commands/select/ for details.
      *
      * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the transaction fails with an error.
      */
@@ -202,7 +257,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
-     * See https://redis.io/commands/config-resetstat/ for details.
+     * See https://valkey.io/commands/config-resetstat/ for details.
      *
      * Command Response - always "OK".
      */
@@ -211,7 +266,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Retrieve the values of multiple keys.
-     * See https://redis.io/commands/mget/ for details.
+     * See https://valkey.io/commands/mget/ for details.
      *
      * @param keys - A list of keys to retrieve values for.
      *
@@ -223,7 +278,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Set multiple keys to multiple values in a single atomic operation.
-     * See https://redis.io/commands/mset/ for details.
+     * See https://valkey.io/commands/mset/ for details.
      *
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      *
@@ -234,7 +289,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/incr/ for details.
+     * See https://valkey.io/commands/incr/ for details.
      *
      * @param key - The key to increment its value.
      *
@@ -245,7 +300,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Increments the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/incrby/ for details.
+     * See https://valkey.io/commands/incrby/ for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
@@ -259,7 +314,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Increment the string representing a floating point number stored at `key` by `amount`.
      * By using a negative amount value, the result is that the value stored at `key` is decremented.
      * If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/incrbyfloat/ for details.
+     * See https://valkey.io/commands/incrbyfloat/ for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
@@ -272,7 +327,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the current connection id.
-     * See https://redis.io/commands/client-id/ for details.
+     * See https://valkey.io/commands/client-id/ for details.
      *
      * Command Response - the id of the client.
      */
@@ -281,7 +336,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/decr/ for details.
+     * See https://valkey.io/commands/decr/ for details.
      *
      * @param key - The key to decrement its value.
      *
@@ -292,7 +347,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Decrements the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/decrby/ for details.
+     * See https://valkey.io/commands/decrby/ for details.
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
@@ -304,7 +359,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Reads the configuration parameters of a running Redis server.
-     * See https://redis.io/commands/config-get/ for details.
+     * See https://valkey.io/commands/config-get/ for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      *
@@ -316,22 +371,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Set configuration parameters to the specified values.
-     * See https://redis.io/commands/config-set/ for details.
+     * See https://valkey.io/commands/config-set/ for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
      *
      * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
-     *
-     * @example
-     * config_set([("timeout", "1000")], [("maxmemory", "1GB")]) - Returns OK
-     *
      */
     public configSet(parameters: Record<string, string>): T {
         return this.addAndReturn(createConfigSet(parameters));
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
-     * See https://redis.io/commands/hget/ for details.
+     * See https://valkey.io/commands/hget/ for details.
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
@@ -343,7 +394,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
-     * See https://redis.io/commands/hset/ for details.
+     * See https://valkey.io/commands/hset/ for details.
      *
      * @param key - The key of the hash.
      * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
@@ -358,7 +409,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
      * If `key` does not exist, a new key holding a hash is created.
      * If `field` already exists, this operation has no effect.
-     * See https://redis.io/commands/hsetnx/ for more details.
+     * See https://valkey.io/commands/hsetnx/ for more details.
      *
      * @param key - The key of the hash.
      * @param field - The field to set the value for.
@@ -372,7 +423,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Removes the specified fields from the hash stored at `key`.
      * Specified fields that do not exist within this hash are ignored.
-     * See https://redis.io/commands/hdel/ for details.
+     * See https://valkey.io/commands/hdel/ for details.
      *
      * @param key - The key of the hash.
      * @param fields - The fields to remove from the hash stored at `key`.
@@ -385,7 +436,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the values associated with the specified fields in the hash stored at `key`.
-     * See https://redis.io/commands/hmget/ for details.
+     * See https://valkey.io/commands/hmget/ for details.
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
@@ -399,7 +450,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
-     * See https://redis.io/commands/hexists/ for details.
+     * See https://valkey.io/commands/hexists/ for details.
      *
      * @param key - The key of the hash.
      * @param field - The field to check in the hash stored at `key`.
@@ -412,7 +463,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns all fields and values of the hash stored at `key`.
-     * See https://redis.io/commands/hgetall/ for details.
+     * See https://valkey.io/commands/hgetall/ for details.
      *
      * @param key - The key of the hash.
      *
@@ -426,7 +477,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Increments the number stored at `field` in the hash stored at `key` by `increment`.
      * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
      * If `field` or `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/hincrby/ for details.
+     * See https://valkey.io/commands/hincrby/ for details.
      *
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
@@ -441,7 +492,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Increment the string representing a floating point number stored at `field` in the hash stored at `key` by `increment`.
      * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
      * If `field` or `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/hincrbyfloat/ for details.
+     * See https://valkey.io/commands/hincrbyfloat/ for details.
      *
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
@@ -454,7 +505,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the number of fields contained in the hash stored at `key`.
-     * See https://redis.io/commands/hlen/ for more details.
+     * See https://valkey.io/commands/hlen/ for more details.
      *
      * @param key - The key of the hash.
      *
@@ -465,20 +516,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns all values in the hash stored at key.
-     * See https://redis.io/commands/hvals/ for more details.
+     * See https://valkey.io/commands/hvals/ for more details.
      *
      * @param key - The key of the hash.
      *
      * Command Response - a list of values in the hash, or an empty list when the key does not exist.
      */
     public hvals(key: string): T {
-        return this.addAndReturn(createHvals(key));
+        return this.addAndReturn(createHVals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
-     * See https://redis.io/commands/lpush/ for details.
+     * See https://valkey.io/commands/lpush/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
@@ -489,9 +540,24 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     *
+     * Command Response - The length of the list after the push operation.
+     */
+    public lpushx(key: string, elements: string[]): T {
+        return this.addAndReturn(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
-     * See https://redis.io/commands/lpop/ for details.
+     * See https://valkey.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
      *
@@ -503,7 +569,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
-     * See https://redis.io/commands/lpop/ for details.
+     * See https://valkey.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
@@ -519,7 +585,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
-     * See https://redis.io/commands/lrange/ for details.
+     * See https://valkey.io/commands/lrange/ for details.
      *
      * @param key - The key of the list.
      * @param start - The starting point of the range.
@@ -535,7 +601,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the length of the list stored at `key`.
-     * See https://redis.io/commands/llen/ for details.
+     * See https://valkey.io/commands/llen/ for details.
      *
      * @param key - The key of the list.
      *
@@ -546,11 +612,29 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createLLen(key));
     }
 
+    /**
+     * Sets the list element at `index` to `element`.
+     * The index is zero-based, so `0` means the first element, `1` the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, `-1` means the last element, `-2` means the penultimate and so forth.
+     *
+     * See https://valkey.io/commands/lset/ for details.
+     *
+     * @param key - The key of the list.
+     * @param index - The index of the element in the list to be set.
+     * @param element - The new element to set at the specified index.
+     *
+     * Command Response - Always "OK".
+     */
+    public lset(key: string, index: number, element: string): T {
+        return this.addAndReturn(createLSet(key, index, element));
+    }
+
     /** Trim an existing list so that it will contain only the specified range of elements specified.
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
-     * See https://redis.io/commands/ltrim/ for details.
+     * See https://valkey.io/commands/ltrim/ for details.
      *
      * @param key - The key of the list.
      * @param start - The starting point of the range.
@@ -584,7 +668,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Inserts all the specified values at the tail of the list stored at `key`.
      * `elements` are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
-     * See https://redis.io/commands/rpush/ for details.
+     * See https://valkey.io/commands/rpush/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
@@ -595,9 +679,24 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createRPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     *
+     * Command Response - The length of the list after the push operation.
+     */
+    public rpushx(key: string, elements: string[]): T {
+        return this.addAndReturn(createRPushX(key, elements));
+    }
+
     /** Removes and returns the last elements of the list stored at `key`.
      * The command pops a single element from the end of the list.
-     * See https://redis.io/commands/rpop/ for details.
+     * See https://valkey.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
      *
@@ -609,7 +708,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
-     * See https://redis.io/commands/rpop/ for details.
+     * See https://valkey.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
@@ -623,7 +722,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
      * If `key` does not exist, a new set is created before adding `members`.
-     * See https://redis.io/commands/sadd/ for details.
+     * See https://valkey.io/commands/sadd/ for details.
      *
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
@@ -635,7 +734,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
-     * See https://redis.io/commands/srem/ for details.
+     * See https://valkey.io/commands/srem/ for details.
      *
      * @param key - The key to remove the members from its set.
      * @param members - A list of members to remove from the set stored at `key`.
@@ -648,7 +747,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns all the members of the set value stored at `key`.
-     * See https://redis.io/commands/smembers/ for details.
+     * See https://valkey.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
      *
@@ -656,11 +755,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      */
     public smembers(key: string): T {
-        return this.addAndReturn(createSMembers(key));
+        return this.addAndReturn(createSMembers(key), true);
+    }
+
+    /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+     * Creates a new destination set if needed. The operation is atomic.
+     * See https://valkey.io/commands/smove for more details.
+     *
+     * @param source - The key of the set to remove the element from.
+     * @param destination - The key of the set to add the element to.
+     * @param member - The set element to move.
+     *
+     * Command Response - `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+     */
+    public smove(source: string, destination: string, member: string): T {
+        return this.addAndReturn(createSMove(source, destination, member));
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
-     * See https://redis.io/commands/scard/ for details.
+     * See https://valkey.io/commands/scard/ for details.
      *
      * @param key - The key to return the number of its members.
      *
@@ -670,8 +783,107 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSCard(key));
     }
 
+    /** Gets the intersection of all the given sets.
+     * When in cluster mode, all `keys` must map to the same hash slot.
+     * See https://valkey.io/docs/latest/commands/sinter/ for more details.
+     *
+     * @param keys - The `keys` of the sets to get the intersection.
+     *
+     * Command Response - A set of members which are present in all given sets.
+     * If one or more sets do not exist, an empty set will be returned.
+     */
+    public sinter(keys: string[]): T {
+        return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @param keys - The keys of the sets.
+     *
+     * Command Response - The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public sintercard(keys: string[], limit?: number): T {
+        return this.addAndReturn(createSInterCard(keys, limit));
+    }
+
+    /**
+     * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sinterstore/ for more details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sinterstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSInterStore(destination, keys));
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets in `keys`.
+     *
+     * See https://valkey.io/commands/sdiff/ for more details.
+     *
+     * @param keys - The keys of the sets to diff.
+     *
+     * Command Response - A `Set` of elements representing the difference between the sets.
+     * If a key in `keys` does not exist, it is treated as an empty set.
+     */
+    public sdiff(keys: string[]): T {
+        return this.addAndReturn(createSDiff(keys), true);
+    }
+
+    /**
+     * Stores the difference between the first set and all the successive sets in `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sdiffstore/ for more details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys of the sets to diff.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sdiffstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSDiffStore(destination, keys));
+    }
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * See https://valkey.io/commands/sunion/ for more details.
+     *
+     * @param keys - The keys of the sets.
+     *
+     * Command Response - A `Set` of members which are present in at least one of the given sets.
+     * If none of the sets exist, an empty `Set` will be returned.
+     */
+    public sunion(keys: string[]): T {
+        return this.addAndReturn(createSUnion(keys), true);
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by `keys` into a new set
+     * at `destination`.
+     *
+     * See https://valkey.io/commands/sunionstore/ for details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sunionstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSUnionStore(destination, keys));
+    }
+
     /** Returns if `member` is a member of the set stored at `key`.
-     * See https://redis.io/commands/sismember/ for more details.
+     * See https://valkey.io/commands/sismember/ for more details.
      *
      * @param key - The key of the set.
      * @param member - The member to check for existence in the set.
@@ -680,11 +892,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
      */
     public sismember(key: string, member: string): T {
-        return this.addAndReturn(createSismember(key, member));
+        return this.addAndReturn(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     *
+     * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public smismember(key: string, members: string[]): T {
+        return this.addAndReturn(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
-     * See https://redis.io/commands/spop/ for details.
+     * See https://valkey.io/commands/spop/ for details.
      * To pop multiple members, see `spopCount`.
      *
      * @param key - The key of the set.
@@ -697,7 +925,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
-     * See https://redis.io/commands/spop/ for details.
+     * See https://valkey.io/commands/spop/ for details.
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
@@ -706,11 +934,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, empty list will be returned.
      */
     public spopCount(key: string, count: number): T {
-        return this.addAndReturn(createSPop(key, count));
+        return this.addAndReturn(createSPop(key, count), true);
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
-     * See https://redis.io/commands/exists/ for details.
+     * See https://valkey.io/commands/exists/ for details.
      *
      * @param keys - The keys list to check.
      *
@@ -723,8 +951,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Removes the specified keys. A key is ignored if it does not exist.
      * This command, similar to DEL, removes specified keys and ignores non-existent ones.
-     * However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
-     * See https://redis.io/commands/unlink/ for details.
+     * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+     * See https://valkey.io/commands/unlink/ for details.
      *
      * @param keys - The keys we wanted to unlink.
      *
@@ -738,7 +966,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/expire/ for details.
+     * See https://valkey.io/commands/expire/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
@@ -755,7 +983,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/expireat/ for details.
+     * See https://valkey.io/commands/expireat/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
@@ -776,7 +1004,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/pexpire/ for details.
+     * See https://valkey.io/commands/pexpire/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
@@ -797,7 +1025,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/pexpireat/ for details.
+     * See https://valkey.io/commands/pexpireat/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
@@ -817,7 +1045,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
-     * See https://redis.io/commands/ttl/ for details.
+     * See https://valkey.io/commands/ttl/ for details.
      *
      * @param key - The key to return its timeout.
      *
@@ -829,11 +1057,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /** Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
-     * See https://redis.io/commands/zadd/ for more details.
+     * See https://valkey.io/commands/zadd/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
-     * @param options - The Zadd options.
+     * @param options - The ZAdd options.
      * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      *
      * Command Response - The number of elements added to the sorted set.
@@ -842,11 +1070,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public zadd(
         key: string,
         membersScoresMap: Record<string, number>,
-        options?: ZaddOptions,
+        options?: ZAddOptions,
         changed?: boolean,
     ): T {
         return this.addAndReturn(
-            createZadd(
+            createZAdd(
                 key,
                 membersScoresMap,
                 options,
@@ -858,12 +1086,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
-     * See https://redis.io/commands/zadd/ for more details.
+     * See https://valkey.io/commands/zadd/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - The Zadd options.
+     * @param options - The ZAdd options.
      *
      * Command Response - The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
@@ -872,16 +1100,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions,
+        options?: ZAddOptions,
     ): T {
         return this.addAndReturn(
-            createZadd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
     /** Removes the specified members from the sorted set stored at `key`.
      * Specified members that are not a member of this set are ignored.
-     * See https://redis.io/commands/zrem/ for more details.
+     * See https://valkey.io/commands/zrem/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members to remove from the sorted set.
@@ -890,11 +1118,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
      */
     public zrem(key: string, members: string[]): T {
-        return this.addAndReturn(createZrem(key, members));
+        return this.addAndReturn(createZRem(key, members));
     }
 
     /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
-     * See https://redis.io/commands/zcard/ for more details.
+     * See https://valkey.io/commands/zcard/ for more details.
      *
      * @param key - The key of the sorted set.
      *
@@ -902,11 +1130,28 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
      */
     public zcard(key: string): T {
-        return this.addAndReturn(createZcard(key));
+        return this.addAndReturn(createZCard(key));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+     *
+     * See https://valkey.io/commands/zintercard/ for more details.
+     *
+     * @param keys - The keys of the sorted sets to intersect.
+     * @param limit - An optional argument that can be used to specify a maximum number for the
+     * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
+     *
+     * Command Response - The cardinality of the intersection of the given sorted sets.
+     *
+     * since - Redis version 7.0.0.
+     */
+    public zintercard(keys: string[], limit?: number): T {
+        return this.addAndReturn(createZInterCard(keys, limit));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
-     * See https://redis.io/commands/zscore/ for more details.
+     * See https://valkey.io/commands/zscore/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose score is to be retrieved.
@@ -916,11 +1161,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist, null is returned.
      */
     public zscore(key: string, member: string): T {
-        return this.addAndReturn(createZscore(key, member));
+        return this.addAndReturn(createZScore(key, member));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
-     * See https://redis.io/commands/zcount/ for more details.
+     * See https://valkey.io/commands/zcount/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
@@ -935,13 +1180,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         minScore: ScoreBoundary<number>,
         maxScore: ScoreBoundary<number>,
     ): T {
-        return this.addAndReturn(createZcount(key, minScore, maxScore));
+        return this.addAndReturn(createZCount(key, minScore, maxScore));
     }
 
     /** Returns the specified range of elements in the sorted set stored at `key`.
      * ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
      *
-     * See https://redis.io/commands/zrange/ for more details.
+     * See https://valkey.io/commands/zrange/ for more details.
      * To get the elements with their scores, see `zrangeWithScores`.
      *
      * @param key - The key of the sorted set.
@@ -959,12 +1204,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
     ): T {
-        return this.addAndReturn(createZrange(key, rangeQuery, reverse));
+        return this.addAndReturn(createZRange(key, rangeQuery, reverse));
     }
 
     /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
      * Similar to ZRANGE but with a WITHSCORE flag.
-     * See https://redis.io/commands/zrange/ for more details.
+     * See https://valkey.io/commands/zrange/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
@@ -982,12 +1227,37 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         reverse: boolean = false,
     ): T {
         return this.addAndReturn(
-            createZrangeWithScores(key, rangeQuery, reverse),
+            createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zinterstore/ for more details.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  string[] - for keys only.
+     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public zinterstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(
+            createZInterstore(destination, keys, aggregationType),
         );
     }
 
     /** Returns the string representation of the type of the value stored at `key`.
-     * See https://redis.io/commands/type/ for more details.
+     * See https://valkey.io/commands/type/ for more details.
      *
      * @param key - The key to check its data type.
      *
@@ -998,7 +1268,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the length of the string value stored at `key`.
-     * See https://redis.io/commands/strlen/ for more details.
+     * See https://valkey.io/commands/strlen/ for more details.
      *
      * @param key - The `key` to check its length.
      *
@@ -1012,7 +1282,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
      * Otherwise, only one member with the lowest score is removed and returned.
-     * See https://redis.io/commands/zpopmin for more details.
+     * See https://valkey.io/commands/zpopmin for more details.
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
@@ -1022,13 +1292,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores.
      */
     public zpopmin(key: string, count?: number): T {
-        return this.addAndReturn(createZpopmin(key, count));
+        return this.addAndReturn(createZPopMin(key, count));
     }
 
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
-     * See https://redis.io/commands/zpopmax for more details.
+     * See https://valkey.io/commands/zpopmax for more details.
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
@@ -1038,11 +1308,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
      */
     public zpopmax(key: string, count?: number): T {
-        return this.addAndReturn(createZpopmax(key, count));
+        return this.addAndReturn(createZPopMax(key, count));
     }
 
     /** Echoes the provided `message` back.
-     * See https://redis.io/commands/echo for more details.
+     * See https://valkey.io/commands/echo for more details.
      *
      * @param message - The message to be echoed back.
      *
@@ -1053,20 +1323,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
-     * See https://redis.io/commands/pttl for more details.
+     * See https://valkey.io/commands/pttl for more details.
      *
      * @param key - The key to return its timeout.
      *
      * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
      */
     public pttl(key: string): T {
-        return this.addAndReturn(createPttl(key));
+        return this.addAndReturn(createPTTL(key));
     }
 
     /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
-     * See https://redis.io/commands/zremrangebyrank/ for more details.
+     * See https://valkey.io/commands/zremrangebyrank/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param start - The starting point of the range.
@@ -1078,11 +1348,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` does not exist 0 will be returned.
      */
     public zremRangeByRank(key: string, start: number, end: number): T {
-        return this.addAndReturn(createZremRangeByRank(key, start, end));
+        return this.addAndReturn(createZRemRangeByRank(key, start, end));
     }
 
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
-     * See https://redis.io/commands/zremrangebyscore/ for more details.
+     * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param minScore - The minimum score to remove from. Can be positive/negative infinity, or specific score and inclusivity.
@@ -1098,12 +1368,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         maxScore: ScoreBoundary<number>,
     ): T {
         return this.addAndReturn(
-            createZremRangeByScore(key, minScore, maxScore),
+            createZRemRangeByScore(key, minScore, maxScore),
         );
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
-     * See https://redis.io/commands/zrank for more details.
+     * See https://valkey.io/commands/zrank for more details.
      * To get the rank of `member` with its score, see `zrankWithScore`.
      *
      * @param key - The key of the sorted set.
@@ -1113,11 +1383,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
      */
     public zrank(key: string, member: string): T {
-        return this.addAndReturn(createZrank(key, member));
+        return this.addAndReturn(createZRank(key, member));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
-     * See https://redis.io/commands/zrank for more details.
+     * See https://valkey.io/commands/zrank for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -1128,12 +1398,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * since - Redis version 7.2.0.
      */
     public zrankWithScore(key: string, member: string): T {
-        return this.addAndReturn(createZrank(key, member, true));
+        return this.addAndReturn(createZRank(key, member, true));
     }
 
     /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
-     * See https://redis.io/commands/persist/ for more details.
+     * See https://valkey.io/commands/persist/ for more details.
      *
      * @param key - The key to remove the existing timeout on.
      *
@@ -1146,13 +1416,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
-     *  @remarks - This function should only be used for single-response commands. Commands that don't return response (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's behavior (such as entering pub/sub mode on RESP2 connections) shouldn't be called using this function.
+     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+     * for details on the restrictions and limitations of the custom command API.
      *
-     * @example
-     * Returns a list of all pub/sub clients:
-     * ```ts
-     * connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
-     * ```
+     * Command Response - A response from Redis with an `Object`.
      */
     public customCommand(args: string[]): T {
         return this.addAndReturn(createCustomCommand(args));
@@ -1162,7 +1429,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of the list.
      * Here, -1 means the last element, -2 means the penultimate and so forth.
-     * See https://redis.io/commands/lindex/ for more details.
+     * See https://valkey.io/commands/lindex/ for more details.
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
@@ -1170,12 +1437,36 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `index` is out of range or if `key` does not exist, null is returned.
      */
     public lindex(key: string, index: number): T {
-        return this.addAndReturn(createLindex(key, index));
+        return this.addAndReturn(createLIndex(key, index));
+    }
+
+    /**
+     * Inserts `element` in the list at `key` either before or after the `pivot`.
+     *
+     * See https://valkey.io/commands/linsert/ for more details.
+     *
+     * @param key - The key of the list.
+     * @param position - The relative position to insert into - either `InsertPosition.Before` or
+     *     `InsertPosition.After` the `pivot`.
+     * @param pivot - An element of the list.
+     * @param element - The new element to insert.
+     *
+     * Command Response - The list length after a successful insert operation.
+     * If the `key` doesn't exist returns `-1`.
+     * If the `pivot` wasn't found, returns `0`.
+     */
+    public linsert(
+        key: string,
+        position: InsertPosition,
+        pivot: string,
+        element: string,
+    ): T {
+        return this.addAndReturn(createLInsert(key, position, pivot, element));
     }
 
     /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
-     * See https://redis.io/commands/xadd/ for more details.
+     * See https://valkey.io/commands/xadd/ for more details.
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
@@ -1186,23 +1477,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         values: [string, string][],
         options?: StreamAddOptions,
     ): T {
-        return this.addAndReturn(createXadd(key, values, options));
+        return this.addAndReturn(createXAdd(key, values, options));
     }
 
     /**
      * Trims the stream stored at `key` by evicting older entries.
-     * See https://redis.io/commands/xtrim/ for more details.
+     * See https://valkey.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
-        return this.addAndReturn(createXtrim(key, options));
+        return this.addAndReturn(createXTrim(key, options));
     }
 
     /** Returns the server time.
-     * See https://redis.io/commands/time/ for details.
+     * See https://valkey.io/commands/time/ for details.
      *
      * @returns - The current server time as a two items `array`:
      * A Unix timestamp and the amount of microseconds already elapsed in the current second.
@@ -1214,7 +1505,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads entries from the given streams.
-     * See https://redis.io/commands/xread/ for more details.
+     * See https://valkey.io/commands/xread/ for more details.
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
@@ -1224,7 +1515,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): T {
-        return this.addAndReturn(createXread(keys_and_ids, options));
+        return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Returns the number of entries in the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xlen/ for more details.
+     *
+     * @param key - The key of the stream.
+     *
+     * Command Response - The number of entries in the stream. If `key` does not exist, returns `0`.
+     */
+    public xlen(key: string): T {
+        return this.addAndReturn(createXLen(key));
     }
 
     /**
@@ -1232,7 +1536,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `newkey` already exists it is overwritten.
      * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
-     * See https://redis.io/commands/rename/ for more details.
+     * See https://valkey.io/commands/rename/ for more details.
      *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
@@ -1242,21 +1546,188 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createRename(key, newKey));
     }
 
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     * See https://valkey.io/commands/renamenx/ for more details.
+     *
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * Command Response - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
+     */
+    public renamenx(key: string, newKey: string): T {
+        return this.addAndReturn(createRenameNX(key, newKey));
+    }
+
     /** Blocking list pop primitive.
      * Pop an element from the tail of the first list that is non-empty,
-     * with the given keys being checked in the order that they are given.
+     * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
-     * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
-     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * See https://valkey.io/commands/brpop/ for more details.
+     * Note: `BRPOP` is a blocking command,
+     * see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
     public brpop(keys: string[], timeout: number): T {
-        return this.addAndReturn(createBrpop(keys, timeout));
+        return this.addAndReturn(createBRPop(keys, timeout));
+    }
+
+    /** Blocking list pop primitive.
+     * Pop an element from the head of the first list that is non-empty,
+     * with the given `keys` being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://valkey.io/commands/blpop/ for more details.
+     * Note: `BLPOP` is a blocking command,
+     * see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
+     */
+    public blpop(keys: string[], timeout: number): T {
+        return this.addAndReturn(createBLPop(keys, timeout));
+    }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     *
+     * See https://valkey.io/commands/pfadd/ for more details.
+     *
+     * @param key - The key of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     */
+    public pfadd(key: string, elements: string[]): T {
+        return this.addAndReturn(createPfAdd(key, elements));
+    }
+
+    /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * See https://valkey.io/commands/pfcount/ for more details.
+     *
+     * @param keys - The keys of the HyperLogLog data structures to be analyzed.
+     * Command Response - The approximated cardinality of given HyperLogLog data structures.
+     *     The cardinality of a key that does not exist is `0`.
+     */
+    public pfcount(keys: string[]): T {
+        return this.addAndReturn(createPfCount(keys));
+    }
+
+    /** Returns the internal encoding for the Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-encoding for more details.
+     *
+     * @param key - The `key` of the object to get the internal encoding of.
+     * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
+     *     Otherwise, returns None.
+     */
+    public objectEncoding(key: string): T {
+        return this.addAndReturn(createObjectEncoding(key));
+    }
+
+    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-freq for more details.
+     *
+     * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     * Command Response - If `key` exists, returns the logarithmic access frequency counter of
+     *     the object stored at `key` as a `number`. Otherwise, returns `null`.
+     */
+    public objectFreq(key: string): T {
+        return this.addAndReturn(createObjectFreq(key));
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at `key`.
+     *
+     * See https://valkey.io/commands/object-idletime/ for more details.
+     *
+     * @param key - The key of the object to get the idle time of.
+     *
+     * Command Response - If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
+     */
+    public objectIdletime(key: string): T {
+        return this.addAndReturn(createObjectIdletime(key));
+    }
+
+    /**
+     * Returns the reference count of the object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-refcount/ for more details.
+     *
+     * @param key - The `key` of the object to get the reference count of.
+     *
+     * Command Response - If `key` exists, returns the reference count of the object stored at `key` as a `number`.
+     * Otherwise, returns `null`.
+     */
+    public objectRefcount(key: string): T {
+        return this.addAndReturn(createObjectRefcount(key));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options.
+     *
+     * Command Response - A piece of generative computer art along with the current server version.
+     */
+    public lolwut(options?: LolwutOptions): T {
+        return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `OK`.
+     */
+    public flushall(mode?: FlushMode): T {
+        return this.addAndReturn(createFlushAll(mode));
+    }
+
+    /**
+     * Returns the index of the first occurrence of `element` inside the list specified by `key`. If no
+     * match is found, `null` is returned. If the `count` option is specified, then the function returns
+     * an `array` of indices of matching elements within the list.
+     *
+     * See https://valkey.io/commands/lpos/ for more details.
+     *
+     * @param key - The name of the list.
+     * @param element - The value to search for within the list.
+     * @param options - The LPOS options.
+     *
+     * Command Response -  The index of `element`, or `null` if `element` is not in the list. If the `count`
+     * option is specified, then the function returns an `array` of indices of matching elements within the list.
+     *
+     * since - Valkey version 6.0.6.
+     */
+    public lpos(key: string, element: string, options?: LPosOptions): T {
+        return this.addAndReturn(createLPos(key, element, options));
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * See https://valkey.io/commands/dbsize/ for more details.
+     *
+     * Command Response - The number of keys in the currently selected database.
+     */
+    public dbsize(): T {
+        return this.addAndReturn(createDBSize());
     }
 }
 
@@ -1265,24 +1736,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
  * Transactions allow the execution of a group of commands in a single step.
  *
  * Command Response:
- *  An array of command responses is returned by the RedisClient.exec command, in the order they were given.
+ *  An array of command responses is returned by the GlideClient.exec command, in the order they were given.
  *  Each element in the array represents a command given to the transaction.
  *  The response for each command depends on the executed Redis command.
  *  Specific response types are documented alongside each method.
  *
  * @example
- *       transaction = new Transaction()
- *          .set("key", "value")
- *          .select(1)  /// Standalone command
- *          .get("key");
- *       await RedisClient.exec(transaction);
- *       [OK , OK , null]
+ * ```typescript
+ * const transaction = new Transaction()
+ *    .set("key", "value")
+ *    .select(1)  /// Standalone command
+ *    .get("key");
+ * const result = await GlideClient.exec(transaction);
+ * console.log(result); // Output: ['OK', 'OK', null]
+ * ```
  */
 export class Transaction extends BaseTransaction<Transaction> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
 
     /** Change the currently selected Redis database.
-     * See https://redis.io/commands/select/ for details.
+     * See https://valkey.io/commands/select/ for details.
      *
      * @param index - The index of the database to select.
      *
@@ -1298,7 +1771,7 @@ export class Transaction extends BaseTransaction<Transaction> {
  * Transactions allow the execution of a group of commands in a single step.
  *
  * Command Response:
- *  An array of command responses is returned by the RedisClusterClient.exec command, in the order they were given.
+ *  An array of command responses is returned by the GlideClusterClient.exec command, in the order they were given.
  *  Each element in the array represents a command given to the transaction.
  *  The response for each command depends on the executed Redis command.
  *  Specific response types are documented alongside each method.

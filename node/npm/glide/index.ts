@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { GLIBC, MUSL, familySync } from "detect-libc";
 import { arch, platform } from "process";
 
 let globalObject = global as unknown;
@@ -14,10 +15,30 @@ function loadNativeBinding() {
         case "linux":
             switch (arch) {
                 case "x64":
-                    nativeBinding = require("@scope/glide-for-redis-linux-x64");
+                    switch (familySync()) {
+                        case GLIBC:
+                            nativeBinding = require("@scope/valkey-glide-linux-x64");
+                            break;
+                        case MUSL:
+                            nativeBinding = require("@scope/valkey-glide-linux-musl-x64");
+                            break;
+                        default:
+                            nativeBinding = require("@scope/valkey-glide-linux-x64");
+                            break;
+                    }
                     break;
                 case "arm64":
-                    nativeBinding = require("@scope/glide-for-redis-linux-arm64");
+                    switch (familySync()) {
+                        case GLIBC:
+                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
+                            break;
+                        case MUSL:
+                            nativeBinding = require("@scope/valkey-glide-linux-musl-arm64");
+                            break;
+                        default:
+                            nativeBinding = require("@scope/valkey-glide-linux-arm64");
+                            break;
+                    }
                     break;
                 default:
                     throw new Error(
@@ -28,10 +49,10 @@ function loadNativeBinding() {
         case "darwin":
             switch (arch) {
                 case "x64":
-                    nativeBinding = require("@scope/glide-for-redis-darwin-x64");
+                    nativeBinding = require("@scope/valkey-glide-darwin-x64");
                     break;
                 case "arm64":
-                    nativeBinding = require("@scope/glide-for-redis-darwin-arm64");
+                    nativeBinding = require("@scope/valkey-glide-darwin-arm64");
                     break;
                 default:
                     throw new Error(
@@ -53,33 +74,95 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
-        RedisClient,
-        RedisClusterClient,
+        GlideClient,
+        GlideClusterClient,
+        GlideClientConfiguration,
+        SlotIdTypes,
+        SlotKeyTypes,
+        RouteByAddress,
+        Routes,
+        SingleNodeRoute,
+        PeriodicChecksManualInterval,
+        PeriodicChecks,
         Logger,
+        LPosOptions,
         ExpireOptions,
         InfoOptions,
+        InsertPosition,
+        SetOptions,
+        ZaddOptions,
+        ScoreBoundry,
+        RangeByIndex,
+        RangeByScore,
+        RangeByLex,
+        SortedSetRange,
+        StreamTrimOptions,
+        StreamAddOptions,
+        StreamReadOptions,
+        ScriptOptions,
         ClosingError,
+        ConfigurationError,
         ExecAbortError,
         RedisError,
         RequestError,
         TimeoutError,
+        ConnectionError,
         ClusterTransaction,
         Transaction,
+        PubSubMsg,
+        createLeakedArray,
+        createLeakedAttribute,
+        createLeakedBigint,
+        createLeakedDouble,
+        createLeakedMap,
+        createLeakedString,
+        parseInfoResponse,
     } = nativeBinding;
 
     module.exports = {
-        RedisClient,
-        RedisClusterClient,
+        GlideClient,
+        GlideClusterClient,
+        GlideClientConfiguration,
+        SlotIdTypes,
+        SlotKeyTypes,
+        RouteByAddress,
+        Routes,
+        SingleNodeRoute,
+        PeriodicChecksManualInterval,
+        PeriodicChecks,
         Logger,
+        LPosOptions,
         ExpireOptions,
         InfoOptions,
+        InsertPosition,
+        SetOptions,
+        ZaddOptions,
+        ScoreBoundry,
+        RangeByIndex,
+        RangeByScore,
+        RangeByLex,
+        SortedSetRange,
+        StreamTrimOptions,
+        StreamAddOptions,
+        StreamReadOptions,
+        ScriptOptions,
         ClosingError,
+        ConfigurationError,
         ExecAbortError,
         RedisError,
         RequestError,
         TimeoutError,
+        ConnectionError,
         ClusterTransaction,
         Transaction,
+        PubSubMsg,
+        createLeakedArray,
+        createLeakedAttribute,
+        createLeakedBigint,
+        createLeakedDouble,
+        createLeakedMap,
+        createLeakedString,
+        parseInfoResponse,
     };
 
     globalObject = Object.assign(global, nativeBinding);

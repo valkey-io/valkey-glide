@@ -1,0 +1,61 @@
+name: Setup musl on Linux
+
+inputs:
+    workspace:
+        description: "github workspace"
+        required: true
+        type: string
+    npm-scope:
+        description: "npm scope"
+        required: true
+        type: string
+    npm-auth-token:
+        description: "npm auth token"
+        required: true
+        type: string
+    arch:
+        description: "architecture"
+        required: false
+        type: string
+        options:
+            - "arm64"
+            - "x64"
+        default: "arm64"
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install dependencies
+          shell: sh
+          run: |
+              apk update
+              apk add bash git sed python3
+        
+        - name: Skip all steps if not on ARM64
+          shell: bash
+          if: ${{ inputs.arch != 'arm64' }}
+          run: exit 0
+
+        # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and 
+        # here we just making sure we getting the clean repo
+        - name: Clean repository for musl on ARM64
+          shell: bash
+          run: |
+            git config --global --add safe.directory "${{ inputs.workspace }}"
+            git clean -xdf
+            git reset --hard
+            git submodule sync
+            git submodule update --init --recursive
+            
+        - name: Set up access for musl on ARM
+          shell: bash
+          run: |
+              chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE
+                
+        - name: Setup node
+          shell: bash
+          working-directory: ./node
+          run: |
+              npm config set registry https://registry.npmjs.org/
+              npm config set '//registry.npmjs.org/:_authToken' ${{ inputs.npm-auth-token }}
+              npm config set scope ${{ inputs.npm-scope }}

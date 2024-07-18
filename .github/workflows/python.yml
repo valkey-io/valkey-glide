@@ -11,7 +11,10 @@ on:
             - .github/workflows/python.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-redis-modules/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
+            - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
 
     pull_request:
         paths:
@@ -22,7 +25,11 @@ on:
             - .github/workflows/python.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-redis-modules/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
+            - .github/workflows/install-valkey/action.yml
+            - .github/json_matrices/build-matrix.json
+    workflow_dispatch:
 
 concurrency:
     group: python-${{ github.head_ref || github.ref }}
@@ -32,30 +39,55 @@ permissions:
     contents: read
 
 jobs:
-    test-ubuntu-latest:
-        runs-on: ubuntu-latest
-        timeout-minutes: 25
+    load-engine-matrix:
+      runs-on: ubuntu-latest
+      outputs:
+        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+      steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Load the engine matrix
+            id: load-engine-matrix
+            shell: bash
+            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+
+    test:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: load-engine-matrix
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:
-                redis:
-                    - 6.2.14
-                    - 7.2.3
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+                python:
+                  # - "3.8"
+                  # - "3.9"
+                  # - "3.10"
+                  # - "3.11"
+                    - "3.12"
+                host:
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ubuntu-latest,
+                        TARGET: x86_64-unknown-linux-gnu
+                    }
+                    ## TODO comment out macos
+                    - {
+                        OS: macos,
+                        RUNNER: macos-latest,
+                        TARGET: aarch64-apple-darwin
+                    }
 
         steps:
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
-            - name: Install redis
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.redis }}
-
-            - name: Set up Python 3.10
+            - name: Set up Python
               uses: actions/setup-python@v4
               with:
-                  python-version: "3.10"
+                  python-version: ${{ matrix.python }}
 
             - name: Install dependencies
               working-directory: ./python
@@ -66,9 +98,10 @@ jobs:
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "ubuntu-latest"
-                  target: "x86_64-unknown-linux-gnu"
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Type check with mypy
               working-directory: ./python
@@ -77,21 +110,16 @@ jobs:
                   # all installed dependencies and build files
                   source .env/bin/activate
                   pip install mypy types-protobuf
-                  # Install the benchmark requirements 
+                  # Install the benchmark requirements
                   pip install -r ../benchmarks/python/requirements.txt
                   python -m mypy ..
-
-            - name: Install Redis Modules
-              uses: ./.github/workflows/install-redis-modules
-              with:
-                  redis-version: ${{ matrix.redis }} 
 
             - name: Test with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto --override-ini=addopts= --load-module=$GITHUB_WORKSPACE/redisjson.so --html=pytest_report.html --self-contained-html
+                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               with:
@@ -102,11 +130,72 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-python-redis-${{ matrix.redis }}
+                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
                   path: |
                       python/python/tests/pytest_report.html
                       utils/clusters/**
                       benchmarks/results/**
+
+    test-pubsub:
+      runs-on: ${{ matrix.host.RUNNER }}
+      needs: load-engine-matrix
+      timeout-minutes: 35
+      strategy:
+          fail-fast: false
+          matrix:
+              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+              python:
+                # - "3.8"
+                # - "3.9"
+                # - "3.10"
+                # - "3.11"
+                  - "3.12"
+                host:
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ubuntu-latest,
+                        TARGET: x86_64-unknown-linux-gnu
+                    }
+                    ## TODO comment out macos
+                    - {
+                        OS: macos,
+                        RUNNER: macos-latest,
+                        TARGET: aarch64-apple-darwin
+                    }
+
+      steps:
+          - uses: actions/checkout@v4
+            with:
+                submodules: recursive
+
+          - name: Set up Python
+            uses: actions/setup-python@v4
+            with:
+                python-version: ${{ matrix.python }}
+
+          - name: Build Python wrapper
+            uses: ./.github/workflows/build-python-wrapper
+            with:
+                os: ${{ matrix.host.OS }}
+                target: ${{ matrix.host.TARGET }}
+                github-token: ${{ secrets.GITHUB_TOKEN }}
+                engine-version: ${{ matrix.engine.version }}
+
+          - name: Test pubsub with pytest
+            working-directory: ./python
+            run: |
+                source .env/bin/activate
+                cd python/tests/
+                pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
+
+          - name: Upload test reports
+            if: always()
+            continue-on-error: true
+            uses: actions/upload-artifact@v4
+            with:
+                name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                path: |
+                    python/python/tests/pytest_report.html
 
     lint:
         runs-on: ubuntu-latest
@@ -149,29 +238,6 @@ jobs:
               run: |
                   black --check --diff .
 
-    build-macos-latest:
-        runs-on: macos-latest
-        timeout-minutes: 25
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-            - name: Set up Homebrew
-              uses: Homebrew/actions/setup-homebrew@master
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: "macos-latest"
-                  target: "x86_64-apple-darwin"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Test compatibility with pytest
-              working-directory: ./python
-              run: |
-                  source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test
-
     build-amazonlinux-latest:
         runs-on: ubuntu-latest
         container: amazonlinux:latest
@@ -182,7 +248,7 @@ jobs:
                   yum -y remove git
                   yum -y remove git-*
                   yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                  yum install -y git 
+                  yum install -y git
                   git --version
 
             - uses: actions/checkout@v4
@@ -202,15 +268,19 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create a symbolic Link for redis6 binaries
-              working-directory: ./python
-              run: |
-                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+                  engine-version: "7.2.5"
 
             - name: Test compatibility with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test
+                  pytest --asyncio-mode=auto -m smoke_test --html=pytest_report.html --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: smoke-test-report-amazon-linux
+                  path: |
+                      python/python/tests/pytest_report.html

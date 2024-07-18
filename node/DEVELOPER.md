@@ -1,6 +1,6 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test the GLIDE for Redis Node wrapper.
+This document describes how to set up your development environment to build and test Valkey GLIDE Node wrapper.
 
 ### Development Overview
 
@@ -12,7 +12,9 @@ The GLIDE Node wrapper consists of both TypeScript and Rust code. Rust bindings 
 
 Software Dependencies
 
-> If your NodeJS version is below the supported version specified in the client's [documentation](https://github.com/aws/glide-for-redis/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
+##### **Note:** Nodejs Supported Version
+
+If your Nodejs version is below the supported version specified in the client's [documentation](https://github.com/valkey-io/valkey-glide/blob/main/node/README.md#nodejs-supported-version), you can upgrade it using [NVM](https://github.com/nvm-sh/nvm?tab=readme-ov-file#install--update-script).
 
 -   npm
 -   git
@@ -30,7 +32,11 @@ sudo apt update -y
 sudo apt install -y nodejs npm git gcc pkg-config protobuf-compiler openssl libssl-dev
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Check the installed node version
+node -v
 ```
+
+> **Note:** Ensure that you installed a supported Node.js version. For Ubuntu 22.04 or earlier, please refer to the instructions [here](#note-nodejs-supported-version) to upgrade your Node.js version.
 
 **Dependencies installation for CentOS**
 
@@ -57,8 +63,8 @@ Before starting this step, make sure you've installed all software requirments.
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-    git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
-    cd glide-for-redis
+    git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
+    cd valkey-glide
     ```
 2. Initialize git submodule:
     ```bash
@@ -95,9 +101,10 @@ Before starting this step, make sure you've installed all software requirments.
     Once building completed, you'll find the compiled JavaScript code in the`./build-ts` folder.
 
 5. Run tests:
-    1. Ensure that you have installed redis-server and redis-cli on your host. You can find the Redis installation guide at the following link: [Redis Installation Guide](https://redis.io/docs/install/install-redis/install-redis-on-linux/).
+    1. Ensure that you have installed server and valkey-cli on your host. You can download Valkey at the following link: [Valkey Download page](https://valkey.io/download/).
     2. Execute the following command from the node folder:
         ```bash
+        npm run build # make sure we have a debug build compiled first
         npm test
         ```
 6. Integrating the built GLIDE package into your project:
@@ -112,7 +119,7 @@ Before starting this step, make sure you've installed all software requirments.
 
 ### Troubleshooting
 
--   If the build fails after running `npx tsc` because `glide-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
+-   If the build fails after running `npx tsc` because `redis-rs` isn't found, check if your npm version is in the range 9.0.0-9.4.1, and if so, upgrade it. 9.4.2 contains a fix to a change introduced in 9.0.0 that is required in order to build the library.
 
 ### Test
 
@@ -120,6 +127,12 @@ To run tests, use the following command:
 
 ```bash
 npm test
+```
+
+To run the integration tests with existing servers, run the following command:
+
+```bash
+npm run test -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
 ```
 
 ### Submodules
@@ -149,13 +162,34 @@ Development on the Node wrapper may involve changes in either the TypeScript or 
 #### Running the linters
 
 1. TypeScript
+
     ```bash
-    # Run from the `node` folder
+    # Run from the root folder of the GLIDE repository
     npm install eslint-plugin-import@latest  @typescript-eslint/parser @typescript-eslint/eslint-plugin eslint-plugin-tsdoc eslint typescript eslint-plugin-import@latest eslint-config-prettier prettier
     npm i
+    cd node
     npx eslint . --max-warnings=0
     npx prettier --check .
     ```
+
+    To automatically apply prettier recommendations, run the following command:
+
+    ```bash
+    npx prettier -w .
+    ```
+
+    To avoid getting ESLint warnings from protobuf generated files, run the following command:
+
+    ```bash
+    npx eslint --ignore-pattern ProtobufMessage.* .
+    ```
+
+    To automatically apply ESLint recommendations, run the following command:
+
+    ```bash
+    npx eslint --ignore-pattern ProtobufMessage.* --ignore-pattern 'build-ts/**' --fix .
+    ```
+
 2. Rust
     ```bash
     # Run from the `node/rust-client` folder

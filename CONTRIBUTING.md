@@ -38,6 +38,7 @@ GitHub provides additional document on [forking a repository](https://help.githu
 Looking at the existing issues is a great way to find something to contribute on. As our projects, by default, use the default GitHub issue labels (enhancement/bug/duplicate/help wanted/invalid/question/wontfix), looking at any 'help wanted' issues is a great place to start.
 
 ## Developer Guides
+-   [Java](./java/DEVELOPER.md)
 -   [Node](./node/DEVELOPER.md)
 -   [Python](./python/DEVELOPER.md)
 
@@ -48,7 +49,7 @@ opensource-codeofconduct@amazon.com with any additional questions or comments.
 
 
 ## Security issue notifications
-If you discover a potential security issue in this project we ask that you notify AWS/Amazon Security via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Please do **not** create a public github issue.
+See [SECURITY.md](./SECURITY.md)
 
 
 ## Licensing

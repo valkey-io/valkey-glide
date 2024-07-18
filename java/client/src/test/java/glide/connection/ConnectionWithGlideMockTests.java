@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connection;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -8,9 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import command_request.CommandRequestOuterClass.CommandRequest;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.NodeAddress;
-import glide.api.RedisClient;
+import glide.api.GlideClient;
+import glide.api.logging.Logger;
 import glide.api.models.exceptions.ClosingException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
@@ -27,7 +29,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.Response;
 
 public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
@@ -37,9 +38,13 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
     @BeforeEach
     @SneakyThrows
     public void createTestClient() {
+        // TODO: Add DISABLED level to logger-core
+        Logger.setLoggerConfig(Logger.Level.DISABLED);
         channelHandler =
                 new ChannelHandler(
-                        new CallbackDispatcher(), socketPath, Platform.getThreadPoolResourceSupplier().get());
+                        new CallbackDispatcher(null),
+                        socketPath,
+                        Platform.getThreadPoolResourceSupplier().get());
     }
 
     @AfterEach
@@ -64,7 +69,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
 
     @Test
     @SneakyThrows
-    // as of #710 https://github.com/aws/babushka/pull/710 - connection response is empty
+    // as of #710 https://github.com/valkey-io/valkey-glide/pull/710 - connection response is empty
     public void can_connect_with_empty_response() {
         RustCoreMock.updateGlideMock(
                 new RustCoreMock.GlideMockProtobuf() {
@@ -74,7 +79,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -97,7 +102,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -120,7 +125,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -139,7 +144,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder commandRequest(CommandRequest request) {
                         return null;
                     }
                 });
@@ -182,10 +187,15 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
         }
     }
 
-    private static class TestClient extends RedisClient {
+    private static class TestClient extends GlideClient {
 
         public TestClient(ChannelHandler channelHandler) {
-            super(new ConnectionManager(channelHandler), new CommandManager(channelHandler));
+            super(
+                    new ClientBuilder(
+                            new ConnectionManager(channelHandler),
+                            new CommandManager(channelHandler),
+                            null,
+                            null));
         }
     }
 }

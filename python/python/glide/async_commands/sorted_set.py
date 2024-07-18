@@ -1,7 +1,10 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union, cast
+
+from glide.async_commands.command_args import Limit, OrderBy
+from glide.constants import TEncodable
 
 
 class InfBound(Enum):
@@ -23,6 +26,43 @@ class InfBound(Enum):
     """
 
 
+class AggregationType(Enum):
+    """
+    Enumeration representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
+    """
+
+    SUM = "SUM"
+    """
+    Represents aggregation by summing the scores of elements across inputs where they exist.
+    """
+    MIN = "MIN"
+    """
+    Represents aggregation by selecting the minimum score of an element across inputs where it exists.
+    """
+    MAX = "MAX"
+    """
+    Represents aggregation by selecting the maximum score of an element across inputs where it exists.
+    """
+
+
+class ScoreFilter(Enum):
+    """
+    Defines which elements to pop from a sorted set.
+
+    ScoreFilter is a mandatory option for ZMPOP (https://valkey.io/commands/zmpop)
+    and BZMPOP (https://valkey.io/commands/bzmpop).
+    """
+
+    MIN = "MIN"
+    """
+    Pop elements with the lowest scores.
+    """
+    MAX = "MAX"
+    """
+    Pop elements with the highest scores.
+    """
+
+
 class ScoreBoundary:
     """
     Represents a specific numeric score boundary in a sorted set.
@@ -33,7 +73,7 @@ class ScoreBoundary:
     """
 
     def __init__(self, value: float, is_inclusive: bool = True):
-        # Convert the score boundary to the Redis protocol format
+        # Convert the score boundary to Valkey protocol format
         self.value = str(value) if is_inclusive else f"({value}"
 
 
@@ -47,25 +87,8 @@ class LexBoundary:
     """
 
     def __init__(self, value: str, is_inclusive: bool = True):
-        # Convert the lexicographic boundary to the Redis protocol format
+        # Convert the lexicographic boundary to Valkey protocol format
         self.value = f"[{value}" if is_inclusive else f"({value}"
-
-
-class Limit:
-    """
-    Represents a limit argument for a range query in a sorted set to be used in [ZRANGE](https://redis.io/commands/zrange) command.
-
-    The optional LIMIT argument can be used to obtain a sub-range from the matching elements
-        (similar to SELECT LIMIT offset, count in SQL).
-    Args:
-        offset (int): The offset from the start of the range.
-        count (int): The number of elements to include in the range.
-            A negative count returns all elements from the offset.
-    """
-
-    def __init__(self, offset: int, count: int):
-        self.offset = offset
-        self.count = count
 
 
 class RangeByIndex:
@@ -132,13 +155,138 @@ class RangeByLex:
         self.limit = limit
 
 
+class GeospatialData:
+    def __init__(self, longitude: float, latitude: float):
+        """
+        Represents a geographic position defined by longitude and latitude.
+
+        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+            - Valid longitudes are from -180 to 180 degrees.
+            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+        Args:
+            longitude (float): The longitude coordinate.
+            latitude (float): The latitude coordinate.
+        """
+        self.longitude = longitude
+        self.latitude = latitude
+
+
+class GeoUnit(Enum):
+    """
+    Enumeration representing distance units options for the `GEODIST` command.
+    """
+
+    METERS = "m"
+    """
+    Represents distance in meters.
+    """
+    KILOMETERS = "km"
+    """
+    Represents distance in kilometers.
+    """
+    MILES = "mi"
+    """
+    Represents distance in miles.
+    """
+    FEET = "ft"
+    """
+    Represents distance in feet.
+    """
+
+
+class GeoSearchByRadius:
+    """
+    Represents search criteria of searching within a certain radius from a specified point.
+
+    Args:
+        radius (float): Radius of the search area.
+        unit (GeoUnit): Unit of the radius. See `GeoUnit`.
+    """
+
+    def __init__(self, radius: float, unit: GeoUnit):
+        """
+        Initialize the search criteria.
+        """
+        self.radius = radius
+        self.unit = unit
+
+    def to_args(self) -> List[str]:
+        """
+        Convert the search criteria to the corresponding part of the command.
+
+        Returns:
+            List[str]: List representation of the search criteria.
+        """
+        return ["BYRADIUS", str(self.radius), self.unit.value]
+
+
+class GeoSearchByBox:
+    """
+    Represents search criteria of searching within a specified rectangular area.
+
+    Args:
+        width (float): Width of the bounding box.
+        height (float): Height of the bounding box
+        unit (GeoUnit): Unit of the radius. See `GeoUnit`.
+    """
+
+    def __init__(self, width: float, height: float, unit: GeoUnit):
+        """
+        Initialize the search criteria.
+        """
+        self.width = width
+        self.height = height
+        self.unit = unit
+
+    def to_args(self) -> List[str]:
+        """
+        Convert the search criteria to the corresponding part of the command.
+
+        Returns:
+            List[str]: List representation of the search criteria.
+        """
+        return ["BYBOX", str(self.width), str(self.height), self.unit.value]
+
+
+class GeoSearchCount:
+    """
+    Represents the count option for limiting the number of results in a GeoSearch.
+
+    Args:
+        count (int): The maximum number of results to return.
+        any_option (bool): Whether to allow returning as enough matches are found.
+        This means that the results returned may not be the ones closest to the specified point. Default to False.
+    """
+
+    def __init__(self, count: int, any_option: bool = False):
+        """
+        Initialize the count option.
+        """
+        self.count = count
+        self.any_option = any_option
+
+    def to_args(self) -> List[str]:
+        """
+        Convert the count option to the corresponding part of the command.
+
+        Returns:
+            List[str]: List representation of the count option.
+        """
+        if self.any_option:
+            return ["COUNT", str(self.count), "ANY"]
+        return ["COUNT", str(self.count)]
+
+
 def _create_zrange_args(
-    key: str,
+    key: TEncodable,
     range_query: Union[RangeByLex, RangeByScore, RangeByIndex],
     reverse: bool,
     with_scores: bool,
-) -> List[str]:
-    args = [key, str(range_query.start), str(range_query.stop)]
+    destination: Optional[TEncodable] = None,
+) -> List[TEncodable]:
+    args = [destination] if destination else []
+    args += [key, str(range_query.start), str(range_query.stop)]
 
     if isinstance(range_query, RangeByScore):
         args.append("BYSCORE")
@@ -156,5 +304,99 @@ def _create_zrange_args(
         )
     if with_scores:
         args.append("WITHSCORES")
+
+    return args
+
+
+def separate_keys(
+    keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]]
+) -> Tuple[List[TEncodable], List[TEncodable]]:
+    """
+    Returns separate lists of keys and weights in case of weighted keys.
+    """
+    if not keys:
+        return [], []
+
+    key_list: List[TEncodable] = []
+    weight_list: List[TEncodable] = []
+
+    if isinstance(keys[0], tuple):
+        for item in keys:
+            key = item[0]
+            weight = item[1]
+            key_list.append(cast(TEncodable, key))
+            weight_list.append(cast(TEncodable, str(weight)))
+    else:
+        key_list.extend(cast(List[TEncodable], keys))
+
+    return key_list, weight_list
+
+
+def _create_zinter_zunion_cmd_args(
+    keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
+    aggregation_type: Optional[AggregationType] = None,
+    destination: Optional[TEncodable] = None,
+) -> List[TEncodable]:
+    args: List[TEncodable] = []
+
+    if destination:
+        args.append(destination)
+
+    args.append(str(len(keys)))
+
+    only_keys, weights = separate_keys(keys)
+
+    args.extend(only_keys)
+
+    if weights:
+        args.append("WEIGHTS")
+        args.extend(weights)
+
+    if aggregation_type:
+        args.append("AGGREGATE")
+        args.append(aggregation_type.value)
+
+    return args
+
+
+def _create_geosearch_args(
+    keys: List[TEncodable],
+    search_from: Union[str, bytes, GeospatialData],
+    search_by: Union[GeoSearchByRadius, GeoSearchByBox],
+    order_by: Optional[OrderBy] = None,
+    count: Optional[GeoSearchCount] = None,
+    with_coord: bool = False,
+    with_dist: bool = False,
+    with_hash: bool = False,
+    store_dist: bool = False,
+) -> List[TEncodable]:
+    args: List[TEncodable] = keys
+    if isinstance(search_from, (str, bytes)):
+        args.extend(["FROMMEMBER", search_from])
+    else:
+        args.extend(
+            [
+                "FROMLONLAT",
+                str(search_from.longitude),
+                str(search_from.latitude),
+            ]
+        )
+
+    args.extend(search_by.to_args())
+
+    if order_by:
+        args.append(order_by.value)
+    if count:
+        args.extend(count.to_args())
+
+    if with_coord:
+        args.append("WITHCOORD")
+    if with_dist:
+        args.append("WITHDIST")
+    if with_hash:
+        args.append("WITHHASH")
+
+    if store_dist:
+        args.append("STOREDIST")
 
     return args

@@ -1,5 +1,5 @@
 install-build-tools:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 
 install-dev-tools-go1.18.10:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
@@ -33,9 +33,9 @@ build-glide-client:
 generate-protobuf:
 	mkdir -p protobuf
 	protoc --proto_path=../glide-core/src/protobuf \
-		--go_opt=Mconnection_request.proto=github.com/aws/glide-for-redis/go/protobuf \
-		--go_opt=Mredis_request.proto=github.com/aws/glide-for-redis/go/protobuf \
-		--go_opt=Mresponse.proto=github.com/aws/glide-for-redis/go/protobuf \
+		--go_opt=Mconnection_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
+		--go_opt=Mcommand_request.proto=github.com/valkey-io/valkey-glide/go/protobuf \
+		--go_opt=Mresponse.proto=github.com/valkey-io/valkey-glide/go/protobuf \
 		--go_out=./protobuf \
 		--go_opt=paths=source_relative \
 		../glide-core/src/protobuf/*.proto

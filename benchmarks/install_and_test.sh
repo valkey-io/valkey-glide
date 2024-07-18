@@ -33,6 +33,7 @@ chosenClients="all"
 host="localhost"
 port=6379
 tlsFlag="--tls"
+dotnetFramework="net6.0"
 
 function runPythonBenchmark(){
   # generate protobuf files
@@ -67,7 +68,7 @@ function runCSharpBenchmark(){
   cd ${BENCH_FOLDER}/csharp
   dotnet clean
   dotnet build --configuration Release /warnaserror
-  dotnet run --framework net6.0 --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
+  dotnet run --framework $dotnetFramework --configuration Release --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $portFlag $minimalFlag
 }
 
 function runJavaBenchmark(){
@@ -139,6 +140,7 @@ function Help() {
     echo The benchmark will connect to the server using transport level security \(TLS\) by default. Pass -no-tls to connect to server without TLS.
     echo By default, the benchmark runs against localhost. Pass -host and then the address of the requested Redis server in order to connect to a different server.
     echo By default, the benchmark runs against port 6379. Pass -port and then the port number in order to connect to a different port.
+    echo By default, the C# benchmark runs with 'net6.0' framework. Pass -dotnet-framework and then the framework version in order to use a different framework.
 }
 
 while test $# -gt 0
@@ -226,6 +228,9 @@ do
             ;;
         -minimal)
             minimalFlag="--minimal"
+            ;;
+        -dotnet-framework)
+            dotnetFramework=$2
             ;;
     esac
     shift

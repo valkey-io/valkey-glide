@@ -1,0 +1,160 @@
+name: Java Prepare Deployment
+
+on:
+    pull_request:
+        paths:
+            - .github/workflows/java-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/start-self-hosted-runner/action.yml
+            - .github/json_matrices/build-matrix.json
+    push:
+        tags:
+            - "v*.*"
+    workflow_dispatch:
+      inputs:
+        version:
+          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
+          required: true
+
+concurrency:
+    group: java-cd-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+permissions:
+      id-token: write
+
+jobs:
+    start-self-hosted-runner:
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+            with:
+                fetch-depth: 0
+
+          - name: Start self hosted EC2 runner
+            uses: ./.github/workflows/start-self-hosted-runner
+            with:
+                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                aws-region: ${{ secrets.AWS_REGION }}
+                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+
+    create-binaries-to-publish:
+        needs: start-self-hosted-runner
+        if: github.repository_owner == 'valkey-io'
+        timeout-minutes: 35
+        env:
+            JAVA_VERSION: '11'
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                host:
+                  - {
+                    OS: ubuntu,
+                    RUNNER: ubuntu-latest,
+                    TARGET: x86_64-unknown-linux-gnu,
+                  }
+                  - {
+                    OS: ubuntu,
+                    RUNNER: ["self-hosted", "Linux", "ARM64"],
+                    TARGET: aarch64-unknown-linux-gnu,
+                  }
+                  - {
+                    OS: macos,
+                    RUNNER: macos-12,
+                    TARGET: x86_64-apple-darwin,
+                  }
+                  - {
+                    OS: macos,
+                    RUNNER: macos-latest,
+                    TARGET: aarch64-apple-darwin,
+                  }
+
+        runs-on: ${{ matrix.host.RUNNER }}
+
+        steps:
+            - name: Setup self-hosted runner access
+              run: |
+                  GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
+                  if [ -d $GHA_HOME ]; then
+                    sudo chown -R $USER:$USER $GHA_HOME
+                    sudo rm -rf $GHA_HOME
+                    mkdir -p $GHA_HOME/valkey-glide
+                  else
+                    echo "No cleaning needed"
+                  fi
+
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Set the release version
+              shell: bash
+              run: |
+                  if ${{ github.event_name == 'pull_request' }}; then
+                    R_VERSION="255.255.255"
+                  elif ${{ github.event_name == 'workflow_dispatch' }}; then
+                    R_VERSION="${{ env.INPUT_VERSION }}"
+                  else
+                    R_VERSION=${GITHUB_REF:11}
+                  fi
+                  echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
+                  echo "Release version detected: $R_VERSION"
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                INPUT_VERSION: ${{ github.event.inputs.version }}
+
+            - name: Set up JDK
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: ${{ env.JAVA_VERSION }}
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create secret key ring file
+              working-directory: java/client
+              run: |
+                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
+                  ls -ltr
+              env:
+                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
+
+            - name: Build java client
+              working-directory: java
+              run: |
+                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+
+            - name: Bundle JAR
+              working-directory: java
+              run: |
+                  src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
+                  cd $src_folder
+                  jar -cvf bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
+
+            - name: Upload artifacts to publish
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: java-${{ matrix.host.TARGET }}
+                  path: |
+                      java/bundle*.jar

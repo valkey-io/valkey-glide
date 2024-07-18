@@ -1,11 +1,11 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
 from typing import Optional
 
 from glide.exceptions import RequestError
-from glide.protobuf.redis_request_pb2 import RedisRequest, SimpleRoutes
-from glide.protobuf.redis_request_pb2 import SlotTypes as ProtoSlotTypes
+from glide.protobuf.command_request_pb2 import CommandRequest, SimpleRoutes
+from glide.protobuf.command_request_pb2 import SlotTypes as ProtoSlotTypes
 
 
 class SlotType(Enum):
@@ -24,6 +24,12 @@ class Route:
 
 
 class AllNodes(Route):
+    """
+    Route request to all nodes.
+    Warning:
+        Don't use it with write commands, they could be routed to a replica (RO) node and fail.
+    """
+
     pass
 
 
@@ -32,6 +38,12 @@ class AllPrimaries(Route):
 
 
 class RandomNode(Route):
+    """
+    Route request to a random node.
+    Warning:
+        Don't use it with write commands, because they could be randomly routed to a replica (RO) node and fail.
+    """
+
     pass
 
 
@@ -80,7 +92,7 @@ def to_protobuf_slot_type(slot_type: SlotType) -> ProtoSlotTypes.ValueType:
     )
 
 
-def set_protobuf_route(request: RedisRequest, route: Optional[Route]) -> None:
+def set_protobuf_route(request: CommandRequest, route: Optional[Route]) -> None:
     if route is None:
         return
     elif isinstance(route, AllNodes):

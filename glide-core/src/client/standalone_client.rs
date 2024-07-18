@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use super::get_redis_connection_info;
 use super::reconnecting_connection::ReconnectingConnection;
@@ -9,13 +9,16 @@ use futures::{future, stream, StreamExt};
 #[cfg(standalone_heartbeat)]
 use logger_core::log_debug;
 use logger_core::log_warn;
+use rand::Rng;
 use redis::cluster_routing::{self, is_readonly_cmd, ResponsePolicy, Routable, RoutingInfo};
-use redis::{RedisError, RedisResult, Value};
+use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 #[cfg(standalone_heartbeat)]
 use tokio::task;
 
+#[derive(Debug)]
 enum ReadFrom {
     Primary,
     PreferReplica {
@@ -23,6 +26,7 @@ enum ReadFrom {
     },
 }
 
+#[derive(Debug)]
 struct DropWrapper {
     /// Connection to the primary node in the client.
     primary_index: usize,
@@ -38,7 +42,7 @@ impl Drop for DropWrapper {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
 }
@@ -46,6 +50,7 @@ pub struct StandaloneClient {
 pub enum StandaloneClientConnectionError {
     NoAddressesProvided,
     FailedConnection(Vec<(Option<String>, RedisError)>),
+    PrimaryConflictFound(String),
 }
 
 impl std::fmt::Debug for StandaloneClientConnectionError {
@@ -80,6 +85,12 @@ impl std::fmt::Debug for StandaloneClientConnectionError {
                 };
                 Ok(())
             }
+            StandaloneClientConnectionError::PrimaryConflictFound(found_primaries) => {
+                writeln!(
+                    f,
+                    "Primary conflict. More than one primary found in a Standalone setup: {found_primaries}"
+                )
+            }
         }
     }
 }
@@ -87,22 +98,33 @@ impl std::fmt::Debug for StandaloneClientConnectionError {
 impl StandaloneClient {
     pub async fn create_client(
         connection_request: ConnectionRequest,
+        push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, StandaloneClientConnectionError> {
         if connection_request.addresses.is_empty() {
             return Err(StandaloneClientConnectionError::NoAddressesProvided);
         }
-        let redis_connection_info = get_redis_connection_info(&connection_request);
+        let mut redis_connection_info = get_redis_connection_info(&connection_request);
+        let pubsub_connection_info = redis_connection_info.clone();
+        redis_connection_info.pubsub_subscriptions = None;
         let retry_strategy = RetryStrategy::new(connection_request.connection_retry_strategy);
 
         let tls_mode = connection_request.tls_mode;
         let node_count = connection_request.addresses.len();
+        // randomize pubsub nodes, maybe a batter option is to always use the primary
+        let pubsub_node_index = rand::thread_rng().gen_range(0..node_count);
+        let pubsub_addr = &connection_request.addresses[pubsub_node_index];
         let mut stream = stream::iter(connection_request.addresses.iter())
             .map(|address| async {
                 get_connection_and_replication_info(
                     address,
                     &retry_strategy,
-                    &redis_connection_info,
+                    if address.to_string() != pubsub_addr.to_string() {
+                        &redis_connection_info
+                    } else {
+                        &pubsub_connection_info
+                    },
                     tls_mode.unwrap_or(TlsMode::NoTls),
+                    &push_sender,
                 )
                 .await
                 .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -116,11 +138,20 @@ impl StandaloneClient {
             match result {
                 Ok((connection, replication_status)) => {
                     nodes.push(connection);
-                    if primary_index.is_none()
-                        && redis::from_owned_redis_value::<String>(replication_status)
-                            .is_ok_and(|val| val.contains("role:master"))
+                    if redis::from_owned_redis_value::<String>(replication_status)
+                        .is_ok_and(|val| val.contains("role:master"))
                     {
-                        primary_index = Some(nodes.len() - 1);
+                        if let Some(primary_index) = primary_index {
+                            // More than one primary found
+                            return Err(StandaloneClientConnectionError::PrimaryConflictFound(
+                                format!(
+                                    "Primary nodes: {:?}, {:?}",
+                                    nodes.pop(),
+                                    nodes.get(primary_index)
+                                ),
+                            ));
+                        }
+                        primary_index = Some(nodes.len().saturating_sub(1));
                     }
                 }
                 Err((address, (connection, err))) => {
@@ -254,7 +285,7 @@ impl StandaloneClient {
             Some(ResponsePolicy::OneSucceeded) => future::select_ok(requests.map(Box::pin))
                 .await
                 .map(|(result, _)| result),
-            Some(ResponsePolicy::OneSucceededNonEmpty) => {
+            Some(ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty) => {
                 future::select_ok(requests.map(|request| {
                     Box::pin(async move {
                         let result = request.await?;
@@ -374,12 +405,14 @@ async fn get_connection_and_replication_info(
     retry_strategy: &RetryStrategy,
     connection_info: &redis::RedisConnectionInfo,
     tls_mode: TlsMode,
+    push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
     let result = ReconnectingConnection::new(
         address,
         retry_strategy.clone(),
         connection_info.clone(),
         tls_mode,
+        push_sender.clone(),
     )
     .await;
     let reconnecting_connection = match result {

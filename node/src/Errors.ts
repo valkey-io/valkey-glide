@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 /// Base class for errors.
@@ -32,3 +32,6 @@ export class ExecAbortError extends RequestError {}
 
 /// Errors that are thrown when a connection disconnects. These errors can be temporary, as the client will attempt to reconnect.
 export class ConnectionError extends RequestError {}
+
+/// Errors that are thrown when a request cannot be completed in current configuration settings.
+export class ConfigurationError extends RequestError {}

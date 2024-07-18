@@ -1,9 +1,9 @@
 [package]
-name = "glide-for-redis"
+name = "valkey-glide"
 version = "255.255.255"
 edition = "2021"
 license = "Apache-2.0"
-authors = ["Amazon Web Services"]
+authors = ["Valkey GLIDE Maintainers"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "^0.20", features = ["extension-module", "num-bigint"] }
+bytes = { version = "1.6.0" }
 redis = { path = "../submodules/redis-rs/redis", features = ["aio", "tokio-comp", "connection-manager","tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["socket-layer"] }
 logger_core = {path = "../logger_core"}

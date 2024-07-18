@@ -1,4 +1,4 @@
-// Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 package api
 
@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aws/glide-for-redis/go/glide/protobuf"
 	"github.com/stretchr/testify/assert"
+	"github.com/valkey-io/valkey-glide/go/glide/protobuf"
 )
 
 func TestDefaultStandaloneConfig(t *testing.T) {

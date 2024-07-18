@@ -1,0 +1,20 @@
+plugins {
+    // Apply the application plugin to add support for building a CLI application in Java.
+    id 'application'
+    id "com.google.osdetector" version "1.7.3"
+}
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation "io.valkey:valkey-glide:1.0.1:${osdetector.classifier}"
+}
+
+application {
+    // Define the main class for the application.
+    mainClass = 'glide.examples.ExamplesApp'
+}

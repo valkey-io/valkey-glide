@@ -1,8 +1,8 @@
-// Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 package api
 
-import "github.com/aws/glide-for-redis/go/glide/protobuf"
+import "github.com/valkey-io/valkey-glide/go/glide/protobuf"
 
 const (
 	defaultHost = "localhost"

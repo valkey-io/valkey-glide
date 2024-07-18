@@ -1,5 +1,5 @@
 {
-    "name": "@aws/glide-for-redis",
+    "name": "@valkey/valkey-glide",
     "description": "An AWS-sponsored, open-source Redis client.",
     "main": "build-ts/index.js",
     "module": "build-ts/index.js",
@@ -7,14 +7,16 @@
     "type": "commonjs",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/aws/glide-for-redis.git"
+        "url": "git+https://github.com/valkey-io/valkey-glide.git"
     },
-    "homepage": "https://github.com/aws/glide-for-redis#readme",
+    "homepage": "https://github.com/valkey-io/valkey-glide#readme",
     "dependencies": {
+        "eslint-config-prettier": "^9.1.0",
+        "eslint-plugin-import": "^2.29.1",
         "glide-rs": "file:rust-client",
         "long": "^5.2.3",
         "npmignore": "^0.3.0",
-        "prettier": "^3.2.5",
+        "prettier": "^3.3.2",
         "protobufjs": "^7.2.2"
     },
     "bundleDependencies": [
@@ -32,10 +34,10 @@
         "build-protobuf": "npm run compile-protobuf-files && npm run fix-protobuf-file",
         "compile-protobuf-files": "cd src && pbjs -t static-module -o ProtobufMessage.js ../../glide-core/src/protobuf/*.proto && pbts -o ProtobufMessage.d.ts ProtobufMessage.js",
         "fix-protobuf-file": "replace 'this\\.encode\\(message, writer\\)\\.ldelim' 'this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim' src/ProtobufMessage.js",
-        "test": "jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'",
+        "test": "npm run build-test-utils && jest --verbose --runInBand --testPathIgnorePatterns='RedisModules'",
+        "build-test-utils": "cd ../utils && npm i && npm run build",
         "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
         "prepack": "npmignore --auto",
-        "test-modules": "jest --verbose --runInBand 'tests/RedisModules.test.ts'",
         "prettier:check:ci": "./node_modules/.bin/prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "./node_modules/.bin/prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
@@ -43,12 +45,13 @@
         "@babel/preset-env": "^7.20.2",
         "@jest/globals": "^29.5.0",
         "@types/jest": "^29.4.0",
+        "@types/minimist": "^1.2.5",
         "@types/redis-server": "^1.2.0",
         "@types/uuid": "^9.0.1",
-        "@typescript-eslint/eslint-plugin": "^5.54.1",
-        "@typescript-eslint/parser": "^5.54.1",
+        "@typescript-eslint/eslint-plugin": "^5.62.0",
+        "@typescript-eslint/parser": "^5.62.0",
         "babel-jest": "^28.1.3",
-        "eslint": "^8.36.0",
+        "eslint": "^8.57.0",
         "eslint-plugin-tsdoc": "^0.2.17",
         "find-free-port": "^2.0.0",
         "jest": "^28.1.3",

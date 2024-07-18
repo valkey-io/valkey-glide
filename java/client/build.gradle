@@ -2,6 +2,11 @@ import java.nio.file.Paths
 
 plugins {
     id 'java-library'
+    id 'maven-publish'
+    id 'signing'
+    id 'io.freefair.lombok' version '8.6'
+    id 'com.github.spotbugs' version '6.0.18'
+    id 'com.google.osdetector' version '1.7.3'
 }
 
 repositories {
@@ -9,13 +14,14 @@ repositories {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.26.1'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '4.27.1'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.13.0'
 
     implementation group: 'io.netty', name: 'netty-handler', version: '4.1.100.Final'
     // https://github.com/netty/netty/wiki/Native-transports
     // At the moment, Windows is not supported
     implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-x86_64'
+    implementation group: 'io.netty', name: 'netty-transport-native-epoll', version: '4.1.100.Final', classifier: 'linux-aarch_64'
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-x86_64'
     implementation group: 'io.netty', name: 'netty-transport-native-kqueue', version: '4.1.100.Final', classifier: 'osx-aarch_64'
 
@@ -67,7 +73,7 @@ tasks.register('protobuf', Exec) {
         '-Iprotobuf=glide-core/src/protobuf/',
         '--java_out=java/client/src/main/java/glide/models/protobuf',
         'glide-core/src/protobuf/connection_request.proto',
-        'glide-core/src/protobuf/redis_request.proto',
+        'glide-core/src/protobuf/command_request.proto',
         'glide-core/src/protobuf/response.proto'
     workingDir Paths.get(project.rootDir.path, '..').toFile()
 }
@@ -138,13 +144,97 @@ tasks.register('buildAll') {
     finalizedBy 'build'
 }
 
+tasks.register('buildAllRelease') {
+    dependsOn 'protobuf', 'buildRustRelease', 'testFfi'
+    finalizedBy 'build'
+}
+
 compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
+
+tasks.register('copyNativeLib', Copy) {
+    from "${projectDir}/../target/release"
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+}
+
+def defaultReleaseVersion = "255.255.255";
+
+delombok.dependsOn('compileJava')
+jar.dependsOn('copyNativeLib')
+javadoc.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn('buildRustRelease')
+compileTestJava.dependsOn('copyNativeLib')
 test.dependsOn('buildRust')
 testFfi.dependsOn('buildRust')
 
 test {
     exclude "glide/ffi/FfiTest.class"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = 'io.valkey'
+            artifactId = 'valkey-glide'
+            version = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
+            pom {
+                name = 'valkey-glide'
+                description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
+                url = 'https://github.com/valkey-io/valkey-glide.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/valkey-io/valkey-glide'
+                    connection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/valkey-io/valkey-glide.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'valkey-glide'
+                        url = 'https://github.com/valkey-io/valkey-glide.git'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+
+java {
+    modularity.inferModulePath = true
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(Sign) {
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != defaultReleaseVersion;
+    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+}
+
+signing {
+    sign publishing.publications
 }
 
 tasks.withType(Test) {
@@ -153,9 +243,46 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
+    // This is needed for the FFI tests
     jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
 
 jar {
-    archiveBaseName = "glide"
+    archiveClassifier = osdetector.classifier
+}
+
+sourcesJar {
+    // suppress following error
+    // Entry glide/api/BaseClient.java is a duplicate but no duplicate handling strategy has been set
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+delombok {
+    modulePath = classpath
+}
+
+javadoc {
+    dependsOn delombok
+    source = delombok.outputs
+    options.tags = [ "example:a:Example:" ]
+    failOnError = false // TODO fix all javadoc errors and warnings and remove that
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.html")
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main/spotbugs.xml")
+        }
+    }
+}
+
+spotbugs {
+    ignoreFailures = true
+    showStackTraces = true
 }

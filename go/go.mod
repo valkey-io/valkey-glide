@@ -1,10 +1,10 @@
-module github.com/aws/glide-for-redis/go/glide
+module github.com/valkey-io/valkey-glide/go/glide
 
 go 1.18
 
 require (
 	github.com/stretchr/testify v1.8.4
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (

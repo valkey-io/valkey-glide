@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import {
@@ -10,8 +10,12 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
+import { LPosOptions } from "./command-options/LPosOptions";
 import {
+    AggregationType,
     ExpireOptions,
+    InsertPosition,
+    KeyWeight,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -20,8 +24,9 @@ import {
     StreamAddOptions,
     StreamReadOptions,
     StreamTrimOptions,
-    ZaddOptions,
-    createBrpop,
+    ZAddOptions,
+    createBLPop,
+    createBRPop,
     createDecr,
     createDecrBy,
     createDel,
@@ -39,63 +44,94 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
-    createHvals,
+    createHVals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createLIndex,
+    createLInsert,
     createLLen,
     createLPop,
+    createLPos,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
+    createLSet,
     createLTrim,
-    createLindex,
     createMGet,
     createMSet,
+    createObjectEncoding,
+    createObjectFreq,
+    createObjectIdletime,
+    createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPTTL,
     createPersist,
-    createPttl,
+    createPfAdd,
+    createPfCount,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
+    createSDiff,
+    createSDiffStore,
+    createSInter,
+    createSInterCard,
+    createSInterStore,
+    createSIsMember,
+    createSMIsMember,
     createSMembers,
+    createSMove,
     createSPop,
     createSRem,
+    createSUnion,
+    createSUnionStore,
     createSet,
-    createSismember,
     createStrlen,
     createTTL,
     createType,
     createUnlink,
-    createXadd,
-    createXread,
-    createXtrim,
-    createZadd,
-    createZcard,
-    createZcount,
-    createZpopmax,
-    createZpopmin,
-    createZrange,
-    createZrangeWithScores,
-    createZrank,
-    createZrem,
-    createZremRangeByRank,
-    createZremRangeByScore,
-    createZscore,
+    createXAdd,
+    createXLen,
+    createXRead,
+    createXTrim,
+    createZAdd,
+    createZCard,
+    createZCount,
+    createZInterCard,
+    createZInterstore,
+    createZPopMax,
+    createZPopMin,
+    createZRange,
+    createZRangeWithScores,
+    createZRank,
+    createZRem,
+    createZRemRangeByRank,
+    createZRemRangeByScore,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
+    ConfigurationError,
     ConnectionError,
     ExecAbortError,
     RedisError,
     RequestError,
     TimeoutError,
 } from "./Errors";
+import { GlideClientConfiguration } from "./GlideClient";
+import { ClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
-import { connection_request, redis_request, response } from "./ProtobufMessage";
+import {
+    command_request,
+    connection_request,
+    response,
+} from "./ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -147,14 +183,16 @@ export type BaseClientConfiguration = {
      * DNS Addresses and ports of known nodes in the cluster.
      * If the server is in cluster mode the list can be partial, as the client will attempt to map out the cluster and find all nodes.
      * If the server is in standalone mode, only nodes whose addresses were provided will be used by the client.
+     *
      * @example
-     * <code>
+     * ```typescript
+     * configuration.addresses =
      * [
-     *   \{ address:sample-address-0001.use1.cache.amazonaws.com, port:6378 \},
-     *   \{ address: sample-address-0002.use2.cache.amazonaws.com \}
-     *   \{ address: sample-address-0003.use2.cache.amazonaws.com, port:6380 \}
+     *   { address: sample-address-0001.use1.cache.amazonaws.com, port:6378 },
+     *   { address: sample-address-0002.use2.cache.amazonaws.com }
+     *   { address: sample-address-0003.use2.cache.amazonaws.com, port:6380 }
      * ]
-     * </code>
+     * ```
      */
     addresses: {
         host: string;
@@ -202,11 +240,11 @@ export type ScriptOptions = {
     /**
      * The keys that are used in the script.
      */
-    keys?: string[];
+    keys?: (string | Uint8Array)[];
     /**
      * The arguments for the script.
      */
-    args?: string[];
+    args?: (string | Uint8Array)[];
 };
 
 function getRequestErrorClass(
@@ -231,6 +269,11 @@ function getRequestErrorClass(
     return RequestError;
 }
 
+export type PubSubMsg = {
+    message: string;
+    channel: string;
+    pattern?: string | null;
+};
 export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -243,7 +286,54 @@ export class BaseClient {
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
     private isClosed = false;
+    private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
+    private pendingPushNotification: response.Response[] = [];
+    private config: BaseClientConfiguration | undefined;
 
+    protected configurePubsub(
+        options: ClusterClientConfiguration | GlideClientConfiguration,
+        configuration: connection_request.IConnectionRequest,
+    ) {
+        if (options.pubsubSubscriptions) {
+            if (options.protocol == ProtocolVersion.RESP2) {
+                throw new ConfigurationError(
+                    "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
+                );
+            }
+
+            const { context, callback } = options.pubsubSubscriptions;
+
+            if (context && !callback) {
+                throw new ConfigurationError(
+                    "PubSub subscriptions with a context require a callback function to be configured.",
+                );
+            }
+
+            configuration.pubsubSubscriptions =
+                connection_request.PubSubSubscriptions.create({});
+
+            for (const [channelType, channelsPatterns] of Object.entries(
+                options.pubsubSubscriptions.channelsAndPatterns,
+            )) {
+                let entry =
+                    configuration.pubsubSubscriptions!
+                        .channelsOrPatternsByType![parseInt(channelType)];
+
+                if (!entry) {
+                    entry = connection_request.PubSubChannelsOrPatterns.create({
+                        channelsOrPatterns: [],
+                    });
+                    configuration.pubsubSubscriptions!.channelsOrPatternsByType![
+                        parseInt(channelType)
+                    ] = entry;
+                }
+
+                for (const channelPattern of channelsPatterns) {
+                    entry.channelsOrPatterns!.push(Buffer.from(channelPattern));
+                }
+            }
+        }
+    }
     private handleReadData(data: Buffer) {
         const buf = this.remainingReadData
             ? Buffer.concat([this.remainingReadData, data])
@@ -271,40 +361,69 @@ export class BaseClient {
                 }
             }
 
-            if (message.closingError != null) {
-                this.close(message.closingError);
-                return;
-            }
-
-            const [resolve, reject] =
-                this.promiseCallbackFunctions[message.callbackIdx];
-            this.availableCallbackSlots.push(message.callbackIdx);
-
-            if (message.requestError != null) {
-                const errorType = getRequestErrorClass(
-                    message.requestError.type,
-                );
-                reject(
-                    new errorType(message.requestError.message ?? undefined),
-                );
-            } else if (message.respPointer != null) {
-                const pointer = message.respPointer;
-
-                if (typeof pointer === "number") {
-                    resolve(valueFromSplitPointer(0, pointer));
-                } else {
-                    resolve(valueFromSplitPointer(pointer.high, pointer.low));
-                }
-            } else if (
-                message.constantResponse === response.ConstantResponse.OK
-            ) {
-                resolve("OK");
+            if (message.isPush) {
+                this.processPush(message);
             } else {
-                resolve(null);
+                this.processResponse(message);
             }
         }
 
         this.remainingReadData = undefined;
+    }
+
+    processResponse(message: response.Response) {
+        if (message.closingError != null) {
+            this.close(message.closingError);
+            return;
+        }
+
+        const [resolve, reject] =
+            this.promiseCallbackFunctions[message.callbackIdx];
+        this.availableCallbackSlots.push(message.callbackIdx);
+
+        if (message.requestError != null) {
+            const errorType = getRequestErrorClass(message.requestError.type);
+            reject(new errorType(message.requestError.message ?? undefined));
+        } else if (message.respPointer != null) {
+            const pointer = message.respPointer;
+
+            if (typeof pointer === "number") {
+                resolve(valueFromSplitPointer(0, pointer));
+            } else {
+                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+            }
+        } else if (message.constantResponse === response.ConstantResponse.OK) {
+            resolve("OK");
+        } else {
+            resolve(null);
+        }
+    }
+
+    processPush(response: response.Response) {
+        if (response.closingError != null || !response.respPointer) {
+            const errMsg = response.closingError
+                ? response.closingError
+                : "Client Error - push notification without resp_pointer";
+
+            this.close(errMsg);
+            return;
+        }
+
+        const [callback, context] = this.getPubsubCallbackAndContext(
+            this.config!,
+        );
+
+        if (callback) {
+            const pubsubMessage =
+                this.notificationToPubSubMessageSafe(response);
+
+            if (pubsubMessage) {
+                callback(pubsubMessage, context);
+            }
+        } else {
+            this.pendingPushNotification.push(response);
+            this.completePubSubFuturesSafe();
+        }
     }
 
     /**
@@ -316,6 +435,7 @@ export class BaseClient {
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
+        this.config = options;
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
@@ -353,10 +473,10 @@ export class BaseClient {
      */
     protected createWritePromise<T>(
         command:
-            | redis_request.Command
-            | redis_request.Command[]
-            | redis_request.ScriptInvocation,
-        route?: redis_request.Routes,
+            | command_request.Command
+            | command_request.Command[]
+            | command_request.ScriptInvocation,
+        route?: command_request.Routes,
     ): Promise<T> {
         if (this.isClosed) {
             throw new ClosingError(
@@ -367,31 +487,31 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(callbackIndex, command, route);
+            this.writeOrBufferCommandRequest(callbackIndex, command, route);
         });
     }
 
-    private writeOrBufferRedisRequest(
+    private writeOrBufferCommandRequest(
         callbackIdx: number,
         command:
-            | redis_request.Command
-            | redis_request.Command[]
-            | redis_request.ScriptInvocation,
-        route?: redis_request.Routes,
+            | command_request.Command
+            | command_request.Command[]
+            | command_request.ScriptInvocation,
+        route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
-            ? redis_request.RedisRequest.create({
+            ? command_request.CommandRequest.create({
                   callbackIdx,
-                  transaction: redis_request.Transaction.create({
+                  transaction: command_request.Transaction.create({
                       commands: command,
                   }),
               })
-            : command instanceof redis_request.Command
-              ? redis_request.RedisRequest.create({
+            : command instanceof command_request.Command
+              ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : redis_request.RedisRequest.create({
+              : command_request.CommandRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -399,8 +519,8 @@ export class BaseClient {
 
         this.writeOrBufferRequest(
             message,
-            (message: redis_request.RedisRequest, writer: Writer) => {
-                redis_request.RedisRequest.encodeDelimited(message, writer);
+            (message: command_request.CommandRequest, writer: Writer) => {
+                command_request.CommandRequest.encodeDelimited(message, writer);
             },
         );
     }
@@ -418,8 +538,196 @@ export class BaseClient {
         this.writeBufferedRequestsToSocket();
     }
 
+    // Define a common function to process the result of a transaction with set commands
+    /**
+     * @internal
+     */
+    protected processResultWithSetCommands(
+        result: ReturnType[] | null,
+        setCommandsIndexes: number[],
+    ): ReturnType[] | null {
+        if (result === null) {
+            return null;
+        }
+
+        for (const index of setCommandsIndexes) {
+            result[index] = new Set<ReturnType>(result[index] as ReturnType[]);
+        }
+
+        return result;
+    }
+
+    cancelPubSubFuturesWithExceptionSafe(exception: ConnectionError): void {
+        while (this.pubsubFutures.length > 0) {
+            const nextFuture = this.pubsubFutures.shift();
+
+            if (nextFuture) {
+                const [, reject] = nextFuture;
+                reject(exception);
+            }
+        }
+    }
+
+    isPubsubConfigured(
+        config: GlideClientConfiguration | ClusterClientConfiguration,
+    ): boolean {
+        return !!config.pubsubSubscriptions;
+    }
+
+    getPubsubCallbackAndContext(
+        config: GlideClientConfiguration | ClusterClientConfiguration,
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    ): [((msg: PubSubMsg, context: any) => void) | null | undefined, any] {
+        if (config.pubsubSubscriptions) {
+            return [
+                config.pubsubSubscriptions.callback,
+                config.pubsubSubscriptions.context,
+            ];
+        }
+
+        return [null, null];
+    }
+
+    public getPubSubMessage(): Promise<PubSubMsg> {
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        if (!this.isPubsubConfigured(this.config!)) {
+            throw new ConfigurationError(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
+            );
+        }
+
+        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+            throw new ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback.",
+            );
+        }
+
+        return new Promise((resolve, reject) => {
+            this.pubsubFutures.push([resolve, reject]);
+            this.completePubSubFuturesSafe();
+        });
+    }
+
+    public tryGetPubSubMessage(): PubSubMsg | null {
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        if (!this.isPubsubConfigured(this.config!)) {
+            throw new ConfigurationError(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
+            );
+        }
+
+        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+            throw new ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback.",
+            );
+        }
+
+        let msg: PubSubMsg | null = null;
+        this.completePubSubFuturesSafe();
+
+        while (this.pendingPushNotification.length > 0 && !msg) {
+            const pushNotification = this.pendingPushNotification.shift()!;
+            msg = this.notificationToPubSubMessageSafe(pushNotification);
+        }
+
+        return msg;
+    }
+    notificationToPubSubMessageSafe(
+        pushNotification: response.Response,
+    ): PubSubMsg | null {
+        let msg: PubSubMsg | null = null;
+        const responsePointer = pushNotification.respPointer;
+        let nextPushNotificationValue: Record<string, unknown> = {};
+
+        if (responsePointer) {
+            if (typeof responsePointer !== "number") {
+                nextPushNotificationValue = valueFromSplitPointer(
+                    responsePointer.high,
+                    responsePointer.low,
+                ) as Record<string, unknown>;
+            } else {
+                nextPushNotificationValue = valueFromSplitPointer(
+                    0,
+                    responsePointer,
+                ) as Record<string, unknown>;
+            }
+
+            const messageKind = nextPushNotificationValue["kind"];
+
+            if (messageKind === "Disconnect") {
+                Logger.log(
+                    "warn",
+                    "disconnect notification",
+                    "Transport disconnected, messages might be lost",
+                );
+            } else if (
+                messageKind === "Message" ||
+                messageKind === "PMessage" ||
+                messageKind === "SMessage"
+            ) {
+                const values = nextPushNotificationValue["values"] as string[];
+
+                if (messageKind === "PMessage") {
+                    msg = {
+                        message: values[2],
+                        channel: values[1],
+                        pattern: values[0],
+                    };
+                } else {
+                    msg = {
+                        message: values[1],
+                        channel: values[0],
+                        pattern: null,
+                    };
+                }
+            } else if (
+                messageKind === "PSubscribe" ||
+                messageKind === "Subscribe" ||
+                messageKind === "SSubscribe" ||
+                messageKind === "Unsubscribe" ||
+                messageKind === "SUnsubscribe" ||
+                messageKind === "PUnsubscribe"
+            ) {
+                // pass
+            } else {
+                Logger.log(
+                    "error",
+                    "unknown notification",
+                    `Unknown notification: '${messageKind}'`,
+                );
+            }
+        }
+
+        return msg;
+    }
+    completePubSubFuturesSafe() {
+        while (
+            this.pendingPushNotification.length > 0 &&
+            this.pubsubFutures.length > 0
+        ) {
+            const nextPushNotification = this.pendingPushNotification.shift()!;
+            const pubsubMessage =
+                this.notificationToPubSubMessageSafe(nextPushNotification);
+
+            if (pubsubMessage) {
+                const [resolve] = this.pubsubFutures.shift()!;
+                resolve(pubsubMessage);
+            }
+        }
+    }
+
     /** Get the value associated with the given key, or null if no such value exists.
-     * See https://redis.io/commands/get/ for details.
+     * See https://valkey.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
      * @returns If `key` exists, returns the value of `key` as a string. Otherwise, return null.
@@ -436,7 +744,7 @@ export class BaseClient {
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
-     * See https://redis.io/commands/set/ for details.
+     * See https://valkey.io/commands/set/ for details.
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
@@ -465,15 +773,15 @@ export class BaseClient {
      * ```
      */
     public set(
-        key: string,
-        value: string,
+        key: string | Uint8Array,
+        value: string | Uint8Array,
         options?: SetOptions,
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
     }
 
     /** Removes the specified keys. A key is ignored if it does not exist.
-     * See https://redis.io/commands/del/ for details.
+     * See https://valkey.io/commands/del/ for details.
      *
      * @param keys - the keys we wanted to remove.
      * @returns the number of keys that were removed.
@@ -498,8 +806,9 @@ export class BaseClient {
     }
 
     /** Retrieve the values of multiple keys.
-     * See https://redis.io/commands/mget/ for details.
+     * See https://valkey.io/commands/mget/ for details.
      *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      * @param keys - A list of keys to retrieve values for.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
@@ -518,8 +827,9 @@ export class BaseClient {
     }
 
     /** Set multiple keys to multiple values in a single operation.
-     * See https://redis.io/commands/mset/ for details.
+     * See https://valkey.io/commands/mset/ for details.
      *
+     * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns always "OK".
      *
@@ -535,7 +845,7 @@ export class BaseClient {
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/incr/ for details.
+     * See https://valkey.io/commands/incr/ for details.
      *
      * @param key - The key to increment its value.
      * @returns the value of `key` after the increment.
@@ -553,7 +863,7 @@ export class BaseClient {
     }
 
     /** Increments the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/incrby/ for details.
+     * See https://valkey.io/commands/incrby/ for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
@@ -574,7 +884,7 @@ export class BaseClient {
     /** Increment the string representing a floating point number stored at `key` by `amount`.
      * By using a negative increment value, the result is that the value stored at `key` is decremented.
      * If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/incrbyfloat/ for details.
+     * See https://valkey.io/commands/incrbyfloat/ for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
@@ -593,7 +903,7 @@ export class BaseClient {
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/decr/ for details.
+     * See https://valkey.io/commands/decr/ for details.
      *
      * @param key - The key to decrement its value.
      * @returns the value of `key` after the decrement.
@@ -611,7 +921,7 @@ export class BaseClient {
     }
 
     /** Decrements the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/decrby/ for details.
+     * See https://valkey.io/commands/decrby/ for details.
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
@@ -630,7 +940,7 @@ export class BaseClient {
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
-     * See https://redis.io/commands/hget/ for details.
+     * See https://valkey.io/commands/hget/ for details.
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
@@ -656,7 +966,7 @@ export class BaseClient {
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
-     * See https://redis.io/commands/hset/ for details.
+     * See https://valkey.io/commands/hset/ for details.
      *
      * @param key - The key of the hash.
      * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
@@ -680,7 +990,7 @@ export class BaseClient {
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
      * If `key` does not exist, a new key holding a hash is created.
      * If `field` already exists, this operation has no effect.
-     * See https://redis.io/commands/hsetnx/ for more details.
+     * See https://valkey.io/commands/hsetnx/ for more details.
      *
      * @param key - The key of the hash.
      * @param field - The field to set the value for.
@@ -707,7 +1017,7 @@ export class BaseClient {
 
     /** Removes the specified fields from the hash stored at `key`.
      * Specified fields that do not exist within this hash are ignored.
-     * See https://redis.io/commands/hdel/ for details.
+     * See https://valkey.io/commands/hdel/ for details.
      *
      * @param key - The key of the hash.
      * @param fields - The fields to remove from the hash stored at `key`.
@@ -726,7 +1036,7 @@ export class BaseClient {
     }
 
     /** Returns the values associated with the specified fields in the hash stored at `key`.
-     * See https://redis.io/commands/hmget/ for details.
+     * See https://valkey.io/commands/hmget/ for details.
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
@@ -746,7 +1056,7 @@ export class BaseClient {
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
-     * See https://redis.io/commands/hexists/ for details.
+     * See https://valkey.io/commands/hexists/ for details.
      *
      * @param key - The key of the hash.
      * @param field - The field to check in the hash stored at `key`.
@@ -771,7 +1081,7 @@ export class BaseClient {
     }
 
     /** Returns all fields and values of the hash stored at `key`.
-     * See https://redis.io/commands/hgetall/ for details.
+     * See https://valkey.io/commands/hgetall/ for details.
      *
      * @param key - The key of the hash.
      * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
@@ -791,7 +1101,7 @@ export class BaseClient {
     /** Increments the number stored at `field` in the hash stored at `key` by increment.
      * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
      * If `field` or `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/hincrby/ for details.
+     * See https://valkey.io/commands/hincrby/ for details.
      *
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
@@ -816,7 +1126,7 @@ export class BaseClient {
     /** Increment the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
      * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
      * If `field` or `key` does not exist, it is set to 0 before performing the operation.
-     * See https://redis.io/commands/hincrbyfloat/ for details.
+     * See https://valkey.io/commands/hincrbyfloat/ for details.
      *
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
@@ -839,7 +1149,7 @@ export class BaseClient {
     }
 
     /** Returns the number of fields contained in the hash stored at `key`.
-     * See https://redis.io/commands/hlen/ for more details.
+     * See https://valkey.io/commands/hlen/ for more details.
      *
      * @param key - The key of the hash.
      * @returns The number of fields in the hash, or 0 when the key does not exist.
@@ -863,7 +1173,7 @@ export class BaseClient {
     }
 
     /** Returns all values in the hash stored at key.
-     * See https://redis.io/commands/hvals/ for more details.
+     * See https://valkey.io/commands/hvals/ for more details.
      *
      * @param key - The key of the hash.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
@@ -876,13 +1186,13 @@ export class BaseClient {
      * ```
      */
     public hvals(key: string): Promise<string[]> {
-        return this.createWritePromise(createHvals(key));
+        return this.createWritePromise(createHVals(key));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
-     * See https://redis.io/commands/lpush/ for details.
+     * See https://valkey.io/commands/lpush/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
@@ -906,9 +1216,28 @@ export class BaseClient {
         return this.createWritePromise(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     * @returns The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
+     * console.log(result); // Output: 2 - Indicates that the list has two elements.
+     * ```
+     */
+    public lpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
-     * See https://redis.io/commands/lpop/ for details.
+     * See https://valkey.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
      * @returns The value of the first element.
@@ -933,7 +1262,7 @@ export class BaseClient {
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
-     * See https://redis.io/commands/lpop/ for details.
+     * See https://valkey.io/commands/lpop/ for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
@@ -962,7 +1291,7 @@ export class BaseClient {
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
-     * See https://redis.io/commands/lrange/ for details.
+     * See https://valkey.io/commands/lrange/ for details.
      *
      * @param key - The key of the list.
      * @param start - The starting point of the range.
@@ -998,7 +1327,7 @@ export class BaseClient {
     }
 
     /** Returns the length of the list stored at `key`.
-     * See https://redis.io/commands/llen/ for details.
+     * See https://valkey.io/commands/llen/ for details.
      *
      * @param key - The key of the list.
      * @returns the length of the list at `key`.
@@ -1015,11 +1344,35 @@ export class BaseClient {
         return this.createWritePromise(createLLen(key));
     }
 
+    /**
+     * Sets the list element at `index` to `element`.
+     * The index is zero-based, so `0` means the first element, `1` the second element and so on.
+     * Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, `-1` means the last element, `-2` means the penultimate and so forth.
+     *
+     * See https://valkey.io/commands/lset/ for details.
+     *
+     * @param key - The key of the list.
+     * @param index - The index of the element in the list to be set.
+     * @param element - The new element to set at the specified index.
+     * @returns Always "OK".
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the lset method
+     * const response = await client.lset("test_key", 1, "two");
+     * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
+     * ```
+     */
+    public lset(key: string, index: number, element: string): Promise<"OK"> {
+        return this.createWritePromise(createLSet(key, index, element));
+    }
+
     /** Trim an existing list so that it will contain only the specified range of elements specified.
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
-     * See https://redis.io/commands/ltrim/ for details.
+     * See https://valkey.io/commands/ltrim/ for details.
      *
      * @param key - The key of the list.
      * @param start - The starting point of the range.
@@ -1065,7 +1418,7 @@ export class BaseClient {
     /** Inserts all the specified values at the tail of the list stored at `key`.
      * `elements` are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
-     * See https://redis.io/commands/rpush/ for details.
+     * See https://valkey.io/commands/rpush/ for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
@@ -1089,9 +1442,28 @@ export class BaseClient {
         return this.createWritePromise(createRPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     * @returns The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const result = await client.rpushx("my_list", ["value1", "value2"]);
+     * console.log(result);  // Output: 2 - Indicates that the list has two elements.
+     * ```
+     * */
+    public rpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createRPushX(key, elements));
+    }
+
     /** Removes and returns the last elements of the list stored at `key`.
      * The command pops a single element from the end of the list.
-     * See https://redis.io/commands/rpop/ for details.
+     * See https://valkey.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
      * @returns The value of the last element.
@@ -1116,7 +1488,7 @@ export class BaseClient {
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
-     * See https://redis.io/commands/rpop/ for details.
+     * See https://valkey.io/commands/rpop/ for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
@@ -1143,7 +1515,7 @@ export class BaseClient {
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
      * If `key` does not exist, a new set is created before adding `members`.
-     * See https://redis.io/commands/sadd/ for details.
+     * See https://valkey.io/commands/sadd/ for details.
      *
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
@@ -1161,7 +1533,7 @@ export class BaseClient {
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
-     * See https://redis.io/commands/srem/ for details.
+     * See https://valkey.io/commands/srem/ for details.
      *
      * @param key - The key to remove the members from its set.
      * @param members - A list of members to remove from the set stored at `key`.
@@ -1180,25 +1552,54 @@ export class BaseClient {
     }
 
     /** Returns all the members of the set value stored at `key`.
-     * See https://redis.io/commands/smembers/ for details.
+     * See https://valkey.io/commands/smembers/ for details.
      *
      * @param key - The key to return its members.
-     * @returns All members of the set.
-     * If `key` does not exist, it is treated as an empty set and this command returns empty list.
+     * @returns A `Set` containing all members of the set.
+     * If `key` does not exist, it is treated as an empty set and this command returns an empty `Set`.
      *
      * @example
      * ```typescript
      * // Example usage of the smembers method
      * const result = await client.smembers("my_set");
-     * console.log(result); // Output: ["member1", "member2", "member3"]
+     * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public smembers(key: string): Promise<string[]> {
-        return this.createWritePromise(createSMembers(key));
+    public smembers(key: string): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSMembers(key)).then(
+            (smembes) => new Set<string>(smembes),
+        );
+    }
+
+    /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+     * Creates a new destination set if needed. The operation is atomic.
+     * See https://valkey.io/commands/smove for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     *
+     * @param source - The key of the set to remove the element from.
+     * @param destination - The key of the set to add the element to.
+     * @param member - The set element to move.
+     * @returns `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.smove("set1", "set2", "member1");
+     * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
+     * ```
+     */
+    public smove(
+        source: string,
+        destination: string,
+        member: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createSMove(source, destination, member),
+        );
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
-     * See https://redis.io/commands/scard/ for details.
+     * See https://valkey.io/commands/scard/ for details.
      *
      * @param key - The key to return the number of its members.
      * @returns The cardinality (number of elements) of the set, or 0 if key does not exist.
@@ -1214,8 +1615,176 @@ export class BaseClient {
         return this.createWritePromise(createSCard(key));
     }
 
+    /** Gets the intersection of all the given sets.
+     * See https://valkey.io/docs/latest/commands/sinter/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The `keys` of the sets to get the intersection.
+     * @returns - A set of members which are present in all given sets.
+     * If one or more sets do not exist, an empty set will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of sinter method when member exists
+     * const result = await client.sinter(["my_set1", "my_set2"]);
+     * console.log(result); // Output: Set {'member2'} - Indicates that sets have one common member
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of sinter method with non-existing key
+     * const result = await client.sinter(["my_set", "non_existing_key"]);
+     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
+     * ```
+     */
+    public sinter(keys: string[]): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSInter(keys)).then(
+            (sinter) => new Set<string>(sinter),
+        );
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets.
+     * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * await client.sadd("set2", ["b", "c", "d"]);
+     * const result1 = await client.sintercard(["set1", "set2"]);
+     * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+     *
+     * const result2 = await client.sintercard(["set1", "set2"], 1);
+     * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
+     * ```
+     */
+    public sintercard(keys: string[], limit?: number): Promise<number> {
+        return this.createWritePromise(createSInterCard(keys, limit));
+    }
+
+    /**
+     * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sinterstore/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     * @returns The number of elements in the resulting set.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.sinterstore("my_set", ["set1", "set2"]);
+     * console.log(result); // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
+     * ```
+     */
+    public sinterstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createSInterStore(destination, keys));
+    }
+
+    /**
+     * Computes the difference between the first set and all the successive sets in `keys`.
+     *
+     * See https://valkey.io/commands/sdiff/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets to diff.
+     * @returns A `Set` of elements representing the difference between the sets.
+     * If a key in `keys` does not exist, it is treated as an empty set.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["member1", "member2"]);
+     * await client.sadd("set2", ["member1"]);
+     * const result = await client.sdiff(["set1", "set2"]);
+     * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
+     * ```
+     */
+    public sdiff(keys: string[]): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSDiff(keys)).then(
+            (sdiff) => new Set<string>(sdiff),
+        );
+    }
+
+    /**
+     * Stores the difference between the first set and all the successive sets in `keys` into a new set at `destination`.
+     *
+     * See https://valkey.io/commands/sdiffstore/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param destination - The key of the destination set.
+     * @param keys - The keys of the sets to diff.
+     * @returns The number of elements in the resulting set.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["member1", "member2"]);
+     * await client.sadd("set2", ["member1"]);
+     * const result = await client.sdiffstore("set3", ["set1", "set2"]);
+     * console.log(result); // Output: 1 - One member was stored in "set3", and that member is the diff between "set1" and "set2".
+     * ```
+     */
+    public sdiffstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createSDiffStore(destination, keys));
+    }
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * See https://valkey.io/commands/sunion/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets.
+     * @returns A `Set` of members which are present in at least one of the given sets.
+     * If none of the sets exist, an empty `Set` will be returned.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("my_set1", ["member1", "member2"]);
+     * await client.sadd("my_set2", ["member2", "member3"]);
+     * const result1 = await client.sunion(["my_set1", "my_set2"]);
+     * console.log(result1); // Output: Set {'member1', 'member2', 'member3'} - Sets "my_set1" and "my_set2" have three unique members.
+     *
+     * const result2 = await client.sunion(["my_set1", "non_existing_set"]);
+     * console.log(result2); // Output: Set {'member1', 'member2'}
+     * ```
+     */
+    public sunion(keys: string[]): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSUnion(keys)).then(
+            (sunion) => new Set<string>(sunion),
+        );
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by `keys` into a new set
+     * at `destination`.
+     *
+     * See https://valkey.io/commands/sunionstore/ for details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     * @returns The number of elements in the resulting set.
+     *
+     * @example
+     * ```typescript
+     * const length = await client.sunionstore("mySet", ["set1", "set2"]);
+     * console.log(length); // Output: 2 - Two elements were stored in "mySet", and those two members are the union of "set1" and "set2".
+     * ```
+     */
+    public sunionstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createSUnionStore(destination, keys));
+    }
+
     /** Returns if `member` is a member of the set stored at `key`.
-     * See https://redis.io/commands/sismember/ for more details.
+     * See https://valkey.io/commands/sismember/ for more details.
      *
      * @param key - The key of the set.
      * @param member - The member to check for existence in the set.
@@ -1237,11 +1806,33 @@ export class BaseClient {
      * ```
      */
     public sismember(key: string, member: string): Promise<boolean> {
-        return this.createWritePromise(createSismember(key, member));
+        return this.createWritePromise(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * const result = await client.smismember("set1", ["b", "c", "d"]);
+     * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
+     * ```
+     */
+    public smismember(key: string, members: string[]): Promise<boolean[]> {
+        return this.createWritePromise(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
-     * See https://redis.io/commands/spop/ for details.
+     * See https://valkey.io/commands/spop/ for details.
      * To pop multiple members, see `spopCount`.
      *
      * @param key - The key of the set.
@@ -1267,31 +1858,35 @@ export class BaseClient {
     }
 
     /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
-     * See https://redis.io/commands/spop/ for details.
+     * See https://valkey.io/commands/spop/ for details.
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
-     * @returns A list of popped elements will be returned depending on the set's length.
-     * If `key` does not exist, empty list will be returned.
+     * @returns A `Set` containing the popped elements, depending on the set's length.
+     * If `key` does not exist, an empty `Set` will be returned.
      *
      * @example
+     * ```typescript
      * // Example usage of spopCount method to remove and return multiple random members from a set
      * const result = await client.spopCount("my_set", 2);
-     * console.log(result); // Output: ['member2', 'member3'] - Removes and returns 2 random members from the set "my_set".
+     * console.log(result); // Output: Set {'member2', 'member3'} - Removes and returns 2 random members from the set "my_set".
+     * ```
      *
      * @example
      * ```typescript
      * // Example usage of spopCount method with non-existing key
      * const result = await client.spopCount("non_existing_key");
-     * console.log(result); // Output: []
+     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public spopCount(key: string, count: number): Promise<string[]> {
-        return this.createWritePromise(createSPop(key, count));
+    public async spopCount(key: string, count: number): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSPop(key, count)).then(
+            (spop) => new Set<string>(spop),
+        );
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
-     * See https://redis.io/commands/exists/ for details.
+     * See https://valkey.io/commands/exists/ for details.
      *
      * @param keys - The keys list to check.
      * @returns The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
@@ -1310,8 +1905,8 @@ export class BaseClient {
 
     /** Removes the specified keys. A key is ignored if it does not exist.
      * This command, similar to DEL, removes specified keys and ignores non-existent ones.
-     * However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
-     * See https://redis.io/commands/unlink/ for details.
+     * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+     * See https://valkey.io/commands/unlink/ for details.
      *
      * @param keys - The keys we wanted to unlink.
      * @returns The number of keys that were unlinked.
@@ -1331,7 +1926,7 @@ export class BaseClient {
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/expire/ for details.
+     * See https://valkey.io/commands/expire/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
@@ -1365,7 +1960,7 @@ export class BaseClient {
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/expireat/ for details.
+     * See https://valkey.io/commands/expireat/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
@@ -1394,7 +1989,7 @@ export class BaseClient {
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/pexpire/ for details.
+     * See https://valkey.io/commands/pexpire/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
@@ -1423,7 +2018,7 @@ export class BaseClient {
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://redis.io/commands/pexpireat/ for details.
+     * See https://valkey.io/commands/pexpireat/ for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
@@ -1449,7 +2044,7 @@ export class BaseClient {
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
-     * See https://redis.io/commands/ttl/ for details.
+     * See https://valkey.io/commands/ttl/ for details.
      *
      * @param key - The key to return its timeout.
      * @returns TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
@@ -1483,40 +2078,58 @@ export class BaseClient {
      * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
      * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
-     * See https://redis.io/commands/script-load/ and https://redis.io/commands/evalsha/ for details.
+     * See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for details.
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.
-     * @returns a value that depends on the script that was executed.
+     * @returns A value that depends on the script that was executed.
      *
      * @example
-     *       const luaScript = new Script("return \{ KEYS[1], ARGV[1] \}");
-     *       const scriptOptions = \{
-     *            keys: ["foo"],
-     *            args: ["bar"],
-     *       \};
-     *       await invokeScript(luaScript, scriptOptions);
-     *       ["foo", "bar"]
+     * ```typescript
+     * const luaScript = new Script("return { KEYS[1], ARGV[1] }");
+     * const scriptOptions = {
+     *      keys: ["foo"],
+     *      args: ["bar"],
+     * };
+     * const result = await invokeScript(luaScript, scriptOptions);
+     * console.log(result); // Output: ['foo', 'bar']
+     * ```
      */
     public invokeScript(
         script: Script,
         option?: ScriptOptions,
     ): Promise<ReturnType> {
-        const scriptInvocation = redis_request.ScriptInvocation.create({
+        const scriptInvocation = command_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: option?.keys,
-            args: option?.args,
+            keys: option?.keys?.map((item) => {
+                if (typeof item === "string") {
+                    // Convert the string to a Uint8Array
+                    return Buffer.from(item);
+                } else {
+                    // If it's already a Uint8Array, just return it
+                    return item;
+                }
+            }),
+            args: option?.args?.map((item) => {
+                if (typeof item === "string") {
+                    // Convert the string to a Uint8Array
+                    return Buffer.from(item);
+                } else {
+                    // If it's already a Uint8Array, just return it
+                    return item;
+                }
+            }),
         });
         return this.createWritePromise(scriptInvocation);
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
-     * See https://redis.io/commands/zadd/ for more details.
+     * See https://valkey.io/commands/zadd/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
-     * @param options - The Zadd options.
+     * @param options - The ZAdd options.
      * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
@@ -1538,11 +2151,11 @@ export class BaseClient {
     public zadd(
         key: string,
         membersScoresMap: Record<string, number>,
-        options?: ZaddOptions,
+        options?: ZAddOptions,
         changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
-            createZadd(
+            createZAdd(
                 key,
                 membersScoresMap,
                 options,
@@ -1554,12 +2167,12 @@ export class BaseClient {
     /** Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
-     * See https://redis.io/commands/zadd/ for more details.
+     * See https://valkey.io/commands/zadd/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - The Zadd options.
+     * @param options - The ZAdd options.
      * @returns The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
      *
@@ -1581,16 +2194,16 @@ export class BaseClient {
         key: string,
         member: string,
         increment: number,
-        options?: ZaddOptions,
+        options?: ZAddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZadd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, "INCR"),
         );
     }
 
     /** Removes the specified members from the sorted set stored at `key`.
      * Specified members that are not a member of this set are ignored.
-     * See https://redis.io/commands/zrem/ for more details.
+     * See https://valkey.io/commands/zrem/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members to remove from the sorted set.
@@ -1612,11 +2225,11 @@ export class BaseClient {
      * ```
      */
     public zrem(key: string, members: string[]): Promise<number> {
-        return this.createWritePromise(createZrem(key, members));
+        return this.createWritePromise(createZRem(key, members));
     }
 
     /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
-     * See https://redis.io/commands/zcard/ for more details.
+     * See https://valkey.io/commands/zcard/ for more details.
      *
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
@@ -1637,11 +2250,34 @@ export class BaseClient {
      * ```
      */
     public zcard(key: string): Promise<number> {
-        return this.createWritePromise(createZcard(key));
+        return this.createWritePromise(createZCard(key));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+     *
+     * See https://valkey.io/commands/zintercard/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets to intersect.
+     * @param limit - An optional argument that can be used to specify a maximum number for the
+     * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
+     * @returns The cardinality of the intersection of the given sorted sets.
+     *
+     * since - Redis version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * const cardinality = await client.zintercard(["key1", "key2"], 10);
+     * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
+     * ```
+     */
+    public zintercard(keys: string[], limit?: number): Promise<number> {
+        return this.createWritePromise(createZInterCard(keys, limit));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
-     * See https://redis.io/commands/zscore/ for more details.
+     * See https://valkey.io/commands/zscore/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose score is to be retrieved.
@@ -1671,11 +2307,11 @@ export class BaseClient {
      * ```
      */
     public zscore(key: string, member: string): Promise<number | null> {
-        return this.createWritePromise(createZscore(key, member));
+        return this.createWritePromise(createZScore(key, member));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
-     * See https://redis.io/commands/zcount/ for more details.
+     * See https://valkey.io/commands/zcount/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
@@ -1703,13 +2339,13 @@ export class BaseClient {
         minScore: ScoreBoundary<number>,
         maxScore: ScoreBoundary<number>,
     ): Promise<number> {
-        return this.createWritePromise(createZcount(key, minScore, maxScore));
+        return this.createWritePromise(createZCount(key, minScore, maxScore));
     }
 
     /** Returns the specified range of elements in the sorted set stored at `key`.
      * ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
      *
-     * See https://redis.io/commands/zrange/ for more details.
+     * See https://valkey.io/commands/zrange/ for more details.
      * To get the elements with their scores, see `zrangeWithScores`.
      *
      * @param key - The key of the sorted set.
@@ -1726,8 +2362,9 @@ export class BaseClient {
      * // Example usage of zrange method to retrieve all members of a sorted set in ascending order
      * const result = await client.zrange("my_sorted_set", { start: 0, stop: -1 });
      * console.log(result1); // Output: ['member1', 'member2', 'member3'] - Returns all members in ascending order.
-     *
+     * ```
      * @example
+     * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
      *              start: "negativeInfinity",
@@ -1742,12 +2379,12 @@ export class BaseClient {
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
     ): Promise<string[]> {
-        return this.createWritePromise(createZrange(key, rangeQuery, reverse));
+        return this.createWritePromise(createZRange(key, rangeQuery, reverse));
     }
 
     /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
      * Similar to ZRANGE but with a WITHSCORE flag.
-     * See https://redis.io/commands/zrange/ for more details.
+     * See https://valkey.io/commands/zrange/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
@@ -1767,8 +2404,9 @@ export class BaseClient {
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member1': 10.5, 'member2': 15.2} - Returns members with scores between 10 and 20 with their scores.
-     *
+     * ```
      * @example
+     * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
      *              start: "negativeInfinity",
@@ -1784,12 +2422,49 @@ export class BaseClient {
         reverse: boolean = false,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
-            createZrangeWithScores(key, rangeQuery, reverse),
+            createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see `zinter_withscores`.
+     *
+     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zinterstore/ for more details.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  string[] - for keys only.
+     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zinterstore command with an existing key
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
+     * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
+     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
+     * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     * ```
+     */
+    public zinterstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZInterstore(destination, keys, aggregationType),
         );
     }
 
     /** Returns the length of the string value stored at `key`.
-     * See https://redis.io/commands/strlen/ for more details.
+     * See https://valkey.io/commands/strlen/ for more details.
      *
      * @param key - The key to check its length.
      * @returns - The length of the string value stored at key
@@ -1815,7 +2490,7 @@ export class BaseClient {
     }
 
     /** Returns the string representation of the type of the value stored at `key`.
-     * See https://redis.io/commands/type/ for more details.
+     * See https://valkey.io/commands/type/ for more details.
      *
      * @param key - The `key` to check its data type.
      * @returns If the `key` exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
@@ -1843,7 +2518,7 @@ export class BaseClient {
     /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
      * Otherwise, only one member with the lowest score is removed and returned.
-     * See https://redis.io/commands/zpopmin for more details.
+     * See https://valkey.io/commands/zpopmin for more details.
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
@@ -1869,13 +2544,13 @@ export class BaseClient {
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
-        return this.createWritePromise(createZpopmin(key, count));
+        return this.createWritePromise(createZPopMin(key, count));
     }
 
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
-     * See https://redis.io/commands/zpopmax for more details.
+     * See https://valkey.io/commands/zpopmax for more details.
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
@@ -1901,11 +2576,11 @@ export class BaseClient {
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
-        return this.createWritePromise(createZpopmax(key, count));
+        return this.createWritePromise(createZPopMax(key, count));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
-     * See https://redis.io/commands/pttl for more details.
+     * See https://valkey.io/commands/pttl for more details.
      *
      * @param key - The key to return its timeout.
      * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
@@ -1932,13 +2607,13 @@ export class BaseClient {
      * ```
      */
     public pttl(key: string): Promise<number> {
-        return this.createWritePromise(createPttl(key));
+        return this.createWritePromise(createPTTL(key));
     }
 
     /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
-     * See https://redis.io/commands/zremrangebyrank/ for more details.
+     * See https://valkey.io/commands/zremrangebyrank/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param start - The starting point of the range.
@@ -1960,11 +2635,11 @@ export class BaseClient {
         start: number,
         end: number,
     ): Promise<number> {
-        return this.createWritePromise(createZremRangeByRank(key, start, end));
+        return this.createWritePromise(createZRemRangeByRank(key, start, end));
     }
 
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
-     * See https://redis.io/commands/zremrangebyscore/ for more details.
+     * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
      * @param key - The key of the sorted set.
      * @param minScore - The minimum score to remove from. Can be positive/negative infinity, or specific score and inclusivity.
@@ -1993,12 +2668,12 @@ export class BaseClient {
         maxScore: ScoreBoundary<number>,
     ): Promise<number> {
         return this.createWritePromise(
-            createZremRangeByScore(key, minScore, maxScore),
+            createZRemRangeByScore(key, minScore, maxScore),
         );
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
-     * See https://redis.io/commands/zrank for more details.
+     * See https://valkey.io/commands/zrank for more details.
      * To get the rank of `member` with its score, see `zrankWithScore`.
      *
      * @param key - The key of the sorted set.
@@ -2021,11 +2696,11 @@ export class BaseClient {
      * ```
      */
     public zrank(key: string, member: string): Promise<number | null> {
-        return this.createWritePromise(createZrank(key, member));
+        return this.createWritePromise(createZRank(key, member));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
-     * See https://redis.io/commands/zrank for more details.
+     * See https://valkey.io/commands/zrank for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -2052,12 +2727,12 @@ export class BaseClient {
         key: string,
         member: string,
     ): Promise<number[] | null> {
-        return this.createWritePromise(createZrank(key, member, true));
+        return this.createWritePromise(createZRank(key, member, true));
     }
 
     /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
-     * See https://redis.io/commands/xadd/ for more details.
+     * See https://valkey.io/commands/xadd/ for more details.
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
@@ -2068,34 +2743,65 @@ export class BaseClient {
         values: [string, string][],
         options?: StreamAddOptions,
     ): Promise<string | null> {
-        return this.createWritePromise(createXadd(key, values, options));
+        return this.createWritePromise(createXAdd(key, values, options));
     }
 
     /**
      * Trims the stream stored at `key` by evicting older entries.
-     * See https://redis.io/commands/xtrim/ for more details.
+     * See https://valkey.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
-        return this.createWritePromise(createXtrim(key, options));
+        return this.createWritePromise(createXTrim(key, options));
     }
 
     /**
      * Reads entries from the given streams.
-     * See https://redis.io/commands/xread/ for more details.
+     * See https://valkey.io/commands/xread/ for more details.
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
-     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * @returns A map of stream keys, to a map of stream ids, to an array of entries.
+     * @example
+     * ```typescript
+     * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
+     * console.log(result); // Output: {
+     *                      //     "my_stream": {
+     *                      //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     *                      //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     *                      //     }, "writers": {
+     *                      //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     *                      //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
+     *                      //     }
+     *                      // }
+     * ```
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
-    ): Promise<Record<string, [string, string[]][]>> {
-        return this.createWritePromise(createXread(keys_and_ids, options));
+    ): Promise<Record<string, Record<string, string[][]>>> {
+        return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Returns the number of entries in the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xlen/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @returns The number of entries in the stream. If `key` does not exist, returns `0`.
+     *
+     * @example
+     * ```typescript
+     * const numEntries = await client.xlen("my_stream");
+     * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
+     * ```
+     */
+    public xlen(key: string): Promise<number> {
+        return this.createWritePromise(createXLen(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
@@ -2110,7 +2816,7 @@ export class BaseClient {
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of the list.
      * Here, -1 means the last element, -2 means the penultimate and so forth.
-     * See https://redis.io/commands/lindex/ for more details.
+     * See https://valkey.io/commands/lindex/ for more details.
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
@@ -2132,12 +2838,43 @@ export class BaseClient {
      * ```
      */
     public lindex(key: string, index: number): Promise<string | null> {
-        return this.createWritePromise(createLindex(key, index));
+        return this.createWritePromise(createLIndex(key, index));
+    }
+
+    /**
+     * Inserts `element` in the list at `key` either before or after the `pivot`.
+     *
+     * See https://valkey.io/commands/linsert/ for more details.
+     *
+     * @param key - The key of the list.
+     * @param position - The relative position to insert into - either `InsertPosition.Before` or
+     *     `InsertPosition.After` the `pivot`.
+     * @param pivot - An element of the list.
+     * @param element - The new element to insert.
+     * @returns The list length after a successful insert operation.
+     * If the `key` doesn't exist returns `-1`.
+     * If the `pivot` wasn't found, returns `0`.
+     *
+     * @example
+     * ```typescript
+     * const length = await client.linsert("my_list", InsertPosition.Before, "World", "There");
+     * console.log(length); // Output: 2 - The list has a length of 2 after performing the insert.
+     * ```
+     */
+    public linsert(
+        key: string,
+        position: InsertPosition,
+        pivot: string,
+        element: string,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createLInsert(key, position, pivot, element),
+        );
     }
 
     /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
-     * See https://redis.io/commands/persist/ for more details.
+     * See https://valkey.io/commands/persist/ for more details.
      *
      * @param key - The key to remove the existing timeout on.
      * @returns `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
@@ -2156,10 +2893,9 @@ export class BaseClient {
     /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
-     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
-     * See https://redis.io/commands/rename/ for more details.
+     * See https://valkey.io/commands/rename/ for more details.
      *
+     * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
@@ -2176,18 +2912,41 @@ export class BaseClient {
         return this.createWritePromise(createRename(key, newKey));
     }
 
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * See https://valkey.io/commands/renamenx/ for more details.
+     *
+     * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * @returns - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of renamenx method to rename a key
+     * await client.set("old_key", "value");
+     * const result = await client.renamenx("old_key", "new_key");
+     * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
+     * ```
+     */
+    public renamenx(key: string, newKey: string): Promise<boolean> {
+        return this.createWritePromise(createRenameNX(key, newKey));
+    }
+
     /** Blocking list pop primitive.
      * Pop an element from the tail of the first list that is non-empty,
-     * with the given keys being checked in the order that they are given.
+     * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
-     * See https://redis.io/commands/brpop/ for more details.
-     * Note: BRPOP is a blocking command,
-     * see [Blocking Commands](https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * See https://valkey.io/commands/brpop/ for more details.
      *
+     * @remarks
+     * 1. When in cluster mode, all `keys` must map to the same hash slot.
+     * 2. `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
-     * formatted as [key, value]. If no element could be popped and the timeout expired, returns Null.
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
      * @example
      * ```typescript
@@ -2200,7 +2959,176 @@ export class BaseClient {
         keys: string[],
         timeout: number,
     ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBrpop(keys, timeout));
+        return this.createWritePromise(createBRPop(keys, timeout));
+    }
+
+    /** Blocking list pop primitive.
+     * Pop an element from the head of the first list that is non-empty,
+     * with the given `keys` being checked in the order that they are given.
+     * Blocks the connection when there are no elements to pop from any of the given lists.
+     * See https://valkey.io/commands/blpop/ for more details.
+     *
+     * @remarks
+     * 1. When in cluster mode, all `keys` must map to the same hash slot.
+     * 2. `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @param keys - The `keys` of the lists to pop from.
+     * @param timeout - The `timeout` in seconds.
+     * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
+     * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.blpop(["list1", "list2"], 5);
+     * console.log(result); // Output: ['list1', 'element']
+     * ```
+     */
+    public blpop(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string] | null> {
+        return this.createWritePromise(createBLPop(keys, timeout));
+    }
+
+    /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
+     * Creates a new structure if the `key` does not exist.
+     * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
+     *
+     * See https://valkey.io/commands/pfadd/ for more details.
+     *
+     * @param key - The key of the HyperLogLog data structure to add elements into.
+     * @param elements - An array of members to add to the HyperLogLog stored at `key`.
+     * @returns - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
+     *     altered, then returns `1`. Otherwise, returns `0`.
+     * @example
+     * ```typescript
+     * const result = await client.pfadd("hll_1", ["a", "b", "c"]);
+     * console.log(result); // Output: 1 - Indicates that a data structure was created or modified
+     * const result = await client.pfadd("hll_2", []);
+     * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
+     * ```
+     */
+    public pfadd(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createPfAdd(key, elements));
+    }
+
+    /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * See https://valkey.io/commands/pfcount/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the HyperLogLog data structures to be analyzed.
+     * @returns - The approximated cardinality of given HyperLogLog data structures.
+     *     The cardinality of a key that does not exist is `0`.
+     * @example
+     * ```typescript
+     * const result = await client.pfcount(["hll_1", "hll_2"]);
+     * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
+     * ```
+     */
+    public pfcount(keys: string[]): Promise<number> {
+        return this.createWritePromise(createPfCount(keys));
+    }
+
+    /** Returns the internal encoding for the Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-encoding for more details.
+     *
+     * @param key - The `key` of the object to get the internal encoding of.
+     * @returns - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
+     *     Otherwise, returns None.
+     * @example
+     * ```typescript
+     * const result = await client.objectEncoding("my_hash");
+     * console.log(result); // Output: "listpack"
+     * ```
+     */
+    public objectEncoding(key: string): Promise<string | null> {
+        return this.createWritePromise(createObjectEncoding(key));
+    }
+
+    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-freq for more details.
+     *
+     * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     * @returns - If `key` exists, returns the logarithmic access frequency counter of the object
+     *            stored at `key` as a `number`. Otherwise, returns `null`.
+     * @example
+     * ```typescript
+     * const result = await client.objectFreq("my_hash");
+     * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
+     * ```
+     */
+    public objectFreq(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectFreq(key));
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at `key`.
+     *
+     * See https://valkey.io/commands/object-idletime/ for more details.
+     *
+     * @param key - The key of the object to get the idle time of.
+     * @returns If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.objectIdletime("my_hash");
+     * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
+     * ```
+     */
+    public objectIdletime(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectIdletime(key));
+    }
+
+    /**
+     * Returns the reference count of the object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-refcount/ for more details.
+     *
+     * @param key - The `key` of the object to get the reference count of.
+     * @returns If `key` exists, returns the reference count of the object stored at `key` as a `number`.
+     * Otherwise, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.objectRefcount("my_hash");
+     * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
+     * ```
+     */
+    public objectRefcount(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectRefcount(key));
+    }
+
+    /**
+     * Returns the index of the first occurrence of `element` inside the list specified by `key`. If no
+     * match is found, `null` is returned. If the `count` option is specified, then the function returns
+     * an `array` of indices of matching elements within the list.
+     *
+     * See https://valkey.io/commands/lpos/ for more details.
+     *
+     * @param key - The name of the list.
+     * @param element - The value to search for within the list.
+     * @param options - The LPOS options.
+     * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
+     * is specified, then the function returns an `array` of indices of matching elements within the list.
+     *
+     * since - Valkey version 6.0.6.
+     *
+     * @example
+     * ```typescript
+     * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ rank: 2 }))); // Output: 5 - the second occurrence of "e" is at index 5.
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ count: 3 }))); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
+     * ```
+     */
+    public lpos(
+        key: string,
+        element: string,
+        options?: LPosOptions,
+    ): Promise<number | number[] | null> {
+        return this.createWritePromise(createLPos(key, element, options));
     }
 
     /**
@@ -2272,6 +3200,11 @@ export class BaseClient {
         this.isClosed = true;
         this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage));
+        });
+
+        // Handle pubsub futures
+        this.pubsubFutures.forEach(([, reject]) => {
+            reject(new ClosingError(errorMessage || ""));
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();

@@ -1,110 +1,252 @@
+# Valkey GLIDE
+
+Valkey General Language Independent Driver for the Enterprise (GLIDE), is an open-source Valkey client library. Valkey GLIDE is one of the official client libraries for Valkey, and it supports all Valkey commands. Valkey GLIDE supports Valkey 7.2 and above, and Redis open-source 6.2, 7.0 and 7.2. Application programmers use Valkey GLIDE to safely and reliably connect their applications to Valkey- and Redis OSS- compatible services. Valkey GLIDE is designed for reliability, optimized performance, and high-availability, for Valkey and Redis OSS based applications. It is sponsored and supported by AWS, and is pre-configured with best practices learned from over a decade of operating Redis OSS-compatible services used by hundreds of thousands of customers. To help ensure consistency in application development and operations, Valkey GLIDE is implemented using a core driver framework, written in Rust, with language specific extensions. This design ensures consistency in features across languages and reduces overall complexity.
+
 # Getting Started - Java Wrapper
 
-## Notice: Java Wrapper - Work in Progress
+## System Requirements
 
-We're excited to share that the Java client is currently in development! However, it's important to note that this client
-is a work in progress and is not yet complete or fully tested. Your contributions and feedback are highly encouraged as
-we work towards refining and improving this implementation. Thank you for your interest and understanding as we continue
-to develop this Java wrapper.
+The release of Valkey GLIDE was tested on the following platforms:
 
+Linux:
+- Ubuntu 22.04.1 (x86_64)
+- Amazon Linux 2023 (AL2023) (x86_64)
+
+macOS:
+- macOS 12.7 (Apple silicon/aarch_64 and Intel/x86_64)
+
+## Layout of Java code
 The Java client contains the following parts:
 
-1. `client`: A Java-wrapper around the rust-core client.
-2. `examples`: An examples app to test the client against a Redis localhost
-3. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of GLIDE for Redis and other Java clients.
-4. `integTest`: An integration test sub-project for API and E2E testing
+1. `src`: Rust dynamic library FFI to integrate with [GLIDE core library](../glide-core/).
+2. `client`: A Java-wrapper around the GLIDE core rust library and unit tests for it.
+3. `benchmark`: A dedicated benchmarking tool designed to evaluate and compare the performance of Valkey GLIDE and other Java clients.
+4. `integTest`: An integration test sub-project for API and E2E testing.
+
+An example app (called glide.examples.ExamplesApp) is also available under [examples app](../examples/java), to sanity check the project.
+
+## Supported Engine Versions
+
+Refer to the [Supported Engine Versions table](https://github.com/valkey-io/valkey-glide/blob/main/README.md#supported-engine-versions) for details.
 
 ## Installation and Setup
 
-### Install from Gradle
-
-At the moment, the Java client must be built from source.
-
-### Build from source
-
-Software Dependencies:
-
-- JDK 11+
-- git
-- protoc (protobuf compiler)
-- Rust
-
 #### Prerequisites
 
-**Dependencies installation for Ubuntu**
+For developers, please refer to Java's [DEVELOPER.md](./DEVELOPER.md) for further instruction on how to set up your development environment.
+
+**Java Requirements**
+
+Minimum requirements: JDK 11 or later. Ensure that you have a minimum Java version of JDK 11 installed on your system:
+
 ```bash
-sudo apt update -y
-sudo apt install -y protobuf-compiler openjdk-11-jdk openssl gcc
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
+echo $JAVA_HOME
+java -version
 ```
 
-**Dependencies for MacOS**
+### Adding the client to your project
 
-Ensure that you have a minimum Java version of JDK 11 installed on your system:
-```bash
- $ echo $JAVA_HOME
-/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home
+Refer to https://central.sonatype.com/artifact/io.valkey/valkey-glide.
+Once set up, you can run the basic examples.
 
-$ java -version
- openjdk version "11.0.1" 2018-10-16
- OpenJDK Runtime Environment 18.9 (build 11.0.1+13)
- OpenJDK 64-Bit Server VM 18.9 (build 11.0.1+13, mixed mode)
-```
+Additionally, consider installing the Gradle plugin, [OS Detector](https://github.com/google/osdetector-gradle-plugin) to help you determine what classifier to use.
 
-#### Building and installation steps
-The Java client is currently a work in progress and offers no guarantees. Users should build at their own risk.
-
-Before starting this step, make sure you've installed all software requirements.
-1. Clone the repository:
-```bash
-VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
-cd glide-for-redis
+## Classifiers
+There are 4 types of classifiers for Valkey GLIDE which are
 ```
-2. Initialize git submodule:
-```bash
-git submodule update --init --recursive
-```
-3. Generate protobuf files:
-```bash
-cd java/
-./gradlew :client:protobuf
-```
-4. Build the client library:
-```bash
-cd java/
-./gradlew :client:build
-```
-5. Run tests:
-```bash
-cd java/
-$ ./gradlew :client:test
+osx-aarch_64
+osx-x86_64
+linux-aarch_64
+linux-x86_64
 ```
 
-Other useful gradle developer commands:
-* `./gradlew :client:test` to run client unit tests
-* `./gradlew :integTest:test` to run client examples
-* `./gradlew spotlessCheck` to check for codestyle issues
-* `./gradlew spotlessApply` to apply codestyle recommendations
-* `./gradlew :examples:run` to run client examples
-* `./gradlew :benchmarks:run` to run performance benchmarks
+Gradle:
+- Copy the snippet and paste it in the `build.gradle` dependencies section.
+- **IMPORTANT** must include a `classifier` to specify your platform.
+```groovy
+// osx-aarch_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'osx-aarch_64'
+}
+
+// osx-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'osx-x86_64'
+}
+
+// linux-aarch_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'linux-aarch_64'
+}
+
+// linux-x86_64
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: 'linux-x86_64'
+}
+
+// with osdetector
+plugins {
+    id "com.google.osdetector" version "1.7.3"
+}
+dependencies {
+    implementation group: 'io.valkey', name: 'valkey-glide', version: '1.0.1', classifier: osdetector.classifier
+}
+```
+
+Maven:
+- **IMPORTANT** must include a `classifier`. Please use this dependency block and add it to the pom.xml file.
+```xml
+
+<!--osx-aarch_64-->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>osx-aarch_64</classifier>
+   <version>1.0.1</version>
+</dependency>
+
+<!--osx-x86_64-->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>osx-x86_64</classifier>
+   <version>1.0.1</version>
+</dependency>
+
+<!--linux-aarch_64-->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>linux-aarch_64</classifier>
+   <version>1.0.1</version>
+</dependency>
+
+<!--linux-x86_64-->
+<dependency>
+   <groupId>io.valkey</groupId>
+   <artifactId>valkey-glide</artifactId>
+   <classifier>linux-x86_64</classifier>
+   <version>1.0.1</version>
+</dependency>
+```
+
+## Setting up the Java module
+
+To use Valkey GLIDE in a Java project with modules, include a module-info.java in your project.
+
+For example, if your program is called `App`, you can follow this path
+```java
+app/src/main/java/module-info.java
+```
+
+and inside the module it will specifically require the line
+`requires glide.api;`
+
+For example, if your project has a module called playground, it would look like this
+```java
+module playground {
+    requires glide.api;
+}
+```
 
 ## Basic Examples
 
-### Standalone Redis:
+### Standalone Valkey:
 
 ```java
-import glide.api.RedisClient;
+// You can run this example code in Main.java.
+import glide.api.GlideClient;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.GlideClientConfiguration;
+import java.util.concurrent.ExecutionException;
 
-RedisClient client = RedisClient.CreateClient().get();
+import static glide.api.models.GlideString.gs;
 
-CompletableFuture<String> setResponse = client.set("key", "foobar");
-assert setResponse.get() == "OK" : "Failed on client.set("key", "foobar") request";
+public class Main {
 
-CompletableFuture<String> getResponse = client.get("key");
-assert getResponse.get() == "foobar" : "Failed on client.get("key") request";
+    public static void main(String[] args) {
+        runGlideExamples();
+    }
+
+    private static void runGlideExamples() {
+        String host = "localhost";
+        Integer port = 6379;
+        boolean useSsl = false;
+
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(host).port(port).build())
+                        .useTLS(useSsl)
+                        .build();
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+
+            System.out.println("PING: " + client.ping(gs("PING")).get());
+            System.out.println("PING(found you): " + client.ping( gs("found you")).get());
+
+            System.out.println("SET(apples, oranges): " + client.set(gs("apples"), gs("oranges")).get());
+            System.out.println("GET(apples): " + client.get(gs("apples")).get());
+
+        } catch (ExecutionException | InterruptedException e) {
+            System.out.println("Glide example failed with an exception: ");
+            e.printStackTrace();
+        }
+    }
+}
 ```
+
+### Cluster Valkey:
+```java
+// You can run this example code in Main.java.
+import glide.api.GlideClusterClient;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration;
+
+import java.util.concurrent.ExecutionException;
+
+import static glide.api.models.GlideString.gs;
+
+public class Main {
+
+    public static void main(String[] args) {
+        runGlideExamples();
+    }
+
+    private static void runGlideExamples() {
+        String host = "localhost";
+        Integer port1 = 7001;
+        Integer port2 = 7002;
+        Integer port3 = 7003;
+        Integer port4 = 7004;
+        Integer port5 = 7005;
+        Integer port6 = 7006;
+        boolean useSsl = false;
+
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(host).port(port1).port(port2).port(port3).port(port4).port(port5).port(port6).build())
+                        .useTLS(useSsl)
+                        .build();
+
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+
+            System.out.println("PING: " + client.ping(gs("PING")).get());
+            System.out.println("PING(found you): " + client.ping( gs("found you")).get());
+
+            System.out.println("SET(apples, oranges): " + client.set(gs("apples"), gs("oranges")).get());
+            System.out.println("GET(apples): " + client.get(gs("apples")).get());
+
+        } catch (ExecutionException | InterruptedException e) {
+            System.out.println("Glide example failed with an exception: ");
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### Accessing tests
+For more examples, you can refer to the test folder [unit tests](./client/src/test/java/glide/api) and [integration tests](./integTest/src/test/java/glide).
 
 ### Benchmarks
 
@@ -117,9 +259,9 @@ You can run benchmarks using `./gradlew run`. You can set arguments using the ar
 
 The following arguments are accepted:
 * `resultsFile`: the results output file
-* `concurrentTasks`: Number of concurrent tasks
+* `concurrentTasks`: number of concurrent tasks
 * `clients`: one of: all|jedis|lettuce|glide
-* `clientCount`: Client count
-* `host`: redis server host url
-* `port`: redis server port number
-* `tls`: redis TLS configured
+* `clientCount`: client count
+* `host`: Valkey server host url
+* `port`: Valkey server port number
+* `tls`: Valkey TLS configured
