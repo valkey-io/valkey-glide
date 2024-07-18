@@ -113,6 +113,8 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZDiff,
+    createZDiffWithScores,
     createZInterCard,
     createZInterstore,
     createZPopMax,
@@ -1148,6 +1150,40 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zintercard(keys: string[], limit?: number): T {
         return this.addAndReturn(createZInterCard(keys, limit));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     * To get the elements with their scores, see {@link zdiffWithScores}.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - An `array` of elements representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zdiff(keys: string[]): T {
+        return this.addAndReturn(createZDiff(keys));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets, with the associated
+     * scores.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - A map of elements and their scores representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zdiffWithScores(keys: string[]): T {
+        return this.addAndReturn(createZDiffWithScores(keys));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
