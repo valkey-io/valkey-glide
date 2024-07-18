@@ -1483,8 +1483,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zrevrank/ for more details.
      *
-     * @param key The key of the sorted set.
-     * @param member The member whose rank is to be retrieved.
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
      * Command Response - The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
      */
@@ -1498,8 +1498,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zrevrank/ for more details.
      *
-     * @param key The key of the sorted set.
-     * @param member The member whose rank is to be retrieved.
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
      * Command Response -  A list containing the rank and score of `member` in the sorted set, where ranks
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
