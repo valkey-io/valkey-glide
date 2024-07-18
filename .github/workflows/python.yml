@@ -72,12 +72,11 @@ jobs:
                         RUNNER: ubuntu-latest,
                         TARGET: x86_64-unknown-linux-gnu
                     }
-                    ## TODO comment out macos
-                    - {
-                        OS: macos,
-                        RUNNER: macos-latest,
-                        TARGET: aarch64-apple-darwin
-                    }
+                    # - {
+                    #     OS: macos,
+                    #     RUNNER: macos-latest,
+                    #     TARGET: aarch64-apple-darwin
+                    # }
 
         steps:
             - uses: actions/checkout@v4
@@ -156,12 +155,11 @@ jobs:
                         RUNNER: ubuntu-latest,
                         TARGET: x86_64-unknown-linux-gnu
                     }
-                    ## TODO comment out macos
-                    - {
-                        OS: macos,
-                        RUNNER: macos-latest,
-                        TARGET: aarch64-apple-darwin
-                    }
+                    # - {
+                    #     OS: macos,
+                    #     RUNNER: macos-latest,
+                    #     TARGET: aarch64-apple-darwin
+                    # }
 
         steps:
             - uses: actions/checkout@v4
