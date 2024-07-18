@@ -1533,10 +1533,7 @@ export function createFunctionLoad(
     libraryCode: string,
     replace?: boolean,
 ): command_request.Command {
-    const args =
-        replace === undefined || !replace
-            ? [libraryCode]
-            : ["REPLACE", libraryCode];
+    const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
     return createCommand(RequestType.FunctionLoad, args);
 }
 
