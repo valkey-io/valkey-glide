@@ -163,39 +163,39 @@ jobs:
                         TARGET: aarch64-apple-darwin
                     }
 
-      steps:
-          - uses: actions/checkout@v4
-            with:
-                submodules: recursive
-
-          - name: Set up Python
-            uses: actions/setup-python@v4
-            with:
-                python-version: ${{ matrix.python }}
-
-          - name: Build Python wrapper
-            uses: ./.github/workflows/build-python-wrapper
-            with:
-                os: ${{ matrix.host.OS }}
-                target: ${{ matrix.host.TARGET }}
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                engine-version: ${{ matrix.engine.version }}
-
-          - name: Test pubsub with pytest
-            working-directory: ./python
-            run: |
-                source .env/bin/activate
-                cd python/tests/
-                pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
-
-          - name: Upload test reports
-            if: always()
-            continue-on-error: true
-            uses: actions/upload-artifact@v4
-            with:
-                name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
-                path: |
-                    python/python/tests/pytest_report.html
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+        
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: ${{ matrix.python }}
+        
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+        
+            - name: Test pubsub with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
+        
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  path: |
+                      python/python/tests/pytest_report.html
 
     lint:
         runs-on: ubuntu-latest
