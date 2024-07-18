@@ -1485,8 +1485,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
+     *
      * Command Response - The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
-     *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      */
     public zrevrank(key: string, member: string): T {
         return this.addAndReturn(createZRevRank(key, member));
@@ -1500,9 +1501,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
+     *
      * Command Response -  A list containing the rank and score of `member` in the sorted set, where ranks
      *     are ordered from high to low based on scores.
-     *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      *
      * since - Valkey version 7.2.0.
      */

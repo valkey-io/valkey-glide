@@ -2844,7 +2844,7 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
      * @returns The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
-     *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      *
      * @example
      * ```typescript
@@ -2866,7 +2866,7 @@ export class BaseClient {
      * @param member - The member whose rank is to be retrieved.
      * @returns A list containing the rank and score of `member` in the sorted set, where ranks
      *     are ordered from high to low based on scores.
-     *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      *
      * since - Valkey version 7.2.0.
      *
