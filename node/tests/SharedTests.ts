@@ -2209,7 +2209,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 let result = await client.zdiffWithScores([key1, key2]);
-                let expected = {
+                const expected = {
                     one: 1.0,
                     three: 3.0,
                 };
