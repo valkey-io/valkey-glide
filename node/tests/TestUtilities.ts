@@ -317,6 +317,8 @@ export async function transactionTest(
     const args: ReturnType[] = [];
     baseTransaction.flushall();
     args.push("OK");
+    baseTransaction.dbsize();
+    args.push(0);
     baseTransaction.set(key1, "bar");
     args.push("OK");
     baseTransaction.getdel(key1);

@@ -29,6 +29,7 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createDBSize,
     createDecr,
     createDecrBy,
     createDel,
@@ -1730,6 +1731,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lpos(key: string, element: string, options?: LPosOptions): T {
         return this.addAndReturn(createLPos(key, element, options));
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * See https://valkey.io/commands/dbsize/ for more details.
+     *
+     * Command Response - The number of keys in the currently selected database.
+     */
+    public dbsize(): T {
+        return this.addAndReturn(createDBSize());
     }
 }
 
