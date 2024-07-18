@@ -28,6 +28,7 @@ import {
     intoString,
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
+import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -3879,6 +3880,114 @@ export function runBaseTests<Context>(config: {
                         client.flushall(undefined, replicaRoute),
                     ).rejects.toThrowError();
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpos test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}:${uuidv4()}`;
+                const valueArray = ["a", "a", "b", "c", "a", "b"];
+                expect(await client.rpush(key, valueArray)).toEqual(6);
+
+                // simplest case
+                expect(await client.lpos(key, "a")).toEqual(0);
+                expect(
+                    await client.lpos(key, "b", new LPosOptions({ rank: 2 })),
+                ).toEqual(5);
+
+                // element doesn't exist
+                expect(await client.lpos(key, "e")).toBeNull();
+
+                // reverse traversal
+                expect(
+                    await client.lpos(key, "b", new LPosOptions({ rank: -2 })),
+                ).toEqual(2);
+
+                // unlimited comparisons
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 1, maxLength: 0 }),
+                    ),
+                ).toEqual(0);
+
+                // limited comparisons
+                expect(
+                    await client.lpos(
+                        key,
+                        "c",
+                        new LPosOptions({ rank: 1, maxLength: 2 }),
+                    ),
+                ).toBeNull();
+
+                // invalid rank value
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ rank: 0 })),
+                ).rejects.toThrow(RequestError);
+
+                // invalid maxlen value
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ maxLength: -1 })),
+                ).rejects.toThrow(RequestError);
+
+                // non-existent key
+                expect(await client.lpos("non-existent_key", "e")).toBeNull();
+
+                // wrong key data type
+                const wrongDataType = `{key}:${uuidv4()}`;
+                expect(await client.sadd(wrongDataType, ["a", "b"])).toEqual(2);
+
+                await expect(client.lpos(wrongDataType, "a")).rejects.toThrow(
+                    RequestError,
+                );
+
+                // invalid count value
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ count: -1 })),
+                ).rejects.toThrow(RequestError);
+
+                // with count
+                expect(
+                    await client.lpos(key, "a", new LPosOptions({ count: 2 })),
+                ).toEqual([0, 1]);
+                expect(
+                    await client.lpos(key, "a", new LPosOptions({ count: 0 })),
+                ).toEqual([0, 1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 1, count: 0 }),
+                    ),
+                ).toEqual([0, 1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 2, count: 0 }),
+                    ),
+                ).toEqual([1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 3, count: 0 }),
+                    ),
+                ).toEqual([4]);
+
+                // reverse traversal
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: -1, count: 0 }),
+                    ),
+                ).toEqual([4, 1, 0]);
             }, protocol);
         },
         config.timeout,

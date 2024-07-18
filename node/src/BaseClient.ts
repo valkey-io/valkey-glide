@@ -10,6 +10,7 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
+import { LPosOptions } from "./command-options/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
@@ -52,6 +53,7 @@ import {
     createLInsert,
     createLLen,
     createLPop,
+    createLPos,
     createLPush,
     createLPushX,
     createLRange,
@@ -2864,6 +2866,36 @@ export class BaseClient {
      */
     public objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
+    }
+
+    /**
+     * Returns the index of the first occurrence of `element` inside the list specified by `key`. If no
+     * match is found, `null` is returned. If the `count` option is specified, then the function returns
+     * an `array` of indices of matching elements within the list.
+     *
+     * See https://valkey.io/commands/lpos/ for more details.
+     *
+     * @param key - The name of the list.
+     * @param element - The value to search for within the list.
+     * @param options - The LPOS options.
+     * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
+     * is specified, then the function returns an `array` of indices of matching elements within the list.
+     *
+     * since - Valkey version 6.0.6.
+     *
+     * @example
+     * ```typescript
+     * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ rank: 2 }))); // Output: 5 - the second occurrence of "e" is at index 5.
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ count: 3 }))); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
+     * ```
+     */
+    public lpos(
+        key: string,
+        element: string,
+        options?: LPosOptions,
+    ): Promise<number | number[] | null> {
+        return this.createWritePromise(createLPos(key, element, options));
     }
 
     /**

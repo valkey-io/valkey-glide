@@ -4,6 +4,7 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
+import { LPosOptions } from "./command-options/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
 
@@ -1684,4 +1685,21 @@ export function createFlushAll(mode?: FlushMode): command_request.Command {
     } else {
         return createCommand(RequestType.FlushAll, []);
     }
+}
+
+/**
+ * @internal
+ */
+export function createLPos(
+    key: string,
+    element: string,
+    options?: LPosOptions,
+): command_request.Command {
+    let args: string[] = [key, element];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    return createCommand(RequestType.LPos, args);
 }
