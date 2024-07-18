@@ -1693,6 +1693,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param libraryCode - The source code that implements the library.
      * @param replace - Whether the given library should overwrite a library with the same name if it
      *     already exists.
+     *
      * Command Response - The library name that was loaded.
      */
     public functionLoad(libraryCode: string, replace?: boolean): T {

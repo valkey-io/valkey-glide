@@ -384,11 +384,9 @@ describe("GlideClient", () => {
                     ]),
                 ).toEqual([]);
 
-                expect(await client.functionLoad(code)).toEqual(
-                    Buffer.from(libName),
-                );
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
 
-                expect(
+                checkSimple(
                     await client.customCommand([
                         "FCALL",
                         funcName,
@@ -396,8 +394,8 @@ describe("GlideClient", () => {
                         "one",
                         "two",
                     ]),
-                ).toEqual(Buffer.from("one"));
-                expect(
+                ).toEqual("one");
+                checkSimple(
                     await client.customCommand([
                         "FCALL_RO",
                         funcName,
@@ -405,7 +403,7 @@ describe("GlideClient", () => {
                         "one",
                         "two",
                     ]),
-                ).toEqual(Buffer.from("one"));
+                ).toEqual("one");
 
                 // TODO verify with FUNCTION LIST
                 // re-load library without replace
@@ -415,8 +413,8 @@ describe("GlideClient", () => {
                 );
 
                 // re-load library with replace
-                expect(await client.functionLoad(code, true)).toEqual(
-                    Buffer.from(libName),
+                checkSimple(await client.functionLoad(code, true)).toEqual(
+                    libName,
                 );
 
                 // overwrite lib with new code
@@ -429,8 +427,8 @@ describe("GlideClient", () => {
                     ]),
                     true,
                 );
-                expect(await client.functionLoad(newCode, true)).toEqual(
-                    Buffer.from(libName),
+                checkSimple(await client.functionLoad(newCode, true)).toEqual(
+                    libName,
                 );
 
                 expect(

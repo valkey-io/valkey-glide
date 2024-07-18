@@ -23,6 +23,7 @@ import { RedisCluster } from "../../utils/TestUtils.js";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
+    checkSimple,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -567,9 +568,9 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                expect(await client.functionLoad(code)).toEqual(
-                                    Buffer.from(libName),
-                                );
+                                checkSimple(
+                                    await client.functionLoad(code),
+                                ).toEqual(libName);
                                 // call functions from that library to confirm that it works
                                 let fcall = await client.customCommand(
                                     ["FCALL", funcName, "0", "one", "two"],
@@ -579,9 +580,7 @@ describe("GlideClusterClient", () => {
                                     fcall as object,
                                     singleNodeRoute,
                                     (value) =>
-                                        expect(value).toEqual(
-                                            Buffer.from("one"),
-                                        ),
+                                        checkSimple(value).toEqual("one"),
                                 );
 
                                 fcall = await client.customCommand(
@@ -592,9 +591,7 @@ describe("GlideClusterClient", () => {
                                     fcall as object,
                                     singleNodeRoute,
                                     (value) =>
-                                        expect(value).toEqual(
-                                            Buffer.from("one"),
-                                        ),
+                                        checkSimple(value).toEqual("one"),
                                 );
 
                                 // re-load library without replace
@@ -605,9 +602,9 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // re-load library with replace
-                                expect(
+                                checkSimple(
                                     await client.functionLoad(code, true),
-                                ).toEqual(Buffer.from(libName));
+                                ).toEqual(libName);
 
                                 // overwrite lib with new code
                                 const func2Name =
@@ -620,9 +617,9 @@ describe("GlideClusterClient", () => {
                                     ]),
                                     true,
                                 );
-                                expect(
+                                checkSimple(
                                     await client.functionLoad(newCode, true),
-                                ).toEqual(Buffer.from(libName));
+                                ).toEqual(libName);
 
                                 fcall = await client.customCommand(
                                     ["FCALL", func2Name, "0", "one", "two"],
