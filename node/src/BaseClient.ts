@@ -81,6 +81,7 @@ import {
     createSCard,
     createSDiff,
     createSDiffStore,
+    createSetBit,
     createSInter,
     createSInterCard,
     createSInterStore,
@@ -960,6 +961,29 @@ export class BaseClient {
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /**
+     * Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index, with
+     * `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less than
+     * `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to `value` and
+     * the preceding bits are set to `0`.
+     *
+     * See https://valkey.io/commands/setbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to be set.
+     * @param value - The bit value to set at `offset`. The value must be `0` or `1`.
+     * @returns The bit value that was previously stored at `offset`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.setbit("key", 1, 1);
+     * console.log(result); // Output: 0 - The second bit value was 0 before setting to 1.
+     * ```
+     */
+    public setbit(key: string, offset: number, value: number): Promise<number> {
+        return this.createWritePromise(createSetBit(key, offset, value));
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.

@@ -445,6 +445,21 @@ export function createDecrBy(
 /**
  * @internal
  */
+export function createSetBit(
+    key: string,
+    offset: number,
+    value: number,
+): command_request.Command {
+    return createCommand(RequestType.SetBit, [
+        key.toString(),
+        offset.toString(),
+        value.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
 export function createHDel(
     key: string,
     fields: string[],

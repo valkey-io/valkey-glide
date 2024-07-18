@@ -312,6 +312,7 @@ export async function transactionTest(
     const key14 = "{key}" + uuidv4(); // sorted set
     const key15 = "{key}" + uuidv4(); // list
     const key16 = "{key}" + uuidv4(); // list
+    const key17 = "{key}" + uuidv4(); // bitmap
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -566,6 +567,10 @@ export async function transactionTest(
     args.push([key6, field + "3"]);
     baseTransaction.blpop([key6], 0.1);
     args.push([key6, field + "1"]);
+
+    baseTransaction.setbit(key17, 1, 1);
+    args.push(0);
+
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
     baseTransaction.pfcount([key11]);

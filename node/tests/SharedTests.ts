@@ -489,6 +489,36 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `setbit test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+
+                expect(await client.setbit(key, 1, 1)).toEqual(0);
+                expect(await client.setbit(key, 1, 0)).toEqual(1);
+
+                // invalid argument - offset can't be negative
+                await expect(client.setbit(key, -1, 1)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // invalid argument - "value" arg must be 0 or 1
+                await expect(client.setbit(key, 0, 2)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a string
+                expect(await client.sadd(stringKey, ["foo"])).toEqual(1);
+                await expect(client.setbit(stringKey, 0, 0)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set with timeout parameter_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
