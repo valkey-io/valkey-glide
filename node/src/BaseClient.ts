@@ -85,8 +85,8 @@ import {
     createSInterCard,
     createSInterStore,
     createSIsMember,
-    createSMembers,
     createSMIsMember,
+    createSMembers,
     createSMove,
     createSPop,
     createSRem,
@@ -118,12 +118,15 @@ import {
 } from "./Commands";
 import {
     ClosingError,
+    ConfigurationError,
     ConnectionError,
     ExecAbortError,
     RedisError,
     RequestError,
     TimeoutError,
 } from "./Errors";
+import { GlideClientConfiguration } from "./GlideClient";
+import { ClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
@@ -267,6 +270,11 @@ function getRequestErrorClass(
     return RequestError;
 }
 
+export type PubSubMsg = {
+    message: string;
+    channel: string;
+    pattern?: string | null;
+};
 export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -279,7 +287,54 @@ export class BaseClient {
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
     private isClosed = false;
+    private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
+    private pendingPushNotification: response.Response[] = [];
+    private config: BaseClientConfiguration | undefined;
 
+    protected configurePubsub(
+        options: ClusterClientConfiguration | GlideClientConfiguration,
+        configuration: connection_request.IConnectionRequest,
+    ) {
+        if (options.pubsubSubscriptions) {
+            if (options.protocol == ProtocolVersion.RESP2) {
+                throw new ConfigurationError(
+                    "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
+                );
+            }
+
+            const { context, callback } = options.pubsubSubscriptions;
+
+            if (context && !callback) {
+                throw new ConfigurationError(
+                    "PubSub subscriptions with a context require a callback function to be configured.",
+                );
+            }
+
+            configuration.pubsubSubscriptions =
+                connection_request.PubSubSubscriptions.create({});
+
+            for (const [channelType, channelsPatterns] of Object.entries(
+                options.pubsubSubscriptions.channelsAndPatterns,
+            )) {
+                let entry =
+                    configuration.pubsubSubscriptions!
+                        .channelsOrPatternsByType![parseInt(channelType)];
+
+                if (!entry) {
+                    entry = connection_request.PubSubChannelsOrPatterns.create({
+                        channelsOrPatterns: [],
+                    });
+                    configuration.pubsubSubscriptions!.channelsOrPatternsByType![
+                        parseInt(channelType)
+                    ] = entry;
+                }
+
+                for (const channelPattern of channelsPatterns) {
+                    entry.channelsOrPatterns!.push(Buffer.from(channelPattern));
+                }
+            }
+        }
+    }
     private handleReadData(data: Buffer) {
         const buf = this.remainingReadData
             ? Buffer.concat([this.remainingReadData, data])
@@ -307,40 +362,69 @@ export class BaseClient {
                 }
             }
 
-            if (message.closingError != null) {
-                this.close(message.closingError);
-                return;
-            }
-
-            const [resolve, reject] =
-                this.promiseCallbackFunctions[message.callbackIdx];
-            this.availableCallbackSlots.push(message.callbackIdx);
-
-            if (message.requestError != null) {
-                const errorType = getRequestErrorClass(
-                    message.requestError.type,
-                );
-                reject(
-                    new errorType(message.requestError.message ?? undefined),
-                );
-            } else if (message.respPointer != null) {
-                const pointer = message.respPointer;
-
-                if (typeof pointer === "number") {
-                    resolve(valueFromSplitPointer(0, pointer));
-                } else {
-                    resolve(valueFromSplitPointer(pointer.high, pointer.low));
-                }
-            } else if (
-                message.constantResponse === response.ConstantResponse.OK
-            ) {
-                resolve("OK");
+            if (message.isPush) {
+                this.processPush(message);
             } else {
-                resolve(null);
+                this.processResponse(message);
             }
         }
 
         this.remainingReadData = undefined;
+    }
+
+    processResponse(message: response.Response) {
+        if (message.closingError != null) {
+            this.close(message.closingError);
+            return;
+        }
+
+        const [resolve, reject] =
+            this.promiseCallbackFunctions[message.callbackIdx];
+        this.availableCallbackSlots.push(message.callbackIdx);
+
+        if (message.requestError != null) {
+            const errorType = getRequestErrorClass(message.requestError.type);
+            reject(new errorType(message.requestError.message ?? undefined));
+        } else if (message.respPointer != null) {
+            const pointer = message.respPointer;
+
+            if (typeof pointer === "number") {
+                resolve(valueFromSplitPointer(0, pointer));
+            } else {
+                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+            }
+        } else if (message.constantResponse === response.ConstantResponse.OK) {
+            resolve("OK");
+        } else {
+            resolve(null);
+        }
+    }
+
+    processPush(response: response.Response) {
+        if (response.closingError != null || !response.respPointer) {
+            const errMsg = response.closingError
+                ? response.closingError
+                : "Client Error - push notification without resp_pointer";
+
+            this.close(errMsg);
+            return;
+        }
+
+        const [callback, context] = this.getPubsubCallbackAndContext(
+            this.config!,
+        );
+
+        if (callback) {
+            const pubsubMessage =
+                this.notificationToPubSubMessageSafe(response);
+
+            if (pubsubMessage) {
+                callback(pubsubMessage, context);
+            }
+        } else {
+            this.pendingPushNotification.push(response);
+            this.completePubSubFuturesSafe();
+        }
     }
 
     /**
@@ -352,6 +436,7 @@ export class BaseClient {
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
+        this.config = options;
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
@@ -471,6 +556,175 @@ export class BaseClient {
         }
 
         return result;
+    }
+
+    cancelPubSubFuturesWithExceptionSafe(exception: ConnectionError): void {
+        while (this.pubsubFutures.length > 0) {
+            const nextFuture = this.pubsubFutures.shift();
+
+            if (nextFuture) {
+                const [, reject] = nextFuture;
+                reject(exception);
+            }
+        }
+    }
+
+    isPubsubConfigured(
+        config: GlideClientConfiguration | ClusterClientConfiguration,
+    ): boolean {
+        return !!config.pubsubSubscriptions;
+    }
+
+    getPubsubCallbackAndContext(
+        config: GlideClientConfiguration | ClusterClientConfiguration,
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    ): [((msg: PubSubMsg, context: any) => void) | null | undefined, any] {
+        if (config.pubsubSubscriptions) {
+            return [
+                config.pubsubSubscriptions.callback,
+                config.pubsubSubscriptions.context,
+            ];
+        }
+
+        return [null, null];
+    }
+
+    public getPubSubMessage(): Promise<PubSubMsg> {
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        if (!this.isPubsubConfigured(this.config!)) {
+            throw new ConfigurationError(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
+            );
+        }
+
+        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+            throw new ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback.",
+            );
+        }
+
+        return new Promise((resolve, reject) => {
+            this.pubsubFutures.push([resolve, reject]);
+            this.completePubSubFuturesSafe();
+        });
+    }
+
+    public tryGetPubSubMessage(): PubSubMsg | null {
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        if (!this.isPubsubConfigured(this.config!)) {
+            throw new ConfigurationError(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
+            );
+        }
+
+        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+            throw new ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback.",
+            );
+        }
+
+        let msg: PubSubMsg | null = null;
+        this.completePubSubFuturesSafe();
+
+        while (this.pendingPushNotification.length > 0 && !msg) {
+            const pushNotification = this.pendingPushNotification.shift()!;
+            msg = this.notificationToPubSubMessageSafe(pushNotification);
+        }
+
+        return msg;
+    }
+    notificationToPubSubMessageSafe(
+        pushNotification: response.Response,
+    ): PubSubMsg | null {
+        let msg: PubSubMsg | null = null;
+        const responsePointer = pushNotification.respPointer;
+        let nextPushNotificationValue: Record<string, unknown> = {};
+
+        if (responsePointer) {
+            if (typeof responsePointer !== "number") {
+                nextPushNotificationValue = valueFromSplitPointer(
+                    responsePointer.high,
+                    responsePointer.low,
+                ) as Record<string, unknown>;
+            } else {
+                nextPushNotificationValue = valueFromSplitPointer(
+                    0,
+                    responsePointer,
+                ) as Record<string, unknown>;
+            }
+
+            const messageKind = nextPushNotificationValue["kind"];
+
+            if (messageKind === "Disconnect") {
+                Logger.log(
+                    "warn",
+                    "disconnect notification",
+                    "Transport disconnected, messages might be lost",
+                );
+            } else if (
+                messageKind === "Message" ||
+                messageKind === "PMessage" ||
+                messageKind === "SMessage"
+            ) {
+                const values = nextPushNotificationValue["values"] as string[];
+
+                if (messageKind === "PMessage") {
+                    msg = {
+                        message: values[2],
+                        channel: values[1],
+                        pattern: values[0],
+                    };
+                } else {
+                    msg = {
+                        message: values[1],
+                        channel: values[0],
+                        pattern: null,
+                    };
+                }
+            } else if (
+                messageKind === "PSubscribe" ||
+                messageKind === "Subscribe" ||
+                messageKind === "SSubscribe" ||
+                messageKind === "Unsubscribe" ||
+                messageKind === "SUnsubscribe" ||
+                messageKind === "PUnsubscribe"
+            ) {
+                // pass
+            } else {
+                Logger.log(
+                    "error",
+                    "unknown notification",
+                    `Unknown notification: '${messageKind}'`,
+                );
+            }
+        }
+
+        return msg;
+    }
+    completePubSubFuturesSafe() {
+        while (
+            this.pendingPushNotification.length > 0 &&
+            this.pubsubFutures.length > 0
+        ) {
+            const nextPushNotification = this.pendingPushNotification.shift()!;
+            const pubsubMessage =
+                this.notificationToPubSubMessageSafe(nextPushNotification);
+
+            if (pubsubMessage) {
+                const [resolve] = this.pubsubFutures.shift()!;
+                resolve(pubsubMessage);
+            }
+        }
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
@@ -2967,6 +3221,11 @@ export class BaseClient {
         this.isClosed = true;
         this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage));
+        });
+
+        // Handle pubsub futures
+        this.pubsubFutures.forEach(([, reject]) => {
+            reject(new ClosingError(errorMessage || ""));
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();

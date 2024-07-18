@@ -1476,6 +1476,18 @@ export function createTime(): command_request.Command {
 /**
  * @internal
  */
+export function createPublish(
+    message: string,
+    channel: string,
+    sharded: boolean = false,
+): command_request.Command {
+    const request = sharded ? RequestType.SPublish : RequestType.Publish;
+    return createCommand(request, [channel, message]);
+}
+
+/**
+ * @internal
+ */
 export function createBRPop(
     keys: string[],
     timeout: number,
