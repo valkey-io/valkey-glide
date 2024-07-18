@@ -2,9 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { LPosOptions } from "./command-options/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
+    FlushMode,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -27,6 +29,7 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createDBSize,
     createDecr,
     createDecrBy,
     createDel,
@@ -34,7 +37,9 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createFlushAll,
     createGet,
+    createGetDel,
     createHDel,
     createHExists,
     createHGet,
@@ -54,6 +59,7 @@ import {
     createLInsert,
     createLLen,
     createLPop,
+    createLPos,
     createLPush,
     createLPushX,
     createLRange,
@@ -108,6 +114,8 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZDiff,
+    createZDiffWithScores,
     createZInterCard,
     createZInterstore,
     createZPopMax,
@@ -181,6 +189,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public get(key: string): T {
         return this.addAndReturn(createGet(key));
+    }
+
+    /**
+     * Gets a string value associated with the given `key`and deletes the key.
+     *
+     * See https://valkey.io/commands/getdel/ for details.
+     *
+     * @param key - The key to retrieve from the database.
+     *
+     * Command Response - If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
+     */
+    public getdel(key: string): T {
+        return this.addAndReturn(createGetDel(key));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1146,6 +1167,40 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZInterCard(keys, limit));
     }
 
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     * To get the elements with their scores, see {@link zdiffWithScores}.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - An `array` of elements representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zdiff(keys: string[]): T {
+        return this.addAndReturn(createZDiff(keys));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets, with the associated
+     * scores.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - A map of elements and their scores representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zdiffWithScores(keys: string[]): T {
+        return this.addAndReturn(createZDiffWithScores(keys));
+    }
+
     /** Returns the score of `member` in the sorted set stored at `key`.
      * See https://valkey.io/commands/zscore/ for more details.
      *
@@ -1698,6 +1753,49 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public functionLoad(libraryCode: string, replace?: boolean): T {
         return this.addAndReturn(createFunctionLoad(libraryCode, replace));
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `OK`.
+     */
+    public flushall(mode?: FlushMode): T {
+        return this.addAndReturn(createFlushAll(mode));
+    }
+
+    /**
+     * Returns the index of the first occurrence of `element` inside the list specified by `key`. If no
+     * match is found, `null` is returned. If the `count` option is specified, then the function returns
+     * an `array` of indices of matching elements within the list.
+     *
+     * See https://valkey.io/commands/lpos/ for more details.
+     *
+     * @param key - The name of the list.
+     * @param element - The value to search for within the list.
+     * @param options - The LPOS options.
+     *
+     * Command Response -  The index of `element`, or `null` if `element` is not in the list. If the `count`
+     * option is specified, then the function returns an `array` of indices of matching elements within the list.
+     *
+     * since - Valkey version 6.0.6.
+     */
+    public lpos(key: string, element: string, options?: LPosOptions): T {
+        return this.addAndReturn(createLPos(key, element, options));
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * See https://valkey.io/commands/dbsize/ for more details.
+     *
+     * Command Response - The number of keys in the currently selected database.
+     */
+    public dbsize(): T {
+        return this.addAndReturn(createDBSize());
     }
 }
 

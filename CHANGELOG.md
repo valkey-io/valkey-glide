@@ -1,13 +1,16 @@
 #### Changes
+* Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
 * Node: Added SDIFFSTORE command ([#1931](https://github.com/valkey-io/valkey-glide/pull/1931))
+* Node: Added ZDIFF command ([#1972](https://github.com/valkey-io/valkey-glide/pull/1972))
 * Node: Added SINTERCARD command ([#1956](https://github.com/valkey-io/valkey-glide/pull/1956))
 * Node: Added SINTERSTORE command ([#1929](https://github.com/valkey-io/valkey-glide/pull/1929))
 * Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))
 * Node: Added SMISMEMBER command ([#1955](https://github.com/valkey-io/valkey-glide/pull/1955))
 * Node: Added SDIFF command ([#1924](https://github.com/valkey-io/valkey-glide/pull/1924))
 * Node: Added LOLWUT command ([#1934](https://github.com/valkey-io/valkey-glide/pull/1934))
+* Node: Added LPOS command ([#1927](https://github.com/valkey-io/valkey-glide/pull/1927))
 * Node: Added FUNCTION LOAD command ([#1969](https://github.com/valkey-io/valkey-glide/pull/1969))
 
 ## 1.0.0 (2024-07-09)
@@ -98,6 +101,8 @@
 * Python: Added FUNCTION STATS command ([#1794](https://github.com/valkey-io/valkey-glide/pull/1794))
 * Python: Added XINFO STREAM command ([#1816](https://github.com/valkey-io/valkey-glide/pull/1816))
 * Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/valkey-io/valkey-glide/pull/1814))
+* Node: Added FlushAll command ([#1958](https://github.com/valkey-io/valkey-glide/pull/1958))
+* Node: Added DBSize command ([#1932](https://github.com/valkey-io/valkey-glide/pull/1932))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

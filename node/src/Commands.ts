@@ -4,6 +4,7 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
+import { LPosOptions } from "./command-options/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
 
@@ -89,6 +90,13 @@ function createCommand(
  */
 export function createGet(key: string): command_request.Command {
     return createCommand(RequestType.Get, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createGetDel(key: string): command_request.Command {
+    return createCommand(RequestType.GetDel, [key]);
 }
 
 export type SetOptions = {
@@ -1028,6 +1036,25 @@ export function createZInterCard(
 /**
  * @internal
  */
+export function createZDiff(keys: string[]): command_request.Command {
+    const args: string[] = keys;
+    args.unshift(keys.length.toString());
+    return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
+export function createZDiffWithScores(keys: string[]): command_request.Command {
+    const args: string[] = keys;
+    args.unshift(keys.length.toString());
+    args.push("WITHSCORES");
+    return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
@@ -1468,6 +1495,18 @@ export function createTime(): command_request.Command {
 /**
  * @internal
  */
+export function createPublish(
+    message: string,
+    channel: string,
+    sharded: boolean = false,
+): command_request.Command {
+    const request = sharded ? RequestType.SPublish : RequestType.Publish;
+    return createCommand(request, [channel, message]);
+}
+
+/**
+ * @internal
+ */
 export function createBRPop(
     keys: string[],
     timeout: number,
@@ -1662,4 +1701,57 @@ export function createLolwut(options?: LolwutOptions): command_request.Command {
     }
 
     return createCommand(RequestType.Lolwut, args);
+}
+
+/**
+ * Defines flushing mode for:
+ *
+ * `FLUSHALL` command.
+ *
+ * See https://valkey.io/commands/flushall/ for details.
+ */
+export enum FlushMode {
+    /**
+     * Flushes synchronously.
+     *
+     * since Valkey 6.2 and above.
+     */
+    SYNC = "SYNC",
+    /** Flushes asynchronously. */
+    ASYNC = "ASYNC",
+}
+
+/**
+ * @internal
+ */
+export function createFlushAll(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushAll, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushAll, []);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createLPos(
+    key: string,
+    element: string,
+    options?: LPosOptions,
+): command_request.Command {
+    let args: string[] = [key, element];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    return createCommand(RequestType.LPos, args);
+}
+
+/**
+ * @internal
+ */
+export function createDBSize(): command_request.Command {
+    return createCommand(RequestType.DBSize, []);
 }

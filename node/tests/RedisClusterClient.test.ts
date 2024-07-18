@@ -13,6 +13,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 import {
+    ClusterClientConfiguration,
     ClusterTransaction,
     GlideClusterClient,
     InfoOptions,
@@ -51,7 +52,8 @@ describe("GlideClusterClient", () => {
             ? RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
-            : await RedisCluster.createCluster(true, 3, 0);
+            : // setting replicaCount to 1 to facilitate tests routed to replicas
+              await RedisCluster.createCluster(true, 3, 1);
     }, 20000);
 
     afterEach(async () => {
@@ -307,6 +309,8 @@ describe("GlideClusterClient", () => {
                 client.sintercard(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
+                client.zdiff(["abc", "zxy", "lkn"]),
+                client.zdiffWithScores(["abc", "zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
@@ -656,4 +660,60 @@ describe("GlideClusterClient", () => {
             );
         },
     );
+
+    it.each([
+        [true, ProtocolVersion.RESP3],
+        [false, ProtocolVersion.RESP3],
+    ])("simple pubsub test", async (sharded, protocol) => {
+        if (sharded && (await checkIfServerVersionLessThan("7.2.0"))) {
+            return;
+        }
+
+        const channel = "test-channel";
+        const shardedChannel = "test-channel-sharded";
+        const channelsAndPatterns: Partial<
+            Record<ClusterClientConfiguration.PubSubChannelModes, Set<string>>
+        > = {
+            [ClusterClientConfiguration.PubSubChannelModes.Exact]: new Set([
+                channel,
+            ]),
+        };
+
+        if (sharded) {
+            channelsAndPatterns[
+                ClusterClientConfiguration.PubSubChannelModes.Sharded
+            ] = new Set([shardedChannel]);
+        }
+
+        const config: ClusterClientConfiguration = getClientConfigurationOption(
+            cluster.getAddresses(),
+            protocol,
+        );
+        config.pubsubSubscriptions = {
+            channelsAndPatterns: channelsAndPatterns,
+        };
+        client = await GlideClusterClient.createClient(config);
+        const message = uuidv4();
+
+        await client.publish(message, channel);
+        const sleep = new Promise((resolve) => setTimeout(resolve, 1000));
+        await sleep;
+
+        let pubsubMsg = await client.getPubSubMessage();
+        expect(pubsubMsg.channel.toString()).toBe(channel);
+        expect(pubsubMsg.message.toString()).toBe(message);
+        expect(pubsubMsg.pattern).toBeNull();
+
+        if (sharded) {
+            await client.publish(message, shardedChannel, true);
+            await sleep;
+            pubsubMsg = await client.getPubSubMessage();
+            console.log(pubsubMsg);
+            expect(pubsubMsg.channel.toString()).toBe(shardedChannel);
+            expect(pubsubMsg.message.toString()).toBe(message);
+            expect(pubsubMsg.pattern).toBeNull();
+        }
+
+        client.close();
+    });
 });

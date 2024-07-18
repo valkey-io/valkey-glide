@@ -19,6 +19,7 @@ import {
     Transaction,
 } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
+import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 
 beforeAll(() => {
     Logger.init("info");
@@ -348,9 +349,18 @@ export async function transactionTest(
     const key13 = "{key}" + uuidv4();
     const key14 = "{key}" + uuidv4(); // sorted set
     const key15 = "{key}" + uuidv4(); // list
+    const key16 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
+    baseTransaction.flushall();
+    args.push("OK");
+    baseTransaction.dbsize();
+    args.push(0);
+    baseTransaction.set(key1, "bar");
+    args.push("OK");
+    baseTransaction.getdel(key1);
+    args.push("bar");
     baseTransaction.set(key1, "bar");
     args.push("OK");
     baseTransaction.objectEncoding(key1);
@@ -433,6 +443,22 @@ export async function transactionTest(
     args.push(0);
     baseTransaction.lpushx(key15, ["_"]);
     args.push(0);
+    baseTransaction.rpush(key16, [
+        field + "1",
+        field + "1",
+        field + "2",
+        field + "3",
+        field + "3",
+    ]);
+    args.push(5);
+    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
+    args.push(1);
+    baseTransaction.lpos(
+        key16,
+        field + "1",
+        new LPosOptions({ rank: 2, count: 0 }),
+    );
+    args.push([1]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -507,8 +533,16 @@ export async function transactionTest(
     args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     args.push(2);
-    baseTransaction.zadd(key13, { one: 1, two: 2, tree: 3.5 });
+    baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     args.push(3);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction.zdiff([key13, key12]);
+        args.push(["three"]);
+        baseTransaction.zdiffWithScores([key13, key12]);
+        args.push({ three: 3.5 });
+    }
+
     baseTransaction.zinterstore(key12, [key12, key13]);
     args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");

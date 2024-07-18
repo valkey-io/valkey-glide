@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
     ExpireOptions,
+    FlushMode,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
@@ -26,6 +27,8 @@ import {
     intoArray,
     intoString,
 } from "./TestUtilities";
+import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
+import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -505,6 +508,26 @@ export function runBaseTests<Context>(config: {
                         timeout: prevTimeout["timeout"],
                     }),
                 ).toEqual("OK");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getdel test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const value1 = uuidv4();
+                const key2 = uuidv4();
+
+                expect(await client.set(key1, value1)).toEqual("OK");
+                checkSimple(await client.getdel(key1)).toEqual(value1);
+                expect(await client.getdel(key1)).toEqual(null);
+
+                // key isn't a string
+                expect(await client.sadd(key2, ["a"])).toEqual(1);
+                await expect(client.getdel(key2)).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
@@ -2169,6 +2192,76 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zdiff test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const key3 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+
+                const entries1 = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                };
+                const entries2 = { two: 2.0 };
+                const entries3 = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                    four: 4.0,
+                };
+
+                expect(await client.zadd(key1, entries1)).toEqual(3);
+                expect(await client.zadd(key2, entries2)).toEqual(1);
+                expect(await client.zadd(key3, entries3)).toEqual(4);
+
+                checkSimple(await client.zdiff([key1, key2])).toEqual([
+                    "one",
+                    "three",
+                ]);
+                checkSimple(await client.zdiff([key1, key3])).toEqual([]);
+                checkSimple(await client.zdiff([nonExistingKey, key3])).toEqual(
+                    [],
+                );
+
+                let result = await client.zdiffWithScores([key1, key2]);
+                const expected = {
+                    one: 1.0,
+                    three: 3.0,
+                };
+                expect(compareMaps(result, expected)).toBe(true);
+
+                result = await client.zdiffWithScores([key1, key3]);
+                expect(compareMaps(result, {})).toBe(true);
+
+                result = await client.zdiffWithScores([nonExistingKey, key3]);
+                expect(compareMaps(result, {})).toBe(true);
+
+                // invalid arg - key list must not be empty
+                await expect(client.zdiff([])).rejects.toThrow(RequestError);
+                await expect(client.zdiffWithScores([])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a sorted set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(client.zdiff([stringKey, key1])).rejects.toThrow();
+                await expect(
+                    client.zdiffWithScores([stringKey, key1]),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -3811,6 +3904,208 @@ export function runBaseTests<Context>(config: {
                 expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
                     1,
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `flushall test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Test FLUSHALL SYNC
+                expect(await client.flushall(FlushMode.SYNC)).toBe("OK");
+
+                // TODO: replace with KEYS command when implemented
+                const keysAfter = (await client.customCommand([
+                    "keys",
+                    "*",
+                ])) as string[];
+                expect(keysAfter.length).toBe(0);
+
+                // Test various FLUSHALL calls
+                expect(await client.flushall()).toBe("OK");
+                expect(await client.flushall(FlushMode.ASYNC)).toBe("OK");
+
+                if (client instanceof GlideClusterClient) {
+                    const key = uuidv4();
+                    const primaryRoute: SingleNodeRoute = {
+                        type: "primarySlotKey",
+                        key: key,
+                    };
+                    expect(await client.flushall(undefined, primaryRoute)).toBe(
+                        "OK",
+                    );
+                    expect(
+                        await client.flushall(FlushMode.ASYNC, primaryRoute),
+                    ).toBe("OK");
+
+                    //Test FLUSHALL on replica (should fail)
+                    const key2 = uuidv4();
+                    const replicaRoute: SingleNodeRoute = {
+                        type: "replicaSlotKey",
+                        key: key2,
+                    };
+                    await expect(
+                        client.flushall(undefined, replicaRoute),
+                    ).rejects.toThrowError();
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lpos test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}:${uuidv4()}`;
+                const valueArray = ["a", "a", "b", "c", "a", "b"];
+                expect(await client.rpush(key, valueArray)).toEqual(6);
+
+                // simplest case
+                expect(await client.lpos(key, "a")).toEqual(0);
+                expect(
+                    await client.lpos(key, "b", new LPosOptions({ rank: 2 })),
+                ).toEqual(5);
+
+                // element doesn't exist
+                expect(await client.lpos(key, "e")).toBeNull();
+
+                // reverse traversal
+                expect(
+                    await client.lpos(key, "b", new LPosOptions({ rank: -2 })),
+                ).toEqual(2);
+
+                // unlimited comparisons
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 1, maxLength: 0 }),
+                    ),
+                ).toEqual(0);
+
+                // limited comparisons
+                expect(
+                    await client.lpos(
+                        key,
+                        "c",
+                        new LPosOptions({ rank: 1, maxLength: 2 }),
+                    ),
+                ).toBeNull();
+
+                // invalid rank value
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ rank: 0 })),
+                ).rejects.toThrow(RequestError);
+
+                // invalid maxlen value
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ maxLength: -1 })),
+                ).rejects.toThrow(RequestError);
+
+                // non-existent key
+                expect(await client.lpos("non-existent_key", "e")).toBeNull();
+
+                // wrong key data type
+                const wrongDataType = `{key}:${uuidv4()}`;
+                expect(await client.sadd(wrongDataType, ["a", "b"])).toEqual(2);
+
+                await expect(client.lpos(wrongDataType, "a")).rejects.toThrow(
+                    RequestError,
+                );
+
+                // invalid count value
+                await expect(
+                    client.lpos(key, "a", new LPosOptions({ count: -1 })),
+                ).rejects.toThrow(RequestError);
+
+                // with count
+                expect(
+                    await client.lpos(key, "a", new LPosOptions({ count: 2 })),
+                ).toEqual([0, 1]);
+                expect(
+                    await client.lpos(key, "a", new LPosOptions({ count: 0 })),
+                ).toEqual([0, 1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 1, count: 0 }),
+                    ),
+                ).toEqual([0, 1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 2, count: 0 }),
+                    ),
+                ).toEqual([1, 4]);
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: 3, count: 0 }),
+                    ),
+                ).toEqual([4]);
+
+                // reverse traversal
+                expect(
+                    await client.lpos(
+                        key,
+                        "a",
+                        new LPosOptions({ rank: -1, count: 0 }),
+                    ),
+                ).toEqual([4, 1, 0]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `dbsize test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // flush all data
+                expect(await client.flushall()).toBe("OK");
+
+                // check that DBSize is 0
+                expect(await client.dbsize()).toBe(0);
+
+                // set 10 random key-value pairs
+                for (let i = 0; i < 10; i++) {
+                    const key = `{key}:${uuidv4()}`;
+                    const value = "0".repeat(Math.random() * 7);
+
+                    expect(await client.set(key, value)).toBe("OK");
+                }
+
+                // check DBSIZE after setting
+                expect(await client.dbsize()).toBe(10);
+
+                // additional test for the standalone client
+                if (client instanceof GlideClient) {
+                    expect(await client.flushall()).toBe("OK");
+                    const key = uuidv4();
+                    expect(await client.set(key, "value")).toBe("OK");
+                    expect(await client.dbsize()).toBe(1);
+                    // switching to another db to check size
+                    expect(await client.select(1)).toBe("OK");
+                    expect(await client.dbsize()).toBe(0);
+                }
+
+                // additional test for the cluster client
+                if (client instanceof GlideClusterClient) {
+                    expect(await client.flushall()).toBe("OK");
+                    const key = uuidv4();
+                    expect(await client.set(key, "value")).toBe("OK");
+                    const primaryRoute: SingleNodeRoute = {
+                        type: "primarySlotKey",
+                        key: key,
+                    };
+                    expect(await client.dbsize(primaryRoute)).toBe(1);
+                }
             }, protocol);
         },
         config.timeout,

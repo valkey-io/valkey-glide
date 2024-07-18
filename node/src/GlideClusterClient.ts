@@ -3,8 +3,14 @@
  */
 
 import * as net from "net";
-import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
+    BaseClient,
+    BaseClientConfiguration,
+    PubSubMsg,
+    ReturnType,
+} from "./BaseClient";
+import {
+    FlushMode,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -14,11 +20,14 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createDBSize,
     createEcho,
     createFunctionLoad,
+    createFlushAll,
     createInfo,
     createLolwut,
     createPing,
+    createPublish,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -51,6 +60,49 @@ export type PeriodicChecks =
      * Manually configured interval for periodic checks.
      */
     | PeriodicChecksManualInterval;
+
+/* eslint-disable-next-line @typescript-eslint/no-namespace */
+export namespace ClusterClientConfiguration {
+    /**
+     * Enum representing pubsub subscription modes.
+     * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
+     */
+    export enum PubSubChannelModes {
+        /**
+         * Use exact channel names.
+         */
+        Exact = 0,
+
+        /**
+         * Use channel name patterns.
+         */
+        Pattern = 1,
+
+        /**
+         * Use sharded pubsub. Available since Valkey version 7.0.
+         */
+        Sharded = 2,
+    }
+
+    export type PubSubSubscriptions = {
+        /**
+         * Channels and patterns by modes.
+         */
+        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
+
+        /**
+         * Optional callback to accept the incoming messages.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        callback?: (msg: PubSubMsg, context: any) => void;
+
+        /**
+         * Arbitrary context to pass to the callback.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        context?: any;
+    };
+}
 export type ClusterClientConfiguration = BaseClientConfiguration & {
     /**
      * Configure the periodic topology checks.
@@ -59,6 +111,12 @@ export type ClusterClientConfiguration = BaseClientConfiguration & {
      * If not set, `enabledDefaultConfigs` will be used.
      */
     periodicChecks?: PeriodicChecks;
+
+    /**
+     * PubSub subscriptions to be used for the client.
+     * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
+     */
+    pubsubSubscriptions?: ClusterClientConfiguration.PubSubSubscriptions;
 };
 
 /**
@@ -233,6 +291,7 @@ export class GlideClusterClient extends BaseClient {
             }
         }
 
+        this.configurePubsub(options, configuration);
         return configuration;
     }
 
@@ -627,6 +686,84 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, replace),
             toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     *   case the client will route the command to the nodes defined by `route`.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushall(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFlushAll(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns the number of keys in the database.
+     *
+     * See https://valkey.io/commands/dbsize/ for more details.
+
+     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The number of keys in the database.
+     *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
+     *
+     * @example
+     * ```typescript
+     * const numKeys = await client.dbsize("allPrimaries");
+     * console.log("Number of keys across all primary nodes: ", numKeys);
+     * ```
+     */
+    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(createDBSize(), toProtobufRoute(route));
+    }
+
+    /** Publish a message on pubsub channel.
+     * This command aggregates PUBLISH and SPUBLISH commands functionalities.
+     * The mode is selected using the 'sharded' parameter.
+     * For both sharded and non-sharded mode, request is routed using hashed channel as key.
+     * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey version 7.0.
+     * @returns -  Number of subscriptions in primary node that received the message.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of publish command
+     * const result = await client.publish("Hi all!", "global-channel");
+     * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of spublish command
+     * const result = await client.publish("Hi all!", "global-channel", true);
+     * console.log(result); // Output: 2 - Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
+     * ```
+     */
+    public publish(
+        message: string,
+        channel: string,
+        sharded: boolean = false,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createPublish(message, channel, sharded),
         );
     }
 }
