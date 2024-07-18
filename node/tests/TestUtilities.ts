@@ -491,8 +491,16 @@ export async function transactionTest(
     args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     args.push(2);
-    baseTransaction.zadd(key13, { one: 1, two: 2, tree: 3.5 });
+    baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     args.push(3);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction.zdiff([key13, key12]);
+        args.push(["three"]);
+        baseTransaction.zdiffWithScores([key13, key12]);
+        args.push({ three: 3.5 });
+    }
+
     baseTransaction.zinterstore(key12, [key12, key13]);
     args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
