@@ -1028,6 +1028,25 @@ export function createZInterCard(
 /**
  * @internal
  */
+export function createZDiff(keys: string[]): command_request.Command {
+    const args: string[] = keys;
+    args.unshift(keys.length.toString());
+    return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
+export function createZDiffWithScores(keys: string[]): command_request.Command {
+    const args: string[] = keys;
+    args.unshift(keys.length.toString());
+    args.push("WITHSCORES");
+    return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
