@@ -22,14 +22,14 @@ public class StandaloneExample {
      *
      * @return A <code>GlideClient</code> connected to the provided node address.
      * @throws CancellationException if the operation is cancelled.
-     * @throws ExecutionException if the client creation fails due to execution errors.
+     * @throws ExecutionException if the client fails due to execution errors.
      * @throws InterruptedException if the operation is interrupted.
      */
     public static GlideClient createClient() throws CancellationException, ExecutionException, InterruptedException {
         String host = "localhost";
         Integer port = 6379;
 
-        // Check GlideClientConfiguration for additional options.
+        // Check <code>GlideClientConfiguration</code> for additional options.
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port).build())
@@ -82,7 +82,7 @@ public class StandaloneExample {
             } catch (InterruptedException e) {
                 Logger.log(Logger.Level.ERROR, "glide", "Client interrupted: " + e.getMessage());
                 Thread.currentThread().interrupt(); // Restore interrupt status
-                throw new CancellationException("Interrupted while creating client");
+                throw new CancellationException("Client was interrupted.");
             } catch (ExecutionException e) {
                 // All Glide errors will be handled as ExecutionException
                 if (e.getCause() instanceof ClosingException) {

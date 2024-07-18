@@ -26,7 +26,7 @@ public class ClusterExample {
      *
      * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
      * @throws CancellationException if the operation is cancelled.
-     * @throws ExecutionException if the client creation fails due to execution errors.
+     * @throws ExecutionException if the client fails due to execution errors.
      * @throws InterruptedException if the operation is interrupted.
      */
     public static GlideClusterClient createClient() throws CancellationException, ExecutionException, InterruptedException {
@@ -35,7 +35,7 @@ public class ClusterExample {
         // GLIDE is able to detect all cluster nodes and connect to them automatically
         // even if only one of them was configured
 
-        // Check GlideClusterClientConfiguration for additional options.
+        // Check <code>GlideClusterClientConfiguration</code> for additional options.
         GlideClusterClientConfiguration config =
                 GlideClusterClientConfiguration.builder()
                         .address(
@@ -101,7 +101,7 @@ public class ClusterExample {
             } catch (InterruptedException e) {
                 Logger.log(Logger.Level.ERROR, "glide", "Client interrupted: " + e.getMessage());
                 Thread.currentThread().interrupt(); // Restore interrupt status
-                throw new CancellationException("Interrupted while creating client");
+                throw new CancellationException("Client was interrupted.");
             } catch (ExecutionException e) {
                 // All Glide errors will be handled as ExecutionException
                 if (e.getCause() instanceof ClosingException) {
