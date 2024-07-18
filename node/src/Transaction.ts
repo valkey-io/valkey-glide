@@ -1503,8 +1503,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response -  A list containing the rank and score of `member` in the sorted set, where ranks
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
-     * 
-     * since - Redis version 7.2.0.
+     *
+     * since - Valkey version 7.2.0.
      */
     public zrevrankWithScore(key: string, member: string): T {
         return this.addAndReturn(createZRevRankWithScore(key, member));
