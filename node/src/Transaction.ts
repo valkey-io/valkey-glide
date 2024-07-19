@@ -3,6 +3,8 @@
  */
 
 import { LPosOptions } from "./commands/LPosOptions";
+import { ListDirection } from "./commands/ListDirection";
+
 import {
     AggregationType,
     ExpireOptions,

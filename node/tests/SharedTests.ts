@@ -29,6 +29,7 @@ import {
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
 import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";

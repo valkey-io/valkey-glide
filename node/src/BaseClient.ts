@@ -11,6 +11,8 @@ import {
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import { LPosOptions } from "./commands/LPosOptions";
+import { ListDirection } from "./commands/ListDirection";
+
 import {
     AggregationType,
     ExpireOptions,
