@@ -451,7 +451,7 @@ export function createSetBit(
     value: number,
 ): command_request.Command {
     return createCommand(RequestType.SetBit, [
-        key.toString(),
+        key,
         offset.toString(),
         value.toString(),
     ]);
