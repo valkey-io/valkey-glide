@@ -563,6 +563,23 @@ export function createLSet(
 /**
  * @internal
  */
+export function createLMove(
+    source: string,
+    destination: string,
+    where_from: ListDirection,
+    where_to: ListDirection
+): command_request.Command {
+    return createCommand(RequestType.LMove, [
+        source,
+        destination,
+        ListDirection[where_from],
+        ListDirection[where_to]
+    ]);
+}
+
+/**
+ * @internal
+ */
 export function createLTrim(
     key: string,
     start: number,
