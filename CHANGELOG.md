@@ -104,6 +104,7 @@
 * Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/valkey-io/valkey-glide/pull/1814))
 * Node: Added FlushAll command ([#1958](https://github.com/valkey-io/valkey-glide/pull/1958))
 * Node: Added DBSize command ([#1932](https://github.com/valkey-io/valkey-glide/pull/1932))
+* Node: Added GeoAdd command ([#1980](https://github.com/valkey-io/valkey-glide/pull/1980))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))
