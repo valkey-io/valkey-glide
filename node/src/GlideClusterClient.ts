@@ -22,6 +22,7 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
+    createFunctionLoad,
     createFlushAll,
     createInfo,
     createLolwut,
@@ -651,6 +652,38 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(
             createLolwut(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * See https://valkey.io/commands/function-load/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The source code that implements the library.
+     * @param replace - Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The library name that was loaded.
+     *
+     * @example
+     * ```typescript
+     * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
+     * const result = await client.functionLoad(code, true, 'allNodes');
+     * console.log(result); // Output: 'mylib'
+     * ```
+     */
+    public functionLoad(
+        libraryCode: string,
+        replace?: boolean,
+        route?: Routes,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionLoad(libraryCode, replace),
             toProtobufRoute(route),
         );
     }

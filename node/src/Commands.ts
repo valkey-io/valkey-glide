@@ -1530,6 +1530,17 @@ export function createBLPop(
 /**
  * @internal
  */
+export function createFunctionLoad(
+    libraryCode: string,
+    replace?: boolean,
+): command_request.Command {
+    const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
+    return createCommand(RequestType.FunctionLoad, args);
+}
+
+/**
+ * @internal
+ */
 export function createBitCount(
     key: string,
     options?: BitOffsetOptions,
