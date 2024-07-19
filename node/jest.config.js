@@ -16,11 +16,14 @@ module.exports = {
     testTimeout: 20000,
     reporters: [
         "default",
-        ["./node_modules/jest-html-reporter", {
-            includeFailureMsg: true,
-            includeSuiteFailure: true,
-            executionTimeWarningThreshold: 60,
-            sort: "status"
-        }]
-    ]
+        [
+            "./node_modules/jest-html-reporter",
+            {
+                includeFailureMsg: true,
+                includeSuiteFailure: true,
+                executionTimeWarningThreshold: 60,
+                sort: "status",
+            },
+        ],
+    ],
 };
