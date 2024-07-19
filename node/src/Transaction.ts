@@ -8,7 +8,6 @@ import { ListDirection } from "./commands/ListDirection";
 import {
     AggregationType,
     ExpireOptions,
-    FlushMode,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -40,6 +39,9 @@ import {
     createExpire,
     createExpireAt,
     createFlushAll,
+    createFlushDB,
+    createFunctionLoad,
+    createGeoAdd,
     createGet,
     createGetDel,
     createHDel,
@@ -92,13 +94,12 @@ import {
     createSCard,
     createSDiff,
     createSDiffStore,
-    createSetBit,
     createSInter,
     createSInterCard,
     createSInterStore,
     createSIsMember,
-    createSMembers,
     createSMIsMember,
+    createSMembers,
     createSMove,
     createSPop,
     createSRem,
@@ -106,6 +107,7 @@ import {
     createSUnionStore,
     createSelect,
     createSet,
+    createSetBit,
     createStrlen,
     createTTL,
     createTime,
@@ -132,12 +134,12 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createGeoAdd,
     createZRevRank,
     createZRevRankWithScore,
-    createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
+import { FlushMode } from "./commands/FlushMode";
+import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
@@ -1870,10 +1872,24 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/flushall/ for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     *
      * Command Response - `OK`.
      */
     public flushall(mode?: FlushMode): T {
         return this.addAndReturn(createFlushAll(mode));
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     *
+     * Command Response - `OK`.
+     */
+    public flushdb(mode?: FlushMode): T {
+        return this.addAndReturn(createFlushDB(mode));
     }
 
     /**

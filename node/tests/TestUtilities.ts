@@ -22,6 +22,7 @@ import { checkIfServerVersionLessThan } from "./SharedTests";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 
 beforeAll(() => {
     Logger.init("info");
@@ -359,6 +360,12 @@ export async function transactionTest(
     const value = uuidv4();
     const args: ReturnType[] = [];
     baseTransaction.flushall();
+    args.push("OK");
+    baseTransaction.flushall(FlushMode.SYNC);
+    args.push("OK");
+    baseTransaction.flushdb();
+    args.push("OK");
+    baseTransaction.flushdb(FlushMode.SYNC);
     args.push("OK");
     baseTransaction.dbsize();
     args.push(0);

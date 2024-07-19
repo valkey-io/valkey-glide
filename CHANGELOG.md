@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
 * Node: Added SETBIT command ([#1978](https://github.com/valkey-io/valkey-glide/pull/1978))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))

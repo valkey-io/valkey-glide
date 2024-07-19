@@ -8,7 +8,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
     ExpireOptions,
-    FlushMode,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
@@ -33,6 +32,7 @@ import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
 import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
