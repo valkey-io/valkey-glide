@@ -11,6 +11,7 @@
 * Node: Added SDIFF command ([#1924](https://github.com/valkey-io/valkey-glide/pull/1924))
 * Node: Added LOLWUT command ([#1934](https://github.com/valkey-io/valkey-glide/pull/1934))
 * Node: Added LPOS command ([#1927](https://github.com/valkey-io/valkey-glide/pull/1927))
+* Node: Added FUNCTION LOAD command ([#1969](https://github.com/valkey-io/valkey-glide/pull/1969))
 
 ## 1.0.0 (2024-07-09)
 
