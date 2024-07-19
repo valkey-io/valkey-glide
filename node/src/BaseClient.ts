@@ -33,6 +33,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createGeoAdd,
     createGet,
     createGetDel,
     createHDel,
@@ -136,6 +137,8 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -3228,6 +3231,37 @@ export class BaseClient {
         options?: LPosOptions,
     ): Promise<number | number[] | null> {
         return this.createWritePromise(createLPos(key, element, options));
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its position is updated.
+     *
+     * See https://valkey.io/commands/geoadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersToGeospatialData - A mapping of member names to their corresponding positions - see
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @param options - The GeoAdd options - see {@link GeoAddOptions}.
+     * @returns The number of elements added to the sorted set. If `changed` is set to
+     *    `true` in the options, returns the number of elements updated in the sorted set.
+     *
+     * @example
+     * ```typescript
+     * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
+     * const num = await client.geoadd("mySortedSet", {"Palermo", new GeospatialData(13.361389, 38.115556)}, options);
+     * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
+     * ```
+     */
+    public geoadd(
+        key: string,
+        membersToGeospatialData: Map<string, GeospatialData>,
+        options?: GeoAddOptions,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createGeoAdd(key, membersToGeospatialData, options),
+        );
     }
 
     /**

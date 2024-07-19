@@ -128,9 +128,12 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createGeoAdd,
     createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -1815,6 +1818,31 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public dbsize(): T {
         return this.addAndReturn(createDBSize());
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its position is updated.
+     *
+     * See https://valkey.io/commands/geoadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersToGeospatialData - A mapping of member names to their corresponding positions - see
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @param options - The GeoAdd options - see {@link GeoAddOptions}.
+     *
+     * Command Response - The number of elements added to the sorted set. If `changed` is set to
+     *    `true` in the options, returns the number of elements updated in the sorted set.
+     */
+    public geoadd(
+        key: string,
+        membersToGeospatialData: Map<string, GeospatialData>,
+        options?: GeoAddOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoAdd(key, membersToGeospatialData, options),
+        );
     }
 }
 
