@@ -10,7 +10,6 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
-    FlushMode,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -22,14 +21,16 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
-    createFunctionLoad,
     createFlushAll,
+    createFlushDB,
+    createFunctionLoad,
     createInfo,
     createLolwut,
     createPing,
     createPublish,
     createTime,
 } from "./Commands";
+import { FlushMode } from "./commands/FlushMode";
 import { RequestError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
@@ -694,8 +695,8 @@ export class GlideClusterClient extends BaseClient {
      * See https://valkey.io/commands/flushall/ for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns `OK`.
      *
      * @example
@@ -707,6 +708,29 @@ export class GlideClusterClient extends BaseClient {
     public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
         return this.createWritePromise(
             createFlushAll(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushdb(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFlushDB(mode),
             toProtobufRoute(route),
         );
     }
