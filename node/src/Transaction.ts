@@ -130,6 +130,8 @@ import {
     createZRemRangeByScore,
     createZScore,
     createGeoAdd,
+    createZRevRank,
+    createZRevRankWithScore,
     createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -1491,6 +1493,42 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zrankWithScore(key: string, member: string): T {
         return this.addAndReturn(createZRank(key, member, true));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key`, where
+     * scores are ordered from the highest to lowest, starting from 0.
+     * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     *
+     * Command Response - The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     */
+    public zrevrank(key: string, member: string): T {
+        return this.addAndReturn(createZRevRank(key, member));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key` with its
+     * score, where scores are ordered from the highest to lowest, starting from 0.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     *
+     * Command Response -  A list containing the rank and score of `member` in the sorted set, where ranks
+     *     are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * since - Valkey version 7.2.0.
+     */
+    public zrevrankWithScore(key: string, member: string): T {
+        return this.addAndReturn(createZRevRankWithScore(key, member));
     }
 
     /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to

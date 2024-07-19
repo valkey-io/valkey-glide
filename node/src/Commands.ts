@@ -1802,3 +1802,23 @@ export function createGeoAdd(
 
     return createCommand(RequestType.GeoAdd, args);
 }
+
+/**
+ * @internal
+ */
+export function createZRevRank(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRankWithScore(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
+}

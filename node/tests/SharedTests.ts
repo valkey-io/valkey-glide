@@ -3121,6 +3121,50 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrevrank test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonSetKey = uuidv4();
+                const membersScores = { one: 1.5, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zrevrank(key, "three")).toEqual(0);
+
+                if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+                    expect(await client.zrevrankWithScore(key, "one")).toEqual([
+                        2, 1.5,
+                    ]);
+                    expect(
+                        await client.zrevrankWithScore(
+                            key,
+                            "nonExistingMember",
+                        ),
+                    ).toBeNull();
+                    expect(
+                        await client.zrevrankWithScore(
+                            "nonExistingKey",
+                            "member",
+                        ),
+                    ).toBeNull();
+                }
+
+                expect(
+                    await client.zrevrank(key, "nonExistingMember"),
+                ).toBeNull();
+                expect(
+                    await client.zrevrank("nonExistingKey", "member"),
+                ).toBeNull();
+
+                // Key exists, but is not a sorted set
+                checkSimple(await client.set(nonSetKey, "value")).toEqual("OK");
+                await expect(
+                    client.zrevrank(nonSetKey, "member"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `test brpop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
