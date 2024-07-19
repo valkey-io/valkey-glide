@@ -540,7 +540,7 @@ describe("GlideClusterClient", () => {
 
             checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            checkSimple(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
             checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");

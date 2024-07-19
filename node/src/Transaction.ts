@@ -2,7 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { LPosOptions } from "./commands/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
@@ -39,6 +38,7 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionLoad,
+    createGeoAdd,
     createGet,
     createGetDel,
     createHDel,
@@ -90,7 +90,6 @@ import {
     createSCard,
     createSDiff,
     createSDiffStore,
-    createSetBit,
     createSInter,
     createSInterCard,
     createSInterStore,
@@ -104,6 +103,7 @@ import {
     createSUnionStore,
     createSelect,
     createSet,
+    createSetBit,
     createStrlen,
     createTTL,
     createTime,
@@ -129,12 +129,12 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createGeoAdd,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
+import { FlushMode } from "./commands/FlushMode";
+import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
-import { FlushMode } from "./commands/FlushMode";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -1784,6 +1784,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/flushall/ for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     *
      * Command Response - `OK`.
      */
     public flushall(mode?: FlushMode): T {
@@ -1796,6 +1797,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/flushdb/ for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     *
      * Command Response - `OK`.
      */
     public flushdb(mode?: FlushMode): T {
