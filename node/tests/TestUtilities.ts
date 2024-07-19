@@ -554,6 +554,8 @@ export async function transactionTest(
         args.push({ three: 3.5 });
         baseTransaction.zdiffstore(key13, [key13, key13]);
         args.push(0);
+        baseTransaction.zmscore(key13, ["three", "one"]);
+        args.push([3.5, 1.0]);
     }
 
     baseTransaction.zinterstore(key12, [key12, key13]);

@@ -120,6 +120,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMScore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -1256,6 +1257,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zscore(key: string, member: string): T {
         return this.addAndReturn(createZScore(key, member));
+    }
+
+    /**
+     * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zmscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members in the sorted set.
+     *
+     * Command Response - An `array` of scores corresponding to `members`.
+     * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zmscore(key: string, members: string[]): T {
+        return this.addAndReturn(createZMScore(key, members));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
