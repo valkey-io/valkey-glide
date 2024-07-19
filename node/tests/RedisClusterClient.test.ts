@@ -35,6 +35,7 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 type Context = {
     client: GlideClusterClient;
 };
@@ -521,6 +522,34 @@ describe("GlideClusterClient", () => {
             client.close();
         },
         TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "flushdb flushall dbsize test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            expect(await client.dbsize()).toBeGreaterThanOrEqual(0);
+            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.dbsize()).toBeGreaterThan(0);
+
+            checkSimple(await client.flushall()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.dbsize()).toEqual(1);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.dbsize()).toEqual(1);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            client.close();
+        },
     );
 
     describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(

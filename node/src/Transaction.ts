@@ -6,7 +6,6 @@ import { LPosOptions } from "./commands/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
-    FlushMode,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -38,6 +37,8 @@ import {
     createExpire,
     createExpireAt,
     createFlushAll,
+    createFlushDB,
+    createFunctionLoad,
     createGet,
     createGetDel,
     createHDel,
@@ -94,8 +95,8 @@ import {
     createSInterCard,
     createSInterStore,
     createSIsMember,
-    createSMembers,
     createSMIsMember,
+    createSMembers,
     createSMove,
     createSPop,
     createSRem,
@@ -129,11 +130,11 @@ import {
     createZRemRangeByScore,
     createZScore,
     createGeoAdd,
-    createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { FlushMode } from "./commands/FlushMode";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -1787,6 +1788,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public flushall(mode?: FlushMode): T {
         return this.addAndReturn(createFlushAll(mode));
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `OK`.
+     */
+    public flushdb(mode?: FlushMode): T {
+        return this.addAndReturn(createFlushDB(mode));
     }
 
     /**
