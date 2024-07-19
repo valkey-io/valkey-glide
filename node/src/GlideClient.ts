@@ -22,6 +22,7 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
+    createFunctionLoad,
     createFlushAll,
     createInfo,
     createLolwut,
@@ -358,7 +359,7 @@ export class GlideClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of time method without any argument
+     * // Example usage of time command
      * const result = await client.time();
      * console.log(result); // Output: ['1710925775', '913580']
      * ```
@@ -383,6 +384,34 @@ export class GlideClient extends BaseClient {
      */
     public lolwut(options?: LolwutOptions): Promise<string> {
         return this.createWritePromise(createLolwut(options));
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * See https://valkey.io/commands/function-load/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The source code that implements the library.
+     * @param replace - Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * @returns The library name that was loaded.
+     *
+     * @example
+     * ```typescript
+     * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
+     * const result = await client.functionLoad(code, true);
+     * console.log(result); // Output: 'mylib'
+     * ```
+     */
+    public functionLoad(
+        libraryCode: string,
+        replace?: boolean,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionLoad(libraryCode, replace),
+        );
     }
 
     /**
