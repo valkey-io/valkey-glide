@@ -38,6 +38,8 @@ import {
     createExpire,
     createExpireAt,
     createFlushAll,
+    createFunctionFlush,
+    createFunctionLoad,
     createGet,
     createGetDel,
     createHDel,
@@ -93,8 +95,8 @@ import {
     createSInterCard,
     createSInterStore,
     createSIsMember,
-    createSMembers,
     createSMIsMember,
+    createSMembers,
     createSMove,
     createSPop,
     createSRem,
@@ -127,7 +129,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1753,6 +1754,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public functionLoad(libraryCode: string, replace?: boolean): T {
         return this.addAndReturn(createFunctionLoad(libraryCode, replace));
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `OK`.
+     */
+    public functionFlush(mode?: FlushMode): T {
+        return this.addAndReturn(createFunctionFlush(mode));
     }
 
     /**

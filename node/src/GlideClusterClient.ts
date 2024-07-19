@@ -22,8 +22,9 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
-    createFunctionLoad,
     createFlushAll,
+    createFunctionFlush,
+    createFunctionLoad,
     createInfo,
     createLolwut,
     createPing,
@@ -686,6 +687,38 @@ export class GlideClusterClient extends BaseClient {
             createFunctionLoad(libraryCode, replace),
             toProtobufRoute(route),
         );
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     *   case the client will route the command to the nodes defined by `route`.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
+        if (mode) {
+            return this.createWritePromise(
+                createFunctionFlush(mode),
+                toProtobufRoute(route),
+            );
+        } else {
+            return this.createWritePromise(
+                createFunctionFlush(),
+                toProtobufRoute(route),
+            );
+        }
     }
 
     /**

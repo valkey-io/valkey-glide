@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClusterClientConfiguration,
     ClusterTransaction,
+    FlushMode,
     GlideClusterClient,
     InfoOptions,
     ProtocolVersion,
@@ -651,6 +652,115 @@ describe("GlideClusterClient", () => {
                                         "FLUSH",
                                     ]),
                                 ).toEqual("OK");
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
+        },
+    );
+
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([true, false])(
+                "Single node route = %s",
+                (singleNodeRoute) => {
+                    it(
+                        "function flush",
+                        async () => {
+                            if (await checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
+
+                            try {
+                                const libName =
+                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                const funcName =
+                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                const code = generateLuaLibCode(
+                                    libName,
+                                    new Map([[funcName, "return args[1]"]]),
+                                    true,
+                                );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not yet exist
+                                const functionList1 =
+                                    await client.customCommand([
+                                        "FUNCTION",
+                                        "LIST",
+                                        "LIBRARYNAME",
+                                        libName,
+                                    ]);
+                                checkClusterResponse(
+                                    functionList1 as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+
+                                // load the library
+                                checkSimple(
+                                    await client.functionLoad(
+                                        code,
+                                        undefined,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+
+                                // flush functions
+                                expect(
+                                    await client.functionFlush(
+                                        FlushMode.SYNC,
+                                        route,
+                                    ),
+                                ).toEqual("OK");
+                                expect(
+                                    await client.functionFlush(
+                                        FlushMode.ASYNC,
+                                        route,
+                                    ),
+                                ).toEqual("OK");
+
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not exist
+                                const functionList2 =
+                                    await client.customCommand([
+                                        "FUNCTION",
+                                        "LIST",
+                                        "LIBRARYNAME",
+                                        libName,
+                                    ]);
+                                checkClusterResponse(
+                                    functionList2 as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+
+                                // Attempt to re-load library without overwriting to ensure FLUSH was effective
+                                checkSimple(
+                                    await client.functionLoad(
+                                        code,
+                                        undefined,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+                            } finally {
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
                                 client.close();
                             }
                         },

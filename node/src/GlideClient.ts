@@ -22,8 +22,9 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
-    createFunctionLoad,
     createFlushAll,
+    createFunctionFlush,
+    createFunctionLoad,
     createInfo,
     createLolwut,
     createPing,
@@ -412,6 +413,30 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, replace),
         );
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionFlush(mode?: FlushMode): Promise<string> {
+        if (mode) {
+            return this.createWritePromise(createFunctionFlush(mode));
+        } else {
+            return this.createWritePromise(createFunctionFlush());
+        }
     }
 
     /**
