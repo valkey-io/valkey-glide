@@ -127,6 +127,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1735,6 +1736,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * See https://valkey.io/commands/function-load/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The source code that implements the library.
+     * @param replace - Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     *
+     * Command Response - The library name that was loaded.
+     */
+    public functionLoad(libraryCode: string, replace?: boolean): T {
+        return this.addAndReturn(createFunctionLoad(libraryCode, replace));
     }
 
     /**

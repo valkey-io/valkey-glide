@@ -21,11 +21,12 @@ import {
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { command_request } from "../src/ProtobufMessage";
-import { runBaseTests } from "./SharedTests";
+import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
     checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
+    generateLuaLibCode,
     getClientConfigurationOption,
     intoString,
     parseCommandLineArgs,
@@ -359,6 +360,108 @@ describe("GlideClient", () => {
             client.close();
         },
         TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function load test_%p",
+        async (protocol) => {
+            if (await checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                checkSimple(
+                    await client.customCommand([
+                        "FCALL",
+                        funcName,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual("one");
+                checkSimple(
+                    await client.customCommand([
+                        "FCALL_RO",
+                        funcName,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual("one");
+
+                // TODO verify with FUNCTION LIST
+                // re-load library without replace
+
+                await expect(client.functionLoad(code)).rejects.toThrow(
+                    `Library '${libName}' already exists`,
+                );
+
+                // re-load library with replace
+                checkSimple(await client.functionLoad(code, true)).toEqual(
+                    libName,
+                );
+
+                // overwrite lib with new code
+                const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
+                const newCode = generateLuaLibCode(
+                    libName,
+                    new Map([
+                        [funcName, "return args[1]"],
+                        [func2Name, "return #args"],
+                    ]),
+                    true,
+                );
+                checkSimple(await client.functionLoad(newCode, true)).toEqual(
+                    libName,
+                );
+
+                expect(
+                    await client.customCommand([
+                        "FCALL",
+                        func2Name,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual(2);
+                expect(
+                    await client.customCommand([
+                        "FCALL_RO",
+                        func2Name,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual(2);
+            } finally {
+                expect(
+                    await client.customCommand(["FUNCTION", "FLUSH"]),
+                ).toEqual("OK");
+                client.close();
+            }
+        },
     );
 
     it.each([ProtocolVersion.RESP3])("simple pubsub test", async (protocol) => {
