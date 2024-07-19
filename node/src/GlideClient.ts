@@ -10,7 +10,6 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
-    FlushMode,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -22,8 +21,9 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
-    createFunctionLoad,
     createFlushAll,
+    createFlushDB,
+    createFunctionLoad,
     createInfo,
     createLolwut,
     createPing,
@@ -33,6 +33,7 @@ import {
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
+import { FlushMode } from "./commands/FlushMode";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {
@@ -416,7 +417,6 @@ export class GlideClient extends BaseClient {
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
-     * The command will be routed to all primary nodes.
      *
      * See https://valkey.io/commands/flushall/ for more details.
      *
@@ -430,11 +430,25 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public flushall(mode?: FlushMode): Promise<string> {
-        if (mode) {
-            return this.createWritePromise(createFlushAll(mode));
-        } else {
-            return this.createWritePromise(createFlushAll());
-        }
+        return this.createWritePromise(createFlushAll(mode));
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushdb(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushdb(mode?: FlushMode): Promise<string> {
+        return this.createWritePromise(createFlushDB(mode));
     }
 
     /**
