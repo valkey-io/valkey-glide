@@ -1073,6 +1073,17 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createZDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    const args: string[] = [destination, keys.length.toString(), ...keys];
+    return createCommand(RequestType.ZDiffStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
@@ -1784,4 +1795,24 @@ export function createGeoAdd(
     });
 
     return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRank(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRankWithScore(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
 }

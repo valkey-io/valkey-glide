@@ -2295,6 +2295,86 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zdiffstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const key3 = `{key}-${uuidv4()}`;
+                const key4 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+
+                const entries1 = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                };
+                const entries2 = { two: 2.0 };
+                const entries3 = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                    four: 4.0,
+                };
+
+                expect(await client.zadd(key1, entries1)).toEqual(3);
+                expect(await client.zadd(key2, entries2)).toEqual(1);
+                expect(await client.zadd(key3, entries3)).toEqual(4);
+
+                expect(await client.zdiffstore(key4, [key1, key2])).toEqual(2);
+                const result1 = await client.zrangeWithScores(key4, {
+                    start: 0,
+                    stop: -1,
+                });
+                const expected1 = { one: 1.0, three: 3.0 };
+                expect(compareMaps(result1, expected1)).toBe(true);
+
+                expect(
+                    await client.zdiffstore(key4, [key3, key2, key1]),
+                ).toEqual(1);
+                const result2 = await client.zrangeWithScores(key4, {
+                    start: 0,
+                    stop: -1,
+                });
+                expect(compareMaps(result2, { four: 4.0 })).toBe(true);
+
+                expect(await client.zdiffstore(key4, [key1, key3])).toEqual(0);
+                const result3 = await client.zrangeWithScores(key4, {
+                    start: 0,
+                    stop: -1,
+                });
+                expect(compareMaps(result3, {})).toBe(true);
+
+                expect(
+                    await client.zdiffstore(key4, [nonExistingKey, key1]),
+                ).toEqual(0);
+                const result4 = await client.zrangeWithScores(key4, {
+                    start: 0,
+                    stop: -1,
+                });
+                expect(compareMaps(result4, {})).toBe(true);
+
+                // invalid arg - key list must not be empty
+                await expect(client.zdiffstore(key4, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a sorted set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.zdiffstore(key4, [stringKey, key1]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -3036,6 +3116,50 @@ export function runBaseTests<Context>(config: {
 
                 checkSimple(await client.set(key2, "value")).toEqual("OK");
                 await expect(client.zrank(key2, "member")).rejects.toThrow();
+            }, protocol);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrevrank test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonSetKey = uuidv4();
+                const membersScores = { one: 1.5, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+                expect(await client.zrevrank(key, "three")).toEqual(0);
+
+                if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+                    expect(await client.zrevrankWithScore(key, "one")).toEqual([
+                        2, 1.5,
+                    ]);
+                    expect(
+                        await client.zrevrankWithScore(
+                            key,
+                            "nonExistingMember",
+                        ),
+                    ).toBeNull();
+                    expect(
+                        await client.zrevrankWithScore(
+                            "nonExistingKey",
+                            "member",
+                        ),
+                    ).toBeNull();
+                }
+
+                expect(
+                    await client.zrevrank(key, "nonExistingMember"),
+                ).toBeNull();
+                expect(
+                    await client.zrevrank("nonExistingKey", "member"),
+                ).toBeNull();
+
+                // Key exists, but is not a sorted set
+                checkSimple(await client.set(nonSetKey, "value")).toEqual("OK");
+                await expect(
+                    client.zrevrank(nonSetKey, "member"),
+                ).rejects.toThrow();
             }, protocol);
         },
     );

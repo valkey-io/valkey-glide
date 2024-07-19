@@ -529,6 +529,14 @@ export async function transactionTest(
         args.push([0, 1]);
     }
 
+    baseTransaction.zrevrank(key8, "member5");
+    args.push(0);
+
+    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+        baseTransaction.zrevrankWithScore(key8, "member5");
+        args.push([0, 5]);
+    }
+
     baseTransaction.zaddIncr(key8, "member2", 1);
     args.push(3);
     baseTransaction.zrem(key8, ["member1"]);
@@ -551,6 +559,8 @@ export async function transactionTest(
         args.push(["three"]);
         baseTransaction.zdiffWithScores([key13, key12]);
         args.push({ three: 3.5 });
+        baseTransaction.zdiffstore(key13, [key13, key13]);
+        args.push(0);
     }
 
     baseTransaction.zinterstore(key12, [key12, key13]);

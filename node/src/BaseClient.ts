@@ -107,6 +107,7 @@ import {
     createZCard,
     createZCount,
     createZDiff,
+    createZDiffStore,
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
@@ -118,6 +119,8 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
+    createZRevRank,
+    createZRevRankWithScore,
     createZScore,
 } from "./Commands";
 import {
@@ -2378,6 +2381,35 @@ export class BaseClient {
         return this.createWritePromise(createZDiffWithScores(keys));
     }
 
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets in `keys` and stores
+     * the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
+     * treated as empty sets.
+     *
+     * See https://valkey.io/commands/zdiffstore/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+     * @param destination - The key for the resulting sorted set.
+     * @param keys - The keys of the sorted sets to compare.
+     * @returns The number of members in the resulting sorted set stored at `destination`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
+     * await client.zadd("zset2", {"member1": 1.0});
+     * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
+     * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
+     *
+     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
+     * ```
+     */
+    public zdiffstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createZDiffStore(destination, keys));
+    }
+
     /** Returns the score of `member` in the sorted set stored at `key`.
      * See https://valkey.io/commands/zscore/ for more details.
      *
@@ -2830,6 +2862,55 @@ export class BaseClient {
         member: string,
     ): Promise<number[] | null> {
         return this.createWritePromise(createZRank(key, member, true));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key`, where
+     * scores are ordered from the highest to lowest, starting from 0.
+     * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevrank("my_sorted_set", "member2");
+     * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
+     * ```
+     */
+    public zrevrank(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZRevRank(key, member));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key` with its
+     * score, where scores are ordered from the highest to lowest, starting from 0.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns A list containing the rank and score of `member` in the sorted set, where ranks
+     *     are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * since - Valkey version 7.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevankWithScore("my_sorted_set", "member2");
+     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
+     * ```
+     */
+    public zrevrankWithScore(
+        key: string,
+        member: string,
+    ): Promise<(number[] | null)[]> {
+        return this.createWritePromise(createZRevRankWithScore(key, member));
     }
 
     /**
