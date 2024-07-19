@@ -10,7 +10,7 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { LPosOptions } from "./command-options/LPosOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,

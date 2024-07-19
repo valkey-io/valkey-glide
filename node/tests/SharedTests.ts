@@ -28,7 +28,7 @@ import {
     intoString,
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
