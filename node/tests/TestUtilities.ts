@@ -10,6 +10,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    FlushMode,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
@@ -18,8 +19,8 @@ import {
     ReturnType,
     Transaction,
 } from "..";
-import { checkIfServerVersionLessThan } from "./SharedTests";
 import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
+import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");
@@ -622,6 +623,12 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.functionFlush();
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.ASYNC);
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.SYNC);
+        args.push("OK");
     }
 
     return args;
