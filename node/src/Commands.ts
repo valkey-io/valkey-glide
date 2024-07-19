@@ -1059,8 +1059,7 @@ export function createZDiffStore(
     destination: string,
     keys: string[],
 ): command_request.Command {
-    let args: string[] = [destination, keys.length.toString()];
-    args = args.concat(keys);
+    const args: string[] = [destination, keys.length.toString(), ...keys];
     return createCommand(RequestType.ZDiffStore, args);
 }
 
