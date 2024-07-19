@@ -119,6 +119,7 @@ import {
     createZCard,
     createZCount,
     createZDiff,
+    createZDiffStore,
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
@@ -1251,6 +1252,24 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zdiffWithScores(keys: string[]): T {
         return this.addAndReturn(createZDiffWithScores(keys));
+    }
+
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets in `keys` and stores
+     * the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
+     * treated as empty sets.
+     *
+     * See https://valkey.io/commands/zdiffstore/ for more details.
+     *
+     * @param destination - The key for the resulting sorted set.
+     * @param keys - The keys of the sorted sets to compare.
+     *
+     * Command Response - The number of members in the resulting sorted set stored at `destination`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zdiffstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createZDiffStore(destination, keys));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
