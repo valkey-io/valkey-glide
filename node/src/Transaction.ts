@@ -130,10 +130,8 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createGeoAdd,
     createZRevRank,
     createZRevRankWithScore,
-    createFunctionLoad,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { FlushMode } from "./commands/FlushMode";
