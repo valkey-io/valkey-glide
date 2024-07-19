@@ -8,6 +8,8 @@ import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 import RequestType = command_request.RequestType;
 
@@ -441,6 +443,21 @@ export function createDecrBy(
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createSetBit(
+    key: string,
+    offset: number,
+    value: number,
+): command_request.Command {
+    return createCommand(RequestType.SetBit, [
+        key,
+        offset.toString(),
+        value.toString(),
+    ]);
 }
 
 /**
@@ -1051,6 +1068,17 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
     args.unshift(keys.length.toString());
     args.push("WITHSCORES");
     return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
+export function createZDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    const args: string[] = [destination, keys.length.toString(), ...keys];
+    return createCommand(RequestType.ZDiffStore, args);
 }
 
 /**
@@ -1764,4 +1792,46 @@ export function createLPos(
  */
 export function createDBSize(): command_request.Command {
     return createCommand(RequestType.DBSize, []);
+}
+
+/**
+ * @internal
+ */
+export function createGeoAdd(
+    key: string,
+    membersToGeospatialData: Map<string, GeospatialData>,
+    options?: GeoAddOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    membersToGeospatialData.forEach((coord, member) => {
+        args = args.concat(coord.toArgs());
+        args.push(member);
+    });
+
+    return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRank(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRankWithScore(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
 }
