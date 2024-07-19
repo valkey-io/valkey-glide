@@ -111,7 +111,7 @@ jobs:
               with:
                   name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-ubuntu
                   path: |
-                      node/pytest_report*.html
+                      node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
 
@@ -169,7 +169,7 @@ jobs:
     #           with:
     #               name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-macos
     #               path: |
-    #                   node/pytest_report*.html
+    #                   node/test-report*.html
     #                   utils/clusters/**
     #                   benchmarks/results/**
 
@@ -216,7 +216,7 @@ jobs:
               with:
                   name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-amazonlinux
                   path: |
-                      node/pytest_report*.html
+                      node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
 
@@ -266,6 +266,6 @@ jobs:
               with:
                   name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-linux-musl
                   path: |
-                      node/pytest_report*.html
+                      node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
