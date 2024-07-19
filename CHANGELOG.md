@@ -4,6 +4,7 @@
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
 * Node: Added SDIFFSTORE command ([#1931](https://github.com/valkey-io/valkey-glide/pull/1931))
 * Node: Added ZDIFF command ([#1972](https://github.com/valkey-io/valkey-glide/pull/1972))
+* Node: Added ZDIFFSTORE command ([#1985](https://github.com/valkey-io/valkey-glide/pull/1985))
 * Node: Added SINTERCARD command ([#1956](https://github.com/valkey-io/valkey-glide/pull/1956))
 * Node: Added SINTERSTORE command ([#1929](https://github.com/valkey-io/valkey-glide/pull/1929))
 * Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))

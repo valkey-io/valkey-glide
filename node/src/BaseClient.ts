@@ -105,6 +105,7 @@ import {
     createZCard,
     createZCount,
     createZDiff,
+    createZDiffStore,
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
@@ -2349,6 +2350,35 @@ export class BaseClient {
      */
     public zdiffWithScores(keys: string[]): Promise<Record<string, number>> {
         return this.createWritePromise(createZDiffWithScores(keys));
+    }
+
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets in `keys` and stores
+     * the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
+     * treated as empty sets.
+     *
+     * See https://valkey.io/commands/zdiffstore/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+     * @param destination - The key for the resulting sorted set.
+     * @param keys - The keys of the sorted sets to compare.
+     * @returns The number of members in the resulting sorted set stored at `destination`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
+     * await client.zadd("zset2", {"member1": 1.0});
+     * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
+     * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
+     *
+     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
+     * ```
+     */
+    public zdiffstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createZDiffStore(destination, keys));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.

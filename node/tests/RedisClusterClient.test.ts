@@ -307,6 +307,7 @@ describe("GlideClusterClient", () => {
                 client.zinterstore("abc", ["zxy", "lkn"]),
                 client.zdiff(["abc", "zxy", "lkn"]),
                 client.zdiffWithScores(["abc", "zxy", "lkn"]),
+                client.zdiffstore("abc", ["zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),

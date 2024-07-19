@@ -1055,6 +1055,18 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createZDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    let args: string[] = [destination, keys.length.toString()];
+    args = args.concat(keys);
+    return createCommand(RequestType.ZDiffStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
