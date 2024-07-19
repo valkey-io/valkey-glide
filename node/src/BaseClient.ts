@@ -10,8 +10,6 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { BitOffsetOptions } from "./command-options/BitOffsetOptions";
-import { LPosOptions } from "./command-options/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
@@ -120,6 +118,8 @@ import {
     createZRemRangeByScore,
     createZScore,
 } from "./Commands";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
     ConfigurationError,

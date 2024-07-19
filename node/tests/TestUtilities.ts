@@ -18,12 +18,12 @@ import {
     ReturnType,
     Transaction,
 } from "..";
-import { checkIfServerVersionLessThan } from "./SharedTests";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 import {
     BitmapIndexType,
     BitOffsetOptions,
-} from "../build-ts/src/command-options/BitOffsetOptions";
+} from "../build-ts/src/command/BitOffsetOptions";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");

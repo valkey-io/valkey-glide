@@ -4,10 +4,10 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
-import { LPosOptions } from "./command-options/LPosOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
-import { BitOffsetOptions } from "./command-options/BitOffsetOptions";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 
 import RequestType = command_request.RequestType;
 

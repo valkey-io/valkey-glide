@@ -28,11 +28,11 @@ import {
     intoString,
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 import {
     BitmapIndexType,
     BitOffsetOptions,
-} from "../build-ts/src/command-options/BitOffsetOptions";
+} from "../build-ts/src/commands/BitOffsetOptions";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {

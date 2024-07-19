@@ -2,8 +2,8 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { BitOffsetOptions } from "./command-options/BitOffsetOptions";
-import { LPosOptions } from "./command-options/LPosOptions";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
