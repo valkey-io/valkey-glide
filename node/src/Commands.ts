@@ -7,6 +7,7 @@ import Long from "long";
 import { LPosOptions } from "./command-options/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
+import { BitOffsetOptions } from "./command-options/BitOffsetOptions";
 
 import RequestType = command_request.RequestType;
 
@@ -1524,6 +1525,18 @@ export function createBLPop(
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
     return createCommand(RequestType.BLPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBitCount(
+    key: string,
+    options?: BitOffsetOptions,
+): command_request.Command {
+    const args = [key];
+    if (options) args.push(...options.toArgs());
+    return createCommand(RequestType.BitCount, args);
 }
 
 export type StreamReadOptions = {

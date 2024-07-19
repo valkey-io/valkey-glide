@@ -29,6 +29,10 @@ import {
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
+import {
+    BitmapIndexType,
+    BitOffsetOptions,
+} from "../build-ts/src/command-options/BitOffsetOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -4105,6 +4109,90 @@ export function runBaseTests<Context>(config: {
                         key: key,
                     };
                     expect(await client.dbsize(primaryRoute)).toBe(1);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bitcount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const value = "foobar";
+
+                checkSimple(await client.set(key1, value)).toEqual("OK");
+                expect(await client.bitcount(key1)).toEqual(26);
+                expect(
+                    await client.bitcount(key1, new BitOffsetOptions(1, 1)),
+                ).toEqual(6);
+                expect(
+                    await client.bitcount(key1, new BitOffsetOptions(0, -5)),
+                ).toEqual(10);
+                // non-existing key
+                expect(await client.bitcount(uuidv4())).toEqual(0);
+                expect(
+                    await client.bitcount(
+                        uuidv4(),
+                        new BitOffsetOptions(5, 30),
+                    ),
+                ).toEqual(0);
+                // key exists, but it is not a string
+                expect(await client.sadd(key2, [value])).toEqual(1);
+                await expect(client.bitcount(key2)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(
+                    client.bitcount(key2, new BitOffsetOptions(1, 1)),
+                ).rejects.toThrow(RequestError);
+
+                if (await checkIfServerVersionLessThan("7.0.0")) {
+                    await expect(
+                        client.bitcount(
+                            key1,
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BIT),
+                        ),
+                    ).rejects.toThrow();
+                    await expect(
+                        client.bitcount(
+                            key1,
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
+                        ),
+                    ).rejects.toThrow();
+                } else {
+                    expect(
+                        await client.bitcount(
+                            key1,
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
+                        ),
+                    ).toEqual(16);
+                    expect(
+                        await client.bitcount(
+                            key1,
+                            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
+                        ),
+                    ).toEqual(17);
+                    expect(
+                        await client.bitcount(
+                            key1,
+                            new BitOffsetOptions(5, -5, BitmapIndexType.BIT),
+                        ),
+                    ).toEqual(23);
+                    expect(
+                        await client.bitcount(
+                            uuidv4(),
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
+                        ),
+                    ).toEqual(0);
+                    // key exists, but it is not a string
+                    await expect(
+                        client.bitcount(
+                            key2,
+                            new BitOffsetOptions(1, 1, BitmapIndexType.BYTE),
+                        ),
+                    ).rejects.toThrow(RequestError);
                 }
             }, protocol);
         },

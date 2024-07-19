@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))

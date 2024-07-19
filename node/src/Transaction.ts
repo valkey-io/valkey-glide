@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { BitOffsetOptions } from "./command-options/BitOffsetOptions";
 import { LPosOptions } from "./command-options/LPosOptions";
 import {
     AggregationType,
@@ -22,6 +23,7 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBitCount,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -93,8 +95,8 @@ import {
     createSInterCard,
     createSInterStore,
     createSIsMember,
-    createSMembers,
     createSMIsMember,
+    createSMembers,
     createSMove,
     createSPop,
     createSRem,
@@ -1778,6 +1780,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public dbsize(): T {
         return this.addAndReturn(createDBSize());
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+     * optionally be provided to count the number of bits in a specific string interval.
+     *
+     * See https://valkey.io/commands/bitcount for more details.
+     *
+     * @param key - The key for the string to count the set bits of.
+     * @param options - The offset options.
+     *
+     * Command Response - If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+     *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
+     *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+     */
+    public bitcount(key: string, options?: BitOffsetOptions): T {
+        return this.addAndReturn(createBitCount(key, options));
     }
 }
 
