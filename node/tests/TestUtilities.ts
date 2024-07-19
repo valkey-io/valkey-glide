@@ -19,7 +19,7 @@ import {
     ReturnType,
     Transaction,
 } from "..";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
