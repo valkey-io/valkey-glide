@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { beforeAll, expect } from "@jest/globals";
+import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
@@ -13,17 +13,12 @@ import {
     GlideClient,
     GlideClusterClient,
     InsertPosition,
-    Logger,
     ProtocolVersion,
     ReturnType,
     Transaction,
 } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
-
-beforeAll(() => {
-    Logger.init("info");
-});
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: Array<string>) {
