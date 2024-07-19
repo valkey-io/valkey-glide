@@ -118,6 +118,7 @@
 * Node: Added DBSize command ([#1932](https://github.com/valkey-io/valkey-glide/pull/1932))
 * Node: Added GeoAdd command ([#1980](https://github.com/valkey-io/valkey-glide/pull/1980))
 * Node: Added ZRevRank command ([#1977](https://github.com/valkey-io/valkey-glide/pull/1977))
+* Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

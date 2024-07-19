@@ -35,6 +35,7 @@ import {
     createExpire,
     createExpireAt,
     createGeoAdd,
+    createGeoDist,
     createGeoPos,
     createGet,
     createGetBit,
@@ -127,6 +128,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    GeoUnit,
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
@@ -3472,6 +3474,35 @@ export class BaseClient {
         count?: number,
     ): Promise<[string, [Record<string, number>]] | null> {
         return this.createWritePromise(createZMPop(key, modifier, count));
+    }
+
+    /**
+     * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
+     *
+     * See https://valkey.io/commands/geodist/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member1 - The name of the first member.
+     * @param member2 - The name of the second member.
+     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}.
+     * @returns The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
+     *     or if the key does not exist. If not specified, the default unit is {@link GeoUnit.METERS}.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.geodist("mySortedSet", "Place1", "Place2", GeoUnit.KILOMETERS);
+     * console.log(num); // Output: the distance between Place1 and Place2.
+     * ```
+     */
+    public geodist(
+        key: string,
+        member1: string,
+        member2: string,
+        geoUnit?: GeoUnit,
+    ): Promise<number | null> {
+        return this.createWritePromise(
+            createGeoDist(key, member1, member2, geoUnit),
+        );
     }
 
     /**
