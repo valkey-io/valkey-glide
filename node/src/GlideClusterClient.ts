@@ -708,17 +708,10 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
-        if (mode) {
-            return this.createWritePromise(
-                createFunctionFlush(mode),
-                toProtobufRoute(route),
-            );
-        } else {
-            return this.createWritePromise(
-                createFunctionFlush(),
-                toProtobufRoute(route),
-            );
-        }
+        return this.createWritePromise(
+            createFunctionFlush(mode),
+            toProtobufRoute(route),
+        );
     }
 
     /**

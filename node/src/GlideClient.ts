@@ -432,11 +432,7 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public functionFlush(mode?: FlushMode): Promise<string> {
-        if (mode) {
-            return this.createWritePromise(createFunctionFlush(mode));
-        } else {
-            return this.createWritePromise(createFunctionFlush());
-        }
+        return this.createWritePromise(createFunctionFlush(mode));
     }
 
     /**

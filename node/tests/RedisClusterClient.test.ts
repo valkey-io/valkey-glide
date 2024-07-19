@@ -646,12 +646,9 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual(2),
                                 );
                             } finally {
-                                expect(
-                                    await client.customCommand([
-                                        "FUNCTION",
-                                        "FLUSH",
-                                    ]),
-                                ).toEqual("OK");
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
                                 client.close();
                             }
                         },
