@@ -29,6 +29,9 @@ import {
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
+import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -4136,6 +4139,116 @@ export function runBaseTests<Context>(config: {
                     };
                     expect(await client.dbsize(primaryRoute)).toBe(1);
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geoadd test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    "Palermo",
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    "Catania",
+                    new GeospatialData(15.087269, 37.502669),
+                );
+
+                // default geoadd
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // with update mode options
+                membersToCoordinates.set(
+                    "Catania",
+                    new GeospatialData(15.087269, 39),
+                );
+                expect(
+                    await client.geoadd(
+                        key1,
+                        membersToCoordinates,
+                        new GeoAddOptions({
+                            updateMode:
+                                ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                        }),
+                    ),
+                ).toBe(0);
+                expect(
+                    await client.geoadd(
+                        key1,
+                        membersToCoordinates,
+                        new GeoAddOptions({
+                            updateMode: ConditionalChange.ONLY_IF_EXISTS,
+                        }),
+                    ),
+                ).toBe(0);
+
+                // with changed option
+                membersToCoordinates.set(
+                    "Catania",
+                    new GeospatialData(15.087269, 40),
+                );
+                membersToCoordinates.set(
+                    "Tel-Aviv",
+                    new GeospatialData(32.0853, 34.7818),
+                );
+                expect(
+                    await client.geoadd(
+                        key1,
+                        membersToCoordinates,
+                        new GeoAddOptions({ changed: true }),
+                    ),
+                ).toBe(2);
+
+                // key exists but holding non-zset value
+                expect(await client.set(key2, "foo")).toBe("OK");
+                await expect(
+                    client.geoadd(key2, membersToCoordinates),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geoadd invalid args test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+
+                // empty coordinate map
+                await expect(client.geoadd(key, new Map())).rejects.toThrow();
+
+                // coordinate out of bound
+                await expect(
+                    client.geoadd(
+                        key,
+                        new Map([["Place", new GeospatialData(-181, 0)]]),
+                    ),
+                ).rejects.toThrow();
+                await expect(
+                    client.geoadd(
+                        key,
+                        new Map([["Place", new GeospatialData(181, 0)]]),
+                    ),
+                ).rejects.toThrow();
+                await expect(
+                    client.geoadd(
+                        key,
+                        new Map([["Place", new GeospatialData(0, 86)]]),
+                    ),
+                ).rejects.toThrow();
+                await expect(
+                    client.geoadd(
+                        key,
+                        new Map([["Place", new GeospatialData(0, -86)]]),
+                    ),
+                ).rejects.toThrow();
             }, protocol);
         },
         config.timeout,

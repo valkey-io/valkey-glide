@@ -7,6 +7,8 @@ import Long from "long";
 import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 import RequestType = command_request.RequestType;
 
@@ -1766,4 +1768,26 @@ export function createLPos(
  */
 export function createDBSize(): command_request.Command {
     return createCommand(RequestType.DBSize, []);
+}
+
+/**
+ * @internal
+ */
+export function createGeoAdd(
+    key: string,
+    membersToGeospatialData: Map<string, GeospatialData>,
+    options?: GeoAddOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    membersToGeospatialData.forEach((coord, member) => {
+        args = args.concat(coord.toArgs());
+        args.push(member);
+    });
+
+    return createCommand(RequestType.GeoAdd, args);
 }
