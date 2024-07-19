@@ -59,7 +59,7 @@ jobs:
             fail-fast: false
             matrix:
                 engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                  
+
         steps:
             - uses: actions/checkout@v4
               with:
@@ -85,12 +85,12 @@ jobs:
             - name: test hybrid node modules - commonjs
               run: |
                 npm install --package-lock-only
-                npm ci 
+                npm ci
                 npm run build-and-test
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-commonjs.html
-            
+
             - name: test hybrid node modules - ecma
               run: |
                 npm install --package-lock-only
@@ -183,7 +183,7 @@ jobs:
                   yum -y remove git
                   yum -y remove git-*
                   yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                  yum install -y git 
+                  yum install -y git
                   git --version
 
             - uses: actions/checkout@v4
@@ -214,7 +214,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-amazonlinux
+                  name: test-report-node-amazonlinux
                   path: |
                       node/test-report*.html
                       utils/clusters/**
@@ -253,7 +253,7 @@ jobs:
                   target: x86_64-unknown-linux-musl
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: "7.2.5"
-          
+
             - name: Test compatibility
               shell: bash
               run: npm test -- -t "set and get flow works"
@@ -264,7 +264,7 @@ jobs:
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-report-node-${{ matrix.engine.type }}-${{ matrix.engine.version }}-linux-musl
+                  name: test-report-node-linux-musl
                   path: |
                       node/test-report*.html
                       utils/clusters/**
