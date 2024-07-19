@@ -20,6 +20,7 @@ import {
 } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
     Logger.init("info");
@@ -351,6 +352,7 @@ export async function transactionTest(
     const key15 = "{key}" + uuidv4(); // list
     const key16 = "{key}" + uuidv4(); // list
     const key17 = "{key}" + uuidv4(); // bitmap
+    const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -613,6 +615,14 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.pfcount([key11]);
     args.push(3);
+    baseTransaction.geoadd(
+        key18,
+        new Map([
+            ["Palermo", new GeospatialData(13.361389, 38.115556)],
+            ["Catania", new GeospatialData(15.087269, 37.502669)],
+        ]),
+    );
+    args.push(2);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
