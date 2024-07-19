@@ -19,7 +19,7 @@ import {
     Transaction,
 } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 beforeAll(() => {
     Logger.init("info");
