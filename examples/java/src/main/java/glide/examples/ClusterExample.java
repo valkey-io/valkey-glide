@@ -35,7 +35,7 @@ public class ClusterExample {
         // GLIDE is able to detect all cluster nodes and connect to them automatically
         // even if only one of them was configured
 
-        // Check <code>GlideClusterClientConfiguration</code> for additional options.
+        // Check `GlideClusterClientConfiguration` for additional options.
         GlideClusterClientConfiguration config =
                 GlideClusterClientConfiguration.builder()
                         .address(

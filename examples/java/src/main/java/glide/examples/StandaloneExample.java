@@ -29,7 +29,7 @@ public class StandaloneExample {
         String host = "localhost";
         Integer port = 6379;
 
-        // Check <code>GlideClientConfiguration</code> for additional options.
+        // Check `GlideClientConfiguration` for additional options.
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
                         .address(NodeAddress.builder().host(host).port(port).build())
