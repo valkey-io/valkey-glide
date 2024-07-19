@@ -30,7 +30,7 @@ export enum BitmapIndexType {
 export class BitOffsetOptions {
     private start: number;
     private end: number;
-    private intexType?: BitmapIndexType;
+    private indexType?: BitmapIndexType;
 
     /**
      * @param start - The starting offset index.
@@ -42,7 +42,7 @@ export class BitOffsetOptions {
     constructor(start: number, end: number, indexType?: BitmapIndexType) {
         this.start = start;
         this.end = end;
-        this.intexType = indexType;
+        this.indexType = indexType;
     }
 
     /**
@@ -53,7 +53,7 @@ export class BitOffsetOptions {
     public toArgs(): string[] {
         const args = [this.start.toString(), this.end.toString()];
 
-        if (this.intexType) args.push(this.intexType);
+        if (this.indexType) args.push(this.indexType);
 
         return args;
     }
