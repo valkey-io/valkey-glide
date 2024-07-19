@@ -1526,6 +1526,17 @@ export function createBLPop(
     return createCommand(RequestType.BLPop, args);
 }
 
+/**
+ * @internal
+ */
+export function createFunctionLoad(
+    libraryCode: string,
+    replace?: boolean,
+): command_request.Command {
+    const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
+    return createCommand(RequestType.FunctionLoad, args);
+}
+
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or

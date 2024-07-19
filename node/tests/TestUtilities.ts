@@ -202,6 +202,44 @@ export function getFirstResult(
     return Object.values(res).at(0);
 }
 
+// TODO use matcher instead of predicate
+/** Check a multi-node response from a cluster. */
+export function checkClusterMultiNodeResponse(
+    res: object,
+    predicate: (value: ReturnType) => void,
+) {
+    for (const nodeResponse of Object.values(res)) {
+        predicate(nodeResponse);
+    }
+}
+
+/** Check a response from a cluster. Response could be either single-node (value) or multi-node (string-value map). */
+export function checkClusterResponse(
+    res: object,
+    singleNodeRoute: boolean,
+    predicate: (value: ReturnType) => void,
+) {
+    if (singleNodeRoute) predicate(res as ReturnType);
+    else checkClusterMultiNodeResponse(res, predicate);
+}
+
+/** Generate a String of LUA library code. */
+export function generateLuaLibCode(
+    libName: string,
+    functions: Map<string, string>,
+    readonly: boolean,
+): string {
+    let code = `#!lua name=${libName}\n`;
+
+    for (const [functionName, functionBody] of functions) {
+        code += `redis.register_function{ function_name = '${functionName}', callback = function(keys, args) ${functionBody} end`;
+        if (readonly) code += ", flags = { 'no-writes' }";
+        code += " }\n";
+    }
+
+    return code;
+}
+
 /**
  * Parses the command-line arguments passed to the Node.js process.
  *
@@ -570,5 +608,21 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.pfcount([key11]);
     args.push(3);
+
+    const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+    const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+    const code = generateLuaLibCode(
+        libName,
+        new Map([[funcName, "return args[1]"]]),
+        true,
+    );
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.functionLoad(code);
+        args.push(libName);
+        baseTransaction.functionLoad(code, true);
+        args.push(libName);
+    }
+
     return args;
 }

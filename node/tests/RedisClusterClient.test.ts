@@ -18,11 +18,15 @@ import {
     GlideClusterClient,
     InfoOptions,
     ProtocolVersion,
+    Routes,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
+    checkClusterResponse,
+    checkSimple,
     flushAndCloseClient,
+    generateLuaLibCode,
     getClientConfigurationOption,
     getFirstResult,
     intoArray,
@@ -517,6 +521,144 @@ describe("GlideClusterClient", () => {
             client.close();
         },
         TIMEOUT,
+    );
+
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([true, false])(
+                "Single node route = %s",
+                (singleNodeRoute) => {
+                    it(
+                        "function load",
+                        async () => {
+                            if (await checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
+
+                            try {
+                                const libName =
+                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                const funcName =
+                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                const code = generateLuaLibCode(
+                                    libName,
+                                    new Map([[funcName, "return args[1]"]]),
+                                    true,
+                                );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not yet exist
+                                const functionList = await client.customCommand(
+                                    [
+                                        "FUNCTION",
+                                        "LIST",
+                                        "LIBRARYNAME",
+                                        libName,
+                                    ],
+                                );
+                                checkClusterResponse(
+                                    functionList as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+                                // load the library
+                                checkSimple(
+                                    await client.functionLoad(code),
+                                ).toEqual(libName);
+                                // call functions from that library to confirm that it works
+                                let fcall = await client.customCommand(
+                                    ["FCALL", funcName, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkSimple(value).toEqual("one"),
+                                );
+
+                                fcall = await client.customCommand(
+                                    ["FCALL_RO", funcName, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkSimple(value).toEqual("one"),
+                                );
+
+                                // re-load library without replace
+                                await expect(
+                                    client.functionLoad(code),
+                                ).rejects.toThrow(
+                                    `Library '${libName}' already exists`,
+                                );
+
+                                // re-load library with replace
+                                checkSimple(
+                                    await client.functionLoad(code, true),
+                                ).toEqual(libName);
+
+                                // overwrite lib with new code
+                                const func2Name =
+                                    "myfunc2c" + uuidv4().replaceAll("-", "");
+                                const newCode = generateLuaLibCode(
+                                    libName,
+                                    new Map([
+                                        [funcName, "return args[1]"],
+                                        [func2Name, "return #args"],
+                                    ]),
+                                    true,
+                                );
+                                checkSimple(
+                                    await client.functionLoad(newCode, true),
+                                ).toEqual(libName);
+
+                                fcall = await client.customCommand(
+                                    ["FCALL", func2Name, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual(2),
+                                );
+
+                                fcall = await client.customCommand(
+                                    ["FCALL_RO", func2Name, "0", "one", "two"],
+                                    route,
+                                );
+                                checkClusterResponse(
+                                    fcall as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual(2),
+                                );
+                            } finally {
+                                expect(
+                                    await client.customCommand([
+                                        "FUNCTION",
+                                        "FLUSH",
+                                    ]),
+                                ).toEqual("OK");
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
+        },
     );
 
     it.each([
