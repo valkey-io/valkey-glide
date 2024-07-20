@@ -18,11 +18,16 @@ import {
     ReturnType,
     Transaction,
 } from "..";
+import {
+    BitmapIndexType,
+    BitOffsetOptions,
+} from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { checkIfServerVersionLessThan } from "./SharedTests";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
     Logger.init("info");
@@ -633,6 +638,20 @@ export async function transactionTest(
 
     baseTransaction.setbit(key17, 1, 1);
     args.push(0);
+    baseTransaction.set(key17, "foobar");
+    args.push("OK");
+    baseTransaction.bitcount(key17);
+    args.push(26);
+    baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
+    args.push(6);
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.bitcount(
+            key17,
+            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
+        );
+        args.push(17);
+    }
 
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
