@@ -74,6 +74,11 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
+        BitOffsetOptions,
+        BitmapIndexType,
+        ConditionalChange,
+        GeoAddOptions,
+        GeospatialData,
         GlideClient,
         GlideClusterClient,
         GlideClientConfiguration,
@@ -121,6 +126,11 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
+        BitOffsetOptions,
+        BitmapIndexType,
+        ConditionalChange,
+        GeoAddOptions,
+        GeospatialData,
         GlideClient,
         GlideClusterClient,
         GlideClientConfiguration,
