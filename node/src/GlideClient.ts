@@ -23,6 +23,7 @@ import {
     createEcho,
     createFlushAll,
     createFlushDB,
+    createFunctionDelete,
     createFunctionLoad,
     createInfo,
     createLolwut,
@@ -385,6 +386,26 @@ export class GlideClient extends BaseClient {
      */
     public lolwut(options?: LolwutOptions): Promise<string> {
         return this.createWritePromise(createLolwut(options));
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionDelete("libName");
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionDelete(libraryCode: string): Promise<string> {
+        return this.createWritePromise(createFunctionDelete(libraryCode));
     }
 
     /**

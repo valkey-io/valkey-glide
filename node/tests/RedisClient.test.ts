@@ -20,6 +20,7 @@ import {
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
@@ -33,7 +34,6 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
-import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
 
@@ -459,6 +459,63 @@ describe("GlideClient", () => {
                         "two",
                     ]),
                 ).toEqual(2);
+            } finally {
+                expect(
+                    await client.customCommand(["FUNCTION", "FLUSH"]),
+                ).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function delete test_%p",
+        async (protocol) => {
+            if (await checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                // Delete the function
+                expect(await client.functionDelete(libName)).toEqual("OK");
+
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                // deleting a non-existing library
+                await expect(client.functionDelete(libName)).rejects.toThrow(
+                    `Library not found`,
+                );
             } finally {
                 expect(
                     await client.customCommand(["FUNCTION", "FLUSH"]),

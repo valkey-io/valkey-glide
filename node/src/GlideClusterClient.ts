@@ -23,6 +23,7 @@ import {
     createEcho,
     createFlushAll,
     createFlushDB,
+    createFunctionDelete,
     createFunctionLoad,
     createInfo,
     createLolwut,
@@ -653,6 +654,34 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(
             createLolwut(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionDelete("libName");
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionDelete(
+        libraryCode: string,
+        route?: Routes,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionDelete(libraryCode),
             toProtobufRoute(route),
         );
     }
