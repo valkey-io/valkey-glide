@@ -237,6 +237,7 @@ import {
     createZScan,
     createZScore,
 } from "./Commands";
+import { Decoder } from "./Decoder";
 import { command_request } from "./ProtobufMessage";
 
 /**
@@ -278,6 +279,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     protected addAndReturn(
         command: command_request.Command,
         shouldConvertToSet: boolean = false,
+        decoder?: Decoder
     ): T {
         if (shouldConvertToSet) {
             // The command's index within the transaction is saved for later conversion of its response to a Set type.
@@ -295,7 +297,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If `key` exists, returns the value of `key` as a string. Otherwise, return null.
      */
-    public get(key: string): T {
+    public get(key: string, decoder?: Decoder): T {
         return this.addAndReturn(createGet(key));
     }
 
