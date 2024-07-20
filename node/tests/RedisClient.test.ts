@@ -20,6 +20,7 @@ import {
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
@@ -130,26 +131,29 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "simple select test",
+        "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            let selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
             checkSimple(result).toEqual("OK");
 
-            selectResult = await client.select(1);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(1)).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
+            checkSimple(await client.flushdb()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
 
-            selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
             checkSimple(await client.get(key)).toEqual(value);
+
+            expect(await client.dbsize()).toBeGreaterThan(0);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
         },
     );
 
@@ -456,9 +460,66 @@ describe("GlideClient", () => {
                     ]),
                 ).toEqual(2);
             } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function flush test_%p",
+        async (protocol) => {
+            if (await checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
                 expect(
-                    await client.customCommand(["FUNCTION", "FLUSH"]),
-                ).toEqual("OK");
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                // Flush functions
+                expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
+                    "OK",
+                );
+                expect(await client.functionFlush(FlushMode.ASYNC)).toEqual(
+                    "OK",
+                );
+
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                // Attempt to re-load library without overwriting to ensure FLUSH was effective
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
                 client.close();
             }
         },

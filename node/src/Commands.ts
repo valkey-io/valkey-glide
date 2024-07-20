@@ -5,6 +5,7 @@
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 import { LPosOptions } from "./commands/LPosOptions";
+import { FlushMode } from "./commands/FlushMode";
 
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -1578,6 +1579,17 @@ export function createBitCount(
     return createCommand(RequestType.BitCount, args);
 }
 
+/**
+ * @internal
+ */
+export function createFunctionFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FunctionFlush, []);
+    }
+}
+
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
@@ -1742,24 +1754,6 @@ export function createLolwut(options?: LolwutOptions): command_request.Command {
 }
 
 /**
- * Defines flushing mode for:
- *
- * `FLUSHALL` command.
- *
- * See https://valkey.io/commands/flushall/ for details.
- */
-export enum FlushMode {
-    /**
-     * Flushes synchronously.
-     *
-     * since Valkey 6.2 and above.
-     */
-    SYNC = "SYNC",
-    /** Flushes asynchronously. */
-    ASYNC = "ASYNC",
-}
-
-/**
  * @internal
  */
 export function createFlushAll(mode?: FlushMode): command_request.Command {
@@ -1767,6 +1761,17 @@ export function createFlushAll(mode?: FlushMode): command_request.Command {
         return createCommand(RequestType.FlushAll, [mode.toString()]);
     } else {
         return createCommand(RequestType.FlushAll, []);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createFlushDB(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushDB, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushDB, []);
     }
 }
 

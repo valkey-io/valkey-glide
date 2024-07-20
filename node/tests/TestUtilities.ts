@@ -22,6 +22,7 @@ import {
     BitmapIndexType,
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
@@ -362,6 +363,12 @@ export async function transactionTest(
     const args: ReturnType[] = [];
     baseTransaction.flushall();
     args.push("OK");
+    baseTransaction.flushall(FlushMode.SYNC);
+    args.push("OK");
+    baseTransaction.flushdb();
+    args.push("OK");
+    baseTransaction.flushdb(FlushMode.SYNC);
+    args.push("OK");
     baseTransaction.dbsize();
     args.push(0);
     baseTransaction.set(key1, "bar");
@@ -665,6 +672,12 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.functionFlush();
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.ASYNC);
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.SYNC);
+        args.push("OK");
     }
 
     return args;

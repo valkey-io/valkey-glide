@@ -21,6 +21,7 @@ import {
     Routes,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -524,6 +525,34 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "flushdb flushall dbsize test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            expect(await client.dbsize()).toBeGreaterThanOrEqual(0);
+            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.dbsize()).toBeGreaterThan(0);
+
+            checkSimple(await client.flushall()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.dbsize()).toEqual(1);
+            checkSimple(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.dbsize()).toEqual(1);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
+
+            client.close();
+        },
+    );
+
     describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Protocol is RESP2 = %s",
         (protocol) => {
@@ -646,12 +675,118 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual(2),
                                 );
                             } finally {
-                                expect(
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
+        },
+    );
+
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([true, false])(
+                "Single node route = %s",
+                (singleNodeRoute) => {
+                    it(
+                        "function flush",
+                        async () => {
+                            if (await checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
+
+                            try {
+                                const libName =
+                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                const funcName =
+                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                const code = generateLuaLibCode(
+                                    libName,
+                                    new Map([[funcName, "return args[1]"]]),
+                                    true,
+                                );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not yet exist
+                                const functionList1 =
                                     await client.customCommand([
                                         "FUNCTION",
-                                        "FLUSH",
-                                    ]),
+                                        "LIST",
+                                        "LIBRARYNAME",
+                                        libName,
+                                    ]);
+                                checkClusterResponse(
+                                    functionList1 as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+
+                                // load the library
+                                checkSimple(
+                                    await client.functionLoad(
+                                        code,
+                                        undefined,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+
+                                // flush functions
+                                expect(
+                                    await client.functionFlush(
+                                        FlushMode.SYNC,
+                                        route,
+                                    ),
                                 ).toEqual("OK");
+                                expect(
+                                    await client.functionFlush(
+                                        FlushMode.ASYNC,
+                                        route,
+                                    ),
+                                ).toEqual("OK");
+
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not exist
+                                const functionList2 =
+                                    await client.customCommand([
+                                        "FUNCTION",
+                                        "LIST",
+                                        "LIBRARYNAME",
+                                        libName,
+                                    ]);
+                                checkClusterResponse(
+                                    functionList2 as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+
+                                // Attempt to re-load library without overwriting to ensure FLUSH was effective
+                                checkSimple(
+                                    await client.functionLoad(
+                                        code,
+                                        undefined,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+                            } finally {
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
                                 client.close();
                             }
                         },
