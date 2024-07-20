@@ -34,6 +34,7 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
+import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
 
@@ -131,26 +132,29 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "simple select test",
+        "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            let selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
             checkSimple(result).toEqual("OK");
 
-            selectResult = await client.select(1);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(1)).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
+            checkSimple(await client.flushdb()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
 
-            selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
             checkSimple(await client.get(key)).toEqual(value);
+
+            expect(await client.dbsize()).toBeGreaterThan(0);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
         },
     );
 

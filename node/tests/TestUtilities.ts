@@ -20,7 +20,8 @@ import {
     Transaction,
 } from "..";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { checkIfServerVersionLessThan } from "./SharedTests";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 
 beforeAll(() => {
     Logger.init("info");
@@ -351,10 +352,18 @@ export async function transactionTest(
     const key14 = "{key}" + uuidv4(); // sorted set
     const key15 = "{key}" + uuidv4(); // list
     const key16 = "{key}" + uuidv4(); // list
+    const key17 = "{key}" + uuidv4(); // bitmap
+    const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
     baseTransaction.flushall();
+    args.push("OK");
+    baseTransaction.flushall(FlushMode.SYNC);
+    args.push("OK");
+    baseTransaction.flushdb();
+    args.push("OK");
+    baseTransaction.flushdb(FlushMode.SYNC);
     args.push("OK");
     baseTransaction.dbsize();
     args.push(0);
@@ -520,6 +529,14 @@ export async function transactionTest(
         args.push([0, 1]);
     }
 
+    baseTransaction.zrevrank(key8, "member5");
+    args.push(0);
+
+    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+        baseTransaction.zrevrankWithScore(key8, "member5");
+        args.push([0, 5]);
+    }
+
     baseTransaction.zaddIncr(key8, "member2", 1);
     args.push(3);
     baseTransaction.zrem(key8, ["member1"]);
@@ -542,6 +559,8 @@ export async function transactionTest(
         args.push(["three"]);
         baseTransaction.zdiffWithScores([key13, key12]);
         args.push({ three: 3.5 });
+        baseTransaction.zdiffstore(key13, [key13, key13]);
+        args.push(0);
     }
 
     baseTransaction.zinterstore(key12, [key12, key13]);
@@ -605,10 +624,22 @@ export async function transactionTest(
     args.push([key6, field + "3"]);
     baseTransaction.blpop([key6], 0.1);
     args.push([key6, field + "1"]);
+
+    baseTransaction.setbit(key17, 1, 1);
+    args.push(0);
+
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
     baseTransaction.pfcount([key11]);
     args.push(3);
+    baseTransaction.geoadd(
+        key18,
+        new Map([
+            ["Palermo", new GeospatialData(13.361389, 38.115556)],
+            ["Catania", new GeospatialData(15.087269, 37.502669)],
+        ]),
+    );
+    args.push(2);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");

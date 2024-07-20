@@ -5,8 +5,11 @@
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 import { LPosOptions } from "./commands/LPosOptions";
+import { FlushMode } from "./commands/FlushMode";
 
 import { command_request } from "./ProtobufMessage";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 import RequestType = command_request.RequestType;
 
@@ -440,6 +443,21 @@ export function createDecrBy(
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createSetBit(
+    key: string,
+    offset: number,
+    value: number,
+): command_request.Command {
+    return createCommand(RequestType.SetBit, [
+        key,
+        offset.toString(),
+        value.toString(),
+    ]);
 }
 
 /**
@@ -1050,6 +1068,17 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
     args.unshift(keys.length.toString());
     args.push("WITHSCORES");
     return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
+export function createZDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    const args: string[] = [destination, keys.length.toString(), ...keys];
+    return createCommand(RequestType.ZDiffStore, args);
 }
 
 /**
@@ -1712,24 +1741,6 @@ export function createLolwut(options?: LolwutOptions): command_request.Command {
 }
 
 /**
- * Defines flushing mode for:
- *
- * `FLUSHALL` command.
- *
- * See https://valkey.io/commands/flushall/ for details.
- */
-export enum FlushMode {
-    /**
-     * Flushes synchronously.
-     *
-     * since Valkey 6.2 and above.
-     */
-    SYNC = "SYNC",
-    /** Flushes asynchronously. */
-    ASYNC = "ASYNC",
-}
-
-/**
  * @internal
  */
 export function createFlushAll(mode?: FlushMode): command_request.Command {
@@ -1737,6 +1748,17 @@ export function createFlushAll(mode?: FlushMode): command_request.Command {
         return createCommand(RequestType.FlushAll, [mode.toString()]);
     } else {
         return createCommand(RequestType.FlushAll, []);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createFlushDB(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushDB, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushDB, []);
     }
 }
 
@@ -1762,4 +1784,46 @@ export function createLPos(
  */
 export function createDBSize(): command_request.Command {
     return createCommand(RequestType.DBSize, []);
+}
+
+/**
+ * @internal
+ */
+export function createGeoAdd(
+    key: string,
+    membersToGeospatialData: Map<string, GeospatialData>,
+    options?: GeoAddOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    membersToGeospatialData.forEach((coord, member) => {
+        args = args.concat(coord.toArgs());
+        args.push(member);
+    });
+
+    return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRank(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRankWithScore(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
 }

@@ -33,6 +33,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createGeoAdd,
     createGet,
     createGetDel,
     createHDel,
@@ -81,6 +82,7 @@ import {
     createSCard,
     createSDiff,
     createSDiffStore,
+    createSetBit,
     createSInter,
     createSInterCard,
     createSInterStore,
@@ -105,6 +107,7 @@ import {
     createZCard,
     createZCount,
     createZDiff,
+    createZDiffStore,
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
@@ -116,6 +119,8 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
+    createZRevRank,
+    createZRevRankWithScore,
     createZScore,
 } from "./Commands";
 import {
@@ -135,6 +140,8 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -960,6 +967,29 @@ export class BaseClient {
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /**
+     * Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index, with
+     * `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less than
+     * `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to `value` and
+     * the preceding bits are set to `0`.
+     *
+     * See https://valkey.io/commands/setbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to be set.
+     * @param value - The bit value to set at `offset`. The value must be `0` or `1`.
+     * @returns The bit value that was previously stored at `offset`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.setbit("key", 1, 1);
+     * console.log(result); // Output: 0 - The second bit value was 0 before setting to 1.
+     * ```
+     */
+    public setbit(key: string, offset: number, value: number): Promise<number> {
+        return this.createWritePromise(createSetBit(key, offset, value));
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
@@ -2351,6 +2381,35 @@ export class BaseClient {
         return this.createWritePromise(createZDiffWithScores(keys));
     }
 
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets in `keys` and stores
+     * the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
+     * treated as empty sets.
+     *
+     * See https://valkey.io/commands/zdiffstore/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+     * @param destination - The key for the resulting sorted set.
+     * @param keys - The keys of the sorted sets to compare.
+     * @returns The number of members in the resulting sorted set stored at `destination`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
+     * await client.zadd("zset2", {"member1": 1.0});
+     * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
+     * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
+     *
+     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
+     * ```
+     */
+    public zdiffstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createZDiffStore(destination, keys));
+    }
+
     /** Returns the score of `member` in the sorted set stored at `key`.
      * See https://valkey.io/commands/zscore/ for more details.
      *
@@ -2806,6 +2865,55 @@ export class BaseClient {
     }
 
     /**
+     * Returns the rank of `member` in the sorted set stored at `key`, where
+     * scores are ordered from the highest to lowest, starting from 0.
+     * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevrank("my_sorted_set", "member2");
+     * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
+     * ```
+     */
+    public zrevrank(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZRevRank(key, member));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key` with its
+     * score, where scores are ordered from the highest to lowest, starting from 0.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns A list containing the rank and score of `member` in the sorted set, where ranks
+     *     are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * since - Valkey version 7.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevankWithScore("my_sorted_set", "member2");
+     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
+     * ```
+     */
+    public zrevrankWithScore(
+        key: string,
+        member: string,
+    ): Promise<(number[] | null)[]> {
+        return this.createWritePromise(createZRevRankWithScore(key, member));
+    }
+
+    /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
      * See https://valkey.io/commands/xadd/ for more details.
      *
@@ -3204,6 +3312,37 @@ export class BaseClient {
         options?: LPosOptions,
     ): Promise<number | number[] | null> {
         return this.createWritePromise(createLPos(key, element, options));
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its position is updated.
+     *
+     * See https://valkey.io/commands/geoadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersToGeospatialData - A mapping of member names to their corresponding positions - see
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @param options - The GeoAdd options - see {@link GeoAddOptions}.
+     * @returns The number of elements added to the sorted set. If `changed` is set to
+     *    `true` in the options, returns the number of elements updated in the sorted set.
+     *
+     * @example
+     * ```typescript
+     * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
+     * const num = await client.geoadd("mySortedSet", {"Palermo", new GeospatialData(13.361389, 38.115556)}, options);
+     * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
+     * ```
+     */
+    public geoadd(
+        key: string,
+        membersToGeospatialData: Map<string, GeospatialData>,
+        options?: GeoAddOptions,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createGeoAdd(key, membersToGeospatialData, options),
+        );
     }
 
     /**
