@@ -2398,6 +2398,55 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zmscore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+
+                const entries = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                };
+                expect(await client.zadd(key1, entries)).toEqual(3);
+
+                expect(
+                    await client.zmscore(key1, ["one", "three", "two"]),
+                ).toEqual([1.0, 3.0, 2.0]);
+                expect(
+                    await client.zmscore(key1, [
+                        "one",
+                        "nonExistingMember",
+                        "two",
+                        "nonExistingMember",
+                    ]),
+                ).toEqual([1.0, null, 2.0, null]);
+                expect(await client.zmscore(nonExistingKey, ["one"])).toEqual([
+                    null,
+                ]);
+
+                // invalid arg - member list must not be empty
+                await expect(client.zmscore(key1, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a sorted set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.zmscore(stringKey, ["one"]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
