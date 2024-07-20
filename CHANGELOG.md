@@ -12,6 +12,7 @@
 * Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))
 * Node: Added SMISMEMBER command ([#1955](https://github.com/valkey-io/valkey-glide/pull/1955))
 * Node: Added SDIFF command ([#1924](https://github.com/valkey-io/valkey-glide/pull/1924))
+* Node: Added ZMSCORE command ([#1987](https://github.com/valkey-io/valkey-glide/pull/1987))
 * Node: Added LOLWUT command ([#1934](https://github.com/valkey-io/valkey-glide/pull/1934))
 * Node: Added LPOS command ([#1927](https://github.com/valkey-io/valkey-glide/pull/1927))
 * Node: Added FUNCTION LOAD command ([#1969](https://github.com/valkey-io/valkey-glide/pull/1969))
