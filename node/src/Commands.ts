@@ -8,6 +8,7 @@ import { LPosOptions } from "./commands/LPosOptions";
 import { FlushMode } from "./commands/FlushMode";
 
 import { command_request } from "./ProtobufMessage";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
@@ -1574,6 +1575,18 @@ export function createFunctionLoad(
 ): command_request.Command {
     const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
     return createCommand(RequestType.FunctionLoad, args);
+}
+
+/**
+ * @internal
+ */
+export function createBitCount(
+    key: string,
+    options?: BitOffsetOptions,
+): command_request.Command {
+    const args = [key];
+    if (options) args.push(...options.toArgs());
+    return createCommand(RequestType.BitCount, args);
 }
 
 /**
