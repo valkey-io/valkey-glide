@@ -36,7 +36,7 @@ import {
     createExpire,
     createExpireAt,
     createFlushAll,
-    createFlushDB,  
+    createFlushDB,
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,

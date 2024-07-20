@@ -13,7 +13,6 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
-    FlushMode,
     GlideClient,
     GlideClientConfiguration,
     ProtocolVersion,
@@ -21,6 +20,7 @@ import {
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
@@ -34,7 +34,6 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
-import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
 

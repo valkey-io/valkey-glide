@@ -10,7 +10,6 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
-    FlushMode,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
@@ -19,9 +18,10 @@ import {
     ReturnType,
     Transaction,
 } from "..";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");

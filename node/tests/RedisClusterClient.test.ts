@@ -15,13 +15,13 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClusterClientConfiguration,
     ClusterTransaction,
-    FlushMode,
     GlideClusterClient,
     InfoOptions,
     ProtocolVersion,
     Routes,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -36,7 +36,6 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
 type Context = {
     client: GlideClusterClient;
 };
