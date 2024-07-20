@@ -18,10 +18,10 @@ import {
     ReturnType,
     Transaction,
 } from "..";
-import { checkIfServerVersionLessThan } from "./SharedTests";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");
@@ -654,6 +654,12 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.functionFlush();
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.ASYNC);
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.SYNC);
+        args.push("OK");
     }
 
     return args;
