@@ -815,6 +815,7 @@ public class TransactionTestUtilities {
         final String streamKey1 = "{streamKey}-1-" + UUID.randomUUID();
         final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
         final String streamKey3 = "{streamKey}-3-" + UUID.randomUUID();
+        final String streamKey4 = "{streamKey}-4-" + UUID.randomUUID();
         final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
         final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
         final String groupName3 = "{groupName}-2-" + UUID.randomUUID();
@@ -825,7 +826,7 @@ public class TransactionTestUtilities {
                 .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xadd(
-                        streamKey1,
+                        streamKey4,
                         new String[][] {new String[] {"field4", "value4"}},
                         StreamAddOptions.builder().id("0-4").build())
                 .xlen(streamKey1)
@@ -900,8 +901,8 @@ public class TransactionTestUtilities {
                     "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
                     "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
                     "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
-                    "0-4", // xadd(streamKey1, List.of(Pair.of("field4", "value4")), ... .id("0-4").build());
-                    3L, // xlen(streamKey1)
+                    "0-4", // xadd(streamKey4, List.of(Pair.of("field4", "value4")), ... .id("0-4").build());
+                    3L, // xlen(streamKey4)
                     Map.of(
                             streamKey1,
                             Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));

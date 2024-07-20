@@ -5790,12 +5790,12 @@ public class SharedCommandTests {
 
         // get everything from the stream
         Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
-        assertEquals(2, result.size());
-        String[][] entry = result.get(key);
+        assertEquals(1, result.size());
+        String[][] entry = result.get(timestamp);
         assertNotNull(entry);
-        assertEquals(key, entry[0][0]);
+        assertEquals(field, entry[0][0]);
         assertEquals(foo1, entry[0][1]);
-        assertEquals(key, entry[1][0]);
+        assertEquals(field, entry[1][0]);
         assertEquals(bar1, entry[1][1]);
     }
 
