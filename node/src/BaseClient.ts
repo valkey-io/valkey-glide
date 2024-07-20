@@ -10,7 +10,6 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { LPosOptions } from "./commands/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
@@ -27,6 +26,7 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBitCount,
     createDecr,
     createDecrBy,
     createDel,
@@ -125,6 +125,8 @@ import {
     createZScore,
     createGeoPos,
 } from "./Commands";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
     ConfigurationError,
@@ -3336,6 +3338,30 @@ export class BaseClient {
         options?: LPosOptions,
     ): Promise<number | number[] | null> {
         return this.createWritePromise(createLPos(key, element, options));
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+     * optionally be provided to count the number of bits in a specific string interval.
+     *
+     * See https://valkey.io/commands/bitcount for more details.
+     *
+     * @param key - The key for the string to count the set bits of.
+     * @param options - The offset options.
+     * @returns If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+     *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
+     *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
+     * console.log(await client.bitcount("my_key2", OffsetOptions(1, 3))); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+     * console.log(await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
+     * ```
+     */
+    public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
+        return this.createWritePromise(createBitCount(key, options));
     }
 
     /**
