@@ -160,7 +160,7 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
     logger_level.into()
 }
 
-fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
+fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
         Value::SimpleString(str) => Ok(js_env
@@ -172,7 +172,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
         Value::Array(array) => {
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
-                js_array_view.set_element(index as u32, redis_value_to_js(item, js_env)?)?;
+                js_array_view.set_element(index as u32, redis_value_to_js(item, js_env, string_decoder)?)?;
             }
             Ok(js_array_view.into_unknown())
         }
@@ -180,7 +180,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             let mut obj = js_env.create_object()?;
             for (key, value) in map {
                 let field_name = String::from_owned_redis_value(key).map_err(to_js_error)?;
-                let value = redis_value_to_js(value, js_env)?;
+                let value = redis_value_to_js(value, js_env, string_decoder)?;
                 obj.set_named_property(&field_name, value)?;
             }
             Ok(obj.into_unknown())
@@ -208,16 +208,16 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             // TODO - return a set object instead of an array object
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
-                js_array_view.set_element(index as u32, redis_value_to_js(item, js_env)?)?;
+                js_array_view.set_element(index as u32, redis_value_to_js(item, js_env, string_decoder)?)?;
             }
             Ok(js_array_view.into_unknown())
         }
         Value::Attribute { data, attributes } => {
             let mut obj = js_env.create_object()?;
-            let value = redis_value_to_js(*data, js_env)?;
+            let value = redis_value_to_js(*data, js_env, string_decoder)?;
             obj.set_named_property("value", value)?;
 
-            let value = redis_value_to_js(Value::Map(attributes), js_env)?;
+            let value = redis_value_to_js(Value::Map(attributes), js_env, string_decoder)?;
             obj.set_named_property("attributes", value)?;
 
             Ok(obj.into_unknown())
@@ -227,7 +227,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             obj.set_named_property("kind", format!("{kind:?}"))?;
             let js_array_view = data
                 .into_iter()
-                .map(|item| redis_value_to_js(item, js_env))
+                .map(|item| redis_value_to_js(item, js_env, string_decoder))
                 .collect::<Result<Vec<_>, _>>()?;
             obj.set_named_property("values", js_array_view)?;
             Ok(obj.into_unknown())
@@ -238,7 +238,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
 #[napi(
     ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[]"
 )]
-pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
+pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32, string_decoder: bool) -> Result<JsUnknown> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])
         .write_u32::<LittleEndian>(low_bits)
@@ -248,7 +248,7 @@ pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> R
         .unwrap();
     let pointer = u64::from_le_bytes(bytes);
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_js(*value, js_env)
+    redis_value_to_js(*value, js_env, string_decoder)
 }
 
 // Pointers are split because JS cannot represent a full usize using its `number` object.

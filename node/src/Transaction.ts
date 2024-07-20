@@ -132,13 +132,14 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
-    createZScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScore,
 } from "./Commands";
+import { Decoder } from "./Decoder";
 import { command_request } from "./ProtobufMessage";
-import { FlushMode } from "./commands/FlushMode";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
@@ -182,6 +183,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     protected addAndReturn(
         command: command_request.Command,
         shouldConvertToSet: boolean = false,
+        decoder?: Decoder
     ): T {
         if (shouldConvertToSet) {
             // The command's index within the transaction is saved for later conversion of its response to a Set type.
@@ -199,7 +201,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If `key` exists, returns the value of `key` as a string. Otherwise, return null.
      */
-    public get(key: string): T {
+    public get(key: string, decoder?: Decoder): T {
         return this.addAndReturn(createGet(key));
     }
 
