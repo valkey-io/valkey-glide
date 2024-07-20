@@ -1584,6 +1584,17 @@ export function createFunctionLoad(
     return createCommand(RequestType.FunctionLoad, args);
 }
 
+/**
+ * @internal
+ */
+export function createFunctionFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FunctionFlush, []);
+    }
+}
+
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
