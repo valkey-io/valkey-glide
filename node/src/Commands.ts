@@ -1814,8 +1814,17 @@ export function createGeoAdd(
         args = args.concat(coord.toArgs());
         args.push(member);
     });
-
     return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createGeoPos(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.GeoPos, [key].concat(members));
 }
 
 /**

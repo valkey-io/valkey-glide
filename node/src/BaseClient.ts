@@ -123,6 +123,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    createGeoPos,
 } from "./Commands";
 import {
     ClosingError,
@@ -3354,7 +3355,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
-     * const num = await client.geoadd("mySortedSet", {"Palermo", new GeospatialData(13.361389, 38.115556)}, options);
+     * const num = await client.geoadd("mySortedSet", new Map([["Palermo", new GeospatialData(13.361389, 38.115556)]]), options);
      * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
      * ```
      */
@@ -3366,6 +3367,33 @@ export class BaseClient {
         return this.createWritePromise(
             createGeoAdd(key, membersToGeospatialData, options),
         );
+    }
+
+    /**
+     * Returns the positions (longitude, latitude) of all the specified `members` of the
+     * geospatial index represented by the sorted set at `key`.
+     *
+     * See https://valkey.io/commands/geopos for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The members for which to get the positions.
+     * @returns A 2D `array` which represents positions (longitude and latitude) corresponding
+     *     to the given members. If a member does not exist, its position will be `null`.
+     *
+     * @example
+     * ```typescript
+     * await client.geoadd("mySortedSet", new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]));
+     * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
+     * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
+     * // returned might not be exactly the same as the input values
+     * console.log(result); // Output: [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], null]
+     * ```
+     */
+    public geopos(
+        key: string,
+        members: string[],
+    ): Promise<(number[] | null)[]> {
+        return this.createWritePromise(createGeoPos(key, members));
     }
 
     /**

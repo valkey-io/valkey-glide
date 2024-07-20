@@ -134,6 +134,7 @@ import {
     createZScore,
     createZRevRank,
     createZRevRankWithScore,
+    createGeoPos,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { FlushMode } from "./commands/FlushMode";
@@ -1948,6 +1949,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createGeoAdd(key, membersToGeospatialData, options),
         );
+    }
+
+    /**
+     * Returns the positions (longitude, latitude) of all the specified `members` of the
+     * geospatial index represented by the sorted set at `key`.
+     *
+     * See https://valkey.io/commands/geopos for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The members for which to get the positions.
+     *
+     * Command Response - A 2D `array` which represents positions (longitude and latitude) corresponding
+     *     to the given members. If a member does not exist, its position will be `null`.
+     */
+    public geopos(key: string, members: string[]): T {
+        return this.addAndReturn(createGeoPos(key, members));
     }
 }
 
