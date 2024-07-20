@@ -114,6 +114,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMScore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -2486,6 +2487,28 @@ export class BaseClient {
      */
     public zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZScore(key, member));
+    }
+
+    /**
+     * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zmscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members in the sorted set.
+     * @returns An `array` of scores corresponding to `members`.
+     * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zmscore("zset1", ["member1", "non_existent_member", "member2"]);
+     * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
+     * ```
+     */
+    public zmscore(key: string, members: string[]): Promise<(number | null)[]> {
+        return this.createWritePromise(createZMScore(key, members));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.

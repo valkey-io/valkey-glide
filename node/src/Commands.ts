@@ -1109,6 +1109,16 @@ export function createZScore(
     return createCommand(RequestType.ZScore, [key, member]);
 }
 
+/**
+ * @internal
+ */
+export function createZMScore(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.ZMScore, [key, ...members]);
+}
+
 export type ScoreBoundary<T> =
     /**
      * Positive infinity bound for sorted set.
