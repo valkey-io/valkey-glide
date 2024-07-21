@@ -1,10 +1,16 @@
 [
   {
     "type": "valkey",
-    "version": "7.2.5"
+    "version": "7.2.5",
+    "run": "always"
   },
   {
     "type": "valkey",
-    "version": "8.0.0"
+    "version": "redis-7.0.15"
+  },
+  {
+    "type": "valkey",
+    "version": "redis-6.2.14",
+    "run": "always"
   }
 ]
