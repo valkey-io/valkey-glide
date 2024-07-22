@@ -28,6 +28,8 @@ import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { checkIfServerVersionLessThan } from "./SharedTests";
+import { ListDirection } from "../build-ts/src/commands/ListDirection";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
     Logger.init("info");
