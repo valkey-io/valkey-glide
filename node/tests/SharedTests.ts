@@ -18,8 +18,6 @@ import {
     Script,
     parseInfoResponse,
 } from "../";
-import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 import {
     Client,
     GetAndSetRandomValue,
