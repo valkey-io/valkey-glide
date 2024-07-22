@@ -1892,7 +1892,7 @@ export function createZMPop(
     const args: string[] = [keys.length.toString()].concat(keys);
     args.push(modifier);
 
-    if (count !== undefined) {
+    if (count) {
         args.push("COUNT");
         args.push(count.toString());
     }

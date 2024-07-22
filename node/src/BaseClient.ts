@@ -3426,10 +3426,11 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sorted sets.
-     * @param modifier - The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to
-     *     pop the member with the lowest/highest score accordingly.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter#MIN} or
+     *     {@link ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
      * @returns A two-element `array` containing the key name of the set from which the element
-     *     was popped, and a member-score `Map` of the popped element.
+     *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
      *
      * since Valkey version 7.0.0.
@@ -3439,7 +3440,7 @@ export class BaseClient {
      * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
      * await client.zadd("zSet2", { four: 4.0 });
      * console.log(await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2));
-     * // Output: [ "zSet1", { three: 3, two: 2 } ] "three" with score 3 and "two" with score 2 were popped from "zSet1".
+     * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
      * ```
      */
     public zmpop(
