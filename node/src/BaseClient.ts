@@ -10,7 +10,6 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { LPosOptions } from "./commands/LPosOptions";
 import {
     AggregationType,
     ExpireOptions,
@@ -27,6 +26,7 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBitCount,
     createDecr,
     createDecrBy,
     createDel,
@@ -111,6 +111,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMScore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -123,6 +124,8 @@ import {
     createZRevRankWithScore,
     createZScore,
 } from "./Commands";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
     ConfigurationError,
@@ -2444,6 +2447,28 @@ export class BaseClient {
         return this.createWritePromise(createZScore(key, member));
     }
 
+    /**
+     * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zmscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members in the sorted set.
+     * @returns An `array` of scores corresponding to `members`.
+     * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zmscore("zset1", ["member1", "non_existent_member", "member2"]);
+     * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
+     * ```
+     */
+    public zmscore(key: string, members: string[]): Promise<(number | null)[]> {
+        return this.createWritePromise(createZMScore(key, members));
+    }
+
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zcount/ for more details.
      *
@@ -3312,6 +3337,30 @@ export class BaseClient {
         options?: LPosOptions,
     ): Promise<number | number[] | null> {
         return this.createWritePromise(createLPos(key, element, options));
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+     * optionally be provided to count the number of bits in a specific string interval.
+     *
+     * See https://valkey.io/commands/bitcount for more details.
+     *
+     * @param key - The key for the string to count the set bits of.
+     * @param options - The offset options.
+     * @returns If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+     *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
+     *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
+     * console.log(await client.bitcount("my_key2", OffsetOptions(1, 3))); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+     * console.log(await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
+     * ```
+     */
+    public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
+        return this.createWritePromise(createBitCount(key, options));
     }
 
     /**

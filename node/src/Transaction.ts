@@ -20,6 +20,7 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBitCount,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -38,6 +39,7 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
     createGet,
@@ -122,6 +124,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMScore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -135,6 +138,7 @@ import {
     createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
@@ -1260,6 +1264,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZScore(key, member));
     }
 
+    /**
+     * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zmscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members in the sorted set.
+     *
+     * Command Response - An `array` of scores corresponding to `members`.
+     * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public zmscore(key: string, members: string[]): T {
+        return this.addAndReturn(createZMScore(key, members));
+    }
+
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zcount/ for more details.
      *
@@ -1852,6 +1873,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `OK`.
+     */
+    public functionFlush(mode?: FlushMode): T {
+        return this.addAndReturn(createFunctionFlush(mode));
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -1906,6 +1941,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public dbsize(): T {
         return this.addAndReturn(createDBSize());
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+     * optionally be provided to count the number of bits in a specific string interval.
+     *
+     * See https://valkey.io/commands/bitcount for more details.
+     *
+     * @param key - The key for the string to count the set bits of.
+     * @param options - The offset options.
+     *
+     * Command Response - If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+     *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
+     *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+     */
+    public bitcount(key: string, options?: BitOffsetOptions): T {
+        return this.addAndReturn(createBitCount(key, options));
     }
 
     /**

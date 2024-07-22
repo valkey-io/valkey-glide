@@ -18,10 +18,14 @@ import {
     ReturnType,
     Transaction,
 } from "..";
-import { checkIfServerVersionLessThan } from "./SharedTests";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
+import {
+    BitmapIndexType,
+    BitOffsetOptions,
+} from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { checkIfServerVersionLessThan } from "./SharedTests";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
     Logger.init("info");
@@ -561,6 +565,8 @@ export async function transactionTest(
         args.push({ three: 3.5 });
         baseTransaction.zdiffstore(key13, [key13, key13]);
         args.push(0);
+        baseTransaction.zmscore(key12, ["two", "one"]);
+        args.push([2.0, 1.0]);
     }
 
     baseTransaction.zinterstore(key12, [key12, key13]);
@@ -627,6 +633,20 @@ export async function transactionTest(
 
     baseTransaction.setbit(key17, 1, 1);
     args.push(0);
+    baseTransaction.set(key17, "foobar");
+    args.push("OK");
+    baseTransaction.bitcount(key17);
+    args.push(26);
+    baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
+    args.push(6);
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.bitcount(
+            key17,
+            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
+        );
+        args.push(17);
+    }
 
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
@@ -654,6 +674,12 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.functionFlush();
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.ASYNC);
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.SYNC);
+        args.push("OK");
     }
 
     return args;

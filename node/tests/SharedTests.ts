@@ -27,6 +27,10 @@ import {
     intoString,
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
+import {
+    BitmapIndexType,
+    BitOffsetOptions,
+} from "../build-ts/src/commands/BitOffsetOptions";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
@@ -2398,6 +2402,55 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zmscore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const stringKey = `{key}-${uuidv4()}`;
+
+                const entries = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.0,
+                };
+                expect(await client.zadd(key1, entries)).toEqual(3);
+
+                expect(
+                    await client.zmscore(key1, ["one", "three", "two"]),
+                ).toEqual([1.0, 3.0, 2.0]);
+                expect(
+                    await client.zmscore(key1, [
+                        "one",
+                        "nonExistingMember",
+                        "two",
+                        "nonExistingMember",
+                    ]),
+                ).toEqual([1.0, null, 2.0, null]);
+                expect(await client.zmscore(nonExistingKey, ["one"])).toEqual([
+                    null,
+                ]);
+
+                // invalid arg - member list must not be empty
+                await expect(client.zmscore(key1, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a sorted set
+                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.zmscore(stringKey, ["one"]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zcount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -4262,6 +4315,90 @@ export function runBaseTests<Context>(config: {
                         key: key,
                     };
                     expect(await client.dbsize(primaryRoute)).toBe(1);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bitcount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const value = "foobar";
+
+                checkSimple(await client.set(key1, value)).toEqual("OK");
+                expect(await client.bitcount(key1)).toEqual(26);
+                expect(
+                    await client.bitcount(key1, new BitOffsetOptions(1, 1)),
+                ).toEqual(6);
+                expect(
+                    await client.bitcount(key1, new BitOffsetOptions(0, -5)),
+                ).toEqual(10);
+                // non-existing key
+                expect(await client.bitcount(uuidv4())).toEqual(0);
+                expect(
+                    await client.bitcount(
+                        uuidv4(),
+                        new BitOffsetOptions(5, 30),
+                    ),
+                ).toEqual(0);
+                // key exists, but it is not a string
+                expect(await client.sadd(key2, [value])).toEqual(1);
+                await expect(client.bitcount(key2)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(
+                    client.bitcount(key2, new BitOffsetOptions(1, 1)),
+                ).rejects.toThrow(RequestError);
+
+                if (await checkIfServerVersionLessThan("7.0.0")) {
+                    await expect(
+                        client.bitcount(
+                            key1,
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BIT),
+                        ),
+                    ).rejects.toThrow();
+                    await expect(
+                        client.bitcount(
+                            key1,
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
+                        ),
+                    ).rejects.toThrow();
+                } else {
+                    expect(
+                        await client.bitcount(
+                            key1,
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
+                        ),
+                    ).toEqual(16);
+                    expect(
+                        await client.bitcount(
+                            key1,
+                            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
+                        ),
+                    ).toEqual(17);
+                    expect(
+                        await client.bitcount(
+                            key1,
+                            new BitOffsetOptions(5, -5, BitmapIndexType.BIT),
+                        ),
+                    ).toEqual(23);
+                    expect(
+                        await client.bitcount(
+                            uuidv4(),
+                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
+                        ),
+                    ).toEqual(0);
+                    // key exists, but it is not a string
+                    await expect(
+                        client.bitcount(
+                            key2,
+                            new BitOffsetOptions(1, 1, BitmapIndexType.BYTE),
+                        ),
+                    ).rejects.toThrow(RequestError);
                 }
             }, protocol);
         },

@@ -8,6 +8,7 @@ import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
@@ -1091,6 +1092,16 @@ export function createZScore(
     return createCommand(RequestType.ZScore, [key, member]);
 }
 
+/**
+ * @internal
+ */
+export function createZMScore(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.ZMScore, [key, ...members]);
+}
+
 export type ScoreBoundary<T> =
     /**
      * Positive infinity bound for sorted set.
@@ -1573,6 +1584,29 @@ export function createFunctionLoad(
 ): command_request.Command {
     const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
     return createCommand(RequestType.FunctionLoad, args);
+}
+
+/**
+ * @internal
+ */
+export function createBitCount(
+    key: string,
+    options?: BitOffsetOptions,
+): command_request.Command {
+    const args = [key];
+    if (options) args.push(...options.toArgs());
+    return createCommand(RequestType.BitCount, args);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FunctionFlush, []);
+    }
 }
 
 export type StreamReadOptions = {
