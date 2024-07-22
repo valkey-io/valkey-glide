@@ -1021,36 +1021,35 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-            `lmove list_%p`,
-            async (protocol) => {
-                await runTest(async (client: BaseClient) => {
-                    const key1 = uuidv4();
-                    const key2 = uuidv4();
-                    const non_existing_key = uuidv4();
-                    const non_list_key = uuidv4();
-                    const lpushArgs1 = ["2", "1"];
-                    const lpushArgs2 = ["4", "3"];
+        `lmove list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const non_existing_key = uuidv4();
+                const non_list_key = uuidv4();
+                const lpushArgs1 = ["2", "1"];
+                const lpushArgs2 = ["4", "3"];
 
-                    // Initialize the tests
-                    expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
-                    expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
+                // Initialize the tests
+                expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
+                expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
 
-                    // Move from LEFT to LEFT
-                    checkSimple(
-                        await client.lmove(
-                            key1,
-                            key2,
-                            ListDirection.LEFT,
-                            ListDirection.LEFT,
-                        ),
-                    ).toEqual("1");
-                    console.log("RAWRRWERWERWERE");
-                    // Move from LEFT to RIGHT
-                }, protocol);
-            },
-            config.timeout,
-        );
-
+                // Move from LEFT to LEFT
+                checkSimple(
+                    await client.lmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual("1");
+                console.log("RAWRRWERWERWERE");
+                // Move from LEFT to RIGHT
+            }, protocol);
+        },
+        config.timeout,
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `ltrim with existing key and key that holds a value that is not a list_%p`,

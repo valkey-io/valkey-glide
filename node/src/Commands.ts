@@ -568,13 +568,13 @@ export function createLMove(
     source: string,
     destination: string,
     where_from: ListDirection,
-    where_to: ListDirection
+    where_to: ListDirection,
 ): command_request.Command {
     return createCommand(RequestType.LMove, [
         source,
         destination,
         ListDirection[where_from],
-        ListDirection[where_to]
+        ListDirection[where_to],
     ]);
 }
 

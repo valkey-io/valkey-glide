@@ -13,5 +13,5 @@ export enum ListDirection {
     /**
      * Represents the option that elements should be popped from or added to the right side of a list.
      */
-    "RIGHT"
+    "RIGHT",
 }

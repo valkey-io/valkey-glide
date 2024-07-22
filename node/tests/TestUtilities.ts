@@ -20,6 +20,7 @@ import {
 } from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
@@ -353,6 +354,7 @@ export async function transactionTest(
     const key16 = "{key}" + uuidv4(); // list
     const key17 = "{key}" + uuidv4(); // bitmap
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
+    const key19 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -425,6 +427,8 @@ export async function transactionTest(
     args.push("OK");
     baseTransaction.lrange(key5, 0, -1);
     args.push([field + "3", field + "2"]);
+    baseTransaction.lmove(key5, key19, ListDirection.LEFT, ListDirection.LEFT);
+    args.push(field + "3");
     baseTransaction.lpopCount(key5, 2);
     args.push([field + "3", field + "2"]);
     baseTransaction.linsert(

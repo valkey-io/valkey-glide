@@ -692,7 +692,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         source: string,
         destination: string,
         where_from: ListDirection,
-        where_to: ListDirection
+        where_to: ListDirection,
     ): T {
         return this.addAndReturn(
             createLMove(source, destination, where_from, where_to),
