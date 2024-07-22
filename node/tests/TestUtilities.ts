@@ -24,8 +24,8 @@ import {
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 beforeAll(() => {
     Logger.init("info");
@@ -634,6 +634,8 @@ export async function transactionTest(
 
     baseTransaction.setbit(key17, 1, 1);
     args.push(0);
+    baseTransaction.getbit(key17, 1);
+    args.push(1);
     baseTransaction.set(key17, "foobar");
     args.push("OK");
     baseTransaction.bitcount(key17);
@@ -675,6 +677,8 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.functionDelete(libName);
+        args.push("OK");
         baseTransaction.functionFlush();
         args.push("OK");
         baseTransaction.functionFlush(FlushMode.ASYNC);

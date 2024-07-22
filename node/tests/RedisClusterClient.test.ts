@@ -804,6 +804,98 @@ describe("GlideClusterClient", () => {
         },
     );
 
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            describe.each([true, false])(
+                "Single node route = %s",
+                (singleNodeRoute) => {
+                    it(
+                        "function delete",
+                        async () => {
+                            if (await checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const client =
+                                await GlideClusterClient.createClient(
+                                    getClientConfigurationOption(
+                                        cluster.getAddresses(),
+                                        protocol,
+                                    ),
+                                );
+
+                            try {
+                                const libName =
+                                    "mylib1C" + uuidv4().replaceAll("-", "");
+                                const funcName =
+                                    "myfunc1c" + uuidv4().replaceAll("-", "");
+                                const code = generateLuaLibCode(
+                                    libName,
+                                    new Map([[funcName, "return args[1]"]]),
+                                    true,
+                                );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not yet exist
+                                let functionList = await client.customCommand([
+                                    "FUNCTION",
+                                    "LIST",
+                                    "LIBRARYNAME",
+                                    libName,
+                                ]);
+                                checkClusterResponse(
+                                    functionList as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+                                // load the library
+                                checkSimple(
+                                    await client.functionLoad(
+                                        code,
+                                        undefined,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+
+                                // Delete the function
+                                expect(
+                                    await client.functionDelete(libName, route),
+                                ).toEqual("OK");
+
+                                // TODO use commands instead of customCommand once implemented
+                                // verify function does not exist
+                                functionList = await client.customCommand([
+                                    "FUNCTION",
+                                    "LIST",
+                                    "LIBRARYNAME",
+                                    libName,
+                                ]);
+                                checkClusterResponse(
+                                    functionList as object,
+                                    singleNodeRoute,
+                                    (value) => expect(value).toEqual([]),
+                                );
+
+                                // Delete a non-existing library
+                                await expect(
+                                    client.functionDelete(libName, route),
+                                ).rejects.toThrow(`Library not found`);
+                            } finally {
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
+                                client.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
+                },
+            );
+        },
+    );
+
     it.each([
         [true, ProtocolVersion.RESP3],
         [false, ProtocolVersion.RESP3],

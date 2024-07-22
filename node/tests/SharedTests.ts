@@ -467,11 +467,42 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getbit test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const setKey = `{key}-${uuidv4()}`;
+
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.getbit(key, 1)).toEqual(1);
+                // When offset is beyond the string length, the string is assumed to be a contiguous space with 0 bits.
+                expect(await client.getbit(key, 1000)).toEqual(0);
+                // When key does not exist it is assumed to be an empty string, so offset is always out of range and the
+                // value is also assumed to be a contiguous space with 0 bits.
+                expect(await client.getbit(nonExistingKey, 1)).toEqual(0);
+
+                // invalid argument - offset can't be negative
+                await expect(client.getbit(key, -1)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a string
+                expect(await client.sadd(setKey, ["foo"])).toEqual(1);
+                await expect(client.getbit(setKey, 0)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `setbit test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = `{key}-${uuidv4()}`;
-                const stringKey = `{key}-${uuidv4()}`;
+                const setKey = `{key}-${uuidv4()}`;
 
                 expect(await client.setbit(key, 1, 1)).toEqual(0);
                 expect(await client.setbit(key, 1, 0)).toEqual(1);
@@ -487,8 +518,8 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // key exists, but it is not a string
-                expect(await client.sadd(stringKey, ["foo"])).toEqual(1);
-                await expect(client.setbit(stringKey, 0, 0)).rejects.toThrow(
+                expect(await client.sadd(setKey, ["foo"])).toEqual(1);
+                await expect(client.setbit(setKey, 0, 0)).rejects.toThrow(
                     RequestError,
                 );
             }, protocol);

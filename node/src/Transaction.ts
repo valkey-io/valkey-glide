@@ -38,10 +38,12 @@ import {
     createExpireAt,
     createFlushAll,
     createFlushDB,
+    createFunctionDelete,
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
     createGet,
+    createGetBit,
     createGetDel,
     createHDel,
     createHExists,
@@ -132,13 +134,13 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
-    createZScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
-import { FlushMode } from "./commands/FlushMode";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
@@ -385,6 +387,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public decrBy(key: string, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
+    }
+
+    /**
+     * Returns the bit value at `offset` in the string value stored at `key`. `offset` must be greater than or equal
+     * to zero.
+     *
+     * See https://valkey.io/commands/getbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to return.
+     *
+     * Command Response - The bit at the given `offset` of the string. Returns `0` if the key is empty or if the
+     * `offset` exceeds the length of the string.
+     */
+    public getbit(key: string, offset: number): T {
+        return this.addAndReturn(createGetBit(key, offset));
     }
 
     /**
@@ -1837,6 +1855,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     *
+     * Command Response - `OK`.
+     */
+    public functionDelete(libraryCode: string): T {
+        return this.addAndReturn(createFunctionDelete(libraryCode));
     }
 
     /**
