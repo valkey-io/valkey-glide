@@ -531,7 +531,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function delete test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
