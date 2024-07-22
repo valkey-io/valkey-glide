@@ -827,7 +827,7 @@ public class TransactionTestUtilities {
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xadd(
                         streamKey4,
-                        new String[][] {new String[] {"field4", "value4"}},
+                        new String[][] {{"field4", "value4"}, {"field4", "value5"}},
                         StreamAddOptions.builder().id("0-4").build())
                 .xlen(streamKey1)
                 .xread(Map.of(streamKey1, "0-2"))
@@ -901,7 +901,7 @@ public class TransactionTestUtilities {
                     "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
                     "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
                     "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
-                    "0-4", // xadd(streamKey4, List.of(Pair.of("field4", "value4")), ... .id("0-4").build());
+                    "0-4", // xadd(streamKey4, new String[][] {{"field4", "value4"}, {"field4", "value5"}}), ... .id("0-4").build());
                     3L, // xlen(streamKey4)
                     Map.of(
                             streamKey1,
