@@ -307,7 +307,6 @@ describe("GlideClusterClient", () => {
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
-                client.sintercard(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
                 client.zdiff(["abc", "zxy", "lkn"]),
@@ -322,7 +321,10 @@ describe("GlideClusterClient", () => {
             ];
 
             if (!versionLessThan7) {
-                promises.push(client.zintercard(["abc", "zxy", "lkn"]));
+                promises.push(
+                    client.sintercard(["abc", "zxy", "lkn"]),
+                    client.zintercard(["abc", "zxy", "lkn"]),
+                );
             }
 
             for (const promise of promises) {
