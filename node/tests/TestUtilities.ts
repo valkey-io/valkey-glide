@@ -23,11 +23,11 @@ import {
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { checkIfServerVersionLessThan } from "./SharedTests";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
     Logger.init("info");
@@ -681,6 +681,8 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.functionDelete(libName);
+        args.push("OK");
         baseTransaction.functionFlush();
         args.push("OK");
         baseTransaction.functionFlush(FlushMode.ASYNC);

@@ -41,6 +41,7 @@ import {
     createExpireAt,
     createFlushAll,
     createFlushDB,
+    createFunctionDelete,
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
@@ -137,13 +138,13 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
-    createZScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
-import { FlushMode } from "./commands/FlushMode";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
@@ -1885,6 +1886,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     *
+     * Command Response - `OK`.
+     */
+    public functionDelete(libraryCode: string): T {
+        return this.addAndReturn(createFunctionDelete(libraryCode));
     }
 
     /**
