@@ -813,7 +813,7 @@ describe("GlideClusterClient", () => {
                     it(
                         "function delete",
                         async () => {
-                            if (await checkIfServerVersionLessThan("7.0.0"))
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
 
                             const client =
