@@ -35,6 +35,7 @@ import {
     createExpireAt,
     createGeoAdd,
     createGet,
+    createGetBit,
     createGetDel,
     createHDel,
     createHExists,
@@ -970,6 +971,27 @@ export class BaseClient {
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /**
+     * Returns the bit value at `offset` in the string value stored at `key`. `offset` must be greater than or equal
+     * to zero.
+     *
+     * See https://valkey.io/commands/getbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to return.
+     * @returns The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+     * the length of the string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.getbit("key", 1);
+     * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
+     * ```
+     */
+    public getbit(key: string, offset: number): Promise<number> {
+        return this.createWritePromise(createGetBit(key, offset));
     }
 
     /**

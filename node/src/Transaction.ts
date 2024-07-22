@@ -42,6 +42,7 @@ import {
     createFunctionLoad,
     createGeoAdd,
     createGet,
+    createGetBit,
     createGetDel,
     createHDel,
     createHExists,
@@ -385,6 +386,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public decrBy(key: string, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
+    }
+
+    /**
+     * Returns the bit value at `offset` in the string value stored at `key`. `offset` must be greater than or equal
+     * to zero.
+     *
+     * See https://valkey.io/commands/getbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to return.
+     *
+     * Command Response - The bit at the given `offset` of the string. Returns `0` if the key is empty or if the
+     * `offset` exceeds the length of the string.
+     */
+    public getbit(key: string, offset: number): T {
+        return this.addAndReturn(createGetBit(key, offset));
     }
 
     /**

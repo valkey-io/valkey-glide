@@ -449,6 +449,16 @@ export function createDecrBy(
 /**
  * @internal
  */
+export function createGetBit(
+    key: string,
+    offset: number,
+): command_request.Command {
+    return createCommand(RequestType.GetBit, [key, offset.toString()]);
+}
+
+/**
+ * @internal
+ */
 export function createSetBit(
     key: string,
     offset: number,

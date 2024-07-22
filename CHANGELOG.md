@@ -2,6 +2,7 @@
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
+* Node: Added GETBIT command ([#1989](https://github.com/valkey-io/valkey-glide/pull/1989))
 * Node: Added SETBIT command ([#1978](https://github.com/valkey-io/valkey-glide/pull/1978))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
