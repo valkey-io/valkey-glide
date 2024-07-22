@@ -17,8 +17,7 @@
         "long": "^5.2.3",
         "npmignore": "^0.3.0",
         "prettier": "^3.3.2",
-        "protobufjs": "^7.2.2",
-        "semver": "^7.6.3"
+        "protobufjs": "^7.2.2"
     },
     "bundleDependencies": [
         "glide-rs"
@@ -61,7 +60,8 @@
         "replace": "^1.2.2",
         "ts-jest": "^28.0.8",
         "typescript": "^4.9.5",
-        "uuid": "^9.0.0"
+        "uuid": "^9.0.0",
+        "semver": "^7.6.3"
     },
     "author": "Amazon Web Services",
     "license": "Apache-2.0",
