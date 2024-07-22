@@ -5779,24 +5779,21 @@ public class SharedCommandTests {
         String bar1 = "bar1";
 
         String timestamp = "0-1";
+        String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
         assertEquals(
                 timestamp,
                 client
                         .xadd(
                                 key,
-                                new String[][] {new String[] {field, foo1}, new String[] {field, bar1}},
+                                entry,
                                 StreamAddOptions.builder().id(timestamp).build())
                         .get());
 
         // get everything from the stream
         Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
-        String[][] entry = result.get(timestamp);
-        assertNotNull(entry);
-        assertEquals(field, entry[0][0]);
-        assertEquals(foo1, entry[0][1]);
-        assertEquals(field, entry[1][0]);
-        assertEquals(bar1, entry[1][1]);
+        String[][] actualEntry = result.get(timestamp);
+        assertDeepEquals(entry, actualEntry);
     }
 
     @SneakyThrows
