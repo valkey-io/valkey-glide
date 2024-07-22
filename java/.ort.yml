@@ -11,10 +11,13 @@ excludes:
   scopes:
     - pattern: "test.*"
       reason: "TEST_DEPENDENCY_OF"
-      comment: Packages for testing only. Not part of released artifacts."
+      comment: Packages for testing only. Not part of released artifacts.
     - pattern: "(spotbugs.*|spotbugsSlf4j.*)"
       reason: "TEST_DEPENDENCY_OF"
-      comment: Packages for static analysis only. Not part of released artifacts."
+      comment: Packages for static analysis only. Not part of released artifacts.
     - pattern: "jacoco.*"
       reason: "TEST_DEPENDENCY_OF"
-      comment: Packages for code coverage verification only. Not part of released artifacts."
+      comment: Packages for code coverage verification only. Not part of released artifacts.
+    - pattern: "compileClasspath.*"
+      reason: "TEST_DEPENDENCY_OF"
+      comment: Packages for Gradle only. Not part of released artifacts.
