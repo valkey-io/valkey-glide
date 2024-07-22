@@ -105,10 +105,10 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
+     * StreamAddOptions options = StreamAddOptions.builder().id("1-0").makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd("key", Map.of("name", "Sara", "surname", "OConnor"), options).get();
      * if (streamId != null) {
-     *     assert streamId.equals("sid");
+     *     assert streamId.equals("1-0");
      * }
      * }</pre>
      */
@@ -128,10 +128,10 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
+     * StreamAddOptions options = StreamAddOptions.builder().id("1-0").makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd("key", new String[][] {{"name", "Sara"}, {"surname", "OConnor"}}, options).get();
      * if (streamId != null) {
-     *     assert streamId.equals("sid");
+     *     assert streamId.equals("1-0");
      * }
      * }</pre>
      */
@@ -151,10 +151,10 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
+     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("1-0")).makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd(gs("key"), Map.of(gs("name"), gs("Sara"), gs("surname"), gs("OConnor")), options).get();
      * if (streamId != null) {
-     *     assert streamId.equals("sid");
+     *     assert streamId.equals("1-0");
      * }
      * }</pre>
      */
@@ -175,10 +175,10 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
+     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("1-0")).makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd(gs("key"), new GlideString[][] {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}, options).get();
      * if (streamId != null) {
-     *     assert streamId.equals("sid");
+     *     assert streamId.equals("1-0");
      * }
      * }</pre>
      */
