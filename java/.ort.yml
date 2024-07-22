@@ -20,4 +20,4 @@ excludes:
       comment: Packages for code coverage verification only. Not part of released artifacts.
     - pattern: "compileClasspath.*"
       reason: "TEST_DEPENDENCY_OF"
-      comment: Packages for Gradle compiler only. Not part of released artifacts.
+      comment: Packages for Gradle only. Not part of released artifacts.
