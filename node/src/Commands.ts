@@ -8,6 +8,7 @@ import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
+import { BitmapIndexType } from "./commands/BitmapIndexType";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
@@ -1606,6 +1607,42 @@ export function createBitCount(
     const args = [key];
     if (options) args.push(...options.toArgs());
     return createCommand(RequestType.BitCount, args);
+}
+
+/**
+ * @internal
+ */
+export function createBitPos(
+    key: string,
+    bit: number,
+    start?: number,
+): command_request.Command {
+    const args = [key, bit.toString()];
+
+    if (start) {
+        args.push(start.toString());
+    }
+
+    return createCommand(RequestType.BitPos, args);
+}
+
+/**
+ * @internal
+ */
+export function createBitPosInterval(
+    key: string,
+    bit: number,
+    start: number,
+    end: number,
+    indexType?: BitmapIndexType,
+): command_request.Command {
+    const args = [key, bit.toString(), start.toString(), end.toString()];
+
+    if (indexType) {
+        args.push(indexType);
+    }
+
+    return createCommand(RequestType.BitPos, args);
 }
 
 /**

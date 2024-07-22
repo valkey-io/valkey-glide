@@ -27,6 +27,8 @@ import {
     createBLPop,
     createBRPop,
     createBitCount,
+    createBitPos,
+    createBitPosInterval,
     createDecr,
     createDecrBy,
     createDel,
@@ -125,6 +127,7 @@ import {
     createZRevRankWithScore,
     createZScore,
 } from "./Commands";
+import { BitmapIndexType } from "./commands/BitmapIndexType";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { LPosOptions } from "./commands/LPosOptions";
 import {
@@ -1015,6 +1018,79 @@ export class BaseClient {
      */
     public setbit(key: string, offset: number, value: number): Promise<number> {
         return this.createWritePromise(createSetBit(key, offset, value));
+    }
+
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The optional starting offset
+     * `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+     * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+     * the last byte of the list, `-2` being the penultimate, and so on.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - The starting offset.
+     * @returns The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+     * If `start` was provided, the search begins at the offset indicated by `start`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "A1");  // "A1" has binary value 01000001 00110001
+     * const result1 = await client.bitpos("key1", 1);
+     * console.log(result1); // Output: 1 - The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+     *
+     * const result2 = await client.bitpos("key1", 1, -1);
+     * console.log(result2); // Output: 10 - The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+     * ```
+     */
+    public bitpos(key: string, bit: number, start?: number): Promise<number> {
+        return this.createWritePromise(createBitPos(key, bit, start));
+    }
+
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+     * `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+     * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+     * being the penultimate, and so on.
+     *
+     * If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+     * `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
+     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+     * specified, `start=0` and `end=2` means to look at the first three bytes.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @param indexType - The index offset type. This option can only be specified if you are using Valkey version
+     *      7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`. If no index type is
+     *      provided, the indexes will be assumed to be byte indexes.
+     * @returns The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
+     *      value of the string held at `key`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "A12");  // "A12" has binary value 01000001 00110001 00110010
+     * const result1 = await client.bitposInterval("key1", 1, 1, -1);
+     * console.log(result1); // Output: 10 - The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+     *
+     * const result2 = await client.bitposInterval("key1", 1, 2, 9, BitmapIndexType.BIT);
+     * console.log(result2); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+     * ```
+     */
+    public bitposInterval(
+        key: string,
+        bit: number,
+        start: number,
+        end: number,
+        indexType?: BitmapIndexType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createBitPosInterval(key, bit, start, end, indexType),
+        );
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
