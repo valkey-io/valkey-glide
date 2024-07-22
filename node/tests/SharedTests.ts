@@ -13,7 +13,11 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClosingError,
+    ConditionalChange,
     ExpireOptions,
+    FlushMode,
+    GeoUnit,
+    GeospatialData,
     ListDirection,
     GlideClient,
     GlideClusterClient,
@@ -23,9 +27,11 @@ import {
     RequestError,
     ScoreFilter,
     Script,
+    UpdateByScore,
     parseInfoResponse,
-    GeoUnit,
 } from "../";
+import { RedisCluster } from "../../utils/TestUtils";
+import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     Client,
     GetAndSetRandomValue,
@@ -35,14 +41,6 @@ import {
     intoArray,
     intoString,
 } from "./TestUtilities";
-import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import { BitOffsetOptions } from "../build-ts/src/commands/BitOffsetOptions";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
-import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { RedisCluster } from "../../utils/TestUtils";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -283,8 +281,6 @@ export function runBaseTests<Context>(config: {
                 await client.set("foo", "bar");
                 const oldResult = await client.info([InfoOptions.Commandstats]);
                 const oldResultAsString = intoString(oldResult);
-                console.log(oldResult);
-                console.log(oldResultAsString);
                 expect(oldResultAsString).toContain("cmdstat_set");
                 checkSimple(await client.configResetStat()).toEqual("OK");
 
@@ -2450,25 +2446,27 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(
                     await client.zadd(key, membersScores, {
-                        conditionalChange: "onlyIfExists",
+                        conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
                     }),
                 ).toEqual(0);
 
                 expect(
                     await client.zadd(key, membersScores, {
-                        conditionalChange: "onlyIfDoesNotExist",
+                        conditionalChange:
+                            ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
                     }),
                 ).toEqual(3);
 
                 expect(
                     await client.zaddIncr(key, "one", 5.0, {
-                        conditionalChange: "onlyIfDoesNotExist",
+                        conditionalChange:
+                            ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
                     }),
                 ).toEqual(null);
 
                 expect(
                     await client.zaddIncr(key, "one", 5.0, {
-                        conditionalChange: "onlyIfExists",
+                        conditionalChange: ConditionalChange.ONLY_IF_EXISTS,
                     }),
                 ).toEqual(6.0);
             }, protocol);
@@ -2488,27 +2486,27 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zadd(key, membersScores, {
-                        updateOptions: "scoreGreaterThanCurrent",
+                        updateOptions: UpdateByScore.GREATER_THAN,
                         changed: true,
                     }),
                 ).toEqual(1);
 
                 expect(
                     await client.zadd(key, membersScores, {
-                        updateOptions: "scoreLessThanCurrent",
+                        updateOptions: UpdateByScore.LESS_THAN,
                         changed: true,
                     }),
                 ).toEqual(0);
 
                 expect(
                     await client.zaddIncr(key, "one", -3.0, {
-                        updateOptions: "scoreLessThanCurrent",
+                        updateOptions: UpdateByScore.LESS_THAN,
                     }),
                 ).toEqual(7.0);
 
                 expect(
                     await client.zaddIncr(key, "one", -3.0, {
-                        updateOptions: "scoreGreaterThanCurrent",
+                        updateOptions: UpdateByScore.GREATER_THAN,
                     }),
                 ).toEqual(null);
             }, protocol);
@@ -4540,44 +4538,32 @@ export function runBaseTests<Context>(config: {
 
                 // simplest case
                 expect(await client.lpos(key, "a")).toEqual(0);
-                expect(
-                    await client.lpos(key, "b", new LPosOptions({ rank: 2 })),
-                ).toEqual(5);
+                expect(await client.lpos(key, "b", { rank: 2 })).toEqual(5);
 
                 // element doesn't exist
                 expect(await client.lpos(key, "e")).toBeNull();
 
                 // reverse traversal
-                expect(
-                    await client.lpos(key, "b", new LPosOptions({ rank: -2 })),
-                ).toEqual(2);
+                expect(await client.lpos(key, "b", { rank: -2 })).toEqual(2);
 
                 // unlimited comparisons
                 expect(
-                    await client.lpos(
-                        key,
-                        "a",
-                        new LPosOptions({ rank: 1, maxLength: 0 }),
-                    ),
+                    await client.lpos(key, "a", { rank: 1, maxLength: 0 }),
                 ).toEqual(0);
 
                 // limited comparisons
                 expect(
-                    await client.lpos(
-                        key,
-                        "c",
-                        new LPosOptions({ rank: 1, maxLength: 2 }),
-                    ),
+                    await client.lpos(key, "c", { rank: 1, maxLength: 2 }),
                 ).toBeNull();
 
                 // invalid rank value
                 await expect(
-                    client.lpos(key, "a", new LPosOptions({ rank: 0 })),
+                    client.lpos(key, "a", { rank: 0 }),
                 ).rejects.toThrow(RequestError);
 
                 // invalid maxlen value
                 await expect(
-                    client.lpos(key, "a", new LPosOptions({ maxLength: -1 })),
+                    client.lpos(key, "a", { maxLength: -1 }),
                 ).rejects.toThrow(RequestError);
 
                 // non-existent key
@@ -4593,45 +4579,29 @@ export function runBaseTests<Context>(config: {
 
                 // invalid count value
                 await expect(
-                    client.lpos(key, "a", new LPosOptions({ count: -1 })),
+                    client.lpos(key, "a", { count: -1 }),
                 ).rejects.toThrow(RequestError);
 
                 // with count
+                expect(await client.lpos(key, "a", { count: 2 })).toEqual([
+                    0, 1,
+                ]);
+                expect(await client.lpos(key, "a", { count: 0 })).toEqual([
+                    0, 1, 4,
+                ]);
                 expect(
-                    await client.lpos(key, "a", new LPosOptions({ count: 2 })),
-                ).toEqual([0, 1]);
-                expect(
-                    await client.lpos(key, "a", new LPosOptions({ count: 0 })),
+                    await client.lpos(key, "a", { rank: 1, count: 0 }),
                 ).toEqual([0, 1, 4]);
                 expect(
-                    await client.lpos(
-                        key,
-                        "a",
-                        new LPosOptions({ rank: 1, count: 0 }),
-                    ),
-                ).toEqual([0, 1, 4]);
-                expect(
-                    await client.lpos(
-                        key,
-                        "a",
-                        new LPosOptions({ rank: 2, count: 0 }),
-                    ),
+                    await client.lpos(key, "a", { rank: 2, count: 0 }),
                 ).toEqual([1, 4]);
                 expect(
-                    await client.lpos(
-                        key,
-                        "a",
-                        new LPosOptions({ rank: 3, count: 0 }),
-                    ),
+                    await client.lpos(key, "a", { rank: 3, count: 0 }),
                 ).toEqual([4]);
 
                 // reverse traversal
                 expect(
-                    await client.lpos(
-                        key,
-                        "a",
-                        new LPosOptions({ rank: -1, count: 0 }),
-                    ),
+                    await client.lpos(key, "a", { rank: -1, count: 0 }),
                 ).toEqual([4, 1, 0]);
             }, protocol);
         },
@@ -4697,18 +4667,15 @@ export function runBaseTests<Context>(config: {
                 checkSimple(await client.set(key1, value)).toEqual("OK");
                 expect(await client.bitcount(key1)).toEqual(26);
                 expect(
-                    await client.bitcount(key1, new BitOffsetOptions(1, 1)),
+                    await client.bitcount(key1, { start: 1, end: 1 }),
                 ).toEqual(6);
                 expect(
-                    await client.bitcount(key1, new BitOffsetOptions(0, -5)),
+                    await client.bitcount(key1, { start: 0, end: -5 }),
                 ).toEqual(10);
                 // non-existing key
                 expect(await client.bitcount(uuidv4())).toEqual(0);
                 expect(
-                    await client.bitcount(
-                        uuidv4(),
-                        new BitOffsetOptions(5, 30),
-                    ),
+                    await client.bitcount(uuidv4(), { start: 5, end: 30 }),
                 ).toEqual(0);
                 // key exists, but it is not a string
                 expect(await client.sadd(key2, [value])).toEqual(1);
@@ -4716,53 +4683,60 @@ export function runBaseTests<Context>(config: {
                     RequestError,
                 );
                 await expect(
-                    client.bitcount(key2, new BitOffsetOptions(1, 1)),
+                    client.bitcount(key2, { start: 1, end: 1 }),
                 ).rejects.toThrow(RequestError);
 
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     await expect(
-                        client.bitcount(
-                            key1,
-                            new BitOffsetOptions(2, 5, BitmapIndexType.BIT),
-                        ),
+                        client.bitcount(key1, {
+                            start: 2,
+                            end: 5,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).rejects.toThrow();
                     await expect(
-                        client.bitcount(
-                            key1,
-                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
-                        ),
+                        client.bitcount(key1, {
+                            start: 2,
+                            end: 5,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).rejects.toThrow();
                 } else {
                     expect(
-                        await client.bitcount(
-                            key1,
-                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
-                        ),
+                        await client.bitcount(key1, {
+                            start: 2,
+                            end: 5,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).toEqual(16);
                     expect(
-                        await client.bitcount(
-                            key1,
-                            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
-                        ),
+                        await client.bitcount(key1, {
+                            start: 5,
+                            end: 30,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).toEqual(17);
                     expect(
-                        await client.bitcount(
-                            key1,
-                            new BitOffsetOptions(5, -5, BitmapIndexType.BIT),
-                        ),
+                        await client.bitcount(key1, {
+                            start: 5,
+                            end: -5,
+                            indexType: BitmapIndexType.BIT,
+                        }),
                     ).toEqual(23);
                     expect(
-                        await client.bitcount(
-                            uuidv4(),
-                            new BitOffsetOptions(2, 5, BitmapIndexType.BYTE),
-                        ),
+                        await client.bitcount(uuidv4(), {
+                            start: 2,
+                            end: 5,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).toEqual(0);
                     // key exists, but it is not a string
                     await expect(
-                        client.bitcount(
-                            key2,
-                            new BitOffsetOptions(1, 1, BitmapIndexType.BYTE),
-                        ),
+                        client.bitcount(key2, {
+                            start: 1,
+                            end: 1,
+                            indexType: BitmapIndexType.BYTE,
+                        }),
                     ).rejects.toThrow(RequestError);
                 }
             }, protocol);
@@ -4777,14 +4751,14 @@ export function runBaseTests<Context>(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const membersToCoordinates = new Map<string, GeospatialData>();
-                membersToCoordinates.set(
-                    "Palermo",
-                    new GeospatialData(13.361389, 38.115556),
-                );
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 37.502669),
-                );
+                membersToCoordinates.set("Palermo", {
+                    longitude: 13.361389,
+                    latitude: 38.115556,
+                });
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 37.502669,
+                });
 
                 // default geoadd
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
@@ -4812,45 +4786,34 @@ export function runBaseTests<Context>(config: {
                 expect(geopos).toEqual([null]);
 
                 // with update mode options
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 39),
-                );
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 39,
+                });
                 expect(
-                    await client.geoadd(
-                        key1,
-                        membersToCoordinates,
-                        new GeoAddOptions({
-                            updateMode:
-                                ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
-                        }),
-                    ),
+                    await client.geoadd(key1, membersToCoordinates, {
+                        updateMode: ConditionalChange.ONLY_IF_DOES_NOT_EXIST,
+                    }),
                 ).toBe(0);
                 expect(
-                    await client.geoadd(
-                        key1,
-                        membersToCoordinates,
-                        new GeoAddOptions({
-                            updateMode: ConditionalChange.ONLY_IF_EXISTS,
-                        }),
-                    ),
+                    await client.geoadd(key1, membersToCoordinates, {
+                        updateMode: ConditionalChange.ONLY_IF_EXISTS,
+                    }),
                 ).toBe(0);
 
                 // with changed option
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 40),
-                );
-                membersToCoordinates.set(
-                    "Tel-Aviv",
-                    new GeospatialData(32.0853, 34.7818),
-                );
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 40,
+                });
+                membersToCoordinates.set("Tel-Aviv", {
+                    longitude: 32.0853,
+                    latitude: 34.7818,
+                });
                 expect(
-                    await client.geoadd(
-                        key1,
-                        membersToCoordinates,
-                        new GeoAddOptions({ changed: true }),
-                    ),
+                    await client.geoadd(key1, membersToCoordinates, {
+                        changed: true,
+                    }),
                 ).toBe(2);
 
                 // key exists but holding non-zset value
@@ -4877,25 +4840,25 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(-181, 0)]]),
+                        new Map([["Place", { longitude: -181, latitude: 0 }]]),
                     ),
                 ).rejects.toThrow();
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(181, 0)]]),
+                        new Map([["Place", { longitude: 181, latitude: 0 }]]),
                     ),
                 ).rejects.toThrow();
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(0, 86)]]),
+                        new Map([["Place", { longitude: 0, latitude: 86 }]]),
                     ),
                 ).rejects.toThrow();
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(0, -86)]]),
+                        new Map([["Place", { longitude: 0, latitude: -86 }]]),
                     ),
                 ).rejects.toThrow();
             }, protocol);
@@ -5016,14 +4979,14 @@ export function runBaseTests<Context>(config: {
 
                 // adding the geo locations
                 const membersToCoordinates = new Map<string, GeospatialData>();
-                membersToCoordinates.set(
-                    member1,
-                    new GeospatialData(13.361389, 38.115556),
-                );
-                membersToCoordinates.set(
-                    member2,
-                    new GeospatialData(15.087269, 37.502669),
-                );
+                membersToCoordinates.set(member1, {
+                    longitude: 13.361389,
+                    latitude: 38.115556,
+                });
+                membersToCoordinates.set(member2, {
+                    longitude: 15.087269,
+                    latitude: 37.502669,
+                });
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
 
                 // checking result with default metric
@@ -5068,14 +5031,14 @@ export function runBaseTests<Context>(config: {
 
                 // adding the geo locations
                 const membersToCoordinates = new Map<string, GeospatialData>();
-                membersToCoordinates.set(
-                    "Palermo",
-                    new GeospatialData(13.361389, 38.115556),
-                );
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 37.502669),
-                );
+                membersToCoordinates.set("Palermo", {
+                    longitude: 13.361389,
+                    latitude: 38.115556,
+                });
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 37.502669,
+                });
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
 
                 // checking result with default metric
