@@ -638,6 +638,8 @@ export async function transactionTest(
 
     baseTransaction.setbit(key17, 1, 1);
     args.push(0);
+    baseTransaction.getbit(key17, 1);
+    args.push(1);
     baseTransaction.set(key17, "foobar");
     args.push("OK");
     baseTransaction.bitcount(key17);
