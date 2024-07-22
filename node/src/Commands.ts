@@ -928,6 +928,9 @@ export type ZAddOptions = {
      * is greater than the current score. Equivalent to `GT` in the Redis API.
      */
     updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+    /**
+     * Modify the return value from the number of new elements added, to the total number of elements changed.
+     */
     changed?: boolean;
 };
 
