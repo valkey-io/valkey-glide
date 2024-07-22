@@ -53,7 +53,7 @@ public interface StreamBaseCommands {
      * @return The id of the added entry.
      * @example
      *     <pre>{@code
-     * String streamId = client.xadd("key", {{"name", "Sara"}, {"surname", "OConnor"}}).get();
+     * String streamId = client.xadd("key", new String[][] {{"name", "Sara"}, {"surname", "OConnor"}}).get();
      * System.out.println("Stream: " + streamId);
      * }</pre>
      */
@@ -85,7 +85,7 @@ public interface StreamBaseCommands {
      * @return The id of the added entry.
      * @example
      *     <pre>{@code
-     * String streamId = client.xadd(gs("key"), {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}).get();
+     * String streamId = client.xadd(gs("key"), new String[][] {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}).get();
      * System.out.println("Stream: " + streamId);
      * }</pre>
      */
@@ -129,7 +129,7 @@ public interface StreamBaseCommands {
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
      * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
-     * String streamId = client.xadd("key", {{"name", "Sara"}, {"surname", "OConnor"}}, options).get();
+     * String streamId = client.xadd("key", new String[][] {{"name", "Sara"}, {"surname", "OConnor"}}, options).get();
      * if (streamId != null) {
      *     assert streamId.equals("sid");
      * }
@@ -176,7 +176,7 @@ public interface StreamBaseCommands {
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
      * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
-     * String streamId = client.xadd(gs("key"), {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}, options).get();
+     * String streamId = client.xadd(gs("key"), new GlideString[][] {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}, options).get();
      * if (streamId != null) {
      *     assert streamId.equals("sid");
      * }

@@ -7178,7 +7178,7 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
-    public void xadd_list_of_pairs_returns_success() {
+    public void xadd_nested_array_returns_success() {
         // setup
         String key = "testKey";
         String[][] fieldValues = {{"testField1", "testValue1"}, {"testField2", "testValue2"}};
@@ -7196,6 +7196,33 @@ public class GlideClientTest {
 
         // exercise
         CompletableFuture<String> response = service.xadd(key, fieldValues);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void xadd_nested_array_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String[][] fieldValues = {{"testField1", "testValue1"}, {"testField2", "testValue2"}};
+        String[] fieldValuesArgs = convertNestedArrayToKeyValueStringArray(fieldValues);
+        String[] arguments = new String[] {key, "*"};
+        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
+        String returnId = "testId";
+        StreamAddOptions options = StreamAddOptions.builder().build();
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xadd(key, fieldValues, options);
 
         // verify
         assertEquals(testResponse, response);
@@ -7232,7 +7259,7 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
-    public void xadd_list_of_pairs_binary_returns_success() {
+    public void xadd_nested_array_binary_returns_success() {
         // setup
         GlideString key = gs("testKey");
         GlideString[][] fieldValues = {
@@ -7252,6 +7279,35 @@ public class GlideClientTest {
 
         // exercise
         CompletableFuture<GlideString> response = service.xadd(key, fieldValues);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void xadd_nested_array_with_options_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[][] fieldValues = {
+            {gs("testField1"), gs("testValue1")}, {gs("testField2"), gs("testValue2")}
+        };
+        GlideString[] fieldValuesArgs = convertNestedArrayToKeyValueGlideStringArray(fieldValues);
+        GlideString[] arguments = new GlideString[] {key, gs("*")};
+        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
+        GlideString returnId = gs("testId");
+        StreamAddOptionsBinary options = StreamAddOptionsBinary.builder().build();
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(XAdd), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.xadd(key, fieldValues, options);
 
         // verify
         assertEquals(testResponse, response);
