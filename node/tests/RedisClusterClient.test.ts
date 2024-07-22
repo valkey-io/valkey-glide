@@ -858,7 +858,7 @@ describe("GlideClusterClient", () => {
                                 ).toEqual("OK");
 
                                 // TODO use commands instead of customCommand once implemented
-                                // verify function does not yet exist
+                                // verify function does not exist
                                 functionList = await client.customCommand([
                                     "FUNCTION",
                                     "LIST",
@@ -876,12 +876,9 @@ describe("GlideClusterClient", () => {
                                     client.functionDelete(libName, route),
                                 ).rejects.toThrow(`Library not found`);
                             } finally {
-                                expect(
-                                    await client.customCommand([
-                                        "FUNCTION",
-                                        "FLUSH",
-                                    ]),
-                                ).toEqual("OK");
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
                                 client.close();
                             }
                         },

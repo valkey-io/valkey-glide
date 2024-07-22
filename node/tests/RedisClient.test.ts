@@ -574,9 +574,7 @@ describe("GlideClient", () => {
                     `Library not found`,
                 );
             } finally {
-                expect(
-                    await client.customCommand(["FUNCTION", "FLUSH"]),
-                ).toEqual("OK");
+                expect(await client.functionFlush()).toEqual("OK");
                 client.close();
             }
         },
