@@ -17,6 +17,7 @@
     },
     "dependencies": {
         "child_process": "^1.0.2",
-        "typescript": "^5.4.5"
+        "typescript": "^5.4.5",
+        "semver": "^7.6.3"
     }
 }
