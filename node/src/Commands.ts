@@ -1905,6 +1905,17 @@ export function createGeoDist(
 /**
  * @internal
  */
+export function createGeoHash(
+    key: string,
+    members: string[],
+): command_request.Command {
+    const args: string[] = [key].concat(members);
+    return createCommand(RequestType.GeoHash, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRevRank(
     key: string,
     member: string,

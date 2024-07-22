@@ -677,6 +677,8 @@ export async function transactionTest(
     args.push(166274.1516);
     baseTransaction.geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS);
     args.push(166.2742);
+    baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
+    args.push(["sqc8b49rny0", "sqdtr74hyu0", null]);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
