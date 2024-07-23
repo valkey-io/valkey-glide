@@ -6,6 +6,7 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
+import { ListDirection } from "./commands/ListDirection";
 
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -589,6 +590,23 @@ export function createLMove(
         destination,
         whereFrom,
         whereTo,
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createLMove(
+    source: string,
+    destination: string,
+    where_from: ListDirection,
+    where_to: ListDirection,
+): command_request.Command {
+    return createCommand(RequestType.LMove, [
+        source,
+        destination,
+        where_from,
+        where_to,
     ]);
 }
 
