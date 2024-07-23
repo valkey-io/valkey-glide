@@ -1,5 +1,4 @@
 #### Changes
-* Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
@@ -23,6 +22,9 @@
 * Node: Added FUNCTION DELETE command ([#1990](https://github.com/valkey-io/valkey-glide/pull/1990))
 * Node: Added FUNCTION FLUSH command ([#1984](https://github.com/valkey-io/valkey-glide/pull/1984))
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
+
+#### Fixes
+* Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
 
 ## 1.0.0 (2024-07-09)
