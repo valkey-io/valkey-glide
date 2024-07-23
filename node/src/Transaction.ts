@@ -43,6 +43,7 @@ import {
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
+    createGeoDist,
     createGeoPos,
     createGet,
     createGetBit,
@@ -140,6 +141,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    GeoUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -2032,6 +2034,28 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
+     *
+     * See https://valkey.io/commands/geodist/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member1 - The name of the first member.
+     * @param member2 - The name of the second member.
+     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}. If not specified, the default unit is {@link GeoUnit.METERS}.
+     *
+     * Command Response - The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
+     *     or if the key does not exist.
+     */
+    public geodist(
+        key: string,
+        member1: string,
+        member2: string,
+        geoUnit?: GeoUnit,
+    ): T {
+        return this.addAndReturn(createGeoDist(key, member1, member2, geoUnit));
     }
 }
 
