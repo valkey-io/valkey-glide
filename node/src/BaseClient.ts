@@ -2210,21 +2210,20 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
      * @param options - The ZAdd options.
-     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
      *
      * @example
      * ```typescript
      * // Example usage of the zadd method to add elements to a sorted set
-     * const result = await client.zadd("my_sorted_set", \{ "member1": 10.5, "member2": 8.2 \});
+     * const result = await client.zadd("my_sorted_set", { "member1": 10.5, "member2": 8.2 });
      * console.log(result); // Output: 2 - Indicates that two elements have been added to the sorted set "my_sorted_set."
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zadd method to update scores in an existing sorted set
-     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, options={ conditionalChange: "onlyIfExists" } , changed=true);
+     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, { conditionalChange: "onlyIfExists", changed: true });
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
@@ -2232,15 +2231,9 @@ export class BaseClient {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(
-                key,
-                membersScoresMap,
-                options,
-                changed ? "CH" : undefined,
-            ),
+            createZAdd(key, membersScoresMap, options),
         );
     }
 
@@ -2277,7 +2270,7 @@ export class BaseClient {
         options?: ZAddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 

@@ -2093,9 +2093,13 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
+                const newMembersScores = { one: 2, two: 3 };
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
+                expect(
+                    await client.zadd(key, newMembersScores, { changed: true }),
+                ).toEqual(2);
             }, protocol);
         },
         config.timeout,
@@ -2146,25 +2150,17 @@ export function runBaseTests<Context>(config: {
                 membersScores["one"] = 10;
 
                 expect(
-                    await client.zadd(
-                        key,
-                        membersScores,
-                        {
-                            updateOptions: "scoreGreaterThanCurrent",
-                        },
-                        true,
-                    ),
+                    await client.zadd(key, membersScores, {
+                        updateOptions: "scoreGreaterThanCurrent",
+                        changed: true,
+                    }),
                 ).toEqual(1);
 
                 expect(
-                    await client.zadd(
-                        key,
-                        membersScores,
-                        {
-                            updateOptions: "scoreLessThanCurrent",
-                        },
-                        true,
-                    ),
+                    await client.zadd(key, membersScores, {
+                        updateOptions: "scoreLessThanCurrent",
+                        changed: true,
+                    }),
                 ).toEqual(0);
 
                 expect(

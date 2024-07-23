@@ -1129,7 +1129,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
      * @param options - The ZAdd options.
-     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      *
      * Command Response - The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
@@ -1138,16 +1137,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): T {
-        return this.addAndReturn(
-            createZAdd(
-                key,
-                membersScoresMap,
-                options,
-                changed ? "CH" : undefined,
-            ),
-        );
+        return this.addAndReturn(createZAdd(key, membersScoresMap, options));
     }
 
     /** Increments the score of member in the sorted set stored at `key` by `increment`.
@@ -1170,7 +1161,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         options?: ZAddOptions,
     ): T {
         return this.addAndReturn(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 
