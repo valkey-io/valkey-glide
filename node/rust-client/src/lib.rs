@@ -163,12 +163,26 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
 fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
-        Value::SimpleString(str) => Ok(js_env
-            .create_buffer_with_data(str.as_bytes().to_vec())?
-            .into_unknown()),
+        Value::SimpleString(str) => {
+            if string_decoder {
+                Ok(js_env.create_string_from_std(str)
+                .map(|val| val.into_unknown())?)
+            } else {
+                Ok(js_env
+                .create_buffer_with_data(str.as_bytes().to_vec())?
+                .into_unknown())
+            }
+        },
         Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
         Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
-        Value::BulkString(data) => Ok(js_env.create_buffer_with_data(data)?.into_unknown()),
+        Value::BulkString(data) => {
+            if string_decoder {
+                let str = to_js_result(std::str::from_utf8(data.as_ref()))?;
+                Ok(js_env.create_string(str).map(|val| val.into_unknown())?)
+            } else {
+                Ok(js_env.create_buffer_with_data(data)?.into_unknown())
+            }
+        }
         Value::Array(array) => {
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
@@ -192,10 +206,16 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
         // "type and the String type, and return a string in both cases.""
         // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
         Value::VerbatimString { format: _, text } => {
-            // VerbatimString is binary safe -> convert it into such
-            Ok(js_env
-                .create_buffer_with_data(text.as_bytes().to_vec())?
-                .into_unknown())
+            if string_decoder {
+                Ok(js_env
+                    .create_string_from_std(text)
+                    .map(|val| val.into_unknown())?)
+            } else {
+                // VerbatimString is binary safe -> convert it into such
+                Ok(js_env
+                    .create_buffer_with_data(text.as_bytes().to_vec())?
+                    .into_unknown())
+            }
         }
         Value::BigNumber(num) => {
             let sign = num.is_negative();

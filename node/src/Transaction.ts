@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+import { Decoder } from "./BaseClient";
 import {
     AggregationType,
     ExpireOptions,
@@ -136,7 +137,6 @@ import {
     createZRevRankWithScore,
     createZScore,
 } from "./Commands";
-import { Decoder } from "./Decoder";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";

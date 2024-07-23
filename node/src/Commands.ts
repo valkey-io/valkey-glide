@@ -4,14 +4,14 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
-import { LPosOptions } from "./commands/LPosOptions";
 import { FlushMode } from "./commands/FlushMode";
+import { LPosOptions } from "./commands/LPosOptions";
 
 import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 import RequestType = command_request.RequestType;
 
