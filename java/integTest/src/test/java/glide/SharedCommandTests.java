@@ -6292,6 +6292,12 @@ public class SharedCommandTests {
         assertEquals(1, newRevResult.size());
         assertNotNull(newRevResult.get(streamId3));
 
+        // xrange, xrevrange should return null with a zero/negative count
+        assertNull(client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX, 0L).get());
+        assertNull(client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN, 0L).get());
+        assertNull(client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX, -5L).get());
+        assertNull(client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN, -1L).get());
+
         // xrange against an emptied stream
         assertEquals(3, client.xdel(key, new String[] {streamId1, streamId2, streamId3}).get());
         Map<String, String[][]> emptiedResult =
