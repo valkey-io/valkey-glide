@@ -979,6 +979,114 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lmove list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const non_existing_key = uuidv4();
+                const non_list_key = uuidv4();
+                const lpushArgs1 = ["2", "1"];
+                const lpushArgs2 = ["4", "3"];
+
+                // Initialize the tests
+                expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
+                expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
+
+                // Move from LEFT to LEFT
+                checkSimple(
+                    await client.lmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual("1");
+
+                // Move from LEFT to RIGHT
+                checkSimple(
+                    await client.lmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.RIGHT,
+                    ),
+                ).toEqual("2");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                    "4",
+                    "2",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+
+                // Move from RIGHT to LEFT - non-existing destination key
+                checkSimple(
+                    await client.lmove(
+                        key2,
+                        key1,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual("2");
+
+                // Move from RIGHT to RIGHT
+                checkSimple(
+                    await client.lmove(
+                        key2,
+                        key1,
+                        ListDirection.RIGHT,
+                        ListDirection.RIGHT,
+                    ),
+                ).toEqual("4");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "2",
+                    "4",
+                ]);
+
+                // Non-existing source key
+                expect(
+                    await client.lmove(
+                        "{SameSlot}non_existing_key",
+                        key1,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual(null); // should be (nil)
+
+                // Non-list source key
+                const key3 = "{key}-3" + uuidv4();
+                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                await expect(
+                    client.lmove(
+                        key3,
+                        key1,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Non-list destination key
+                await expect(
+                    client.lmove(
+                        key1,
+                        key3,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                    ),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lset test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
