@@ -19,6 +19,7 @@ import {
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -34,6 +35,7 @@ import {
     createExpire,
     createExpireAt,
     createGeoAdd,
+    createGeoPos,
     createGet,
     createGetBit,
     createGetDel,
@@ -83,7 +85,6 @@ import {
     createSCard,
     createSDiff,
     createSDiffStore,
-    createSetBit,
     createSInter,
     createSInterCard,
     createSInterStore,
@@ -96,6 +97,7 @@ import {
     createSUnion,
     createSUnionStore,
     createSet,
+    createSetBit,
     createStrlen,
     createTTL,
     createType,
@@ -112,6 +114,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
@@ -124,9 +127,10 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    createGeoPos,
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
@@ -145,8 +149,6 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -3444,6 +3446,39 @@ export class BaseClient {
         members: string[],
     ): Promise<(number[] | null)[]> {
         return this.createWritePromise(createGeoPos(key, members));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
+     * being checked in the order they are provided.
+     *
+     * See https://valkey.io/commands/zmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
+     * @returns A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
+     * await client.zadd("zSet2", { four: 4.0 });
+     * console.log(await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2));
+     * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
+     * ```
+     */
+    public zmpop(
+        key: string[],
+        modifier: ScoreFilter,
+        count?: number,
+    ): Promise<[string, [Record<string, number>]] | null> {
+        return this.createWritePromise(createZMPop(key, modifier, count));
     }
 
     /**

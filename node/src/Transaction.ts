@@ -13,6 +13,7 @@ import {
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -42,6 +43,7 @@ import {
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
+    createGeoPos,
     createGet,
     createGetBit,
     createGetDel,
@@ -125,6 +127,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
@@ -136,7 +139,6 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createGeoPos,
     createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -1941,7 +1943,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param element - The value to search for within the list.
      * @param options - The LPOS options.
      *
-     * Command Response -  The index of `element`, or `null` if `element` is not in the list. If the `count`
+     * Command Response - The index of `element`, or `null` if `element` is not in the list. If the `count`
      * option is specified, then the function returns an `array` of indices of matching elements within the list.
      *
      * since - Valkey version 6.0.6.
@@ -2018,6 +2020,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public geopos(key: string, members: string[]): T {
         return this.addAndReturn(createGeoPos(key, members));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
+     * being checked in the order they are provided.
+     *
+     * See https://valkey.io/commands/zmpop/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
+     *
+     * Command Response - A two-element `array` containing the key name of the set from which the
+     *     element was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
+        return this.addAndReturn(createZMPop(keys, modifier, count));
     }
 }
 

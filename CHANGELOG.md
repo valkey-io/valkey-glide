@@ -21,6 +21,7 @@
 * Node: Added FUNCTION LOAD command ([#1969](https://github.com/valkey-io/valkey-glide/pull/1969))
 * Node: Added FUNCTION DELETE command ([#1990](https://github.com/valkey-io/valkey-glide/pull/1990))
 * Node: Added FUNCTION FLUSH command ([#1984](https://github.com/valkey-io/valkey-glide/pull/1984))
+* Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 
 ## 1.0.0 (2024-07-09)
 
