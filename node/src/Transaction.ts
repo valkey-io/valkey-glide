@@ -44,6 +44,7 @@ import {
     createFunctionLoad,
     createGeoAdd,
     createGeoDist,
+    createGeoHash,
     createGeoPos,
     createGet,
     createGetBit,
@@ -2056,6 +2057,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         geoUnit?: GeoUnit,
     ): T {
         return this.addAndReturn(createGeoDist(key, member1, member2, geoUnit));
+    }
+
+    /**
+     * Returns the `GeoHash` strings representing the positions of all the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/geohash/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     *
+     * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
+     *   If a member does not exist in the sorted set, a `null` value is returned for that member.
+     */
+    public geohash(key: string, members: string[]): T {
+        return this.addAndReturn(createGeoHash(key, members));
     }
 }
 
