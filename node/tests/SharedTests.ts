@@ -1075,12 +1075,12 @@ export function runBaseTests<Context>(config: {
                 // Non-existing source key
                 expect(
                     await client.lmove(
-                        "{SameSlot}non_existing_key",
+                        "{key}-non_existing_key" + uuidv4(),
                         key1,
                         ListDirection.LEFT,
                         ListDirection.LEFT,
                     ),
-                ).toEqual(null); // should be (nil)
+                ).toEqual(null); 
 
                 // Non-list source key
                 const key3 = "{key}-3" + uuidv4();
