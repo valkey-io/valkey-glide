@@ -41,7 +41,7 @@ type Context = {
     client: GlideClient;
 };
 
-const TIMEOUT = 5000000000000000000;
+const TIMEOUT = 50000;
 
 describe("GlideClient", () => {
     let testsFailed = 0;
@@ -56,7 +56,7 @@ describe("GlideClient", () => {
                   parseEndpoints(standaloneAddresses),
               )
             : await RedisCluster.createCluster(false, 1, 1);
-    }, 20000);
+    }, TIMEOUT);
 
     afterEach(async () => {
         await flushAndCloseClient(false, cluster.getAddresses(), client);

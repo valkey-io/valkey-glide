@@ -1477,7 +1477,7 @@ export class BaseClient {
      * console.log(updated_array); // Output: "two".
      *
      * const updated_array_key2 = await client.lrange("testKey2", 0, -1);
-     * console.log(updated_array_key2); //Output: ["one", "three", "four"].
+     * console.log(updated_array_key2); // Output: ["one", "three", "four"].
      * ```
      */
     public lmove(
