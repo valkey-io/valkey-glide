@@ -1080,7 +1080,7 @@ export function runBaseTests<Context>(config: {
                         ListDirection.LEFT,
                         ListDirection.LEFT,
                     ),
-                ).toEqual(null); 
+                ).toEqual(null);
 
                 // Non-list source key
                 const key3 = "{key}-3" + uuidv4();
