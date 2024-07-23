@@ -9,6 +9,7 @@ import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { BitwiseOperation } from "./commands/BitwiseOperation";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
@@ -444,6 +445,17 @@ export function createDecrBy(
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createBitOp(
+    operation: BitwiseOperation,
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.BitOp, [operation, destination, ...keys]);
 }
 
 /**

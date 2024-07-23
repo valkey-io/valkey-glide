@@ -37,6 +37,7 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
+import { BitwiseOperation } from "../src/commands/BitwiseOperation";
 type Context = {
     client: GlideClusterClient;
 };
@@ -306,6 +307,7 @@ describe("GlideClusterClient", () => {
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
+                client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),

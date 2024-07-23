@@ -37,6 +37,7 @@ import {
     BitmapIndexType,
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
+import { BitwiseOperation } from "../src/commands/BitwiseOperation";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
@@ -468,6 +469,131 @@ export function runBaseTests<Context>(config: {
                         "value is not an integer",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bitop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const keys = [key1, key2];
+                const destination = `{key}-${uuidv4()}`;
+                const nonExistingKey1 = `{key}-${uuidv4()}`;
+                const nonExistingKey2 = `{key}-${uuidv4()}`;
+                const nonExistingKey3 = `{key}-${uuidv4()}`;
+                const nonExistingKeys = [
+                    nonExistingKey1,
+                    nonExistingKey2,
+                    nonExistingKey3,
+                ];
+                const setKey = `{key}-${uuidv4()}`;
+                const value1 = "foobar";
+                const value2 = "abcdef";
+
+                checkSimple(await client.set(key1, value1)).toEqual("OK");
+                checkSimple(await client.set(key2, value2)).toEqual("OK");
+                expect(
+                    await client.bitop(BitwiseOperation.AND, destination, keys),
+                ).toEqual(6);
+                checkSimple(await client.get(destination)).toEqual("`bc`ab");
+                expect(
+                    await client.bitop(BitwiseOperation.OR, destination, keys),
+                ).toEqual(6);
+                checkSimple(await client.get(destination)).toEqual("goofev");
+
+                // reset values for simplicity of results in XOR
+                checkSimple(await client.set(key1, "a")).toEqual("OK");
+                checkSimple(await client.set(key2, "b")).toEqual("OK");
+                expect(
+                    await client.bitop(BitwiseOperation.XOR, destination, keys),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("\u0003");
+
+                // test single source key
+                expect(
+                    await client.bitop(BitwiseOperation.AND, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("a");
+                expect(
+                    await client.bitop(BitwiseOperation.OR, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("a");
+                expect(
+                    await client.bitop(BitwiseOperation.XOR, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("a");
+                expect(
+                    await client.bitop(BitwiseOperation.NOT, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("�");
+
+                expect(await client.setbit(key1, 0, 1)).toEqual(0);
+                expect(
+                    await client.bitop(BitwiseOperation.NOT, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("\u001e");
+
+                // stores null when all keys hold empty strings
+                expect(
+                    await client.bitop(
+                        BitwiseOperation.AND,
+                        destination,
+                        nonExistingKeys,
+                    ),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+                expect(
+                    await client.bitop(
+                        BitwiseOperation.OR,
+                        destination,
+                        nonExistingKeys,
+                    ),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+                expect(
+                    await client.bitop(
+                        BitwiseOperation.XOR,
+                        destination,
+                        nonExistingKeys,
+                    ),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+                expect(
+                    await client.bitop(BitwiseOperation.NOT, destination, [
+                        nonExistingKey1,
+                    ]),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+
+                // invalid argument - source key list cannot be empty
+                await expect(
+                    client.bitop(BitwiseOperation.OR, destination, []),
+                ).rejects.toThrow(RequestError);
+
+                // invalid arguments - NOT cannot be passed more than 1 key
+                await expect(
+                    client.bitop(BitwiseOperation.NOT, destination, keys),
+                ).rejects.toThrow(RequestError);
+
+                expect(await client.sadd(setKey, ["foo"])).toEqual(1);
+                // invalid argument - source key has the wrong type
+                await expect(
+                    client.bitop(BitwiseOperation.AND, destination, [setKey]),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
