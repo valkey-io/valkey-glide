@@ -1008,8 +1008,6 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
-                const non_existing_key = uuidv4();
-                const non_list_key = uuidv4();
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
