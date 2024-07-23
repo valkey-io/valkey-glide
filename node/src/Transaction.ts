@@ -2010,10 +2010,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zmpop/ for more details.
      *
-     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sorted sets.
-     * @param modifier - The element pop criteria - either {@link ScoreFilter#MIN} or
-     *     {@link ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
      * @param count - The number of elements to pop.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the
