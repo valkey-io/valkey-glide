@@ -37,6 +37,7 @@ import {
     createGeoAdd,
     createGeoDist,
     createGeoPos,
+    createGeoHash,
     createGet,
     createGetBit,
     createGetDel,
@@ -3502,6 +3503,30 @@ export class BaseClient {
     ): Promise<number | null> {
         return this.createWritePromise(
             createGeoDist(key, member1, member2, geoUnit),
+        );
+    }
+
+    /**
+     * Returns the `GeoHash` strings representing the positions of all the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/geohash/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
+     *   If a member does not exist in the sorted set, a `null` value is returned for that member.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.geohash("mySortedSet",["Palermo", "Catania", "NonExisting"]);
+     * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * ```
+     */
+    public geohash(key: string, members: string[]): Promise<(string | null)[]> {
+        return this.createWritePromise<(string | null)[]>(
+            createGeoHash(key, members),
+        ).then((hashes) =>
+            hashes.map((hash) => (hash === null ? null : "" + hash)),
         );
     }
 
