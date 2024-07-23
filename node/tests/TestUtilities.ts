@@ -16,6 +16,7 @@ import {
     Logger,
     ProtocolVersion,
     ReturnType,
+    ScoreFilter,
     Transaction,
 } from "..";
 import {
@@ -593,6 +594,10 @@ export async function transactionTest(
         args.push(0);
         baseTransaction.zintercard([key8, key14], 1);
         args.push(0);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX);
+        args.push([key14, { two: 2.0 }]);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
+        args.push([key14, { one: 1.0 }]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
