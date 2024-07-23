@@ -440,9 +440,9 @@ export async function transactionTest(
     baseTransaction.lrange(key5, 0, -1);
     args.push([field + "3", field + "2"]);
     baseTransaction.lmove(key5, key19, ListDirection.LEFT, ListDirection.LEFT);
-    args.push(field + "3");
+    args.push(field + "3").toString();
     baseTransaction.lpopCount(key5, 2);
-    args.push([field + "3", field + "2"]);
+    args.push([field + "2"]);
     baseTransaction.linsert(
         key5,
         InsertPosition.Before,
