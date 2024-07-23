@@ -1733,6 +1733,7 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sets.
+     * @param limit - The limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
      *
      * since Valkey version 7.0.0.
@@ -2964,6 +2965,7 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
+     * @param options - options detailing how to add to the stream.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
