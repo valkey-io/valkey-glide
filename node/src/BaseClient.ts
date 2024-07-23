@@ -1054,8 +1054,8 @@ export class BaseClient {
      * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
      * being the penultimate, and so on.
      *
-     * If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
-     * `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
+     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
      * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
      * specified, `start=0` and `end=2` means to look at the first three bytes.
      *
@@ -1066,8 +1066,8 @@ export class BaseClient {
      * @param start - The starting offset.
      * @param end - The ending offset.
      * @param indexType - The index offset type. This option can only be specified if you are using Valkey version
-     *      7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`. If no index type is
-     *      provided, the indexes will be assumed to be byte indexes.
+     *      7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no index
+     *      type is provided, the indexes will be assumed to be byte indexes.
      * @returns The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
      *      value of the string held at `key`.
      *
