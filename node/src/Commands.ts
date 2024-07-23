@@ -573,8 +573,8 @@ export function createLMove(
     return createCommand(RequestType.LMove, [
         source,
         destination,
-        ListDirection[where_from],
-        ListDirection[where_to],
+        where_from,
+        where_to,
     ]);
 }
 
