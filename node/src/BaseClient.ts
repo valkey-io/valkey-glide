@@ -3425,12 +3425,14 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param members - The members for which to get the positions.
-     * @returns A 2D `array` which represents positions (longitude and latitude) corresponding
-     *     to the given members. If a member does not exist, its position will be `null`.
+     * @returns A 2D `Array` which represents positions (longitude and latitude) corresponding to the
+     *     given members. The order of the returned positions matches the order of the input members.
+     *     If a member does not exist, its position will be `null`.
      *
      * @example
      * ```typescript
-     * await client.geoadd("mySortedSet", new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]));
+     * const data = new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]);
+     * await client.geoadd("mySortedSet", data);
      * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
      * // returned might not be exactly the same as the input values

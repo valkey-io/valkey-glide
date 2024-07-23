@@ -2012,8 +2012,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param members - The members for which to get the positions.
      *
-     * Command Response - A 2D `array` which represents positions (longitude and latitude) corresponding
-     *     to the given members. If a member does not exist, its position will be `null`.
+     * Command Response - A 2D `Array` which represents positions (longitude and latitude) corresponding to the
+     *     given members. The order of the returned positions matches the order of the input members.
+     *     If a member does not exist, its position will be `null`.
      */
     public geopos(key: string, members: string[]): T {
         return this.addAndReturn(createGeoPos(key, members));
