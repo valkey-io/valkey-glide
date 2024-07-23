@@ -10,6 +10,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    GeoUnit,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
@@ -672,6 +673,10 @@ export async function transactionTest(
         [13.36138933897018433, 38.11555639549629859],
         [15.08726745843887329, 37.50266842333162032],
     ]);
+    baseTransaction.geodist(key18, "Palermo", "Catania");
+    args.push(166274.1516);
+    baseTransaction.geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS);
+    args.push(166.2742);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");

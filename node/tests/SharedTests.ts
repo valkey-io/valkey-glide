@@ -17,6 +17,7 @@ import {
     ScoreFilter,
     Script,
     parseInfoResponse,
+    GeoUnit,
 } from "../";
 import {
     Client,
@@ -4626,6 +4627,61 @@ export function runBaseTests<Context>(config: {
                 if (result) {
                     expect(result[1]).toEqual(entries);
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geodist test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const member1 = "Palermo";
+                const member2 = "Catania";
+                const nonExistingMember = "NonExisting";
+                const expected = 166274.1516;
+                const expectedKM = 166.2742;
+                const delta = 1e-9;
+
+                // adding the geo locations
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    member1,
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    member2,
+                    new GeospatialData(15.087269, 37.502669),
+                );
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // checking result with default metric
+                expect(
+                    await client.geodist(key1, member1, member2),
+                ).toBeCloseTo(expected, delta);
+
+                // checking result with metric specification of kilometers
+                expect(
+                    await client.geodist(
+                        key1,
+                        member1,
+                        member2,
+                        GeoUnit.KILOMETERS,
+                    ),
+                ).toBeCloseTo(expectedKM, delta);
+
+                // null result when member index is missing
+                expect(
+                    await client.geodist(key1, member1, nonExistingMember),
+                ).toBeNull();
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key2, "geodist")).toBe("OK");
+                await expect(
+                    client.geodist(key2, member1, member2),
+                ).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
