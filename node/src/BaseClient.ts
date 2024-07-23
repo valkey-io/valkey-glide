@@ -3523,7 +3523,7 @@ export class BaseClient {
      * ```
      */
     public geohash(key: string, members: string[]): Promise<(string | null)[]> {
-        return this.createWritePromise<string[]>(
+        return this.createWritePromise<(string | null)[]>(
             createGeoHash(key, members),
         ).then((hashes) =>
             hashes.map((hash) => (hash === null ? null : "" + hash)),

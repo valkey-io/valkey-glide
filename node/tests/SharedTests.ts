@@ -4708,12 +4708,15 @@ export function runBaseTests<Context>(config: {
                     new GeospatialData(15.087269, 37.502669),
                 );
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
                 // checking result with default metric
                 expect(await client.geohash(key1, members)).toEqual(expected);
+
                 // empty members array
                 expect(await (await client.geohash(key1, empty)).length).toBe(
                     0,
                 );
+
                 // key exists but holds non-ZSET value
                 expect(await client.set(key2, "geohash")).toBe("OK");
                 await expect(client.geohash(key2, members)).rejects.toThrow();
