@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added LMOVE command ([#1996](https://github.com/valkey-io/valkey-glide/pull/1996))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
