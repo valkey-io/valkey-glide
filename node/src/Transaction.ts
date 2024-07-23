@@ -2044,10 +2044,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param member1 - The name of the first member.
      * @param member2 - The name of the second member.
-     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}.
+     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}. If not specified, the default unit is {@link GeoUnit.METERS}.
      *
      * Command Response - The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
-     *     or if the key does not exist. If not specified, the default unit is {@link GeoUnit.METERS}.
+     *     or if the key does not exist.
      */
     public geodist(
         key: string,
