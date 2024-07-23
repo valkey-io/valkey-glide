@@ -938,6 +938,10 @@ export type ZAddOptions = {
      * is greater than the current score. Equivalent to `GT` in the Redis API.
      */
     updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+    /**
+     * Modify the return value from the number of new elements added, to the total number of elements changed.
+     */
+    changed?: boolean;
 };
 
 /**
@@ -947,7 +951,7 @@ export function createZAdd(
     key: string,
     membersScoresMap: Record<string, number>,
     options?: ZAddOptions,
-    changedOrIncr?: "CH" | "INCR",
+    incr: boolean = false,
 ): command_request.Command {
     let args = [key];
 
@@ -969,10 +973,14 @@ export function createZAdd(
         } else if (options.updateOptions === "scoreGreaterThanCurrent") {
             args.push("GT");
         }
+
+        if (options.changed) {
+            args.push("CH");
+        }
     }
 
-    if (changedOrIncr) {
-        args.push(changedOrIncr);
+    if (incr) {
+        args.push("INCR");
     }
 
     args = args.concat(
