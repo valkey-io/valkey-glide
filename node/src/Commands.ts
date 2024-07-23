@@ -4,8 +4,13 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
+import { FlushMode } from "./commands/FlushMode";
+import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 import RequestType = command_request.RequestType;
 
@@ -89,6 +94,13 @@ function createCommand(
  */
 export function createGet(key: string): command_request.Command {
     return createCommand(RequestType.Get, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createGetDel(key: string): command_request.Command {
+    return createCommand(RequestType.GetDel, [key]);
 }
 
 export type SetOptions = {
@@ -437,6 +449,31 @@ export function createDecrBy(
 /**
  * @internal
  */
+export function createGetBit(
+    key: string,
+    offset: number,
+): command_request.Command {
+    return createCommand(RequestType.GetBit, [key, offset.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createSetBit(
+    key: string,
+    offset: number,
+    value: number,
+): command_request.Command {
+    return createCommand(RequestType.SetBit, [
+        key,
+        offset.toString(),
+        value.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
 export function createHDel(
     key: string,
     fields: string[],
@@ -479,6 +516,16 @@ export function createLPush(
     elements: string[],
 ): command_request.Command {
     return createCommand(RequestType.LPush, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
+export function createLPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.LPushX, [key].concat(elements));
 }
 
 /**
@@ -564,6 +611,16 @@ export function createRPush(
 /**
  * @internal
  */
+export function createRPushX(
+    key: string,
+    elements: string[],
+): command_request.Command {
+    return createCommand(RequestType.RPushX, [key].concat(elements));
+}
+
+/**
+ * @internal
+ */
 export function createRPop(
     key: string,
     count?: number,
@@ -628,6 +685,23 @@ export function createSInter(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createSInterCard(
+    keys: string[],
+    limit?: number,
+): command_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.SInterCard, args);
+}
+
+/**
+ * @internal
+ */
 export function createSInterStore(
     destination: string,
     keys: string[],
@@ -677,6 +751,16 @@ export function createSIsMember(
     member: string,
 ): command_request.Command {
     return createCommand(RequestType.SIsMember, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createSMIsMember(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.SMIsMember, [key].concat(members));
 }
 
 /**
@@ -854,6 +938,10 @@ export type ZAddOptions = {
      * is greater than the current score. Equivalent to `GT` in the Redis API.
      */
     updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+    /**
+     * Modify the return value from the number of new elements added, to the total number of elements changed.
+     */
+    changed?: boolean;
 };
 
 /**
@@ -863,7 +951,7 @@ export function createZAdd(
     key: string,
     membersScoresMap: Record<string, number>,
     options?: ZAddOptions,
-    changedOrIncr?: "CH" | "INCR",
+    incr: boolean = false,
 ): command_request.Command {
     let args = [key];
 
@@ -885,10 +973,14 @@ export function createZAdd(
         } else if (options.updateOptions === "scoreGreaterThanCurrent") {
             args.push("GT");
         }
+
+        if (options.changed) {
+            args.push("CH");
+        }
     }
 
-    if (changedOrIncr) {
-        args.push(changedOrIncr);
+    if (incr) {
+        args.push("INCR");
     }
 
     args = args.concat(
@@ -981,11 +1073,51 @@ export function createZInterCard(
 /**
  * @internal
  */
+export function createZDiff(keys: string[]): command_request.Command {
+    const args: string[] = keys;
+    args.unshift(keys.length.toString());
+    return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
+export function createZDiffWithScores(keys: string[]): command_request.Command {
+    const args: string[] = keys;
+    args.unshift(keys.length.toString());
+    args.push("WITHSCORES");
+    return createCommand(RequestType.ZDiff, args);
+}
+
+/**
+ * @internal
+ */
+export function createZDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    const args: string[] = [destination, keys.length.toString(), ...keys];
+    return createCommand(RequestType.ZDiffStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
 ): command_request.Command {
     return createCommand(RequestType.ZScore, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZMScore(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
 export type ScoreBoundary<T> =
@@ -1421,6 +1553,18 @@ export function createTime(): command_request.Command {
 /**
  * @internal
  */
+export function createPublish(
+    message: string,
+    channel: string,
+    sharded: boolean = false,
+): command_request.Command {
+    const request = sharded ? RequestType.SPublish : RequestType.Publish;
+    return createCommand(request, [channel, message]);
+}
+
+/**
+ * @internal
+ */
 export function createBRPop(
     keys: string[],
     timeout: number,
@@ -1438,6 +1582,49 @@ export function createBLPop(
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
     return createCommand(RequestType.BLPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionDelete(
+    libraryCode: string,
+): command_request.Command {
+    return createCommand(RequestType.FunctionDelete, [libraryCode]);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionLoad(
+    libraryCode: string,
+    replace?: boolean,
+): command_request.Command {
+    const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
+    return createCommand(RequestType.FunctionLoad, args);
+}
+
+/**
+ * @internal
+ */
+export function createBitCount(
+    key: string,
+    options?: BitOffsetOptions,
+): command_request.Command {
+    const args = [key];
+    if (options) args.push(...options.toArgs());
+    return createCommand(RequestType.BitCount, args);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FunctionFlush, []);
+    }
 }
 
 export type StreamReadOptions = {
@@ -1569,4 +1756,154 @@ export function createObjectIdletime(key: string): command_request.Command {
  */
 export function createObjectRefcount(key: string): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
+}
+
+export type LolwutOptions = {
+    /**
+     * An optional argument that can be used to specify the version of computer art to generate.
+     */
+    version?: number;
+    /**
+     * An optional argument that can be used to specify the output:
+     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     *  For version `6`, those are number of columns and number of lines.
+     */
+    parameters?: number[];
+};
+
+/**
+ * @internal
+ */
+export function createLolwut(options?: LolwutOptions): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.version !== undefined) {
+            args.push("VERSION", options.version.toString());
+        }
+
+        if (options.parameters !== undefined) {
+            args.push(...options.parameters.map((param) => param.toString()));
+        }
+    }
+
+    return createCommand(RequestType.Lolwut, args);
+}
+
+/**
+ * @internal
+ */
+export function createFlushAll(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushAll, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushAll, []);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createFlushDB(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushDB, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushDB, []);
+    }
+}
+
+/**
+ * @internal
+ */
+export function createLPos(
+    key: string,
+    element: string,
+    options?: LPosOptions,
+): command_request.Command {
+    let args: string[] = [key, element];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    return createCommand(RequestType.LPos, args);
+}
+
+/**
+ * @internal
+ */
+export function createDBSize(): command_request.Command {
+    return createCommand(RequestType.DBSize, []);
+}
+
+/**
+ * @internal
+ */
+export function createGeoAdd(
+    key: string,
+    membersToGeospatialData: Map<string, GeospatialData>,
+    options?: GeoAddOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if (options) {
+        args = args.concat(options.toArgs());
+    }
+
+    membersToGeospatialData.forEach((coord, member) => {
+        args = args.concat(coord.toArgs());
+        args.push(member);
+    });
+
+    return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRank(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRankWithScore(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
+}
+
+/**
+ * Mandatory option for zmpop.
+ * Defines which elements to pop from the sorted set.
+ */
+export enum ScoreFilter {
+    /** Pop elements with the highest scores. */
+    MAX = "MAX",
+    /** Pop elements with the lowest scores. */
+    MIN = "MIN",
+}
+
+/**
+ * @internal
+ */
+export function createZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString()].concat(keys);
+    args.push(modifier);
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.ZMPop, args);
 }

@@ -16,8 +16,16 @@ import {
     Logger,
     ProtocolVersion,
     ReturnType,
+    ScoreFilter,
     Transaction,
 } from "..";
+import {
+    BitmapIndexType,
+    BitOffsetOptions,
+} from "../build-ts/src/commands/BitOffsetOptions";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
@@ -201,6 +209,44 @@ export function getFirstResult(
     return Object.values(res).at(0);
 }
 
+// TODO use matcher instead of predicate
+/** Check a multi-node response from a cluster. */
+export function checkClusterMultiNodeResponse(
+    res: object,
+    predicate: (value: ReturnType) => void,
+) {
+    for (const nodeResponse of Object.values(res)) {
+        predicate(nodeResponse);
+    }
+}
+
+/** Check a response from a cluster. Response could be either single-node (value) or multi-node (string-value map). */
+export function checkClusterResponse(
+    res: object,
+    singleNodeRoute: boolean,
+    predicate: (value: ReturnType) => void,
+) {
+    if (singleNodeRoute) predicate(res as ReturnType);
+    else checkClusterMultiNodeResponse(res, predicate);
+}
+
+/** Generate a String of LUA library code. */
+export function generateLuaLibCode(
+    libName: string,
+    functions: Map<string, string>,
+    readonly: boolean,
+): string {
+    let code = `#!lua name=${libName}\n`;
+
+    for (const [functionName, functionBody] of functions) {
+        code += `redis.register_function{ function_name = '${functionName}', callback = function(keys, args) ${functionBody} end`;
+        if (readonly) code += ", flags = { 'no-writes' }";
+        code += " }\n";
+    }
+
+    return code;
+}
+
 /**
  * Parses the command-line arguments passed to the Node.js process.
  *
@@ -309,9 +355,27 @@ export async function transactionTest(
     const key12 = "{key}" + uuidv4();
     const key13 = "{key}" + uuidv4();
     const key14 = "{key}" + uuidv4(); // sorted set
+    const key15 = "{key}" + uuidv4(); // list
+    const key16 = "{key}" + uuidv4(); // list
+    const key17 = "{key}" + uuidv4(); // bitmap
+    const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
+    baseTransaction.flushall();
+    args.push("OK");
+    baseTransaction.flushall(FlushMode.SYNC);
+    args.push("OK");
+    baseTransaction.flushdb();
+    args.push("OK");
+    baseTransaction.flushdb(FlushMode.SYNC);
+    args.push("OK");
+    baseTransaction.dbsize();
+    args.push(0);
+    baseTransaction.set(key1, "bar");
+    args.push("OK");
+    baseTransaction.getdel(key1);
+    args.push("bar");
     baseTransaction.set(key1, "bar");
     args.push("OK");
     baseTransaction.objectEncoding(key1);
@@ -390,6 +454,26 @@ export async function transactionTest(
     args.push(field + "3");
     baseTransaction.rpopCount(key6, 2);
     args.push([field + "2", field + "1"]);
+    baseTransaction.rpushx(key15, ["_"]); // key15 is empty
+    args.push(0);
+    baseTransaction.lpushx(key15, ["_"]);
+    args.push(0);
+    baseTransaction.rpush(key16, [
+        field + "1",
+        field + "1",
+        field + "2",
+        field + "3",
+        field + "3",
+    ]);
+    args.push(5);
+    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
+    args.push(1);
+    baseTransaction.lpos(
+        key16,
+        field + "1",
+        new LPosOptions({ rank: 2, count: 0 }),
+    );
+    args.push([1]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -398,6 +482,14 @@ export async function transactionTest(
     args.push(new Set(["bar", "foo"]));
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.sintercard([key7, key7]);
+        args.push(2);
+        baseTransaction.sintercard([key7, key7], 1);
+        args.push(1);
+    }
+
     baseTransaction.sinterstore(key7, [key7, key7]);
     args.push(2);
     baseTransaction.sdiff([key7, key7]);
@@ -410,6 +502,12 @@ export async function transactionTest(
     args.push(1);
     baseTransaction.sismember(key7, "bar");
     args.push(true);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
+        args.push([true, true, false]);
+    }
+
     baseTransaction.smembers(key7);
     args.push(new Set(["bar"]));
     baseTransaction.spop(key7);
@@ -436,6 +534,14 @@ export async function transactionTest(
         args.push([0, 1]);
     }
 
+    baseTransaction.zrevrank(key8, "member5");
+    args.push(0);
+
+    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+        baseTransaction.zrevrankWithScore(key8, "member5");
+        args.push([0, 5]);
+    }
+
     baseTransaction.zaddIncr(key8, "member2", 1);
     args.push(3);
     baseTransaction.zrem(key8, ["member1"]);
@@ -450,8 +556,20 @@ export async function transactionTest(
     args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     args.push(2);
-    baseTransaction.zadd(key13, { one: 1, two: 2, tree: 3.5 });
+    baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     args.push(3);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction.zdiff([key13, key12]);
+        args.push(["three"]);
+        baseTransaction.zdiffWithScores([key13, key12]);
+        args.push({ three: 3.5 });
+        baseTransaction.zdiffstore(key13, [key13, key13]);
+        args.push(0);
+        baseTransaction.zmscore(key12, ["two", "one"]);
+        args.push([2.0, 1.0]);
+    }
+
     baseTransaction.zinterstore(key12, [key12, key13]);
     args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
@@ -476,6 +594,10 @@ export async function transactionTest(
         args.push(0);
         baseTransaction.zintercard([key8, key14], 1);
         args.push(0);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX);
+        args.push([key14, { two: 2.0 }]);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
+        args.push([key14, { one: 1.0 }]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
@@ -513,9 +635,61 @@ export async function transactionTest(
     args.push([key6, field + "3"]);
     baseTransaction.blpop([key6], 0.1);
     args.push([key6, field + "1"]);
+
+    baseTransaction.setbit(key17, 1, 1);
+    args.push(0);
+    baseTransaction.getbit(key17, 1);
+    args.push(1);
+    baseTransaction.set(key17, "foobar");
+    args.push("OK");
+    baseTransaction.bitcount(key17);
+    args.push(26);
+    baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
+    args.push(6);
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.bitcount(
+            key17,
+            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
+        );
+        args.push(17);
+    }
+
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
     baseTransaction.pfcount([key11]);
     args.push(3);
+    baseTransaction.geoadd(
+        key18,
+        new Map([
+            ["Palermo", new GeospatialData(13.361389, 38.115556)],
+            ["Catania", new GeospatialData(15.087269, 37.502669)],
+        ]),
+    );
+    args.push(2);
+
+    const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+    const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+    const code = generateLuaLibCode(
+        libName,
+        new Map([[funcName, "return args[1]"]]),
+        true,
+    );
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.functionLoad(code);
+        args.push(libName);
+        baseTransaction.functionLoad(code, true);
+        args.push(libName);
+        baseTransaction.functionDelete(libName);
+        args.push("OK");
+        baseTransaction.functionFlush();
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.ASYNC);
+        args.push("OK");
+        baseTransaction.functionFlush(FlushMode.SYNC);
+        args.push("OK");
+    }
+
     return args;
 }

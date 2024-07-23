@@ -19,6 +19,7 @@ import {
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -26,13 +27,17 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBitCount,
     createDecr,
     createDecrBy,
     createDel,
     createExists,
     createExpire,
     createExpireAt,
+    createGeoAdd,
     createGet,
+    createGetBit,
+    createGetDel,
     createHDel,
     createHExists,
     createHGet,
@@ -51,7 +56,9 @@ import {
     createLInsert,
     createLLen,
     createLPop,
+    createLPos,
     createLPush,
+    createLPushX,
     createLRange,
     createLRem,
     createLSet,
@@ -70,19 +77,24 @@ import {
     createPfCount,
     createRPop,
     createRPush,
+    createRPushX,
     createRename,
     createRenameNX,
     createSAdd,
     createSCard,
     createSDiff,
     createSDiffStore,
+    createSetBit,
     createSInter,
+    createSInterCard,
     createSInterStore,
     createSIsMember,
+    createSMIsMember,
     createSMembers,
     createSMove,
     createSPop,
     createSRem,
+    createSUnion,
     createSUnionStore,
     createSet,
     createStrlen,
@@ -96,8 +108,13 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZDiff,
+    createZDiffStore,
+    createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMPop,
+    createZMScore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -106,23 +123,31 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
+    createZRevRank,
+    createZRevRankWithScore,
     createZScore,
-    createSUnion,
 } from "./Commands";
+import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
+    ConfigurationError,
     ConnectionError,
     ExecAbortError,
     RedisError,
     RequestError,
     TimeoutError,
 } from "./Errors";
+import { GlideClientConfiguration } from "./GlideClient";
+import { ClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
     connection_request,
     response,
 } from "./ProtobufMessage";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -260,6 +285,11 @@ function getRequestErrorClass(
     return RequestError;
 }
 
+export type PubSubMsg = {
+    message: string;
+    channel: string;
+    pattern?: string | null;
+};
 export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -272,7 +302,54 @@ export class BaseClient {
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
     private isClosed = false;
+    private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
+    private pendingPushNotification: response.Response[] = [];
+    private config: BaseClientConfiguration | undefined;
 
+    protected configurePubsub(
+        options: ClusterClientConfiguration | GlideClientConfiguration,
+        configuration: connection_request.IConnectionRequest,
+    ) {
+        if (options.pubsubSubscriptions) {
+            if (options.protocol == ProtocolVersion.RESP2) {
+                throw new ConfigurationError(
+                    "PubSub subscriptions require RESP3 protocol, but RESP2 was configured.",
+                );
+            }
+
+            const { context, callback } = options.pubsubSubscriptions;
+
+            if (context && !callback) {
+                throw new ConfigurationError(
+                    "PubSub subscriptions with a context require a callback function to be configured.",
+                );
+            }
+
+            configuration.pubsubSubscriptions =
+                connection_request.PubSubSubscriptions.create({});
+
+            for (const [channelType, channelsPatterns] of Object.entries(
+                options.pubsubSubscriptions.channelsAndPatterns,
+            )) {
+                let entry =
+                    configuration.pubsubSubscriptions!
+                        .channelsOrPatternsByType![parseInt(channelType)];
+
+                if (!entry) {
+                    entry = connection_request.PubSubChannelsOrPatterns.create({
+                        channelsOrPatterns: [],
+                    });
+                    configuration.pubsubSubscriptions!.channelsOrPatternsByType![
+                        parseInt(channelType)
+                    ] = entry;
+                }
+
+                for (const channelPattern of channelsPatterns) {
+                    entry.channelsOrPatterns!.push(Buffer.from(channelPattern));
+                }
+            }
+        }
+    }
     private handleReadData(data: Buffer) {
         const buf = this.remainingReadData
             ? Buffer.concat([this.remainingReadData, data])
@@ -300,40 +377,69 @@ export class BaseClient {
                 }
             }
 
-            if (message.closingError != null) {
-                this.close(message.closingError);
-                return;
-            }
-
-            const [resolve, reject] =
-                this.promiseCallbackFunctions[message.callbackIdx];
-            this.availableCallbackSlots.push(message.callbackIdx);
-
-            if (message.requestError != null) {
-                const errorType = getRequestErrorClass(
-                    message.requestError.type,
-                );
-                reject(
-                    new errorType(message.requestError.message ?? undefined),
-                );
-            } else if (message.respPointer != null) {
-                const pointer = message.respPointer;
-
-                if (typeof pointer === "number") {
-                    resolve(valueFromSplitPointer(0, pointer));
-                } else {
-                    resolve(valueFromSplitPointer(pointer.high, pointer.low));
-                }
-            } else if (
-                message.constantResponse === response.ConstantResponse.OK
-            ) {
-                resolve("OK");
+            if (message.isPush) {
+                this.processPush(message);
             } else {
-                resolve(null);
+                this.processResponse(message);
             }
         }
 
         this.remainingReadData = undefined;
+    }
+
+    processResponse(message: response.Response) {
+        if (message.closingError != null) {
+            this.close(message.closingError);
+            return;
+        }
+
+        const [resolve, reject] =
+            this.promiseCallbackFunctions[message.callbackIdx];
+        this.availableCallbackSlots.push(message.callbackIdx);
+
+        if (message.requestError != null) {
+            const errorType = getRequestErrorClass(message.requestError.type);
+            reject(new errorType(message.requestError.message ?? undefined));
+        } else if (message.respPointer != null) {
+            const pointer = message.respPointer;
+
+            if (typeof pointer === "number") {
+                resolve(valueFromSplitPointer(0, pointer));
+            } else {
+                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+            }
+        } else if (message.constantResponse === response.ConstantResponse.OK) {
+            resolve("OK");
+        } else {
+            resolve(null);
+        }
+    }
+
+    processPush(response: response.Response) {
+        if (response.closingError != null || !response.respPointer) {
+            const errMsg = response.closingError
+                ? response.closingError
+                : "Client Error - push notification without resp_pointer";
+
+            this.close(errMsg);
+            return;
+        }
+
+        const [callback, context] = this.getPubsubCallbackAndContext(
+            this.config!,
+        );
+
+        if (callback) {
+            const pubsubMessage =
+                this.notificationToPubSubMessageSafe(response);
+
+            if (pubsubMessage) {
+                callback(pubsubMessage, context);
+            }
+        } else {
+            this.pendingPushNotification.push(response);
+            this.completePubSubFuturesSafe();
+        }
     }
 
     /**
@@ -345,6 +451,7 @@ export class BaseClient {
     ) {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
+        this.config = options;
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
@@ -466,6 +573,175 @@ export class BaseClient {
         return result;
     }
 
+    cancelPubSubFuturesWithExceptionSafe(exception: ConnectionError): void {
+        while (this.pubsubFutures.length > 0) {
+            const nextFuture = this.pubsubFutures.shift();
+
+            if (nextFuture) {
+                const [, reject] = nextFuture;
+                reject(exception);
+            }
+        }
+    }
+
+    isPubsubConfigured(
+        config: GlideClientConfiguration | ClusterClientConfiguration,
+    ): boolean {
+        return !!config.pubsubSubscriptions;
+    }
+
+    getPubsubCallbackAndContext(
+        config: GlideClientConfiguration | ClusterClientConfiguration,
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    ): [((msg: PubSubMsg, context: any) => void) | null | undefined, any] {
+        if (config.pubsubSubscriptions) {
+            return [
+                config.pubsubSubscriptions.callback,
+                config.pubsubSubscriptions.context,
+            ];
+        }
+
+        return [null, null];
+    }
+
+    public getPubSubMessage(): Promise<PubSubMsg> {
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        if (!this.isPubsubConfigured(this.config!)) {
+            throw new ConfigurationError(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
+            );
+        }
+
+        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+            throw new ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback.",
+            );
+        }
+
+        return new Promise((resolve, reject) => {
+            this.pubsubFutures.push([resolve, reject]);
+            this.completePubSubFuturesSafe();
+        });
+    }
+
+    public tryGetPubSubMessage(): PubSubMsg | null {
+        if (this.isClosed) {
+            throw new ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client.",
+            );
+        }
+
+        if (!this.isPubsubConfigured(this.config!)) {
+            throw new ConfigurationError(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
+            );
+        }
+
+        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+            throw new ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback.",
+            );
+        }
+
+        let msg: PubSubMsg | null = null;
+        this.completePubSubFuturesSafe();
+
+        while (this.pendingPushNotification.length > 0 && !msg) {
+            const pushNotification = this.pendingPushNotification.shift()!;
+            msg = this.notificationToPubSubMessageSafe(pushNotification);
+        }
+
+        return msg;
+    }
+    notificationToPubSubMessageSafe(
+        pushNotification: response.Response,
+    ): PubSubMsg | null {
+        let msg: PubSubMsg | null = null;
+        const responsePointer = pushNotification.respPointer;
+        let nextPushNotificationValue: Record<string, unknown> = {};
+
+        if (responsePointer) {
+            if (typeof responsePointer !== "number") {
+                nextPushNotificationValue = valueFromSplitPointer(
+                    responsePointer.high,
+                    responsePointer.low,
+                ) as Record<string, unknown>;
+            } else {
+                nextPushNotificationValue = valueFromSplitPointer(
+                    0,
+                    responsePointer,
+                ) as Record<string, unknown>;
+            }
+
+            const messageKind = nextPushNotificationValue["kind"];
+
+            if (messageKind === "Disconnect") {
+                Logger.log(
+                    "warn",
+                    "disconnect notification",
+                    "Transport disconnected, messages might be lost",
+                );
+            } else if (
+                messageKind === "Message" ||
+                messageKind === "PMessage" ||
+                messageKind === "SMessage"
+            ) {
+                const values = nextPushNotificationValue["values"] as string[];
+
+                if (messageKind === "PMessage") {
+                    msg = {
+                        message: values[2],
+                        channel: values[1],
+                        pattern: values[0],
+                    };
+                } else {
+                    msg = {
+                        message: values[1],
+                        channel: values[0],
+                        pattern: null,
+                    };
+                }
+            } else if (
+                messageKind === "PSubscribe" ||
+                messageKind === "Subscribe" ||
+                messageKind === "SSubscribe" ||
+                messageKind === "Unsubscribe" ||
+                messageKind === "SUnsubscribe" ||
+                messageKind === "PUnsubscribe"
+            ) {
+                // pass
+            } else {
+                Logger.log(
+                    "error",
+                    "unknown notification",
+                    `Unknown notification: '${messageKind}'`,
+                );
+            }
+        }
+
+        return msg;
+    }
+    completePubSubFuturesSafe() {
+        while (
+            this.pendingPushNotification.length > 0 &&
+            this.pubsubFutures.length > 0
+        ) {
+            const nextPushNotification = this.pendingPushNotification.shift()!;
+            const pubsubMessage =
+                this.notificationToPubSubMessageSafe(nextPushNotification);
+
+            if (pubsubMessage) {
+                const [resolve] = this.pubsubFutures.shift()!;
+                resolve(pubsubMessage);
+            }
+        }
+    }
+
     /** Get the value associated with the given key, or null if no such value exists.
      * See https://valkey.io/commands/get/ for details.
      *
@@ -481,6 +757,26 @@ export class BaseClient {
      */
     public get(key: string): Promise<string | null> {
         return this.createWritePromise(createGet(key));
+    }
+
+    /**
+     * Gets a string value associated with the given `key`and deletes the key.
+     *
+     * See https://valkey.io/commands/getdel/ for details.
+     *
+     * @param key - The key to retrieve from the database.
+     * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = client.getdel("key");
+     * console.log(result); // Output: 'value'
+     *
+     * const value = client.getdel("key");  // value is null
+     * ```
+     */
+    public getdel(key: string): Promise<string | null> {
+        return this.createWritePromise(createGetDel(key));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -677,6 +973,50 @@ export class BaseClient {
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /**
+     * Returns the bit value at `offset` in the string value stored at `key`. `offset` must be greater than or equal
+     * to zero.
+     *
+     * See https://valkey.io/commands/getbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to return.
+     * @returns The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+     * the length of the string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.getbit("key", 1);
+     * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
+     * ```
+     */
+    public getbit(key: string, offset: number): Promise<number> {
+        return this.createWritePromise(createGetBit(key, offset));
+    }
+
+    /**
+     * Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index, with
+     * `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less than
+     * `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to `value` and
+     * the preceding bits are set to `0`.
+     *
+     * See https://valkey.io/commands/setbit/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param offset - The index of the bit to be set.
+     * @param value - The bit value to set at `offset`. The value must be `0` or `1`.
+     * @returns The bit value that was previously stored at `offset`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.setbit("key", 1, 1);
+     * console.log(result); // Output: 0 - The second bit value was 0 before setting to 1.
+     * ```
+     */
+    public setbit(key: string, offset: number, value: number): Promise<number> {
+        return this.createWritePromise(createSetBit(key, offset, value));
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
@@ -956,6 +1296,25 @@ export class BaseClient {
         return this.createWritePromise(createLPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the head of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/lpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the head of the list stored at `key`.
+     * @returns The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const listLength = await client.lpushx("my_list", ["value1", "value2"]);
+     * console.log(result); // Output: 2 - Indicates that the list has two elements.
+     * ```
+     */
+    public lpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createLPushX(key, elements));
+    }
+
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
      * See https://valkey.io/commands/lpop/ for details.
@@ -1163,6 +1522,25 @@ export class BaseClient {
         return this.createWritePromise(createRPush(key, elements));
     }
 
+    /**
+     * Inserts specified values at the tail of the `list`, only if `key` already
+     * exists and holds a list.
+     *
+     * See https://valkey.io/commands/rpushx/ for details.
+     *
+     * @param key - The key of the list.
+     * @param elements - The elements to insert at the tail of the list stored at `key`.
+     * @returns The length of the list after the push operation.
+     * @example
+     * ```typescript
+     * const result = await client.rpushx("my_list", ["value1", "value2"]);
+     * console.log(result);  // Output: 2 - Indicates that the list has two elements.
+     * ```
+     * */
+    public rpushx(key: string, elements: string[]): Promise<number> {
+        return this.createWritePromise(createRPushX(key, elements));
+    }
+
     /** Removes and returns the last elements of the list stored at `key`.
      * The command pops a single element from the end of the list.
      * See https://valkey.io/commands/rpop/ for details.
@@ -1346,6 +1724,32 @@ export class BaseClient {
     }
 
     /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * See https://valkey.io/commands/sintercard/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sets.
+     * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * await client.sadd("set2", ["b", "c", "d"]);
+     * const result1 = await client.sintercard(["set1", "set2"]);
+     * console.log(result1); // Output: 2 - The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+     *
+     * const result2 = await client.sintercard(["set1", "set2"], 1);
+     * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
+     * ```
+     */
+    public sintercard(keys: string[], limit?: number): Promise<number> {
+        return this.createWritePromise(createSInterCard(keys, limit));
+    }
+
+    /**
      * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
      *
      * See https://valkey.io/commands/sinterstore/ for more details.
@@ -1483,6 +1887,28 @@ export class BaseClient {
      */
     public sismember(key: string, member: string): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
+    }
+
+    /**
+     * Checks whether each member is contained in the members of the set stored at `key`.
+     *
+     * See https://valkey.io/commands/smismember/ for more details.
+     *
+     * @param key - The key of the set to check.
+     * @param members - A list of members to check for existence in the set.
+     * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.sadd("set1", ["a", "b", "c"]);
+     * const result = await client.smismember("set1", ["b", "c", "d"]);
+     * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
+     * ```
+     */
+    public smismember(key: string, members: string[]): Promise<boolean[]> {
+        return this.createWritePromise(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
@@ -1784,21 +2210,20 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
      * @param options - The ZAdd options.
-     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
      *
      * @example
      * ```typescript
      * // Example usage of the zadd method to add elements to a sorted set
-     * const result = await client.zadd("my_sorted_set", \{ "member1": 10.5, "member2": 8.2 \});
+     * const result = await client.zadd("my_sorted_set", { "member1": 10.5, "member2": 8.2 });
      * console.log(result); // Output: 2 - Indicates that two elements have been added to the sorted set "my_sorted_set."
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zadd method to update scores in an existing sorted set
-     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, options={ conditionalChange: "onlyIfExists" } , changed=true);
+     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, { conditionalChange: "onlyIfExists", changed: true });
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
@@ -1806,15 +2231,9 @@ export class BaseClient {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(
-                key,
-                membersScoresMap,
-                options,
-                changed ? "CH" : undefined,
-            ),
+            createZAdd(key, membersScoresMap, options),
         );
     }
 
@@ -1851,7 +2270,7 @@ export class BaseClient {
         options?: ZAddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 
@@ -1930,6 +2349,87 @@ export class BaseClient {
         return this.createWritePromise(createZInterCard(keys, limit));
     }
 
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets.
+     * To get the elements with their scores, see {@link zdiffWithScores}.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @returns An `array` of elements representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0, "member3": 3.0});
+     * await client.zadd("zset2", {"member2": 2.0});
+     * await client.zadd("zset3", {"member3": 3.0});
+     * const result = await client.zdiff(["zset1", "zset2", "zset3"]);
+     * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
+     * ```
+     */
+    public zdiff(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZDiff(keys));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all the successive sorted sets, with the associated
+     * scores.
+     *
+     * See https://valkey.io/commands/zdiff/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @returns A map of elements and their scores representing the difference between the sorted sets.
+     * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0, "member3": 3.0});
+     * await client.zadd("zset2", {"member2": 2.0});
+     * await client.zadd("zset3", {"member3": 3.0});
+     * const result = await client.zdiffWithScores(["zset1", "zset2", "zset3"]);
+     * console.log(result); // Output: {"member1": 1.0} - "member1" is in "zset1" but not "zset2" or "zset3".
+     * ```
+     */
+    public zdiffWithScores(keys: string[]): Promise<Record<string, number>> {
+        return this.createWritePromise(createZDiffWithScores(keys));
+    }
+
+    /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets in `keys` and stores
+     * the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
+     * treated as empty sets.
+     *
+     * See https://valkey.io/commands/zdiffstore/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+     * @param destination - The key for the resulting sorted set.
+     * @param keys - The keys of the sorted sets to compare.
+     * @returns The number of members in the resulting sorted set stored at `destination`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zset1", {"member1": 1.0, "member2": 2.0});
+     * await client.zadd("zset2", {"member1": 1.0});
+     * const result1 = await client.zdiffstore("zset3", ["zset1", "zset2"]);
+     * console.log(result1); // Output: 1 - One member exists in "key1" but not "key2", and this member was stored in "zset3".
+     *
+     * const result2 = await client.zrange("zset3", {start: 0, stop: -1});
+     * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
+     * ```
+     */
+    public zdiffstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createZDiffStore(destination, keys));
+    }
+
     /** Returns the score of `member` in the sorted set stored at `key`.
      * See https://valkey.io/commands/zscore/ for more details.
      *
@@ -1962,6 +2462,28 @@ export class BaseClient {
      */
     public zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZScore(key, member));
+    }
+
+    /**
+     * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zmscore/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - A list of members in the sorted set.
+     * @returns An `array` of scores corresponding to `members`.
+     * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zmscore("zset1", ["member1", "non_existent_member", "member2"]);
+     * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
+     * ```
+     */
+    public zmscore(key: string, members: string[]): Promise<(number | null)[]> {
+        return this.createWritePromise(createZMScore(key, members));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
@@ -2385,6 +2907,55 @@ export class BaseClient {
     }
 
     /**
+     * Returns the rank of `member` in the sorted set stored at `key`, where
+     * scores are ordered from the highest to lowest, starting from 0.
+     * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevrank("my_sorted_set", "member2");
+     * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
+     * ```
+     */
+    public zrevrank(key: string, member: string): Promise<number | null> {
+        return this.createWritePromise(createZRevRank(key, member));
+    }
+
+    /**
+     * Returns the rank of `member` in the sorted set stored at `key` with its
+     * score, where scores are ordered from the highest to lowest, starting from 0.
+     *
+     * See https://valkey.io/commands/zrevrank/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member - The member whose rank is to be retrieved.
+     * @returns A list containing the rank and score of `member` in the sorted set, where ranks
+     *     are ordered from high to low based on scores.
+     *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
+     *
+     * since - Valkey version 7.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zrevankWithScore("my_sorted_set", "member2");
+     * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
+     * ```
+     */
+    public zrevrankWithScore(
+        key: string,
+        member: string,
+    ): Promise<(number[] | null)[]> {
+        return this.createWritePromise(createZRevRankWithScore(key, member));
+    }
+
+    /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
      * See https://valkey.io/commands/xadd/ for more details.
      *
@@ -2756,6 +3327,124 @@ export class BaseClient {
     }
 
     /**
+     * Returns the index of the first occurrence of `element` inside the list specified by `key`. If no
+     * match is found, `null` is returned. If the `count` option is specified, then the function returns
+     * an `array` of indices of matching elements within the list.
+     *
+     * See https://valkey.io/commands/lpos/ for more details.
+     *
+     * @param key - The name of the list.
+     * @param element - The value to search for within the list.
+     * @param options - The LPOS options.
+     * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
+     * is specified, then the function returns an `array` of indices of matching elements within the list.
+     *
+     * since - Valkey version 6.0.6.
+     *
+     * @example
+     * ```typescript
+     * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ rank: 2 }))); // Output: 5 - the second occurrence of "e" is at index 5.
+     * console.log(await client.lpos("myList", "e", new LPosOptions({ count: 3 }))); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
+     * ```
+     */
+    public lpos(
+        key: string,
+        element: string,
+        options?: LPosOptions,
+    ): Promise<number | number[] | null> {
+        return this.createWritePromise(createLPos(key, element, options));
+    }
+
+    /**
+     * Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+     * optionally be provided to count the number of bits in a specific string interval.
+     *
+     * See https://valkey.io/commands/bitcount for more details.
+     *
+     * @param key - The key for the string to count the set bits of.
+     * @param options - The offset options.
+     * @returns If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+     *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
+     *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
+     * console.log(await client.bitcount("my_key2", OffsetOptions(1, 3))); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+     * console.log(await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
+     * ```
+     */
+    public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
+        return this.createWritePromise(createBitCount(key, options));
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at `key`.
+     * If a member is already a part of the sorted set, its position is updated.
+     *
+     * See https://valkey.io/commands/geoadd/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param membersToGeospatialData - A mapping of member names to their corresponding positions - see
+     *     {@link GeospatialData}. The command will report an error when the user attempts to index
+     *     coordinates outside the specified ranges.
+     * @param options - The GeoAdd options - see {@link GeoAddOptions}.
+     * @returns The number of elements added to the sorted set. If `changed` is set to
+     *    `true` in the options, returns the number of elements updated in the sorted set.
+     *
+     * @example
+     * ```typescript
+     * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
+     * const num = await client.geoadd("mySortedSet", {"Palermo", new GeospatialData(13.361389, 38.115556)}, options);
+     * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
+     * ```
+     */
+    public geoadd(
+        key: string,
+        membersToGeospatialData: Map<string, GeospatialData>,
+        options?: GeoAddOptions,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createGeoAdd(key, membersToGeospatialData, options),
+        );
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
+     * being checked in the order they are provided.
+     *
+     * See https://valkey.io/commands/zmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
+     * @returns A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
+     * await client.zadd("zSet2", { four: 4.0 });
+     * console.log(await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2));
+     * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
+     * ```
+     */
+    public zmpop(
+        key: string[],
+        modifier: ScoreFilter,
+        count?: number,
+    ): Promise<[string, [Record<string, number>]] | null> {
+        return this.createWritePromise(createZMPop(key, modifier, count));
+    }
+
+    /**
      * @internal
      */
     protected createClientRequest(
@@ -2824,6 +3513,11 @@ export class BaseClient {
         this.isClosed = true;
         this.promiseCallbackFunctions.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage));
+        });
+
+        // Handle pubsub futures
+        this.pubsubFutures.forEach(([, reject]) => {
+            reject(new ClosingError(errorMessage || ""));
         });
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();

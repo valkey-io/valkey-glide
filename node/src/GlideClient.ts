@@ -3,9 +3,15 @@
  */
 
 import * as net from "net";
-import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
+import {
+    BaseClient,
+    BaseClientConfiguration,
+    PubSubMsg,
+    ReturnType,
+} from "./BaseClient";
 import {
     InfoOptions,
+    LolwutOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -13,14 +19,61 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createDBSize,
     createEcho,
+    createFlushAll,
+    createFlushDB,
+    createFunctionDelete,
+    createFunctionFlush,
+    createFunctionLoad,
     createInfo,
+    createLolwut,
     createPing,
+    createPublish,
     createSelect,
     createTime,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
+import { FlushMode } from "./commands/FlushMode";
+
+/* eslint-disable-next-line @typescript-eslint/no-namespace */
+export namespace GlideClientConfiguration {
+    /**
+     * Enum representing pubsub subscription modes.
+     * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
+     */
+    export enum PubSubChannelModes {
+        /**
+         * Use exact channel names.
+         */
+        Exact = 0,
+
+        /**
+         * Use channel name patterns.
+         */
+        Pattern = 1,
+    }
+
+    export type PubSubSubscriptions = {
+        /**
+         * Channels and patterns by modes.
+         */
+        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
+
+        /**
+         * Optional callback to accept the incoming messages.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        callback?: (msg: PubSubMsg, context: any) => void;
+
+        /**
+         * Arbitrary context to pass to the callback.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        context?: any;
+    };
+}
 
 export type GlideClientConfiguration = BaseClientConfiguration & {
     /**
@@ -52,6 +105,11 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
          */
         exponentBase: number;
     };
+    /**
+     * PubSub subscriptions to be used for the client.
+     * Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
+     */
+    pubsubSubscriptions?: GlideClientConfiguration.PubSubSubscriptions;
 };
 
 /**
@@ -69,6 +127,7 @@ export class GlideClient extends BaseClient {
         const configuration = super.createClientRequest(options);
         configuration.databaseId = options.databaseId;
         configuration.connectionRetryStrategy = options.connectionBackoff;
+        this.configurePubsub(options, configuration);
         return configuration;
     }
 
@@ -77,7 +136,8 @@ export class GlideClient extends BaseClient {
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
             options,
-            (socket: net.Socket) => new GlideClient(socket),
+            (socket: net.Socket, options?: GlideClientConfiguration) =>
+                new GlideClient(socket, options),
         );
     }
 
@@ -302,12 +362,170 @@ export class GlideClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of time method without any argument
+     * // Example usage of time command
      * const result = await client.time();
      * console.log(result); // Output: ['1710925775', '913580']
      * ```
      */
     public time(): Promise<[string, string]> {
         return this.createWritePromise(createTime());
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options
+     * @returns A piece of generative computer art along with the current server version.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.lolwut({ version: 6, parameters: [40, 20] });
+     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * ```
+     */
+    public lolwut(options?: LolwutOptions): Promise<string> {
+        return this.createWritePromise(createLolwut(options));
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionDelete("libName");
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionDelete(libraryCode: string): Promise<string> {
+        return this.createWritePromise(createFunctionDelete(libraryCode));
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * See https://valkey.io/commands/function-load/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The source code that implements the library.
+     * @param replace - Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * @returns The library name that was loaded.
+     *
+     * @example
+     * ```typescript
+     * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
+     * const result = await client.functionLoad(code, true);
+     * console.log(result); // Output: 'mylib'
+     * ```
+     */
+    public functionLoad(
+        libraryCode: string,
+        replace?: boolean,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionLoad(libraryCode, replace),
+        );
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionFlush(mode?: FlushMode): Promise<string> {
+        return this.createWritePromise(createFunctionFlush(mode));
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushall(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushall(mode?: FlushMode): Promise<string> {
+        return this.createWritePromise(createFlushAll(mode));
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushdb(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushdb(mode?: FlushMode): Promise<string> {
+        return this.createWritePromise(createFlushDB(mode));
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * See https://valkey.io/commands/dbsize/ for more details.
+     *
+     * @returns The number of keys in the currently selected database.
+     *
+     * @example
+     * ```typescript
+     * const numKeys = await client.dbsize();
+     * console.log("Number of keys in the current database: ", numKeys);
+     * ```
+     */
+    public dbsize(): Promise<number> {
+        return this.createWritePromise(createDBSize());
+    }
+
+    /** Publish a message on pubsub channel.
+     * See https://valkey.io/commands/publish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     * @returns -  Number of subscriptions in primary node that received the message.
+     * Note that this value does not include subscriptions that configured on replicas.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of publish command
+     * const result = await client.publish("Hi all!", "global-channel");
+     * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
+     * ```
+     */
+    public publish(message: string, channel: string): Promise<number> {
+        return this.createWritePromise(createPublish(message, channel));
     }
 }

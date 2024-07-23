@@ -12,14 +12,22 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import { GlideClient, ProtocolVersion, Transaction } from "..";
+import {
+    GlideClient,
+    GlideClientConfiguration,
+    ProtocolVersion,
+    PubSubMsg,
+    Transaction,
+} from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
-import { runBaseTests } from "./SharedTests";
+import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
     checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
+    generateLuaLibCode,
     getClientConfigurationOption,
     intoString,
     parseCommandLineArgs,
@@ -123,26 +131,29 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "simple select test",
+        "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            let selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
             checkSimple(result).toEqual("OK");
 
-            selectResult = await client.select(1);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(1)).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
+            checkSimple(await client.flushdb()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
 
-            selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
             checkSimple(await client.get(key)).toEqual(value);
+
+            expect(await client.dbsize()).toBeGreaterThan(0);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
         },
     );
 
@@ -296,6 +307,355 @@ describe("GlideClient", () => {
             client.close();
         },
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lolwut test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const result = await client.lolwut();
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result2 = await client.lolwut({ parameters: [] });
+            expect(intoString(result2)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result3 = await client.lolwut({ parameters: [50, 20] });
+            expect(intoString(result3)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result4 = await client.lolwut({ version: 6 });
+            expect(intoString(result4)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result5 = await client.lolwut({
+                version: 5,
+                parameters: [30, 4, 4],
+            });
+            expect(intoString(result5)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // transaction tests
+            const transaction = new Transaction();
+            transaction.lolwut();
+            transaction.lolwut({ version: 5 });
+            transaction.lolwut({ parameters: [1, 2] });
+            transaction.lolwut({ version: 6, parameters: [42] });
+            const results = await client.exec(transaction);
+
+            if (results) {
+                for (const element of results) {
+                    expect(intoString(element)).toEqual(
+                        expect.stringContaining("Redis ver. "),
+                    );
+                }
+            } else {
+                throw new Error("Invalid LOLWUT transaction test results.");
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function load test_%p",
+        async (protocol) => {
+            if (await checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                checkSimple(
+                    await client.customCommand([
+                        "FCALL",
+                        funcName,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual("one");
+                checkSimple(
+                    await client.customCommand([
+                        "FCALL_RO",
+                        funcName,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual("one");
+
+                // TODO verify with FUNCTION LIST
+                // re-load library without replace
+
+                await expect(client.functionLoad(code)).rejects.toThrow(
+                    `Library '${libName}' already exists`,
+                );
+
+                // re-load library with replace
+                checkSimple(await client.functionLoad(code, true)).toEqual(
+                    libName,
+                );
+
+                // overwrite lib with new code
+                const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
+                const newCode = generateLuaLibCode(
+                    libName,
+                    new Map([
+                        [funcName, "return args[1]"],
+                        [func2Name, "return #args"],
+                    ]),
+                    true,
+                );
+                checkSimple(await client.functionLoad(newCode, true)).toEqual(
+                    libName,
+                );
+
+                expect(
+                    await client.customCommand([
+                        "FCALL",
+                        func2Name,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual(2);
+                expect(
+                    await client.customCommand([
+                        "FCALL_RO",
+                        func2Name,
+                        "0",
+                        "one",
+                        "two",
+                    ]),
+                ).toEqual(2);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function flush test_%p",
+        async (protocol) => {
+            if (await checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                // Flush functions
+                expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
+                    "OK",
+                );
+                expect(await client.functionFlush(FlushMode.ASYNC)).toEqual(
+                    "OK",
+                );
+
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                // Attempt to re-load library without overwriting to ensure FLUSH was effective
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function delete test_%p",
+        async (protocol) => {
+            if (await checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not yet exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                // Delete the function
+                expect(await client.functionDelete(libName)).toEqual("OK");
+
+                // TODO use commands instead of customCommand once implemented
+                // verify function does not exist
+                expect(
+                    await client.customCommand([
+                        "FUNCTION",
+                        "LIST",
+                        "LIBRARYNAME",
+                        libName,
+                    ]),
+                ).toEqual([]);
+
+                // deleting a non-existing library
+                await expect(client.functionDelete(libName)).rejects.toThrow(
+                    `Library not found`,
+                );
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP3])("simple pubsub test", async (protocol) => {
+        const pattern = "*";
+        const channel = "test-channel";
+        const config: GlideClientConfiguration = getClientConfigurationOption(
+            cluster.getAddresses(),
+            protocol,
+        );
+        const channelsAndPatterns: Partial<
+            Record<GlideClientConfiguration.PubSubChannelModes, Set<string>>
+        > = {
+            [GlideClientConfiguration.PubSubChannelModes.Exact]: new Set([
+                channel,
+            ]),
+            [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set([
+                pattern,
+            ]),
+        };
+        config.pubsubSubscriptions = {
+            channelsAndPatterns: channelsAndPatterns,
+        };
+        client = await GlideClient.createClient(config);
+        const clientTry = await GlideClient.createClient(config);
+        const context: PubSubMsg[] = [];
+
+        function new_message(msg: PubSubMsg, context: PubSubMsg[]): void {
+            context.push(msg);
+        }
+
+        const clientCallback = await GlideClient.createClient({
+            addresses: config.addresses,
+            pubsubSubscriptions: {
+                channelsAndPatterns: channelsAndPatterns,
+                callback: new_message,
+                context: context,
+            },
+        });
+        const message = uuidv4();
+        const asyncMessages: PubSubMsg[] = [];
+        const tryMessages: (PubSubMsg | null)[] = [];
+
+        await client.publish(message, "test-channel");
+        const sleep = new Promise((resolve) => setTimeout(resolve, 1000));
+        await sleep;
+
+        for (let i = 0; i < 2; i++) {
+            asyncMessages.push(await client.getPubSubMessage());
+            tryMessages.push(clientTry.tryGetPubSubMessage());
+        }
+
+        expect(clientTry.tryGetPubSubMessage()).toBeNull();
+        expect(asyncMessages.length).toBe(2);
+        expect(tryMessages.length).toBe(2);
+        expect(context.length).toBe(2);
+
+        // assert all api flavors produced the same messages
+        expect(asyncMessages).toEqual(tryMessages);
+        expect(asyncMessages).toEqual(context);
+
+        let patternCount = 0;
+
+        for (let i = 0; i < 2; i++) {
+            const pubsubMsg = asyncMessages[i];
+            expect(pubsubMsg.channel.toString()).toBe(channel);
+            expect(pubsubMsg.message.toString()).toBe(message);
+
+            if (pubsubMsg.pattern) {
+                patternCount++;
+                expect(pubsubMsg.pattern.toString()).toBe(pattern);
+            }
+        }
+
+        expect(patternCount).toBe(1);
+        client.close();
+        clientTry.close();
+        clientCallback.close();
+    });
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
