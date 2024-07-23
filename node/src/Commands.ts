@@ -1858,6 +1858,23 @@ export function createGeoAdd(
 }
 
 /**
+ * Enumeration representing distance units options for the {@link geodist} command.
+ */
+export enum GeoUnit {
+    /** Represents distance in meters. */
+    METERS = "m",
+
+    /** Represents distance in kilometers. */
+    KILOMETERS = "km",
+
+    /** Represents distance in miles. */
+    MILES = "mi",
+
+    /** Represents distance in feet. */
+    FEET = "ft",
+}
+
+/**
  * @internal
  */
 export function createGeoPos(
@@ -1865,6 +1882,24 @@ export function createGeoPos(
     members: string[],
 ): command_request.Command {
     return createCommand(RequestType.GeoPos, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
+export function createGeoDist(
+    key: string,
+    member1: string,
+    member2: string,
+    geoUnit?: GeoUnit,
+): command_request.Command {
+    const args: string[] = [key, member1, member2];
+
+    if (geoUnit) {
+        args.push(geoUnit);
+    }
+
+    return createCommand(RequestType.GeoDist, args);
 }
 
 /**
