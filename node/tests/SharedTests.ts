@@ -4434,7 +4434,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `geoadd test_%p`,
+        `geoadd geopos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
@@ -4451,6 +4451,28 @@ export function runBaseTests<Context>(config: {
 
                 // default geoadd
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                let geopos = await client.geopos(key1, [
+                    "Palermo",
+                    "Catania",
+                    "New York",
+                ]);
+                // inner array is possibly null, we need a null check or a cast
+                expect(geopos[0]?.[0]).toBeCloseTo(13.361389, 5);
+                expect(geopos[0]?.[1]).toBeCloseTo(38.115556, 5);
+                expect(geopos[1]?.[0]).toBeCloseTo(15.087269, 5);
+                expect(geopos[1]?.[1]).toBeCloseTo(37.502669, 5);
+                expect(geopos[2]).toBeNull();
+
+                // empty array of places
+                geopos = await client.geopos(key1, []);
+                expect(geopos).toEqual([]);
+
+                // not existing key
+                geopos = await client.geopos(key2, []);
+                expect(geopos).toEqual([]);
+                geopos = await client.geopos(key2, ["Palermo"]);
+                expect(geopos).toEqual([null]);
 
                 // with update mode options
                 membersToCoordinates.set(
@@ -4499,6 +4521,7 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geoadd(key2, membersToCoordinates),
                 ).rejects.toThrow();
+                await expect(client.geopos(key2, ["*_*"])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
