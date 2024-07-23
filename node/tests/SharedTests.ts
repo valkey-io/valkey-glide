@@ -4686,6 +4686,44 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geohash test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const members = ["Palermo", "Catania", "NonExisting"];
+                const empty: string[] = [];
+                const expected = ["sqc8b49rny0", "sqdtr74hyu0", null];
+
+                // adding the geo locations
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    "Palermo",
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    "Catania",
+                    new GeospatialData(15.087269, 37.502669),
+                );
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // checking result with default metric
+                expect(await client.geohash(key1, members)).toEqual(expected);
+
+                // empty members array
+                expect(await (await client.geohash(key1, empty)).length).toBe(
+                    0,
+                );
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key2, "geohash")).toBe("OK");
+                await expect(client.geohash(key2, members)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
