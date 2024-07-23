@@ -902,7 +902,7 @@ public class TransactionTestUtilities {
                     "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
                     "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
                     "0-4", // xadd(streamKey4, new String[][] {{"field4", "value4"}, {"field4", "value5"}}), ... .id("0-4").build());
-                    3L, // xlen(streamKey4)
+                    3L, // xlen(streamKey1)
                     Map.of(
                             streamKey1,
                             Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));

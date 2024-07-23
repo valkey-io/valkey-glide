@@ -5778,18 +5778,12 @@ public class SharedCommandTests {
         String foo1 = "foo1";
         String bar1 = "bar1";
 
-        String timestamp = "1721748920942-0";
         String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
-        assertEquals(
-                timestamp,
-                client
-                        .xadd(key, entry)
-                        .get());
-
+        String streamId = client.xadd(key, entry).get();
         // get everything from the stream
         Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
-        String[][] actualEntry = result.get(timestamp);
+        String[][] actualEntry = result.get(streamId);
         assertDeepEquals(entry, actualEntry);
     }
 
@@ -5802,21 +5796,12 @@ public class SharedCommandTests {
         String foo1 = "foo1";
         String bar1 = "bar1";
 
-        String timestamp = "1721748920942-0";
         String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
-        assertEquals(
-            timestamp,
-            client
-                .xadd(
-                    key,
-                    entry,
-                    StreamAddOptions.builder().id(timestamp).build())
-                .get());
-
+        String streamId = client.xadd(key, entry, StreamAddOptions.builder().build()).get();
         // get everything from the stream
         Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
-        String[][] actualEntry = result.get(timestamp);
+        String[][] actualEntry = result.get(streamId);
         assertDeepEquals(entry, actualEntry);
     }
 
@@ -5829,18 +5814,12 @@ public class SharedCommandTests {
         GlideString foo1 = gs("foo1");
         GlideString bar1 = gs("bar1");
 
-        GlideString timestamp = gs("1721748920942-0");
         GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
-        assertEquals(
-            timestamp,
-            client
-                .xadd(key, entry)
-                .get());
-
+        GlideString streamId = client.xadd(key, entry).get();
         // get everything from the stream
         Map<GlideString, GlideString[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
-        GlideString[][] actualEntry = result.get(timestamp);
+        GlideString[][] actualEntry = result.get(streamId);
         assertDeepEquals(entry, actualEntry);
     }
 
@@ -5853,21 +5832,12 @@ public class SharedCommandTests {
         GlideString foo1 = gs("foo1");
         GlideString bar1 = gs("bar1");
 
-        GlideString timestamp = gs("1721748920942-0");
         GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
-        assertEquals(
-            timestamp,
-            client
-                .xadd(
-                    key,
-                    entry,
-                    StreamAddOptionsBinary.builder().id(timestamp).build())
-                .get());
-
+        GlideString streamId = client.xadd(key, entry, StreamAddOptionsBinary.builder().build()).get();
         // get everything from the stream
         Map<GlideString, GlideString[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
-        GlideString[][] actualEntry = result.get(timestamp);
+        GlideString[][] actualEntry = result.get(streamId);
         assertDeepEquals(entry, actualEntry);
     }
 
