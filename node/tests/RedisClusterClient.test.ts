@@ -19,6 +19,7 @@ import {
     InfoOptions,
     ProtocolVersion,
     Routes,
+    ScoreFilter,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
@@ -323,6 +324,9 @@ describe("GlideClusterClient", () => {
 
             if (!versionLessThan7) {
                 promises.push(client.zintercard(["abc", "zxy", "lkn"]));
+                promises.push(
+                    client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
+                );
             }
 
             for (const promise of promises) {

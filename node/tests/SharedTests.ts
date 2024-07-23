@@ -14,6 +14,7 @@ import {
     InsertPosition,
     ProtocolVersion,
     RequestError,
+    ScoreFilter,
     Script,
     parseInfoResponse,
 } from "../";
@@ -4541,6 +4542,71 @@ export function runBaseTests<Context>(config: {
                         new Map([["Place", new GeospatialData(0, -86)]]),
                     ),
                 ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("7.0.0")) return;
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const nonExistingKey = "{key}-0" + uuidv4();
+                const stringKey = "{key}-string" + uuidv4();
+
+                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
+                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
+                    2,
+                );
+
+                checkSimple(
+                    await client.zmpop([key1, key2], ScoreFilter.MAX),
+                ).toEqual([key1, { b1: 2 }]);
+                checkSimple(
+                    await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
+                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+
+                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN))
+                    .toBeNull;
+                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1))
+                    .toBeNull;
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.zmpop([stringKey], ScoreFilter.MAX),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.zmpop([stringKey], ScoreFilter.MAX, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: key list should not be empty
+                await expect(
+                    client.zmpop([], ScoreFilter.MAX, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: count should be greater than 0
+                await expect(
+                    client.zmpop([key1], ScoreFilter.MAX, 0),
+                ).rejects.toThrow(RequestError);
+
+                // check that order of entries in the response is preserved
+                const entries: Record<string, number> = {};
+
+                for (let i = 0; i < 10; i++) {
+                    // a0 => 0, a1 => 1 etc
+                    entries["a" + i] = i;
+                }
+
+                expect(await client.zadd(key2, entries)).toEqual(10);
+                const result = await client.zmpop([key2], ScoreFilter.MIN, 10);
+
+                if (result) {
+                    expect(result[1]).toEqual(entries);
+                }
             }, protocol);
         },
         config.timeout,

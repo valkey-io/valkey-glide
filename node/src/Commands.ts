@@ -1869,3 +1869,33 @@ export function createZRevRankWithScore(
 ): command_request.Command {
     return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
 }
+
+/**
+ * Mandatory option for zmpop.
+ * Defines which elements to pop from the sorted set.
+ */
+export enum ScoreFilter {
+    /** Pop elements with the highest scores. */
+    MAX = "MAX",
+    /** Pop elements with the lowest scores. */
+    MIN = "MIN",
+}
+
+/**
+ * @internal
+ */
+export function createZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString()].concat(keys);
+    args.push(modifier);
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.ZMPop, args);
+}
