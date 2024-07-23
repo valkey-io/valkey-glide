@@ -1076,11 +1076,16 @@ export function runBaseTests<Context>(config: {
                         key1,
                         key2,
                         ListDirection.LEFT,
-                        ListDirection.LEFT,
+                        ListDirection.LEFT
                     ),
                 ).toEqual("1");
-                console.log("RAWRRWERWERWERE");
+
                 // Move from LEFT to RIGHT
+                checkSimple(await client.lmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT)).toEqual("2");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual(["1", "3", "4", "2"]);
+                checkSimple(await client.lrange(key1, 0 , -1)).toEqual([]);
+
             }, protocol);
         },
         config.timeout,

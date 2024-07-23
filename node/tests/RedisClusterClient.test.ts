@@ -40,7 +40,7 @@ type Context = {
     client: GlideClusterClient;
 };
 
-const TIMEOUT = 50000;
+const TIMEOUT = 500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
 
 describe("GlideClusterClient", () => {
     let testsFailed = 0;

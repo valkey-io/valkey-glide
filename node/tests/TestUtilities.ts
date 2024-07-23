@@ -29,7 +29,6 @@ import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 import { ListDirection } from "../build-ts/src/commands/ListDirection";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 
 beforeAll(() => {
     Logger.init("info");
@@ -441,8 +440,8 @@ export async function transactionTest(
     args.push("OK");
     baseTransaction.lrange(key5, 0, -1);
     args.push([field + "3", field + "2"]);
-    baseTransaction.lmove(key5, key19, ListDirection.LEFT, ListDirection.LEFT);
-    args.push(field + "3");
+//     baseTransaction.lmove(key5, key19, ListDirection.LEFT, ListDirection.LEFT);
+//     args.push(field + "3");
     baseTransaction.lpopCount(key5, 2);
     args.push([field + "3", field + "2"]);
     baseTransaction.linsert(

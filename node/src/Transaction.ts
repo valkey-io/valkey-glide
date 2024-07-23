@@ -2,9 +2,6 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { LPosOptions } from "./commands/LPosOptions";
-import { ListDirection } from "./commands/ListDirection";
-
 import {
     AggregationType,
     ExpireOptions,
@@ -146,6 +143,7 @@ import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
+import { ListDirection } from "./commands/ListDirection";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 

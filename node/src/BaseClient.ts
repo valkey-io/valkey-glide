@@ -10,7 +10,6 @@ import {
 } from "glide-rs";
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
-import { ListDirection } from "./commands/ListDirection";
 
 import {
     AggregationType,
@@ -130,6 +129,8 @@ import {
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { LPosOptions } from "./commands/LPosOptions";
+import { ListDirection } from "./commands/ListDirection";
+
 import {
     ClosingError,
     ConfigurationError,
