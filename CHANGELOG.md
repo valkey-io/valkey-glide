@@ -121,6 +121,7 @@
 * Node: Added ZRevRank command ([#1977](https://github.com/valkey-io/valkey-glide/pull/1977))
 * Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
 * Node: Added GeoHash command ([#1997](https://github.com/valkey-io/valkey-glide/pull/1997))
+* Node: Added LmPop command ([#TBD](https://github.com/valkey-io/valkey-glide/pull/TBD))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

@@ -1934,6 +1934,40 @@ export function createZRevRankWithScore(
 }
 
 /**
+ * Enumeration representing element popping or adding direction for the `List' commands.
+ */
+export enum ListDirection {
+    /**
+     * Represents the option that elements should be popped from or added to the left side of a list.
+     */
+    LEFT = "LEFT",
+
+    /**
+     * Represents the option that elements should be popped from or added to the right side of a list.
+     */
+    Right = "RIGHT",
+}
+
+/**
+ * @internal
+ */
+export function createLMPop(
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString()].concat(keys);
+    args.push(direction);
+
+    if (count) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.LMPop, args);
+}
+
+/**
  * Mandatory option for zmpop.
  * Defines which elements to pop from the sorted set.
  */

@@ -143,6 +143,7 @@ import {
     createZRevRankWithScore,
     createZScore,
     GeoUnit,
+    createLMPop,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -2072,6 +2073,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public geohash(key: string, members: string[]): T {
         return this.addAndReturn(createGeoHash(key, members));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - The maximum number of popped elements.
+     *
+     * Command Response - A `Map` of key-name mapped array of popped elements.
+     *
+     * * since Valkey version 7.0.0.
+     * ```
+     */
+    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+        return this.addAndReturn(createLMPop(keys, direction, count));
     }
 }
 

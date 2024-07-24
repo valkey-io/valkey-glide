@@ -130,6 +130,8 @@ import {
     createZRevRankWithScore,
     createZScore,
     GeoUnit,
+    ListDirection,
+    createLMPop,
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
@@ -3528,6 +3530,34 @@ export class BaseClient {
         ).then((hashes) =>
             hashes.map((hash) => (hash === null ? null : "" + hash)),
         );
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - The maximum number of popped elements.
+     * @returns A `Map` of key-name mapped array of popped elements.
+     *
+     * * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * client.lpush("testKey", ["one", "two", "three"]);
+     * const result = await client.lmpop(["testKey"], ListDirection.LEFT, 1L);
+     * console.log(result.get("testKey")); // Output: ["three"]
+     * ```
+     */
+    public lmpop(
+        keys: string[],
+        direction: ListDirection,
+        count?: number,
+    ): Promise<Map<string, string[]>> {
+        return this.createWritePromise(createLMPop(keys, direction, count));
     }
 
     /**
