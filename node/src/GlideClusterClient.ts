@@ -671,22 +671,22 @@ export class GlideClusterClient extends BaseClient {
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *  case the client will route the command to the nodes defined by `route`.
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns The invoked function's return value.
      *
      * @example
      * ```typescript
-     * const response = await client.fcallRoute("Deep_Thought", undefined, "randomNode");
+     * const response = await client.fcallWithRoute("Deep_Thought", [], "randomNode");
      * console.log(response); // Output: Returns the function's return value.
      * ```
      */
-    public fcallRoute(
+    public fcallWithRoute(
         func: string,
-        args?: string[],
+        args: string[],
         route?: Routes,
     ): Promise<ReturnType> {
         return this.createWritePromise(
-            createFCall(func, undefined, args),
+            createFCall(func, [], args),
             toProtobufRoute(route),
         );
     }
@@ -701,23 +701,23 @@ export class GlideClusterClient extends BaseClient {
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *  case the client will route the command to the nodes defined by `route`.
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns The invoked function's return value.
      *
      * @example
      * ```typescript
-     * const response = await client.fcallReadonlyRoute("Deep_Thought", ["Answer", "to", "the", "Ultimate",
+     * const response = await client.fcallReadonlyWithRoute("Deep_Thought", ["Answer", "to", "the", "Ultimate",
      *            "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], "randomNode");
      * console.log(response); // Output: 42 # The return value on the function that was execute.
      * ```
      */
-    public fcallReadonlyRoute(
+    public fcallReadonlyWithRoute(
         func: string,
-        args?: string[],
+        args: string[],
         route?: Routes,
     ): Promise<ReturnType> {
         return this.createWritePromise(
-            createFCallReadOnly(func, undefined, args),
+            createFCallReadOnly(func, [], args),
             toProtobufRoute(route),
         );
     }
