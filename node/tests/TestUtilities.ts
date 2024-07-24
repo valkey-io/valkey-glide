@@ -10,6 +10,7 @@ import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitwiseOperation,
     ClusterTransaction,
     GeoUnit,
     GlideClient,
@@ -25,7 +26,6 @@ import {
     BitmapIndexType,
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
-import { BitwiseOperation } from "../build-ts/src/commands/BitwiseOperation";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";

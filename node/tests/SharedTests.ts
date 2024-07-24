@@ -10,6 +10,7 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BitwiseOperation,
     ClosingError,
     ExpireOptions,
     GlideClient,
@@ -37,7 +38,6 @@ import {
     BitmapIndexType,
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
-import { BitwiseOperation } from "../src/commands/BitwiseOperation";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";

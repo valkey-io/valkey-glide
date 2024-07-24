@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BitwiseOperation,
     ExpireOptions,
     InsertPosition,
     KeyWeight,
@@ -133,7 +134,6 @@ import {
     GeoUnit,
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { BitwiseOperation } from "./commands/BitwiseOperation";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { LPosOptions } from "./commands/LPosOptions";

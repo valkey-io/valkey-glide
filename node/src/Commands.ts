@@ -9,7 +9,6 @@ import { LPosOptions } from "./commands/LPosOptions";
 
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { BitwiseOperation } from "./commands/BitwiseOperation";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
@@ -445,6 +444,17 @@ export function createDecrBy(
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
+}
+
+/**
+ * Enumeration defining the bitwise operation to use in the {@link BaseClient.bitop|bitop} command. Specifies the
+ * bitwise operation to perform between the passed in keys.
+ */
+export enum BitwiseOperation {
+    AND = "AND",
+    OR = "OR",
+    XOR = "XOR",
+    NOT = "NOT",
 }
 
 /**

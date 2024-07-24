@@ -4,6 +4,7 @@
 
 import {
     AggregationType,
+    BitwiseOperation,
     ExpireOptions,
     InfoOptions,
     InsertPosition,
@@ -147,7 +148,6 @@ import {
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { BitwiseOperation } from "./commands/BitwiseOperation";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";

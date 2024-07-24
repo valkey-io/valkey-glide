@@ -13,6 +13,7 @@ import {
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BitwiseOperation,
     ClusterClientConfiguration,
     ClusterTransaction,
     GlideClusterClient,
@@ -37,7 +38,6 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
-import { BitwiseOperation } from "../src/commands/BitwiseOperation";
 type Context = {
     client: GlideClusterClient;
 };
