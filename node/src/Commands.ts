@@ -2259,3 +2259,24 @@ export function createHStrlen(
 ): command_request.Command {
     return createCommand(RequestType.HStrlen, [key, field]);
 }
+
+/**
+ * @internal
+ */
+export function createZRandMember(
+    key: string,
+    count?: number,
+    withscores?: boolean,
+): command_request.Command {
+    const args = [key];
+
+    if (count) {
+        args.push(count.toString());
+    }
+
+    if (withscores) {
+        args.push("WITHSCORES");
+    }
+
+    return createCommand(RequestType.ZRandMember, args);
+}

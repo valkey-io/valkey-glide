@@ -397,6 +397,7 @@ export async function transactionTest(
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
     const key20 = "{key}" + uuidv4(); // list
+    const key21 = "{key}" + uuidv4(); // zset random
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -809,6 +810,14 @@ export async function transactionTest(
         'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
+    baseTransaction.zadd(key21, { one: 1.0 });
+    args.push(1);
+    baseTransaction.zrandmember(key21);
+    args.push("one");
+    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
+    args.push(["one"]);
+    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
+    args.push(["one", 1.0]);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");

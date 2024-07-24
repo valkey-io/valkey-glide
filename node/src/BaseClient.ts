@@ -1,7 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
@@ -136,6 +135,7 @@ import {
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -2824,6 +2824,91 @@ export class BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
+     * Returns a random element from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @returns A string representing a random element from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmember("mySortedSet");
+     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     *
+     * const payload2 = await client.zrandmember("nonExistingSortedSet");
+     * console.log(payload2); // Output: null
+     * ```
+     */
+    public async zrandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createZRandMember(key)).then((result) =>
+            result === null ? null : "" + result,
+        );
+    }
+
+    /**
+     * Returns a random element from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of elements to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
+     * @returns An `array` of elements from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
+     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     *
+     * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
+     * console.log(payload1); // Output: []
+     * ```
+     */
+    public async zrandmemberWithCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise<(string | null)[]>(
+            createZRandMember(key, count),
+        ).then((hashes) => hashes.map((hash) => "" + hash));
+    }
+
+    /**
+     * Returns a random element from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of elements to return.
+     *     If `count` is positive, returns unique elements.
+     *     If negative, allows for duplicates.
+     * @returns An `array` of `[element, score]` `arrays`, where
+     *     element is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
+     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     *
+     * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
+     * console.log(payload1); // Output: []
+     * ```
+     */
+    public async zrandmemberWithCountWithScores(
+        key: string,
+        count: number,
+    ): Promise<object[][]> {
+        return this.createWritePromise<object[][]>(
+            createZRandMember(key, count, true),
         );
     }
 
