@@ -13,6 +13,7 @@ import {
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BitwiseOperation,
     ClusterClientConfiguration,
     ClusterTransaction,
     GlideClusterClient,
@@ -306,6 +307,7 @@ describe("GlideClusterClient", () => {
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
+                client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),

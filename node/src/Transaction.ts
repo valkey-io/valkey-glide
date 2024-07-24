@@ -4,6 +4,7 @@
 
 import {
     AggregationType,
+    BitwiseOperation,
     ExpireOptions,
     InfoOptions,
     InsertPosition,
@@ -22,6 +23,7 @@ import {
     createBLPop,
     createBRPop,
     createBitCount,
+    createBitOp,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -393,6 +395,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public decrBy(key: string, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
+    }
+
+    /**
+     * Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+     * `destination`.
+     *
+     * See https://valkey.io/commands/bitop/ for more details.
+     *
+     * @param operation - The bitwise operation to perform.
+     * @param destination - The key that will store the resulting string.
+     * @param keys - The list of keys to perform the bitwise operation on.
+     *
+     * Command Response - The size of the string stored in `destination`.
+     */
+    public bitop(
+        operation: BitwiseOperation,
+        destination: string,
+        keys: string[],
+    ): T {
+        return this.addAndReturn(createBitOp(operation, destination, keys));
     }
 
     /**
