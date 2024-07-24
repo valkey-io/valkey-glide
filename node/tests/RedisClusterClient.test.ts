@@ -610,8 +610,9 @@ describe("GlideClusterClient", () => {
                                     await client.functionLoad(code),
                                 ).toEqual(libName);
                                 // call functions from that library to confirm that it works
-                                let fcall = await client.customCommand(
-                                    ["FCALL", funcName, "0", "one", "two"],
+                                let fcall = await client.fcallRoute(
+                                    funcName,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -620,9 +621,9 @@ describe("GlideClusterClient", () => {
                                     (value) =>
                                         checkSimple(value).toEqual("one"),
                                 );
-
-                                fcall = await client.customCommand(
-                                    ["FCALL_RO", funcName, "0", "one", "two"],
+                                fcall = await client.fcallReadonlyRoute(
+                                    funcName,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -659,8 +660,9 @@ describe("GlideClusterClient", () => {
                                     await client.functionLoad(newCode, true),
                                 ).toEqual(libName);
 
-                                fcall = await client.customCommand(
-                                    ["FCALL", func2Name, "0", "one", "two"],
+                                fcall = await client.fcallRoute(
+                                    func2Name,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -669,8 +671,9 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual(2),
                                 );
 
-                                fcall = await client.customCommand(
-                                    ["FCALL_RO", func2Name, "0", "one", "two"],
+                                fcall = await client.fcallReadonlyRoute(
+                                    func2Name,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(

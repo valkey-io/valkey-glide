@@ -397,19 +397,10 @@ describe("GlideClient", () => {
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
                 checkSimple(
-                    await client.customCommand([
-                        "FCALL",
-                        funcName,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcall(funcName, undefined, ["one", "two"]),
                 ).toEqual("one");
                 checkSimple(
-                    await client.customCommand([
-                        "FCALL_RO",
-                        funcName,
-                        "0",
+                    await client.fcallReadonly(funcName, undefined, [
                         "one",
                         "two",
                     ]),
@@ -441,20 +432,11 @@ describe("GlideClient", () => {
                     libName,
                 );
 
-                expect(
-                    await client.customCommand([
-                        "FCALL",
-                        func2Name,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                checkSimple(
+                    await client.fcall(func2Name, undefined, ["one", "two"]),
                 ).toEqual(2);
-                expect(
-                    await client.customCommand([
-                        "FCALL_RO",
-                        func2Name,
-                        "0",
+                checkSimple(
+                    await client.fcallReadonly(func2Name, undefined, [
                         "one",
                         "two",
                     ]),
