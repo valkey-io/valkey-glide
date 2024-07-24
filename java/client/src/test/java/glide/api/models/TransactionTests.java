@@ -769,6 +769,15 @@ public class TransactionTests {
         transaction.xadd("key", Map.of("field1", "foo1"), StreamAddOptions.builder().id("id").build());
         results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
 
+        transaction.xadd("key", new String[][] {new String[] {"field1", "foo1"}});
+        results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
+
+        transaction.xadd(
+                "key",
+                new String[][] {new String[] {"field1", "foo1"}},
+                StreamAddOptions.builder().id("id").build());
+        results.add(Pair.of(XAdd, buildArgs("key", "id", "field1", "foo1")));
+
         transaction.xtrim("key", new MinId(true, "id"));
         results.add(
                 Pair.of(XTrim, buildArgs("key", TRIM_MINID_VALKEY_API, TRIM_EXACT_VALKEY_API, "id")));

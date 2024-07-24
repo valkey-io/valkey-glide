@@ -215,6 +215,7 @@ import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.flattenAllKeysFollowedByAllValues;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst;
+import static glide.utils.ArrayTransformUtils.flattenNestedArrayToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
 import command_request.CommandRequestOuterClass.Command;
@@ -3343,7 +3344,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(ArgType, ArgType[][])}.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -3358,7 +3360,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return Command Response - The id of the added entry.
+     */
+    public <ArgType> T xadd(@NonNull ArgType key, @NonNull ArgType[][] values) {
+        return xadd(key, values, StreamAddOptions.builder().build());
+    }
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(ArgType, ArgType[][], StreamAddOptions)}.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -3382,6 +3401,34 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(key)
                                 .add(options.toArgs())
                                 .add(flattenMapToGlideStringArray(values))));
+        return getThis();
+    }
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options {@link StreamAddOptions}.
+     * @return Command Response - The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
+     */
+    public <ArgType> T xadd(
+            @NonNull ArgType key, @NonNull ArgType[][] values, @NonNull StreamAddOptions options) {
+        checkTypeOrThrow(key);
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XAdd,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(options.toArgs())
+                                .add(flattenNestedArrayToGlideStringArray(values))));
         return getThis();
     }
 

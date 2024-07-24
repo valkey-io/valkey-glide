@@ -29,7 +29,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(String, String[][])}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -45,7 +46,25 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return The id of the added entry.
+     * @example
+     *     <pre>{@code
+     * String streamId = client.xadd("key", new String[][] {{"name", "Sara"}, {"surname", "OConnor"}}).get();
+     * System.out.println("Stream: " + streamId);
+     * }</pre>
+     */
+    CompletableFuture<String> xadd(String key, String[][] values);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(GlideString, GlideString[][])}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -61,7 +80,25 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @return The id of the added entry.
+     * @example
+     *     <pre>{@code
+     * String streamId = client.xadd(gs("key"), new String[][] {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}).get();
+     * System.out.println("Stream: " + streamId);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> xadd(GlideString key, GlideString[][] values);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(String, String[][], StreamAddOptions)}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -73,10 +110,10 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptions options = StreamAddOptions.builder().id("sid").makeStream(Boolean.FALSE).build();
+     * StreamAddOptions options = StreamAddOptions.builder().id("1-0").makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd("key", Map.of("name", "Sara", "surname", "OConnor"), options).get();
      * if (streamId != null) {
-     *     assert streamId.equals("sid");
+     *     assert streamId.equals("1-0");
      * }
      * }</pre>
      */
@@ -84,7 +121,32 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options {@link StreamAddOptions}.
+     * @return The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
+     *     with the matching <code>key</code> exists.
+     * @example
+     *     <pre>{@code
+     * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
+     * StreamAddOptions options = StreamAddOptions.builder().id("1-0").makeStream(Boolean.FALSE).build();
+     * String streamId = client.xadd("key", new String[][] {{"name", "Sara"}, {"surname", "OConnor"}}, options).get();
+     * if (streamId != null) {
+     *     assert streamId.equals("1-0");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<String> xadd(String key, String[][] values, StreamAddOptions options);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(GlideString, GlideString[][], StreamAddOptionsBinary)}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -96,15 +158,40 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
-     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("sid")).makeStream(Boolean.FALSE).build();
+     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("1-0")).makeStream(Boolean.FALSE).build();
      * String streamId = client.xadd(gs("key"), Map.of(gs("name"), gs("Sara"), gs("surname"), gs("OConnor")), options).get();
      * if (streamId != null) {
-     *     assert streamId.equals("sid");
+     *     assert streamId.equals("1-0");
      * }
      * }</pre>
      */
     CompletableFuture<GlideString> xadd(
             GlideString key, Map<GlideString, GlideString> values, StreamAddOptionsBinary options);
+
+    /**
+     * Adds an entry to the specified stream stored at <code>key</code>.<br>
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
+     *
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param values Field-value pairs to be added to the entry.
+     * @param options Stream add options {@link StreamAddOptions}.
+     * @return The id of the added entry, or <code>null</code> if {@link
+     *     StreamAddOptionsBinaryBuilder#makeStream(Boolean)} is set to <code>false</code> and no
+     *     stream with the matching <code>key</code> exists.
+     * @example
+     *     <pre>{@code
+     * // Option to use the existing stream, or return null if the stream doesn't already exist at "key"
+     * StreamAddOptionsBinary options = StreamAddOptions.builder().id(gs("1-0")).makeStream(Boolean.FALSE).build();
+     * String streamId = client.xadd(gs("key"), new GlideString[][] {{gs("name"), gs("Sara")}, {gs("surname"), gs("OConnor")}}, options).get();
+     * if (streamId != null) {
+     *     assert streamId.equals("1-0");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<GlideString> xadd(
+            GlideString key, GlideString[][] values, StreamAddOptionsBinary options);
 
     /**
      * Reads entries from the given streams.
