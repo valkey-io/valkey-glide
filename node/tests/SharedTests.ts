@@ -535,7 +535,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bitpos and bitposInterval test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = `{key}-${uuidv4()}`;
                 const nonExistingKey = `{key}-${uuidv4()}`;
                 const setKey = `{key}-${uuidv4()}`;
@@ -573,7 +573,7 @@ export function runBaseTests<Context>(config: {
                     client.bitposInterval(setKey, 1, 1, -1),
                 ).rejects.toThrow(RequestError);
 
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     await expect(
                         client.bitposInterval(
                             key,
