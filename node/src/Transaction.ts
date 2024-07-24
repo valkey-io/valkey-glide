@@ -144,6 +144,7 @@ import {
     createZScore,
     GeoUnit,
     createLMPop,
+    ListDirection,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";

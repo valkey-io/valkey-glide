@@ -38,6 +38,7 @@ import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialDa
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
 import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { ListDirection } from '../src/Commands';
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -4720,6 +4721,35 @@ export function runBaseTests<Context>(config: {
                 // key exists but holds non-ZSET value
                 expect(await client.set(key2, "geohash")).toBe("OK");
                 await expect(client.geohash(key2, members)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const nonListKey = uuidv4();
+                const singleKeyArray = [key1];
+                const multiKeyArray = [key2, key1];
+                const count = 1;
+                const lpushArgs = ["one", "two", "three", "four", "five"];
+                const expected = new Map<string, string[]>([[key1, ["five"]]]);
+                const expected2 = new Map<string, string[]>([[key1, ["one", "two"]]]);
+
+                // nothing to be popped
+                expect(await client.lmpop(singleKeyArray, ListDirection.LEFT, count)).toBeNull();
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key1, lpushArgs)).toBe(5);
+                expect(await client.lpush(key2, lpushArgs)).toBe(5);
+
+                // checking correct result from popping
+                expect(await client.lmpop(singleKeyArray, ListDirection.LEFT)).toEqual(expected);        
+                
             }, protocol);
         },
         config.timeout,
