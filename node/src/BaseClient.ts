@@ -19,6 +19,7 @@ import {
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -35,6 +36,9 @@ import {
     createExpire,
     createExpireAt,
     createGeoAdd,
+    createGeoDist,
+    createGeoPos,
+    createGeoHash,
     createGet,
     createGetBit,
     createGetDel,
@@ -84,7 +88,6 @@ import {
     createSCard,
     createSDiff,
     createSDiffStore,
-    createSetBit,
     createSInter,
     createSInterCard,
     createSInterStore,
@@ -97,6 +100,7 @@ import {
     createSUnion,
     createSUnionStore,
     createSet,
+    createSetBit,
     createStrlen,
     createTTL,
     createType,
@@ -113,6 +117,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
@@ -125,9 +130,12 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    GeoUnit,
 } from "./Commands";
 import { BitmapIndexType } from "./commands/BitmapIndexType";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
+import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
+import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
@@ -146,8 +154,6 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -1803,6 +1809,7 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sets.
+     * @param limit - The limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
      *
      * since Valkey version 7.0.0.
@@ -2283,21 +2290,20 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
      * @param options - The ZAdd options.
-     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      * @returns The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
      *
      * @example
      * ```typescript
      * // Example usage of the zadd method to add elements to a sorted set
-     * const result = await client.zadd("my_sorted_set", \{ "member1": 10.5, "member2": 8.2 \});
+     * const result = await client.zadd("my_sorted_set", { "member1": 10.5, "member2": 8.2 });
      * console.log(result); // Output: 2 - Indicates that two elements have been added to the sorted set "my_sorted_set."
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zadd method to update scores in an existing sorted set
-     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, options={ conditionalChange: "onlyIfExists" } , changed=true);
+     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, { conditionalChange: "onlyIfExists", changed: true });
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
@@ -2305,15 +2311,9 @@ export class BaseClient {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): Promise<number> {
         return this.createWritePromise(
-            createZAdd(
-                key,
-                membersScoresMap,
-                options,
-                changed ? "CH" : undefined,
-            ),
+            createZAdd(key, membersScoresMap, options),
         );
     }
 
@@ -2350,7 +2350,7 @@ export class BaseClient {
         options?: ZAddOptions,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 
@@ -3041,6 +3041,7 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
+     * @param options - options detailing how to add to the stream.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
@@ -3477,7 +3478,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
-     * const num = await client.geoadd("mySortedSet", {"Palermo", new GeospatialData(13.361389, 38.115556)}, options);
+     * const num = await client.geoadd("mySortedSet", new Map([["Palermo", new GeospatialData(13.361389, 38.115556)]]), options);
      * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
      * ```
      */
@@ -3488,6 +3489,121 @@ export class BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createGeoAdd(key, membersToGeospatialData, options),
+        );
+    }
+
+    /**
+     * Returns the positions (longitude, latitude) of all the specified `members` of the
+     * geospatial index represented by the sorted set at `key`.
+     *
+     * See https://valkey.io/commands/geopos for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The members for which to get the positions.
+     * @returns A 2D `Array` which represents positions (longitude and latitude) corresponding to the
+     *     given members. The order of the returned positions matches the order of the input members.
+     *     If a member does not exist, its position will be `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]);
+     * await client.geoadd("mySortedSet", data);
+     * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
+     * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
+     * // returned might not be exactly the same as the input values
+     * console.log(result); // Output: [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], null]
+     * ```
+     */
+    public geopos(
+        key: string,
+        members: string[],
+    ): Promise<(number[] | null)[]> {
+        return this.createWritePromise(createGeoPos(key, members));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
+     * being checked in the order they are provided.
+     *
+     * See https://valkey.io/commands/zmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
+     * @returns A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
+     * await client.zadd("zSet2", { four: 4.0 });
+     * console.log(await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2));
+     * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
+     * ```
+     */
+    public zmpop(
+        key: string[],
+        modifier: ScoreFilter,
+        count?: number,
+    ): Promise<[string, [Record<string, number>]] | null> {
+        return this.createWritePromise(createZMPop(key, modifier, count));
+    }
+
+    /**
+     * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
+     *
+     * See https://valkey.io/commands/geodist/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member1 - The name of the first member.
+     * @param member2 - The name of the second member.
+     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}. If not specified, the default unit is {@link GeoUnit.METERS}.
+     * @returns The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
+     *     or if the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.geodist("mySortedSet", "Place1", "Place2", GeoUnit.KILOMETERS);
+     * console.log(num); // Output: the distance between Place1 and Place2.
+     * ```
+     */
+    public geodist(
+        key: string,
+        member1: string,
+        member2: string,
+        geoUnit?: GeoUnit,
+    ): Promise<number | null> {
+        return this.createWritePromise(
+            createGeoDist(key, member1, member2, geoUnit),
+        );
+    }
+
+    /**
+     * Returns the `GeoHash` strings representing the positions of all the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/geohash/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
+     *   If a member does not exist in the sorted set, a `null` value is returned for that member.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.geohash("mySortedSet",["Palermo", "Catania", "NonExisting"]);
+     * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * ```
+     */
+    public geohash(key: string, members: string[]): Promise<(string | null)[]> {
+        return this.createWritePromise<(string | null)[]>(
+            createGeoHash(key, members),
+        ).then((hashes) =>
+            hashes.map((hash) => (hash === null ? null : "" + hash)),
         );
     }
 

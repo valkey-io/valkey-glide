@@ -6,16 +6,19 @@ import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
+import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    GeoUnit,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
     Logger,
     ProtocolVersion,
     ReturnType,
+    ScoreFilter,
     Transaction,
 } from "..";
 import { BitmapIndexType } from "../build-ts/src/commands/BitmapIndexType";
@@ -23,7 +26,6 @@ import { BitOffsetOptions } from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");
@@ -337,6 +339,7 @@ export function compareMaps(
 
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
+    version: string,
 ): Promise<ReturnType[]> {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
@@ -480,7 +483,7 @@ export async function transactionTest(
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.sintercard([key7, key7]);
         args.push(2);
         baseTransaction.sintercard([key7, key7], 1);
@@ -500,7 +503,7 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     args.push(true);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         args.push([true, true, false]);
     }
@@ -526,7 +529,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, "member1");
     args.push(0);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrankWithScore(key8, "member1");
         args.push([0, 1]);
     }
@@ -534,7 +537,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     args.push(0);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         args.push([0, 5]);
     }
@@ -556,7 +559,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     args.push(3);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.zdiff([key13, key12]);
         args.push(["three"]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -584,13 +587,17 @@ export async function transactionTest(
     );
     args.push(1); // key8 is now empty
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         args.push(2);
         baseTransaction.zintercard([key8, key14]);
         args.push(0);
         baseTransaction.zintercard([key8, key14], 1);
         args.push(0);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX);
+        args.push([key14, { two: 2.0 }]);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
+        args.push([key14, { one: 1.0 }]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
@@ -642,7 +649,7 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     args.push(1);
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.bitcount(
             key17,
             new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
@@ -664,6 +671,17 @@ export async function transactionTest(
         ]),
     );
     args.push(2);
+    baseTransaction.geopos(key18, ["Palermo", "Catania"]);
+    args.push([
+        [13.36138933897018433, 38.11555639549629859],
+        [15.08726745843887329, 37.50266842333162032],
+    ]);
+    baseTransaction.geodist(key18, "Palermo", "Catania");
+    args.push(166274.1516);
+    baseTransaction.geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS);
+    args.push(166.2742);
+    baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
+    args.push(["sqc8b49rny0", "sqdtr74hyu0", null]);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
@@ -673,7 +691,7 @@ export async function transactionTest(
         true,
     );
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.functionLoad(code);
         args.push(libName);
         baseTransaction.functionLoad(code, true);

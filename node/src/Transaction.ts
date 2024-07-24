@@ -13,6 +13,7 @@ import {
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -43,6 +44,9 @@ import {
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
+    createGeoDist,
+    createGeoHash,
+    createGeoPos,
     createGet,
     createGetBit,
     createGetDel,
@@ -126,6 +130,7 @@ import {
     createZDiffWithScores,
     createZInterCard,
     createZInterstore,
+    createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
@@ -138,6 +143,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    GeoUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitmapIndexType } from "./commands/BitmapIndexType";
@@ -1182,7 +1188,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
      * @param options - The ZAdd options.
-     * @param changed - Modify the return value from the number of new elements added, to the total number of elements changed.
      *
      * Command Response - The number of elements added to the sorted set.
      * If `changed` is set, returns the number of elements updated in the sorted set.
@@ -1191,16 +1196,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
-        changed?: boolean,
     ): T {
-        return this.addAndReturn(
-            createZAdd(
-                key,
-                membersScoresMap,
-                options,
-                changed ? "CH" : undefined,
-            ),
-        );
+        return this.addAndReturn(createZAdd(key, membersScoresMap, options));
     }
 
     /** Increments the score of member in the sorted set stored at `key` by `increment`.
@@ -1223,7 +1220,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         options?: ZAddOptions,
     ): T {
         return this.addAndReturn(
-            createZAdd(key, { [member]: increment }, options, "INCR"),
+            createZAdd(key, { [member]: increment }, options, true),
         );
     }
 
@@ -1995,7 +1992,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param element - The value to search for within the list.
      * @param options - The LPOS options.
      *
-     * Command Response -  The index of `element`, or `null` if `element` is not in the list. If the `count`
+     * Command Response - The index of `element`, or `null` if `element` is not in the list. If the `count`
      * option is specified, then the function returns an `array` of indices of matching elements within the list.
      *
      * since - Valkey version 6.0.6.
@@ -2055,6 +2052,81 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createGeoAdd(key, membersToGeospatialData, options),
         );
+    }
+
+    /**
+     * Returns the positions (longitude, latitude) of all the specified `members` of the
+     * geospatial index represented by the sorted set at `key`.
+     *
+     * See https://valkey.io/commands/geopos for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The members for which to get the positions.
+     *
+     * Command Response - A 2D `Array` which represents positions (longitude and latitude) corresponding to the
+     *     given members. The order of the returned positions matches the order of the input members.
+     *     If a member does not exist, its position will be `null`.
+     */
+    public geopos(key: string, members: string[]): T {
+        return this.addAndReturn(createGeoPos(key, members));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
+     * being checked in the order they are provided.
+     *
+     * See https://valkey.io/commands/zmpop/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
+     *
+     * Command Response - A two-element `array` containing the key name of the set from which the
+     *     element was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
+        return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
+     *
+     * See https://valkey.io/commands/geodist/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member1 - The name of the first member.
+     * @param member2 - The name of the second member.
+     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}. If not specified, the default unit is {@link GeoUnit.METERS}.
+     *
+     * Command Response - The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
+     *     or if the key does not exist.
+     */
+    public geodist(
+        key: string,
+        member1: string,
+        member2: string,
+        geoUnit?: GeoUnit,
+    ): T {
+        return this.addAndReturn(createGeoDist(key, member1, member2, geoUnit));
+    }
+
+    /**
+     * Returns the `GeoHash` strings representing the positions of all the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/geohash/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     *
+     * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
+     *   If a member does not exist in the sorted set, a `null` value is returned for that member.
+     */
+    public geohash(key: string, members: string[]): T {
+        return this.addAndReturn(createGeoHash(key, members));
     }
 }
 

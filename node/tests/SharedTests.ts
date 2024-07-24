@@ -2,8 +2,12 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+// This file contains tests common for standalone and cluster clients, it covers API defined in
+// BaseClient.ts - commands which manipulate with keys.
+// Each test cases has access to a client instance and, optionally, to a cluster - object, which
+// represents a running server instance. See first 2 test cases as examples.
+
 import { expect, it } from "@jest/globals";
-import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
@@ -14,8 +18,10 @@ import {
     InsertPosition,
     ProtocolVersion,
     RequestError,
+    ScoreFilter,
     Script,
     parseInfoResponse,
+    GeoUnit,
 } from "../";
 import {
     Client,
@@ -34,39 +40,7 @@ import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialDa
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
 import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
-
-async function getVersion(): Promise<[number, number, number]> {
-    const versionString = await new Promise<string>((resolve, reject) => {
-        exec(`redis-server -v`, (error, stdout) => {
-            if (error) {
-                reject(error);
-            } else {
-                resolve(stdout);
-            }
-        });
-    });
-    const version = versionString.split("v=")[1].split(" ")[0];
-    const numbers = version?.split(".");
-
-    if (numbers.length != 3) {
-        return [0, 0, 0];
-    }
-
-    return [parseInt(numbers[0]), parseInt(numbers[1]), parseInt(numbers[2])];
-}
-
-export async function checkIfServerVersionLessThan(
-    minVersion: string,
-): Promise<boolean> {
-    const version = await getVersion();
-    const versionToCompare =
-        version[0].toString() +
-        "." +
-        version[1].toString() +
-        "." +
-        version[2].toString();
-    return versionToCompare < minVersion;
-}
+import { RedisCluster } from "../../utils/TestUtils";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -77,6 +51,7 @@ export function runBaseTests<Context>(config: {
     ) => Promise<{
         context: Context;
         client: BaseClient;
+        cluster: RedisCluster;
     }>;
     close: (context: Context, testSucceeded: boolean) => void;
     timeout?: number;
@@ -88,15 +63,18 @@ export function runBaseTests<Context>(config: {
     });
 
     const runTest = async (
-        test: (client: BaseClient) => Promise<void>,
+        test: (client: BaseClient, cluster: RedisCluster) => Promise<void>,
         protocol: ProtocolVersion,
         clientName?: string,
     ) => {
-        const { context, client } = await config.init(protocol, clientName);
+        const { context, client, cluster } = await config.init(
+            protocol,
+            clientName,
+        );
         let testSucceeded = false;
 
         try {
-            await test(client);
+            await test(client, cluster);
             testSucceeded = true;
         } finally {
             config.close(context, testSucceeded);
@@ -106,8 +84,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.2.0")) {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.2.0")) {
                     return;
                 }
 
@@ -1533,8 +1511,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sintercard test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
 
@@ -1874,8 +1852,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `smismember test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -1972,7 +1950,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `expire, pexpire and ttl with positive timeout_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 checkSimple(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.expire(key, 10)).toEqual(true);
@@ -1980,7 +1958,7 @@ export function runBaseTests<Context>(config: {
                 /// set command clears the timeout.
                 checkSimple(await client.set(key, "bar")).toEqual("OK");
                 const versionLessThan =
-                    await checkIfServerVersionLessThan("7.0.0");
+                    cluster.checkIfServerVersionLessThan("7.0.0");
 
                 if (versionLessThan) {
                     expect(await client.pexpire(key, 10000)).toEqual(true);
@@ -2018,7 +1996,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `expireAt, pexpireAt and ttl with positive timeout_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 checkSimple(await client.set(key, "foo")).toEqual("OK");
                 expect(
@@ -2029,7 +2007,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 const versionLessThan =
-                    await checkIfServerVersionLessThan("7.0.0");
+                    cluster.checkIfServerVersionLessThan("7.0.0");
 
                 if (versionLessThan) {
                     expect(
@@ -2215,9 +2193,13 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
+                const newMembersScores = { one: 2, two: 3 };
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
+                expect(
+                    await client.zadd(key, newMembersScores, { changed: true }),
+                ).toEqual(2);
             }, protocol);
         },
         config.timeout,
@@ -2268,25 +2250,17 @@ export function runBaseTests<Context>(config: {
                 membersScores["one"] = 10;
 
                 expect(
-                    await client.zadd(
-                        key,
-                        membersScores,
-                        {
-                            updateOptions: "scoreGreaterThanCurrent",
-                        },
-                        true,
-                    ),
+                    await client.zadd(key, membersScores, {
+                        updateOptions: "scoreGreaterThanCurrent",
+                        changed: true,
+                    }),
                 ).toEqual(1);
 
                 expect(
-                    await client.zadd(
-                        key,
-                        membersScores,
-                        {
-                            updateOptions: "scoreLessThanCurrent",
-                        },
-                        true,
-                    ),
+                    await client.zadd(key, membersScores, {
+                        updateOptions: "scoreLessThanCurrent",
+                        changed: true,
+                    }),
                 ).toEqual(0);
 
                 expect(
@@ -2342,8 +2316,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zintercard test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
 
@@ -2385,8 +2359,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zdiff test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -2455,8 +2429,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zdiffstore test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -2558,8 +2532,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zmscore test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -3295,14 +3269,14 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrank test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const membersScores = { one: 1.5, two: 2, three: 3 };
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zrank(key1, "one")).toEqual(0);
 
-                if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+                if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
                     expect(await client.zrankWithScore(key1, "one")).toEqual([
                         0, 1.5,
                     ]);
@@ -3330,14 +3304,14 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrevrank test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const nonSetKey = uuidv4();
                 const membersScores = { one: 1.5, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrevrank(key, "three")).toEqual(0);
 
-                if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+                if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
                     expect(await client.zrevrankWithScore(key, "one")).toEqual([
                         2, 1.5,
                     ]);
@@ -4031,7 +4005,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "object encoding test_%p",
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const string_key = uuidv4();
                 const list_key = uuidv4();
                 const hashtable_key = uuidv4();
@@ -4044,9 +4018,9 @@ export function runBaseTests<Context>(config: {
                 const stream_key = uuidv4();
                 const non_existing_key = uuidv4();
                 const versionLessThan7 =
-                    await checkIfServerVersionLessThan("7.0.0");
+                    cluster.checkIfServerVersionLessThan("7.0.0");
                 const versionLessThan72 =
-                    await checkIfServerVersionLessThan("7.2.0");
+                    cluster.checkIfServerVersionLessThan("7.2.0");
 
                 expect(await client.objectEncoding(non_existing_key)).toEqual(
                     null,
@@ -4478,7 +4452,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bitcount test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const value = "foobar";
@@ -4508,7 +4482,7 @@ export function runBaseTests<Context>(config: {
                     client.bitcount(key2, new BitOffsetOptions(1, 1)),
                 ).rejects.toThrow(RequestError);
 
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     await expect(
                         client.bitcount(
                             key1,
@@ -4560,7 +4534,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `geoadd test_%p`,
+        `geoadd geopos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
@@ -4577,6 +4551,28 @@ export function runBaseTests<Context>(config: {
 
                 // default geoadd
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                let geopos = await client.geopos(key1, [
+                    "Palermo",
+                    "Catania",
+                    "New York",
+                ]);
+                // inner array is possibly null, we need a null check or a cast
+                expect(geopos[0]?.[0]).toBeCloseTo(13.361389, 5);
+                expect(geopos[0]?.[1]).toBeCloseTo(38.115556, 5);
+                expect(geopos[1]?.[0]).toBeCloseTo(15.087269, 5);
+                expect(geopos[1]?.[1]).toBeCloseTo(37.502669, 5);
+                expect(geopos[2]).toBeNull();
+
+                // empty array of places
+                geopos = await client.geopos(key1, []);
+                expect(geopos).toEqual([]);
+
+                // not existing key
+                geopos = await client.geopos(key2, []);
+                expect(geopos).toEqual([]);
+                geopos = await client.geopos(key2, ["Palermo"]);
+                expect(geopos).toEqual([null]);
 
                 // with update mode options
                 membersToCoordinates.set(
@@ -4625,6 +4621,7 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geoadd(key2, membersToCoordinates),
                 ).rejects.toThrow();
+                await expect(client.geopos(key2, ["*_*"])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
@@ -4664,6 +4661,164 @@ export function runBaseTests<Context>(config: {
                         new Map([["Place", new GeospatialData(0, -86)]]),
                     ),
                 ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const nonExistingKey = "{key}-0" + uuidv4();
+                const stringKey = "{key}-string" + uuidv4();
+
+                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
+                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
+                    2,
+                );
+
+                checkSimple(
+                    await client.zmpop([key1, key2], ScoreFilter.MAX),
+                ).toEqual([key1, { b1: 2 }]);
+                checkSimple(
+                    await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
+                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+
+                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN))
+                    .toBeNull;
+                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1))
+                    .toBeNull;
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.zmpop([stringKey], ScoreFilter.MAX),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.zmpop([stringKey], ScoreFilter.MAX, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: key list should not be empty
+                await expect(
+                    client.zmpop([], ScoreFilter.MAX, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: count should be greater than 0
+                await expect(
+                    client.zmpop([key1], ScoreFilter.MAX, 0),
+                ).rejects.toThrow(RequestError);
+
+                // check that order of entries in the response is preserved
+                const entries: Record<string, number> = {};
+
+                for (let i = 0; i < 10; i++) {
+                    // a0 => 0, a1 => 1 etc
+                    entries["a" + i] = i;
+                }
+
+                expect(await client.zadd(key2, entries)).toEqual(10);
+                const result = await client.zmpop([key2], ScoreFilter.MIN, 10);
+
+                if (result) {
+                    expect(result[1]).toEqual(entries);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geodist test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const member1 = "Palermo";
+                const member2 = "Catania";
+                const nonExistingMember = "NonExisting";
+                const expected = 166274.1516;
+                const expectedKM = 166.2742;
+                const delta = 1e-9;
+
+                // adding the geo locations
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    member1,
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    member2,
+                    new GeospatialData(15.087269, 37.502669),
+                );
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // checking result with default metric
+                expect(
+                    await client.geodist(key1, member1, member2),
+                ).toBeCloseTo(expected, delta);
+
+                // checking result with metric specification of kilometers
+                expect(
+                    await client.geodist(
+                        key1,
+                        member1,
+                        member2,
+                        GeoUnit.KILOMETERS,
+                    ),
+                ).toBeCloseTo(expectedKM, delta);
+
+                // null result when member index is missing
+                expect(
+                    await client.geodist(key1, member1, nonExistingMember),
+                ).toBeNull();
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key2, "geodist")).toBe("OK");
+                await expect(
+                    client.geodist(key2, member1, member2),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geohash test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const members = ["Palermo", "Catania", "NonExisting"];
+                const empty: string[] = [];
+                const expected = ["sqc8b49rny0", "sqdtr74hyu0", null];
+
+                // adding the geo locations
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    "Palermo",
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    "Catania",
+                    new GeospatialData(15.087269, 37.502669),
+                );
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // checking result with default metric
+                expect(await client.geohash(key1, members)).toEqual(expected);
+
+                // empty members array
+                expect(await (await client.geohash(key1, empty)).length).toBe(
+                    0,
+                );
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key2, "geohash")).toBe("OK");
+                await expect(client.geohash(key2, members)).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
