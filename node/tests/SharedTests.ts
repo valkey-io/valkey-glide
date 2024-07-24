@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
     ExpireOptions,
+    ListDirection,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
