@@ -447,6 +447,28 @@ export function createDecrBy(
 }
 
 /**
+ * Enumeration defining the bitwise operation to use in the {@link BaseClient.bitop|bitop} command. Specifies the
+ * bitwise operation to perform between the passed in keys.
+ */
+export enum BitwiseOperation {
+    AND = "AND",
+    OR = "OR",
+    XOR = "XOR",
+    NOT = "NOT",
+}
+
+/**
+ * @internal
+ */
+export function createBitOp(
+    operation: BitwiseOperation,
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.BitOp, [operation, destination, ...keys]);
+}
+
+/**
  * @internal
  */
 export function createGetBit(
