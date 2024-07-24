@@ -40,20 +40,20 @@ permissions:
 
 jobs:
     load-engine-matrix:
-      runs-on: ubuntu-latest
-      outputs:
-        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
-      steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Load the engine matrix
-            id: load-engine-matrix
-            shell: bash
-            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-
-    test-ubuntu-latest:
         runs-on: ubuntu-latest
+        outputs:
+          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+        
+            - name: Load the engine matrix
+              id: load-engine-matrix
+              shell: bash
+              run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+        
+    test:
+        runs-on: ${{ matrix.host.RUNNER }}
         needs: load-engine-matrix
         timeout-minutes: 35
         strategy:
@@ -65,7 +65,18 @@ jobs:
                   # - "3.9"
                   # - "3.10"
                   # - "3.11"
-                  - "3.12"
+                    - "3.12"
+                host:
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ubuntu-latest,
+                        TARGET: x86_64-unknown-linux-gnu
+                    }
+                    # - {
+                    #     OS: macos,
+                    #     RUNNER: macos-latest,
+                    #     TARGET: aarch64-apple-darwin
+                    # }
 
         steps:
             - uses: actions/checkout@v4
@@ -81,31 +92,13 @@ jobs:
               working-directory: ./python
               run: |
                   python -m pip install --upgrade pip
-                  pip install flake8 isort black mypy-protobuf
-
-            - name: Lint with isort
-              working-directory: ./python
-              run: |
-                  isort . --profile black --check --diff
-
-            - name: Lint with flake8
-              working-directory: ./python
-              run: |
-                  # stop the build if there are Python syntax errors or undefined names
-                  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --extend-ignore=E230 --exclude=python/glide/protobuf,.env/*
-                  # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-                  flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --extend-ignore=E230 --exclude=python/glide/protobuf,.env/*
-
-            - name: Lint with black
-              working-directory: ./python
-              run: |
-                  black --check --diff .
+                  pip install mypy-protobuf
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
               with:
-                  os: "ubuntu"
-                  target: "x86_64-unknown-linux-gnu"
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
@@ -125,53 +118,84 @@ jobs:
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto
+                  pytest --asyncio-mode=auto --html=pytest_report.html --self-contained-html
 
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -python
 
-    test-pubsub-ubuntu-latest:
-      runs-on: ubuntu-latest
-      needs: load-engine-matrix
-      timeout-minutes: 35
-      strategy:
-          fail-fast: false
-          matrix:
-              engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-              python:
-                # - "3.8"
-                # - "3.9"
-                # - "3.10"
-                # - "3.11"
-                - "3.12"
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  path: |
+                      python/python/tests/pytest_report.html
+                      utils/clusters/**
+                      benchmarks/results/**
 
-      steps:
-          - uses: actions/checkout@v4
-            with:
-                submodules: recursive
+    test-pubsub:
+        runs-on: ${{ matrix.host.RUNNER }}
+        needs: load-engine-matrix
+        timeout-minutes: 35
+        strategy:
+            fail-fast: false
+            matrix:
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+                python:
+                  # - "3.8"
+                  # - "3.9"
+                  # - "3.10"
+                  # - "3.11"
+                    - "3.12"
+                host:
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ubuntu-latest,
+                        TARGET: x86_64-unknown-linux-gnu
+                    }
+                    # - {
+                    #     OS: macos,
+                    #     RUNNER: macos-latest,
+                    #     TARGET: aarch64-apple-darwin
+                    # }
 
-          - name: Set up Python
-            uses: actions/setup-python@v4
-            with:
-                python-version: ${{ matrix.python }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+        
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: ${{ matrix.python }}
+        
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
+        
+            - name: Test pubsub with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/
+                  pytest --asyncio-mode=auto -k test_pubsub --html=pytest_report.html --self-contained-html
+        
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: pubsub-test-report-python-${{ matrix.python }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.RUNNER }}
+                  path: |
+                      python/python/tests/pytest_report.html
 
-          - name: Build Python wrapper
-            uses: ./.github/workflows/build-python-wrapper
-            with:
-                os: "ubuntu"
-                target: "x86_64-unknown-linux-gnu"
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                engine-version: ${{ matrix.engine.version }}
-
-          - name: Test pubsub with pytest
-            working-directory: ./python
-            run: |
-                source .env/bin/activate
-                cd python/tests/
-                pytest --asyncio-mode=auto -k test_pubsub
-
-    lint-rust:
+    lint:
         runs-on: ubuntu-latest
         timeout-minutes: 15
         steps:
@@ -179,69 +203,38 @@ jobs:
               with:
                   submodules: recursive
 
-            - uses: ./.github/workflows/lint-rust
+            - name: lint rust
+              uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./python
-              name: lint python-rust
 
-    # test-macos-latest:
-    #     runs-on: macos-latest
-    #     needs: load-engine-matrix
-    #     timeout-minutes: 35
-    #     strategy:
-    #       fail-fast: false
-    #       matrix:
-    #           engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-    #     steps:
-    #         - uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-    #         - name: Set up Homebrew
-    #           uses: Homebrew/actions/setup-homebrew@master
+            - name: Install dependencies
+              if: always()
+              working-directory: ./python
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install flake8 isort black
 
-    #         - name: Build Python wrapper
-    #           uses: ./.github/workflows/build-python-wrapper
-    #           with:
-    #               os: "macos"
-    #               target: "aarch64-apple-darwin"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
-    #               engine-version: ${{ matrix.engine.version }}
+            - name: Lint python with isort
+              if: always()
+              working-directory: ./python
+              run: |
+                  isort . --profile black --check --diff
 
-    #         - name: Test with pytest
-    #           working-directory: ./python
-    #           run: |
-    #               source .env/bin/activate
-    #               pytest --asyncio-mode=auto
+            - name: Lint python with flake8
+              if: always()
+              working-directory: ./python
+              run: |
+                  # stop the build if there are Python syntax errors or undefined names
+                  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --extend-ignore=E230 --exclude=python/glide/protobuf,.env/*
+                  # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+                  flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics --extend-ignore=E230 --exclude=python/glide/protobuf,.env/*
 
-    # test-pubsub-macos-latest:
-    #     runs-on: macos-latest
-    #     needs: load-engine-matrix
-    #     timeout-minutes: 35
-    #     strategy:
-    #       fail-fast: false
-    #       matrix:
-    #           engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-    #     steps:
-    #         - uses: actions/checkout@v4
-    #           with:
-    #               submodules: recursive
-    #         - name: Set up Homebrew
-    #           uses: Homebrew/actions/setup-homebrew@master
-
-    #         - name: Build Python wrapper
-    #           uses: ./.github/workflows/build-python-wrapper
-    #           with:
-    #               os: "macos"
-    #               target: "aarch64-apple-darwin"
-    #               github-token: ${{ secrets.GITHUB_TOKEN }}
-    #               engine-version: ${{ matrix.engine.version }}
-
-    #         - name: Test pubsub with pytest
-    #           working-directory: ./python
-    #           run: |
-    #               source .env/bin/activate
-    #               cd python/tests/
-    #               pytest --asyncio-mode=auto -k test_pubsub
+            - name: Lint python with black
+              if: always()
+              working-directory: ./python
+              run: |
+                  black --check --diff .
 
     build-amazonlinux-latest:
         runs-on: ubuntu-latest
@@ -279,4 +272,13 @@ jobs:
               working-directory: ./python
               run: |
                   source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test
+                  pytest --asyncio-mode=auto -m smoke_test --html=pytest_report.html --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: smoke-test-report-amazon-linux
+                  path: |
+                      python/python/tests/pytest_report.html
