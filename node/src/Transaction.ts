@@ -469,7 +469,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the
      *      binary value of the string held at `key`.
      */
-    public bitpos(
+    public bitposInterval(
         key: string,
         bit: number,
         start: number,

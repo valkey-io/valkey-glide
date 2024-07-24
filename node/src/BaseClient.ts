@@ -1081,7 +1081,7 @@ export class BaseClient {
      * console.log(result2); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
      * ```
      */
-    public bitpos(
+    public bitposInterval(
         key: string,
         bit: number,
         start: number,
