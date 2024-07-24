@@ -16,6 +16,7 @@ import {
     GlideClusterClient,
     InsertPosition,
     Logger,
+    ListDirection,
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
