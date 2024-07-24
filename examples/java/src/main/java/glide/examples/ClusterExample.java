@@ -11,7 +11,6 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
-import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.TimeoutException;
 
 import java.util.concurrent.CancellationException;
