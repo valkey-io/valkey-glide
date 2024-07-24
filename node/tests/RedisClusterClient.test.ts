@@ -610,7 +610,7 @@ describe("GlideClusterClient", () => {
                                     await client.functionLoad(code),
                                 ).toEqual(libName);
                                 // call functions from that library to confirm that it works
-                                let fcall = await client.fcallRoute(
+                                let fcall = await client.fcallWithRoute(
                                     funcName,
                                     ["one", "two"],
                                     route,
@@ -621,7 +621,7 @@ describe("GlideClusterClient", () => {
                                     (value) =>
                                         checkSimple(value).toEqual("one"),
                                 );
-                                fcall = await client.fcallReadonlyRoute(
+                                fcall = await client.fcallReadonlyWithRoute(
                                     funcName,
                                     ["one", "two"],
                                     route,
@@ -660,7 +660,7 @@ describe("GlideClusterClient", () => {
                                     await client.functionLoad(newCode, true),
                                 ).toEqual(libName);
 
-                                fcall = await client.fcallRoute(
+                                fcall = await client.fcallWithRoute(
                                     func2Name,
                                     ["one", "two"],
                                     route,
@@ -671,7 +671,7 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual(2),
                                 );
 
-                                fcall = await client.fcallReadonlyRoute(
+                                fcall = await client.fcallReadonlyWithRoute(
                                     func2Name,
                                     ["one", "two"],
                                     route,

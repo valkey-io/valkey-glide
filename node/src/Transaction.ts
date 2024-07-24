@@ -1865,12 +1865,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
-     * all names of keys that a function accesses must be explicitly provided as `keys`.
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
      *
      * Command Response - The invoked function's return value.
      */
-    public fcall(func: string, keys?: string[], args?: string[]): T {
+    public fcall(func: string, keys: string[], args: string[]): T {
         return this.addAndReturn(createFCall(func, keys, args));
     }
 
@@ -1883,12 +1883,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
-     * all names of keys that a function accesses must be explicitly provided as `keys`.
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
      *
      * Command Response - The invoked function's return value.
      */
-    public fcallReadonly(func: string, keys?: string[], args?: string[]): T {
+    public fcallReadonly(func: string, keys: string[], args: string[]): T {
         return this.addAndReturn(createFCallReadOnly(func, keys, args));
     }
 
