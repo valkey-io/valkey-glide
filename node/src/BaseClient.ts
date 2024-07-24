@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BitwiseOperation,
     ExpireOptions,
     InsertPosition,
     KeyWeight,
@@ -28,6 +29,7 @@ import {
     createBLPop,
     createBRPop,
     createBitCount,
+    createBitOp,
     createDecr,
     createDecrBy,
     createDel,
@@ -977,6 +979,39 @@ export class BaseClient {
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /**
+     * Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+     * `destination`.
+     *
+     * See https://valkey.io/commands/bitop/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param operation - The bitwise operation to perform.
+     * @param destination - The key that will store the resulting string.
+     * @param keys - The list of keys to perform the bitwise operation on.
+     * @returns The size of the string stored in `destination`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "A"); // "A" has binary value 01000001
+     * await client.set("key2", "B"); // "B" has binary value 01000010
+     * const result1 = await client.bitop(BitwiseOperation.AND, "destination", ["key1", "key2"]);
+     * console.log(result1); // Output: 1 - The size of the resulting string stored in "destination" is 1.
+     *
+     * const result2 = await client.get("destination");
+     * console.log(result2); // Output: "@" - "@" has binary value 01000000
+     * ```
+     */
+    public bitop(
+        operation: BitwiseOperation,
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
+        return this.createWritePromise(
+            createBitOp(operation, destination, keys),
+        );
     }
 
     /**
