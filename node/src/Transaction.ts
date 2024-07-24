@@ -8,6 +8,7 @@ import {
     InfoOptions,
     InsertPosition,
     KeyWeight,
+    ListDirection,
     LolwutOptions,
     RangeByIndex,
     RangeByLex,
@@ -149,7 +150,6 @@ import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
-import { ListDirection } from "./commands/ListDirection";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 

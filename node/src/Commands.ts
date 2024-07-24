@@ -6,7 +6,6 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
-import { ListDirection } from "./commands/ListDirection";
 
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -560,6 +559,20 @@ export function createLRange(
  */
 export function createLLen(key: string): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
+}
+
+/**
+ * Enumeration representing element popping or adding direction for the List Based Commands.
+ */
+export enum ListDirection {
+    /**
+     * Represents the option that elements should be popped from or added to the left side of a list.
+     */
+    LEFT = "LEFT",
+    /**
+     * Represents the option that elements should be popped from or added to the right side of a list.
+     */
+    RIGHT = "RIGHT",
 }
 
 /**
