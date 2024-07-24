@@ -3462,6 +3462,48 @@ export class BaseClient {
      * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
      *
      * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo'
+     * const result1 = await client.geosearch("mySortedSet", new MemberOrigin("Palermo"), new GeoCircleShape(200, GeoUnit.KILOMETERS));
+     * console.log(result1); // Output: ['Palermo', 'Catania']
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting additional info,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * const result2 = await client.geosearch(
+     *     "mySortedSet",
+     *     new CoordOrigin(new GeospatialData(15, 37)),
+     *     new GeoBoxShape(200, 300, GeoUnit.MILES)),
+     *     new GeoSearchResultOptions({
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         withCoord: true,
+     *         withDist: true,
+     *         withHash: true,
+     *     }),
+     * );
+     * console.log(result2); // Output:
+     * // [
+     * //     [
+     * //         'Catania',                                       // location name
+     * //         [
+     * //             56.4413,                                     // distance
+     * //             3479447370796909,                            // geohash of the location
+     * //             [15.087267458438873, 37.50266842333162],     // coordinates of the location
+     * //         ],
+     * //     ],
+     * //     [
+     * //         'Palermo',
+     * //         [
+     * //             190.4424,
+     * //             3479099956230698,
+     * //             [13.361389338970184, 38.1155563954963],
+     * //         ],
+     * //     ],
+     * // ]
+     * ```
      */
     public geosearch(
         key: string,
