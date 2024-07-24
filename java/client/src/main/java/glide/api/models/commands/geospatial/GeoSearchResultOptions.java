@@ -42,7 +42,7 @@ public class GeoSearchResultOptions {
     /** Indicates the number of matches the result should be limited to. */
     private final long count;
 
-    /** Indicates if the 'ANY' keyword is used for 'COUNT'. */
+    /** Whether to allow returning as enough matches are found. */
     private final boolean isAny;
 
     /** Constructor with count only. */
@@ -52,7 +52,7 @@ public class GeoSearchResultOptions {
         this.isAny = false;
     }
 
-    /** Constructor with count and the 'ANY' keyword. */
+    /** Constructor with count and the {@link #isAny} option. */
     public GeoSearchResultOptions(long count, boolean isAny) {
         this.sortOrder = null;
         this.count = count;
@@ -73,7 +73,7 @@ public class GeoSearchResultOptions {
         this.isAny = false;
     }
 
-    /** Constructor with sort order, count and 'ANY' keyword. */
+    /** Constructor with sort order, count and {@link #isAny} option. */
     public GeoSearchResultOptions(SortOrder order, long count, boolean isAny) {
         this.sortOrder = order;
         this.count = count;

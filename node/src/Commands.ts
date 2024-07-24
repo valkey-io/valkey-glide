@@ -13,6 +13,9 @@ import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 import RequestType = command_request.RequestType;
+import { SearchOrigin } from "./commands/geospatial/GeoSearchOrigin";
+import { GeoSearchShape } from "./commands/geospatial/GeoSearchShape";
+import { GeoSearchResultOptions } from "./commands/geospatial/GeoSearchResultOptions";
 
 function isLargeCommand(args: BulkString[]) {
     let lenSum = 0;
@@ -1848,6 +1851,22 @@ export function createGeoAdd(
     });
 
     return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createGeoSearch(
+    key: string,
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchResultOptions,
+): command_request.Command {
+    let args: string[] = [key].concat(searchFrom.toArgs(), searchBy.toArgs());
+
+    if (resultOptions) args = args.concat(resultOptions.toArgs());
+
+    return createCommand(RequestType.GeoSearch, args);
 }
 
 /**

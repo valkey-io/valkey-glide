@@ -42,6 +42,7 @@ import {
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -143,6 +144,17 @@ import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
+import {
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    SearchOrigin,
+} from "./commands/geospatial/GeoSearchOrigin";
+import { GeoSearchResultOptions } from "./commands/geospatial/GeoSearchResultOptions";
+import {
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchShape,
+} from "./commands/geospatial/GeoSearchShape";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 /**
@@ -1999,6 +2011,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createGeoAdd(key, membersToGeospatialData, options),
+        );
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link CoordOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link MemberOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     *
+     * Command Response - By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     *
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`.
+     *
+     * - The geohash of the location as a integer `number`.
+     *
+     * - The coordinates as a two item `array` of floating point `number`s.
+     */
+    public geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
         );
     }
 }

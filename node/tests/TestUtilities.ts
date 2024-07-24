@@ -26,6 +26,19 @@ import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { checkIfServerVersionLessThan } from "./SharedTests";
+import {
+    CoordOrigin,
+    MemberOrigin,
+} from "../build-ts/src/commands/geospatial/GeoSearchOrigin";
+import {
+    GeoBoxShape,
+    GeoCircleShape,
+} from "../build-ts/src/commands/geospatial/GeoSearchShape";
+import {
+    GeoSearchResultOptions,
+    SortOrder,
+} from "../build-ts/src/commands/geospatial/GeoSearchResultOptions";
+import { GeoUnit } from "../build-ts/src/commands/geospatial/GeoUnit";
 
 beforeAll(() => {
     Logger.init("info");
@@ -37,6 +50,8 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
         builder.push("null");
     } else if (typeof obj === "string") {
         builder.push(obj);
+    } else if (typeof obj === "number") {
+        builder.push(obj.toPrecision(3));
     } else if (obj instanceof Uint8Array) {
         builder.push(obj.toString());
     } else if (obj instanceof Array) {
@@ -662,6 +677,79 @@ export async function transactionTest(
         ]),
     );
     args.push(2);
+
+    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+        baseTransaction
+            .geosearch(
+                key18,
+                new MemberOrigin("Palermo"),
+                new GeoCircleShape(200, GeoUnit.KILOMETERS),
+                new GeoSearchResultOptions({ sortOrder: SortOrder.ASC }),
+            )
+            .geosearch(
+                key18,
+                new CoordOrigin(new GeospatialData(15, 37)),
+                new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
+            )
+            .geosearch(
+                key18,
+                new MemberOrigin("Palermo"),
+                new GeoCircleShape(200, GeoUnit.KILOMETERS),
+                new GeoSearchResultOptions({
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                }),
+            )
+            .geosearch(
+                key18,
+                new CoordOrigin(new GeospatialData(15, 37)),
+                new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
+                new GeoSearchResultOptions({
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                }),
+            );
+        args.push(["Palermo", "Catania"]);
+        args.push(["Palermo", "Catania"]);
+        args.push([
+            [
+                "Palermo",
+                [0.0, 3479099956230698, [13.361389338970184, 38.1155563954963]],
+            ],
+            [
+                "Catania",
+                [
+                    166.2742,
+                    3479447370796909,
+                    [15.087267458438873, 37.50266842333162],
+                ],
+            ],
+        ]);
+        args.push([
+            [
+                "Catania",
+                [
+                    56.4413,
+                    3479447370796909,
+                    [15.087267458438873, 37.50266842333162],
+                ],
+            ],
+            [
+                "Palermo",
+                [
+                    190.4424,
+                    3479099956230698,
+                    [13.361389338970184, 38.1155563954963],
+                ],
+            ],
+        ]);
+    }
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
