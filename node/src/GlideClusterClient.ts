@@ -706,7 +706,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * const response = await client.fcallReadOnly("Deep_Thought", ["Answer", "to", "the", "Ultimate",
+     * const response = await client.fcallReadonlyRoute("Deep_Thought", ["Answer", "to", "the", "Ultimate",
      *            "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], "randomNode");
      * console.log(response); // Output: 42 # The return value on the function that was execute.
      * ```

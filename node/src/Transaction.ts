@@ -5,6 +5,7 @@
 import {
     AggregationType,
     ExpireOptions,
+    GeoUnit,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -144,7 +145,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    GeoUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -1864,7 +1864,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * since Valkey version 7.0.0.
      *
      * @param func - The function name.
-     * @param keys - A list of keys accessed by the function. To ensure the correct execution of functions,
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      * all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
      *
@@ -1882,7 +1882,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * since Valkey version 7.0.0.
      *
      * @param func - The function name.
-     * @param keys - A list of keys accessed by the function. To ensure the correct execution of functions,
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      * all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
      *
