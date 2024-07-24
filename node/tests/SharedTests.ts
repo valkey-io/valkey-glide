@@ -14,9 +14,33 @@ import {
     InsertPosition,
     ProtocolVersion,
     RequestError,
+    ScoreFilter,
     Script,
     parseInfoResponse,
 } from "../";
+import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
+import {
+    BitOffsetOptions,
+    BitmapIndexType,
+} from "../build-ts/src/commands/BitOffsetOptions";
+import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
+import {
+    CoordOrigin,
+    MemberOrigin,
+} from "../build-ts/src/commands/geospatial/GeoSearchOrigin";
+import {
+    GeoSearchResultOptions,
+    SortOrder,
+} from "../build-ts/src/commands/geospatial/GeoSearchResultOptions";
+import {
+    GeoBoxShape,
+    GeoCircleShape,
+} from "../build-ts/src/commands/geospatial/GeoSearchShape";
+import { GeoUnit } from "../build-ts/src/commands/geospatial/GeoUnit";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import {
     Client,
     GetAndSetRandomValue,
@@ -26,29 +50,6 @@ import {
     intoArray,
     intoString,
 } from "./TestUtilities";
-import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import {
-    BitmapIndexType,
-    BitOffsetOptions,
-} from "../build-ts/src/commands/BitOffsetOptions";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
-import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import {
-    CoordOrigin,
-    MemberOrigin,
-} from "../build-ts/src/commands/geospatial/GeoSearchOrigin";
-import {
-    GeoBoxShape,
-    GeoCircleShape,
-} from "../build-ts/src/commands/geospatial/GeoSearchShape";
-import { GeoUnit } from "../build-ts/src/commands/geospatial/GeoUnit";
-import {
-    GeoSearchResultOptions,
-    SortOrder,
-} from "../build-ts/src/commands/geospatial/GeoSearchResultOptions";
 
 async function getVersion(): Promise<[number, number, number]> {
     const versionString = await new Promise<string>((resolve, reject) => {
@@ -2105,9 +2106,13 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
+                const newMembersScores = { one: 2, two: 3 };
 
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zaddIncr(key, "one", 2)).toEqual(3.0);
+                expect(
+                    await client.zadd(key, newMembersScores, { changed: true }),
+                ).toEqual(2);
             }, protocol);
         },
         config.timeout,
@@ -2158,25 +2163,17 @@ export function runBaseTests<Context>(config: {
                 membersScores["one"] = 10;
 
                 expect(
-                    await client.zadd(
-                        key,
-                        membersScores,
-                        {
-                            updateOptions: "scoreGreaterThanCurrent",
-                        },
-                        true,
-                    ),
+                    await client.zadd(key, membersScores, {
+                        updateOptions: "scoreGreaterThanCurrent",
+                        changed: true,
+                    }),
                 ).toEqual(1);
 
                 expect(
-                    await client.zadd(
-                        key,
-                        membersScores,
-                        {
-                            updateOptions: "scoreLessThanCurrent",
-                        },
-                        true,
-                    ),
+                    await client.zadd(key, membersScores, {
+                        updateOptions: "scoreLessThanCurrent",
+                        changed: true,
+                    }),
                 ).toEqual(0);
 
                 expect(
@@ -4450,7 +4447,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `geoadd test_%p`,
+        `geoadd geopos test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
@@ -4467,6 +4464,28 @@ export function runBaseTests<Context>(config: {
 
                 // default geoadd
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                let geopos = await client.geopos(key1, [
+                    "Palermo",
+                    "Catania",
+                    "New York",
+                ]);
+                // inner array is possibly null, we need a null check or a cast
+                expect(geopos[0]?.[0]).toBeCloseTo(13.361389, 5);
+                expect(geopos[0]?.[1]).toBeCloseTo(38.115556, 5);
+                expect(geopos[1]?.[0]).toBeCloseTo(15.087269, 5);
+                expect(geopos[1]?.[1]).toBeCloseTo(37.502669, 5);
+                expect(geopos[2]).toBeNull();
+
+                // empty array of places
+                geopos = await client.geopos(key1, []);
+                expect(geopos).toEqual([]);
+
+                // not existing key
+                geopos = await client.geopos(key2, []);
+                expect(geopos).toEqual([]);
+                geopos = await client.geopos(key2, ["Palermo"]);
+                expect(geopos).toEqual([null]);
 
                 // with update mode options
                 membersToCoordinates.set(
@@ -4515,6 +4534,7 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geoadd(key2, membersToCoordinates),
                 ).rejects.toThrow();
+                await expect(client.geopos(key2, ["*_*"])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
@@ -4836,6 +4856,164 @@ export function runBaseTests<Context>(config: {
                         new GeoCircleShape(100, GeoUnit.METERS),
                     ),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("7.0.0")) return;
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const nonExistingKey = "{key}-0" + uuidv4();
+                const stringKey = "{key}-string" + uuidv4();
+
+                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
+                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
+                    2,
+                );
+
+                checkSimple(
+                    await client.zmpop([key1, key2], ScoreFilter.MAX),
+                ).toEqual([key1, { b1: 2 }]);
+                checkSimple(
+                    await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
+                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+
+                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN))
+                    .toBeNull;
+                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1))
+                    .toBeNull;
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.zmpop([stringKey], ScoreFilter.MAX),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.zmpop([stringKey], ScoreFilter.MAX, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: key list should not be empty
+                await expect(
+                    client.zmpop([], ScoreFilter.MAX, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: count should be greater than 0
+                await expect(
+                    client.zmpop([key1], ScoreFilter.MAX, 0),
+                ).rejects.toThrow(RequestError);
+
+                // check that order of entries in the response is preserved
+                const entries: Record<string, number> = {};
+
+                for (let i = 0; i < 10; i++) {
+                    // a0 => 0, a1 => 1 etc
+                    entries["a" + i] = i;
+                }
+
+                expect(await client.zadd(key2, entries)).toEqual(10);
+                const result = await client.zmpop([key2], ScoreFilter.MIN, 10);
+
+                if (result) {
+                    expect(result[1]).toEqual(entries);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geodist test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const member1 = "Palermo";
+                const member2 = "Catania";
+                const nonExistingMember = "NonExisting";
+                const expected = 166274.1516;
+                const expectedKM = 166.2742;
+                const delta = 1e-9;
+
+                // adding the geo locations
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    member1,
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    member2,
+                    new GeospatialData(15.087269, 37.502669),
+                );
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // checking result with default metric
+                expect(
+                    await client.geodist(key1, member1, member2),
+                ).toBeCloseTo(expected, delta);
+
+                // checking result with metric specification of kilometers
+                expect(
+                    await client.geodist(
+                        key1,
+                        member1,
+                        member2,
+                        GeoUnit.KILOMETERS,
+                    ),
+                ).toBeCloseTo(expectedKM, delta);
+
+                // null result when member index is missing
+                expect(
+                    await client.geodist(key1, member1, nonExistingMember),
+                ).toBeNull();
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key2, "geodist")).toBe("OK");
+                await expect(
+                    client.geodist(key2, member1, member2),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geohash test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const members = ["Palermo", "Catania", "NonExisting"];
+                const empty: string[] = [];
+                const expected = ["sqc8b49rny0", "sqdtr74hyu0", null];
+
+                // adding the geo locations
+                const membersToCoordinates = new Map<string, GeospatialData>();
+                membersToCoordinates.set(
+                    "Palermo",
+                    new GeospatialData(13.361389, 38.115556),
+                );
+                membersToCoordinates.set(
+                    "Catania",
+                    new GeospatialData(15.087269, 37.502669),
+                );
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
+
+                // checking result with default metric
+                expect(await client.geohash(key1, members)).toEqual(expected);
+
+                // empty members array
+                expect(await (await client.geohash(key1, empty)).length).toBe(
+                    0,
+                );
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key2, "geohash")).toBe("OK");
+                await expect(client.geohash(key2, members)).rejects.toThrow();
             }, protocol);
         },
         config.timeout,

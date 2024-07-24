@@ -16,6 +16,7 @@ import {
     Logger,
     ProtocolVersion,
     ReturnType,
+    ScoreFilter,
     Transaction,
 } from "..";
 import {
@@ -608,6 +609,10 @@ export async function transactionTest(
         args.push(0);
         baseTransaction.zintercard([key8, key14], 1);
         args.push(0);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX);
+        args.push([key14, { two: 2.0 }]);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
+        args.push([key14, { one: 1.0 }]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
@@ -677,6 +682,17 @@ export async function transactionTest(
         ]),
     );
     args.push(2);
+    baseTransaction.geopos(key18, ["Palermo", "Catania"]);
+    args.push([
+        [13.36138933897018433, 38.11555639549629859],
+        [15.08726745843887329, 37.50266842333162032],
+    ]);
+    baseTransaction.geodist(key18, "Palermo", "Catania");
+    args.push(166274.1516);
+    baseTransaction.geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS);
+    args.push(166.2742);
+    baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
+    args.push(["sqc8b49rny0", "sqdtr74hyu0", null]);
 
     if (!(await checkIfServerVersionLessThan("6.2.0"))) {
         baseTransaction

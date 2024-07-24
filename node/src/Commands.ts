@@ -16,6 +16,7 @@ import RequestType = command_request.RequestType;
 import { SearchOrigin } from "./commands/geospatial/GeoSearchOrigin";
 import { GeoSearchShape } from "./commands/geospatial/GeoSearchShape";
 import { GeoSearchResultOptions } from "./commands/geospatial/GeoSearchResultOptions";
+import { GeoUnit } from "./commands/geospatial/GeoUnit";
 
 function isLargeCommand(args: BulkString[]) {
     let lenSum = 0;
@@ -941,6 +942,10 @@ export type ZAddOptions = {
      * is greater than the current score. Equivalent to `GT` in the Redis API.
      */
     updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+    /**
+     * Modify the return value from the number of new elements added, to the total number of elements changed.
+     */
+    changed?: boolean;
 };
 
 /**
@@ -950,7 +955,7 @@ export function createZAdd(
     key: string,
     membersScoresMap: Record<string, number>,
     options?: ZAddOptions,
-    changedOrIncr?: "CH" | "INCR",
+    incr: boolean = false,
 ): command_request.Command {
     let args = [key];
 
@@ -972,10 +977,14 @@ export function createZAdd(
         } else if (options.updateOptions === "scoreGreaterThanCurrent") {
             args.push("GT");
         }
+
+        if (options.changed) {
+            args.push("CH");
+        }
     }
 
-    if (changedOrIncr) {
-        args.push(changedOrIncr);
+    if (incr) {
+        args.push("INCR");
     }
 
     args = args.concat(
@@ -1849,8 +1858,46 @@ export function createGeoAdd(
         args = args.concat(coord.toArgs());
         args.push(member);
     });
-
     return createCommand(RequestType.GeoAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createGeoPos(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.GeoPos, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
+export function createGeoDist(
+    key: string,
+    member1: string,
+    member2: string,
+    geoUnit?: GeoUnit,
+): command_request.Command {
+    const args: string[] = [key, member1, member2];
+
+    if (geoUnit) {
+        args.push(geoUnit);
+    }
+
+    return createCommand(RequestType.GeoDist, args);
+}
+
+/**
+ * @internal
+ */
+export function createGeoHash(
+    key: string,
+    members: string[],
+): command_request.Command {
+    const args: string[] = [key].concat(members);
+    return createCommand(RequestType.GeoHash, args);
 }
 
 /**
@@ -1887,4 +1934,34 @@ export function createZRevRankWithScore(
     member: string,
 ): command_request.Command {
     return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
+}
+
+/**
+ * Mandatory option for zmpop.
+ * Defines which elements to pop from the sorted set.
+ */
+export enum ScoreFilter {
+    /** Pop elements with the highest scores. */
+    MAX = "MAX",
+    /** Pop elements with the lowest scores. */
+    MIN = "MIN",
+}
+
+/**
+ * @internal
+ */
+export function createZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString()].concat(keys);
+    args.push(modifier);
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.ZMPop, args);
 }
