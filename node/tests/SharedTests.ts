@@ -983,7 +983,6 @@ export function runBaseTests<Context>(config: {
         `lmove list_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
-
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
