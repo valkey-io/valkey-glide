@@ -1030,9 +1030,9 @@ export class BaseClient {
      *
      * @param key - The key of the string.
      * @param bit - The bit value to match. Must be `0` or `1`.
-     * @param start - The starting offset.
+     * @param start - (Optional) The starting offset. If not supplied, the search will start at the beginning of the string.
      * @returns The position of the first occurrence of `bit` in the binary value of the string held at `key`.
-     * If `start` was provided, the search begins at the offset indicated by `start`.
+     *      If `start` was provided, the search begins at the offset indicated by `start`.
      *
      * @example
      * ```typescript
@@ -1065,9 +1065,9 @@ export class BaseClient {
      * @param bit - The bit value to match. Must be `0` or `1`.
      * @param start - The starting offset.
      * @param end - The ending offset.
-     * @param indexType - The index offset type. This option can only be specified if you are using Valkey version
-     *      7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no index
-     *      type is provided, the indexes will be assumed to be byte indexes.
+     * @param indexType - (Optional) The index offset type. This option can only be specified if you are using Valkey
+     *      version 7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no
+     *      index type is provided, the indexes will be assumed to be byte indexes.
      * @returns The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
      *      value of the string held at `key`.
      *
@@ -1081,7 +1081,7 @@ export class BaseClient {
      * console.log(result2); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
      * ```
      */
-    public bitposInterval(
+    public bitpos(
         key: string,
         bit: number,
         start: number,
