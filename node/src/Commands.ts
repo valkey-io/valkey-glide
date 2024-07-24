@@ -1589,23 +1589,11 @@ export function createBLPop(
  */
 export function createFCall(
     func: string,
-    keys?: string[],
-    args?: string[],
+    keys: string[],
+    args: string[],
 ): command_request.Command {
-    const params: string[] = [];
-    params.push(func);
-
-    if (keys !== undefined) {
-        params.push(keys.length.toString());
-        params.push(...keys);
-    } else {
-        params.push("0");
-    }
-
-    if (args !== undefined) {
-        params.push(...args);
-    }
-
+    let params: string[] = [];
+    params = params.concat(func, keys.length.toString(), keys, args);
     return createCommand(RequestType.FCall, params);
 }
 
@@ -1614,23 +1602,11 @@ export function createFCall(
  */
 export function createFCallReadOnly(
     func: string,
-    keys?: string[],
-    args?: string[],
+    keys: string[],
+    args: string[],
 ): command_request.Command {
-    const params: string[] = [];
-    params.push(func);
-
-    if (keys !== undefined) {
-        params.push(keys.length.toString());
-        params.push(...keys);
-    } else {
-        params.push("0");
-    }
-
-    if (args !== undefined) {
-        params.push(...args);
-    }
-
+    let params: string[] = [];
+    params = params.concat(func, keys.length.toString(), keys, args);
     return createCommand(RequestType.FCallReadOnly, params);
 }
 
