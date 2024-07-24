@@ -982,7 +982,12 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmove list_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
+
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const lpushArgs1 = ["2", "1"];
