@@ -26,7 +26,6 @@ import {
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {

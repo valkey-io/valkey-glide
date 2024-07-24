@@ -15,6 +15,7 @@ import {
     ExpireOptions,
     InsertPosition,
     KeyWeight,
+    ListDirection,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -133,7 +134,7 @@ import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { LPosOptions } from "./commands/LPosOptions";
-import { ListDirection } from "./commands/ListDirection";
+// import { ListDirection } from "./commands/ListDirection";
 
 import {
     ClosingError,

@@ -26,7 +26,6 @@ import {
 import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { ListDirection } from "../build-ts/src/commands/ListDirection";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import {
