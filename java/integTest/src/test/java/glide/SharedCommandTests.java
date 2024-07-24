@@ -5772,6 +5772,112 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        String foo1 = "foo1";
+        String bar1 = "bar1";
+
+        String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
+        String streamId = client.xadd(key, entry).get();
+        // get everything from the stream
+        Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        String[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys_with_options(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        String foo1 = "foo1";
+        String bar1 = "bar1";
+
+        String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
+        String streamId = client.xadd(key, entry, StreamAddOptions.builder().build()).get();
+        // get everything from the stream
+        Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        String[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field = gs(UUID.randomUUID().toString());
+        GlideString foo1 = gs("foo1");
+        GlideString bar1 = gs("bar1");
+
+        GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
+        GlideString streamId = client.xadd(key, entry).get();
+        // get everything from the stream
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        GlideString[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys_with_options_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field = gs(UUID.randomUUID().toString());
+        GlideString foo1 = gs("foo1");
+        GlideString bar1 = gs("bar1");
+
+        GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
+        GlideString streamId = client.xadd(key, entry, StreamAddOptionsBinary.builder().build()).get();
+        // get everything from the stream
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        GlideString[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_wrong_length_entries(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String timestamp = "0-1";
+
+        // Entry too long
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client
+                                .xadd(
+                                        key,
+                                        new String[][] {
+                                            new String[] {"field1", "foo1"}, new String[] {"field2", "bar2", "oh no"}
+                                        },
+                                        StreamAddOptions.builder().id(timestamp).build())
+                                .get());
+
+        // Entry too short
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client
+                                .xadd(
+                                        key,
+                                        new String[][] {new String[] {"field1", "foo1"}, new String[] {"oh no"}},
+                                        StreamAddOptions.builder().id(timestamp).build())
+                                .get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xadd_xlen_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
