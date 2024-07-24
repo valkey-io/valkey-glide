@@ -599,14 +599,14 @@ export function createLMove(
 export function createLMove(
     source: string,
     destination: string,
-    where_from: ListDirection,
-    where_to: ListDirection,
+    whereFrom: ListDirection,
+    whereTo: ListDirection,
 ): command_request.Command {
     return createCommand(RequestType.LMove, [
         source,
         destination,
-        where_from,
-        where_to,
+        whereFrom,
+        whereTo,
     ]);
 }
 
