@@ -1433,15 +1433,15 @@ export class BaseClient {
 
     /**
      * Atomically pops and removes the left/right-most element to the list stored at `source`
-     * depending on `whereto`, and pushes the element at the first/last element of the list
+     * depending on `whereTo`, and pushes the element at the first/last element of the list
      * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
      *
      * See https://valkey.io/commands/lmove/ for details.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
-     * @param whereFrom - The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-     * @param whereTo - The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+     * @param whereFrom - The direction to remove the element from {@link ListDirection}.
+     * @param whereTo - The direction to add the element {@link ListDirection}.
      * @returns The popped element, or `null` if `source` does not exist.
      *
      * since Valkey version 6.2.0.
