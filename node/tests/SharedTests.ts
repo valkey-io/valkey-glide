@@ -4521,8 +4521,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.0.0")) return;
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const nonExistingKey = "{key}-0" + uuidv4();
