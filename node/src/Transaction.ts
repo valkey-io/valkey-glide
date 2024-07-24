@@ -4,6 +4,7 @@
 
 import {
     AggregationType,
+    BitmapIndexType,
     ExpireOptions,
     InfoOptions,
     InsertPosition,
@@ -146,7 +147,6 @@ import {
     GeoUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
-import { BitmapIndexType } from "./commands/BitmapIndexType";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";

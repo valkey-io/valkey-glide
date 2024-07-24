@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BitmapIndexType,
     ExpireOptions,
     InsertPosition,
     KeyWeight,
@@ -132,7 +133,6 @@ import {
     createZScore,
     GeoUnit,
 } from "./Commands";
-import { BitmapIndexType } from "./commands/BitmapIndexType";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 import { GeospatialData } from "./commands/geospatial/GeospatialData";

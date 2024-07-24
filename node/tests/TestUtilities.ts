@@ -10,6 +10,7 @@ import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitmapIndexType,
     ClusterTransaction,
     GeoUnit,
     GlideClient,
@@ -21,7 +22,6 @@ import {
     ScoreFilter,
     Transaction,
 } from "..";
-import { BitmapIndexType } from "../build-ts/src/commands/BitmapIndexType";
 import { BitOffsetOptions } from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";

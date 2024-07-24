@@ -10,6 +10,7 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BitmapIndexType,
     ClosingError,
     ExpireOptions,
     GlideClient,
@@ -33,7 +34,6 @@ import {
     intoString,
 } from "./TestUtilities";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import { BitmapIndexType } from "../build-ts/src/commands/BitmapIndexType";
 import { BitOffsetOptions } from "../build-ts/src/commands/BitOffsetOptions";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";

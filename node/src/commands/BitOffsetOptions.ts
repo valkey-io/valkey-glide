@@ -5,7 +5,7 @@
 // Import below added to fix up the TSdoc link, but eslint blames for unused import.
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { BaseClient } from "src/BaseClient";
-import { BitmapIndexType } from "./BitmapIndexType";
+import { BitmapIndexType } from "src/Commands";
 
 /**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
