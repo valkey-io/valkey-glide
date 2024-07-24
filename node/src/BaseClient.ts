@@ -3591,15 +3591,19 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zincrBy method to increment the value of a member's score
      * await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2});
-     * await client.zincrby("my_sorted_set", 1.2, "member");
+     * console.log(await client.zincrby("my_sorted_set", 1.2, "member"));
      * // Output: 11.7 - The member existed in the set before score was altered, the new score is 11.7.
-     * await client.zincrby("my_sorted_set", -1.7, "member");
+     * console.log(await client.zincrby("my_sorted_set", -1.7, "member"));
      * // Output: 10.0 - Negative increment, decrements the score.
-     * await client.zincrby("my_sorted_set", 5.5, "non_existing_member");
+     * console.log(await client.zincrby("my_sorted_set", 5.5, "non_existing_member"));
      * // Output: 5.5 - A new member is added to the sorted set with the score of 5.5.
      * ```
      */
-    public zincrby(key: string, increment: number, member: string): Promise<number> {
+    public zincrby(
+        key: string,
+        increment: number,
+        member: string,
+    ): Promise<number> {
         return this.createWritePromise(createZIncrBy(key, increment, member));
     }
 

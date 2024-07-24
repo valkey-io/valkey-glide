@@ -595,6 +595,8 @@ export async function transactionTest(
 
     baseTransaction.zaddIncr(key8, "member2", 1);
     responseData.push(['zaddIncr(key8, "member2", 1)', 3]);
+    baseTransaction.zincrby(key8, 0.3, "member1");
+    responseData.push(['zincrby(key8, 0.3, "member1")', 1.3]);
     baseTransaction.zrem(key8, ["member1"]);
     responseData.push(['zrem(key8, ["member1"])', 1]);
     baseTransaction.zcard(key8);

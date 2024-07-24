@@ -4748,7 +4748,9 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zscore(key, member)).toEqual(2.5);
 
                 // key exists, but value doesn't
-                expect(await client.zincrby(key, -3.3, othermember)).toEqual(-3.3);
+                expect(await client.zincrby(key, -3.3, othermember)).toEqual(
+                    -3.3,
+                );
                 expect(await client.zscore(key, othermember)).toEqual(-3.3);
 
                 // updating existing value in existing key

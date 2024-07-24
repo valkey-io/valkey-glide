@@ -24,7 +24,7 @@
 * Node: Added FUNCTION FLUSH command ([#1984](https://github.com/valkey-io/valkey-glide/pull/1984))
 * Node: Added FCALL and FCALL_RO commands ([#2011](https://github.com/valkey-io/valkey-glide/pull/2011))
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
-* Node: Added ZINCRBY command ([#TODO](todo))
+* Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 
 #### Fixes
 * Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
