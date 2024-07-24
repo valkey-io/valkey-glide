@@ -24,7 +24,9 @@
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 
 #### Fixes
+* Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
+* Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count  ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
 
 ## 1.0.0 (2024-07-09)
 
@@ -118,6 +120,8 @@
 * Node: Added DBSize command ([#1932](https://github.com/valkey-io/valkey-glide/pull/1932))
 * Node: Added GeoAdd command ([#1980](https://github.com/valkey-io/valkey-glide/pull/1980))
 * Node: Added ZRevRank command ([#1977](https://github.com/valkey-io/valkey-glide/pull/1977))
+* Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
+* Node: Added GeoHash command ([#1997](https://github.com/valkey-io/valkey-glide/pull/1997))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

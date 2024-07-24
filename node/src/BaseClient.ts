@@ -36,7 +36,9 @@ import {
     createExpire,
     createExpireAt,
     createGeoAdd,
+    createGeoDist,
     createGeoPos,
+    createGeoHash,
     createGet,
     createGetBit,
     createGetDel,
@@ -129,6 +131,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    GeoUnit,
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
@@ -1776,6 +1779,7 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sets.
+     * @param limit - The limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
      *
      * since Valkey version 7.0.0.
@@ -3007,6 +3011,7 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
+     * @param options - options detailing how to add to the stream.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
@@ -3517,6 +3522,59 @@ export class BaseClient {
         count?: number,
     ): Promise<[string, [Record<string, number>]] | null> {
         return this.createWritePromise(createZMPop(key, modifier, count));
+    }
+
+    /**
+     * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
+     *
+     * See https://valkey.io/commands/geodist/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param member1 - The name of the first member.
+     * @param member2 - The name of the second member.
+     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}. If not specified, the default unit is {@link GeoUnit.METERS}.
+     * @returns The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
+     *     or if the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.geodist("mySortedSet", "Place1", "Place2", GeoUnit.KILOMETERS);
+     * console.log(num); // Output: the distance between Place1 and Place2.
+     * ```
+     */
+    public geodist(
+        key: string,
+        member1: string,
+        member2: string,
+        geoUnit?: GeoUnit,
+    ): Promise<number | null> {
+        return this.createWritePromise(
+            createGeoDist(key, member1, member2, geoUnit),
+        );
+    }
+
+    /**
+     * Returns the `GeoHash` strings representing the positions of all the specified `members` in the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/geohash/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
+     *   If a member does not exist in the sorted set, a `null` value is returned for that member.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.geohash("mySortedSet",["Palermo", "Catania", "NonExisting"]);
+     * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * ```
+     */
+    public geohash(key: string, members: string[]): Promise<(string | null)[]> {
+        return this.createWritePromise<(string | null)[]>(
+            createGeoHash(key, members),
+        ).then((hashes) =>
+            hashes.map((hash) => (hash === null ? null : "" + hash)),
+        );
     }
 
     /**
