@@ -695,7 +695,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
-     * @param whereTo - The {@link ListDirection} to add the element.
+     * @param whereTo - The {@link ListDirection} to add the element to.
      *
      * Command Response - The popped element, or `null` if `source` does not exist.
      *
