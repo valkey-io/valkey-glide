@@ -1,5 +1,11 @@
+/**
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+ */
+
+import { exec, execFile } from "child_process";
+import { lt } from "semver";
+
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
-import { execFile } from "child_process";
 
 function parseOutput(input: string): {
     clusterFolder: string;
@@ -32,10 +38,23 @@ function parseOutput(input: string): {
 export class RedisCluster {
     private addresses: [string, number][];
     private clusterFolder: string | undefined;
+    private version: string;
 
     private constructor(addresses: [string, number][], clusterFolder?: string) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
+        this.version = RedisCluster.detectVersion();
+    }
+
+    private static detectVersion(): string {
+        exec(`redis-server -v`, (error, stdout) => {
+            if (error) {
+                throw error;
+            } else {
+                return stdout.split("v=")[1].split(" ")[0];
+            }
+        });
+        return "0.0.0"; // unreachable;
     }
 
     public static createCluster(
@@ -93,6 +112,14 @@ export class RedisCluster {
 
     public getAddresses(): [string, number][] {
         return this.addresses;
+    }
+
+    public getVersion(): string {
+        return this.version;
+    }
+
+    public checkIfServerVersionLessThan(minVersion: string): boolean {
+        return lt(minVersion, this.version);
     }
 
     public async close() {
