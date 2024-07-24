@@ -171,20 +171,6 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
-            /*
-            const failedChecks: string[] = [];
-            for (let i = 0; i < expectedRes.length; i++) {
-                const [testName, expectedResponse] = expectedRes[i];
-
-                try {
-                    expect(intoString(result?.[i])).toEqual(intoString(expectedResponse));
-                } catch(e) {
-                    failedChecks.push(`${testName} failed, expected <${expectedResponse}>, actual <${result?.[i]}>`);
-                }
-            }
-            if (failedChecks.length > 0) {
-                throw new Error("Checks failed in transaction response:\n" + failedChecks.join("\n"));
-            }*/
         },
     );
 
