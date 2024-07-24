@@ -6,6 +6,7 @@ import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
+import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -27,7 +28,6 @@ import {
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");
@@ -341,6 +341,7 @@ export function compareMaps(
 
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
+    version: string,
 ): Promise<ReturnType[]> {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
@@ -484,7 +485,7 @@ export async function transactionTest(
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.sintercard([key7, key7]);
         args.push(2);
         baseTransaction.sintercard([key7, key7], 1);
@@ -504,7 +505,7 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     args.push(true);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         args.push([true, true, false]);
     }
@@ -530,7 +531,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, "member1");
     args.push(0);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrankWithScore(key8, "member1");
         args.push([0, 1]);
     }
@@ -538,7 +539,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     args.push(0);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         args.push([0, 5]);
     }
@@ -560,7 +561,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     args.push(3);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.zdiff([key13, key12]);
         args.push(["three"]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -588,7 +589,7 @@ export async function transactionTest(
     );
     args.push(1); // key8 is now empty
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         args.push(2);
         baseTransaction.zintercard([key8, key14]);
@@ -648,7 +649,7 @@ export async function transactionTest(
     baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
     args.push(6);
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.bitcount(
             key17,
             new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
@@ -688,7 +689,7 @@ export async function transactionTest(
         true,
     );
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.functionLoad(code);
         args.push(libName);
         baseTransaction.functionLoad(code, true);
