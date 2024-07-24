@@ -693,6 +693,10 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.fcall(funcName, undefined, ["one", "two"]);
+        args.push("one");
+        baseTransaction.fcallReadonly(funcName, undefined, ["one", "two"]);
+        args.push("one");
         baseTransaction.functionDelete(libName);
         args.push("OK");
         baseTransaction.functionFlush();
