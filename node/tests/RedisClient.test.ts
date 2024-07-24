@@ -33,6 +33,7 @@ import {
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    validateTransactionResponse,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -167,8 +168,23 @@ describe("GlideClient", () => {
             const expectedRes = await transactionTest(transaction);
             transaction.select(0);
             const result = await client.exec(transaction);
-            expectedRes.push("OK");
-            expect(intoString(result)).toEqual(intoString(expectedRes));
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+            /*
+            const failedChecks: string[] = [];
+            for (let i = 0; i < expectedRes.length; i++) {
+                const [testName, expectedResponse] = expectedRes[i];
+
+                try {
+                    expect(intoString(result?.[i])).toEqual(intoString(expectedResponse));
+                } catch(e) {
+                    failedChecks.push(`${testName} failed, expected <${expectedResponse}>, actual <${result?.[i]}>`);
+                }
+            }
+            if (failedChecks.length > 0) {
+                throw new Error("Checks failed in transaction response:\n" + failedChecks.join("\n"));
+            }*/
         },
     );
 
