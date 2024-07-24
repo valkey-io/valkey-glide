@@ -397,13 +397,10 @@ describe("GlideClient", () => {
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
                 checkSimple(
-                    await client.fcall(funcName, undefined, ["one", "two"]),
+                    await client.fcall(funcName, [], ["one", "two"]),
                 ).toEqual("one");
                 checkSimple(
-                    await client.fcallReadonly(funcName, undefined, [
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
                 // TODO verify with FUNCTION LIST
@@ -433,13 +430,10 @@ describe("GlideClient", () => {
                 );
 
                 checkSimple(
-                    await client.fcall(func2Name, undefined, ["one", "two"]),
+                    await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
                 checkSimple(
-                    await client.fcallReadonly(func2Name, undefined, [
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcallReadonly(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
