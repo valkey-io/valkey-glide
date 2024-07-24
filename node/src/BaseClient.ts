@@ -1433,16 +1433,16 @@ export class BaseClient {
 
     /**
      * Atomically pops and removes the left/right-most element to the list stored at `source`
-     * depending on `where_from`, and pushes the element at the first/last element of the list
-     * stored at `destination` depending on `where_to`.
+     * depending on `whereto`, and pushes the element at the first/last element of the list
+     * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
      *
      * See https://valkey.io/commands/lmove/ for details.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
-     * @param where_from - The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-     * @param where_to - The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-     * @returns The popped element, or `None` if `source` does not exist.
+     * @param whereFrom - The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+     * @param whereTo - The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+     * @returns The popped element, or `null` if `source` does not exist.
      *
      * since Valkey version 6.2.0.
      *
@@ -1464,11 +1464,11 @@ export class BaseClient {
     public lmove(
         source: string,
         destination: string,
-        where_from: ListDirection,
-        where_to: ListDirection,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
     ): Promise<string | null> {
         return this.createWritePromise(
-            createLMove(source, destination, where_from, where_to),
+            createLMove(source, destination, whereFrom, whereTo),
         );
     }
 
