@@ -4735,6 +4735,37 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zincrby test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = "{key}" + uuidv4();
+                const member = "{member}-1" + uuidv4();
+                const othermember = "{member}-1" + uuidv4();
+                const stringKey = "{key}-string" + uuidv4();
+
+                // key does not exist
+                expect(await client.zincrby(key, 2.5, member)).toEqual(2.5);
+                expect(await client.zscore(key, member)).toEqual(2.5);
+
+                // key exists, but value doesn't
+                expect(await client.zincrby(key, -3.3, othermember)).toEqual(-3.3);
+                expect(await client.zscore(key, othermember)).toEqual(-3.3);
+
+                // updating existing value in existing key
+                expect(await client.zincrby(key, 1.0, member)).toEqual(3.5);
+                expect(await client.zscore(key, member)).toEqual(3.5);
+
+                // Key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.zincrby(stringKey, 0.5, "_"),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `geodist test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
