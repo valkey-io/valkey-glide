@@ -3344,8 +3344,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * To add entries with duplicate keys, use {@link #xadd(ArgType, ArgType[][])}.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(ArgType, ArgType[][])}.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -3360,8 +3360,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * This method overload allows entries with duplicate keys to be added.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -3376,8 +3376,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * To add entries with duplicate keys, use {@link #xadd(ArgType, ArgType[][], StreamAddOptions)}.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(ArgType, ArgType[][], StreamAddOptions)}.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
@@ -3406,8 +3406,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * This method overload allows entries with duplicate keys to be added.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.

@@ -7219,7 +7219,7 @@ public class GlideClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.xadd(key, fieldValues, options);
@@ -7304,7 +7304,7 @@ public class GlideClientTest {
 
         // match on protobuf request
         when(commandManager.<GlideString>submitNewCommand(eq(XAdd), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<GlideString> response = service.xadd(key, fieldValues, options);

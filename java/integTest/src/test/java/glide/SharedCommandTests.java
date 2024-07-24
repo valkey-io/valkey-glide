@@ -5817,7 +5817,8 @@ public class SharedCommandTests {
         GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
         GlideString streamId = client.xadd(key, entry).get();
         // get everything from the stream
-        Map<GlideString, GlideString[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
         GlideString[][] actualEntry = result.get(streamId);
         assertDeepEquals(entry, actualEntry);
@@ -5835,7 +5836,8 @@ public class SharedCommandTests {
         GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
         GlideString streamId = client.xadd(key, entry, StreamAddOptionsBinary.builder().build()).get();
         // get everything from the stream
-        Map<GlideString, GlideString[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(1, result.size());
         GlideString[][] actualEntry = result.get(streamId);
         assertDeepEquals(entry, actualEntry);

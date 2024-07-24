@@ -29,8 +29,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * To add entries with duplicate keys, use {@link #xadd(String, String[][])}.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(String, String[][])}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -46,8 +46,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * This method overload allows entries with duplicate keys to be added.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -63,8 +63,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * To add entries with duplicate keys, use {@link #xadd(GlideString, GlideString[][])}.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(GlideString, GlideString[][])}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -80,8 +80,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * This method overload allows entries with duplicate keys to be added.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -97,8 +97,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * To add entries with duplicate keys, use {@link #xadd(String, String[][], StreamAddOptions)}.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(String, String[][], StreamAddOptions)}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -121,8 +121,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * This method overload allows entries with duplicate keys to be added.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -145,8 +145,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * To add entries with duplicate keys, use {@link #xadd(GlideString, GlideString[][], StreamAddOptionsBinary)}.
+     * If the <code>key</code> doesn't exist, the stream is created. To add entries with duplicate
+     * keys, use {@link #xadd(GlideString, GlideString[][], StreamAddOptionsBinary)}.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -170,8 +170,8 @@ public interface StreamBaseCommands {
 
     /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
-     * If the <code>key</code> doesn't exist, the stream is created.
-     * This method overload allows entries with duplicate keys to be added.
+     * If the <code>key</code> doesn't exist, the stream is created. This method overload allows
+     * entries with duplicate keys to be added.
      *
      * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
