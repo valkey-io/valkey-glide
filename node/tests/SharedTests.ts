@@ -1003,7 +1003,6 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
-
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmove list_%p`,
         async (protocol) => {
