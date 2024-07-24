@@ -596,23 +596,6 @@ export function createLMove(
 /**
  * @internal
  */
-export function createLMove(
-    source: string,
-    destination: string,
-    whereFrom: ListDirection,
-    whereTo: ListDirection,
-): command_request.Command {
-    return createCommand(RequestType.LMove, [
-        source,
-        destination,
-        whereFrom,
-        whereTo,
-    ]);
-}
-
-/**
- * @internal
- */
 export function createLSet(
     key: string,
     index: number,

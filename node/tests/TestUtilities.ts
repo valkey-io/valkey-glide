@@ -440,8 +440,10 @@ export async function transactionTest(
     args.push("OK");
     baseTransaction.lrange(key5, 0, -1);
     args.push([field + "3", field + "2"]);
-    baseTransaction.lmove(key5, key19, ListDirection.LEFT, ListDirection.LEFT);
-    args.push(field + "3").toString();
+    if (gte("6.2.0", version)) {
+        baseTransaction.lmove(key5, key19, ListDirection.LEFT, ListDirection.LEFT);
+        args.push(field + "3").toString();
+    }
     baseTransaction.lpopCount(key5, 2);
     args.push([field + "2"]);
     baseTransaction.linsert(
