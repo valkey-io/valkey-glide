@@ -21,8 +21,11 @@ import java.util.concurrent.ExecutionException;
 public class ClusterExample {
 
     /**
-     * Creates and returns a <code>GlideClusterClient</code> instance. This function initializes a
-     * <code>GlideClusterClient</code> with the provided list of nodes.
+     * Creates and returns a <code>GlideClusterClient</code> instance.
+     *
+     * This function initializes a <code>GlideClusterClient</code> with the provided list of nodes.
+     * The list may contain the address of one or more cluster nodes, and the client will automatically
+     * discover all nodes in the cluster.
      *
      * @return A <code>GlideClusterClient</code> connected to the discovered nodes.
      * @throws CancellationException if the operation is cancelled.
@@ -32,8 +35,6 @@ public class ClusterExample {
     public static GlideClusterClient createClient() throws CancellationException, ExecutionException, InterruptedException {
         String host = "localhost";
         Integer port = 6379;
-        // GLIDE is able to detect all cluster nodes and connect to them automatically
-        // even if only one of them was configured
 
         // Check `GlideClusterClientConfiguration` for additional options.
         GlideClusterClientConfiguration config =
@@ -94,6 +95,7 @@ public class ClusterExample {
             try {
                 client = createClient();
                 appLogic(client);
+                return;
 
             } catch (CancellationException e) {
                 Logger.log(Logger.Level.ERROR, "glide", "Request cancelled: " + e.getMessage());
@@ -125,9 +127,6 @@ public class ClusterExample {
                     // A request timed out. You may choose to retry the execution based on your application's
                     // logic
                     Logger.log(Logger.Level.ERROR, "glide", "Timeout encountered: " + e.getMessage());
-                    throw e;
-                } else if (e.getCause() instanceof ExecAbortException) {
-                    Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: " + e.getMessage());
                     throw e;
                 } else {
                     Logger.log(Logger.Level.ERROR, "glide", "Execution error encountered: " + e.getCause());

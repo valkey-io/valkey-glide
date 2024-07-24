@@ -17,8 +17,11 @@ import java.util.concurrent.ExecutionException;
 public class StandaloneExample {
 
     /**
-     * Creates and returns a <code>GlideClient</code> instance. This function initializes a
-     * <code>GlideClient</code> with the provided node address.
+     * Creates and returns a <code>GlideClient</code> instance.
+     *
+     * This function initializes a <code>GlideClient</code> with the provided list of nodes.
+     * The list may contain either only primary node or a mix of primary and replica nodes. The <code>GlideClient
+     * </code> use these nodes to connect to the Standalone setup servers.
      *
      * @return A <code>GlideClient</code> connected to the provided node address.
      * @throws CancellationException if the operation is cancelled.
@@ -75,6 +78,7 @@ public class StandaloneExample {
             try {
                 client = createClient();
                 appLogic(client);
+                return;
 
             } catch (CancellationException e) {
                 Logger.log(Logger.Level.ERROR, "glide", "Request cancelled: " + e.getMessage());
@@ -106,9 +110,6 @@ public class StandaloneExample {
                     // A request timed out. You may choose to retry the execution based on your application's
                     // logic
                     Logger.log(Logger.Level.ERROR, "glide", "Timeout encountered: " + e.getMessage());
-                    throw e;
-                } else if (e.getCause() instanceof ExecAbortException) {
-                    Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: " + e.getMessage());
                     throw e;
                 } else {
                     Logger.log(Logger.Level.ERROR, "glide", "Execution error encountered: " + e.getCause());
