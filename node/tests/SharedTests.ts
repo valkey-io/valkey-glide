@@ -2,6 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+// This file contains tests common for standalone and cluster clients, it covers API defined in
+// BaseClient.ts - commands which manipulate with keys.
+// Each test cases has access to a client instance and, optionally, to a cluster - object, which
+// represents a running server instance. See first 2 test cases as examples.
+
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -36,7 +41,7 @@ import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialDa
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
 import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import RedisCluster from "../../utils/TestUtils";
+import { RedisCluster } from "../../utils/TestUtils";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -80,7 +85,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.2.0")) {
                     return;
                 }
