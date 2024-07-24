@@ -6,6 +6,7 @@ import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
+import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -27,7 +28,6 @@ import {
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
     Logger.init("info");
@@ -377,6 +377,7 @@ export function validateTransactionResponse(
  */
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
+    version: string,
 ): Promise<[string, ReturnType][]> {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
@@ -528,7 +529,7 @@ export async function transactionTest(
     baseTransaction.sinter([key7, key7]);
     responseData.push(["sinter([key7, key7])", new Set(["bar", "foo"])]);
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.sintercard([key7, key7]);
         responseData.push(["sintercard([key7, key7])", 2]);
         baseTransaction.sintercard([key7, key7], 1);
@@ -548,7 +549,7 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     responseData.push(['sismember(key7, "bar")', true]);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
@@ -577,7 +578,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, "member1");
     responseData.push(['zrank(key8, "member1")', 0]);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrankWithScore(key8, "member1");
         responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
     }
@@ -585,7 +586,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     responseData.push(['zrevrank(key8, "member5")', 0]);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
@@ -614,7 +615,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -645,7 +646,7 @@ export async function transactionTest(
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
@@ -723,7 +724,7 @@ export async function transactionTest(
     baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
     responseData.push(["bitcount(key17, new BitOffsetOptions(1, 1))", 6]);
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.bitcount(
             key17,
             new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
@@ -775,7 +776,7 @@ export async function transactionTest(
         true,
     );
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.functionLoad(code);
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);

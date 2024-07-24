@@ -22,7 +22,7 @@ import {
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
-import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
+import { runBaseTests } from "./SharedTests";
 import {
     checkSimple,
     convertStringArrayToBuffer,
@@ -165,7 +165,10 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new Transaction();
-            const expectedRes = await transactionTest(transaction);
+            const expectedRes = await transactionTest(
+                transaction,
+                cluster.getVersion(),
+            );
             transaction.select(0);
             const result = await client.exec(transaction);
             expectedRes.push(["select(0)", "OK"]);
@@ -371,7 +374,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function load test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -471,7 +474,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function flush test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -530,7 +533,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function delete test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -669,7 +672,7 @@ describe("GlideClient", () => {
             options.clientName = clientName;
             testsFailed += 1;
             client = await GlideClient.createClient(options);
-            return { client, context: { client } };
+            return { client, context: { client }, cluster };
         },
         close: (context: Context, testSucceeded: boolean) => {
             if (testSucceeded) {
