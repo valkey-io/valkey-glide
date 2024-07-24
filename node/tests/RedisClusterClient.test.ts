@@ -10,8 +10,8 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
-
 import {
     ClusterClientConfiguration,
     ClusterTransaction,
@@ -23,7 +23,7 @@ import {
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
+import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkSimple,
@@ -83,6 +83,7 @@ describe("GlideClusterClient", () => {
                     client,
                 },
                 client,
+                cluster,
             };
         },
         close: (context: Context, testSucceeded: boolean) => {
@@ -241,7 +242,10 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
-            const expectedRes = await transactionTest(transaction);
+            const expectedRes = await transactionTest(
+                transaction,
+                cluster.getVersion(),
+            );
             const result = await client.exec(transaction);
             expect(intoString(result)).toEqual(intoString(expectedRes));
         },
@@ -298,9 +302,6 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const versionLessThan7 =
-                await checkIfServerVersionLessThan("7.0.0");
-
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
@@ -308,23 +309,27 @@ describe("GlideClusterClient", () => {
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
-                client.sintercard(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
-                client.zdiff(["abc", "zxy", "lkn"]),
-                client.zdiffWithScores(["abc", "zxy", "lkn"]),
-                client.zdiffstore("abc", ["zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
                 client.sdiff(["abc", "zxy", "lkn"]),
                 client.sdiffstore("abc", ["zxy", "lkn"]),
-                // TODO all rest multi-key commands except ones tested below
             ];
 
-            if (!versionLessThan7) {
-                promises.push(client.zintercard(["abc", "zxy", "lkn"]));
+            if (gte(cluster.getVersion(), "6.2.0")) {
                 promises.push(
+                    client.zdiff(["abc", "zxy", "lkn"]),
+                    client.zdiffWithScores(["abc", "zxy", "lkn"]),
+                    client.zdiffstore("abc", ["zxy", "lkn"]),
+                );
+            }
+
+            if (gte(cluster.getVersion(), "7.0.0")) {
+                promises.push(
+                    client.sintercard(["abc", "zxy", "lkn"]),
+                    client.zintercard(["abc", "zxy", "lkn"]),
                     client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                 );
             }
@@ -566,7 +571,7 @@ describe("GlideClusterClient", () => {
                     it(
                         "function load",
                         async () => {
-                            if (await checkIfServerVersionLessThan("7.0.0"))
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
 
                             const client =
@@ -701,7 +706,7 @@ describe("GlideClusterClient", () => {
                     it(
                         "function flush",
                         async () => {
-                            if (await checkIfServerVersionLessThan("7.0.0"))
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
 
                             const client =
@@ -810,7 +815,7 @@ describe("GlideClusterClient", () => {
                     it(
                         "function delete",
                         async () => {
-                            if (await checkIfServerVersionLessThan("7.0.0"))
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
 
                             const client =
@@ -897,7 +902,7 @@ describe("GlideClusterClient", () => {
         [true, ProtocolVersion.RESP3],
         [false, ProtocolVersion.RESP3],
     ])("simple pubsub test", async (sharded, protocol) => {
-        if (sharded && (await checkIfServerVersionLessThan("7.2.0"))) {
+        if (sharded && cluster.checkIfServerVersionLessThan("7.2.0")) {
             return;
         }
 
