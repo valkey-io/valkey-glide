@@ -1616,27 +1616,18 @@ export function createBitPos(
     key: string,
     bit: number,
     start?: number,
+    end?: number,
+    indexType?: BitmapIndexType,
 ): command_request.Command {
     const args = [key, bit.toString()];
 
-    if (start) {
+    if (start !== undefined) {
         args.push(start.toString());
     }
 
-    return createCommand(RequestType.BitPos, args);
-}
-
-/**
- * @internal
- */
-export function createBitPosInterval(
-    key: string,
-    bit: number,
-    start: number,
-    end: number,
-    indexType?: BitmapIndexType,
-): command_request.Command {
-    const args = [key, bit.toString(), start.toString(), end.toString()];
+    if (end !== undefined) {
+        args.push(end.toString());
+    }
 
     if (indexType) {
         args.push(indexType);

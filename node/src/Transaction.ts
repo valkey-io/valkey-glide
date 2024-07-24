@@ -22,7 +22,6 @@ import {
     createBRPop,
     createBitCount,
     createBitPos,
-    createBitPosInterval,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -476,9 +475,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         end: number,
         indexType?: BitmapIndexType,
     ): T {
-        return this.addAndReturn(
-            createBitPosInterval(key, bit, start, end, indexType),
-        );
+        return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
     }
 
     /** Reads the configuration parameters of a running Redis server.

@@ -28,7 +28,6 @@ import {
     createBRPop,
     createBitCount,
     createBitPos,
-    createBitPosInterval,
     createDecr,
     createDecrBy,
     createDel,
@@ -1089,7 +1088,7 @@ export class BaseClient {
         indexType?: BitmapIndexType,
     ): Promise<number> {
         return this.createWritePromise(
-            createBitPosInterval(key, bit, start, end, indexType),
+            createBitPos(key, bit, start, end, indexType),
         );
     }
 
