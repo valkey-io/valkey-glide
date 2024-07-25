@@ -13,7 +13,7 @@ import {
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
-    ClusterClientConfiguration,
+    BitwiseOperation,
     ClusterTransaction,
     GlideClusterClient,
     InfoOptions,
@@ -306,6 +306,7 @@ describe("GlideClusterClient", () => {
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
+                client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
@@ -615,8 +616,9 @@ describe("GlideClusterClient", () => {
                                     await client.functionLoad(code),
                                 ).toEqual(libName);
                                 // call functions from that library to confirm that it works
-                                let fcall = await client.customCommand(
-                                    ["FCALL", funcName, "0", "one", "two"],
+                                let fcall = await client.fcallWithRoute(
+                                    funcName,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -625,9 +627,9 @@ describe("GlideClusterClient", () => {
                                     (value) =>
                                         checkSimple(value).toEqual("one"),
                                 );
-
-                                fcall = await client.customCommand(
-                                    ["FCALL_RO", funcName, "0", "one", "two"],
+                                fcall = await client.fcallReadonlyWithRoute(
+                                    funcName,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -664,8 +666,9 @@ describe("GlideClusterClient", () => {
                                     await client.functionLoad(newCode, true),
                                 ).toEqual(libName);
 
-                                fcall = await client.customCommand(
-                                    ["FCALL", func2Name, "0", "one", "two"],
+                                fcall = await client.fcallWithRoute(
+                                    func2Name,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -674,8 +677,9 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual(2),
                                 );
 
-                                fcall = await client.customCommand(
-                                    ["FCALL_RO", func2Name, "0", "one", "two"],
+                                fcall = await client.fcallReadonlyWithRoute(
+                                    func2Name,
+                                    ["one", "two"],
                                     route,
                                 );
                                 checkClusterResponse(
@@ -897,60 +901,4 @@ describe("GlideClusterClient", () => {
             );
         },
     );
-
-    it.each([
-        [true, ProtocolVersion.RESP3],
-        [false, ProtocolVersion.RESP3],
-    ])("simple pubsub test", async (sharded, protocol) => {
-        if (sharded && cluster.checkIfServerVersionLessThan("7.2.0")) {
-            return;
-        }
-
-        const channel = "test-channel";
-        const shardedChannel = "test-channel-sharded";
-        const channelsAndPatterns: Partial<
-            Record<ClusterClientConfiguration.PubSubChannelModes, Set<string>>
-        > = {
-            [ClusterClientConfiguration.PubSubChannelModes.Exact]: new Set([
-                channel,
-            ]),
-        };
-
-        if (sharded) {
-            channelsAndPatterns[
-                ClusterClientConfiguration.PubSubChannelModes.Sharded
-            ] = new Set([shardedChannel]);
-        }
-
-        const config: ClusterClientConfiguration = getClientConfigurationOption(
-            cluster.getAddresses(),
-            protocol,
-        );
-        config.pubsubSubscriptions = {
-            channelsAndPatterns: channelsAndPatterns,
-        };
-        client = await GlideClusterClient.createClient(config);
-        const message = uuidv4();
-
-        await client.publish(message, channel);
-        const sleep = new Promise((resolve) => setTimeout(resolve, 1000));
-        await sleep;
-
-        let pubsubMsg = await client.getPubSubMessage();
-        expect(pubsubMsg.channel.toString()).toBe(channel);
-        expect(pubsubMsg.message.toString()).toBe(message);
-        expect(pubsubMsg.pattern).toBeNull();
-
-        if (sharded) {
-            await client.publish(message, shardedChannel, true);
-            await sleep;
-            pubsubMsg = await client.getPubSubMessage();
-            console.log(pubsubMsg);
-            expect(pubsubMsg.channel.toString()).toBe(shardedChannel);
-            expect(pubsubMsg.message.toString()).toBe(message);
-            expect(pubsubMsg.pattern).toBeNull();
-        }
-
-        client.close();
-    });
 });

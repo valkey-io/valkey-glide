@@ -21,6 +21,8 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
+    createFCall,
+    createFCallReadOnly,
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
@@ -655,6 +657,67 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise(
             createLolwut(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallWithRoute("Deep_Thought", [], "randomNode");
+     * console.log(response); // Output: Returns the function's return value.
+     * ```
+     */
+    public fcallWithRoute(
+        func: string,
+        args: string[],
+        route?: Routes,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(
+            createFCall(func, [], args),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallReadonlyWithRoute("Deep_Thought", ["Answer", "to", "the", "Ultimate",
+     *            "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], "randomNode");
+     * console.log(response); // Output: 42 # The return value on the function that was execute.
+     * ```
+     */
+    public fcallReadonlyWithRoute(
+        func: string,
+        args: string[],
+        route?: Routes,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(
+            createFCallReadOnly(func, [], args),
             toProtobufRoute(route),
         );
     }

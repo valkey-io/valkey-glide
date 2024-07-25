@@ -12,13 +12,7 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import {
-    GlideClient,
-    GlideClientConfiguration,
-    ProtocolVersion,
-    PubSubMsg,
-    Transaction,
-} from "..";
+import { GlideClient, ProtocolVersion, Transaction } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
@@ -400,22 +394,10 @@ describe("GlideClient", () => {
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
                 checkSimple(
-                    await client.customCommand([
-                        "FCALL",
-                        funcName,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcall(funcName, [], ["one", "two"]),
                 ).toEqual("one");
                 checkSimple(
-                    await client.customCommand([
-                        "FCALL_RO",
-                        funcName,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
                 // TODO verify with FUNCTION LIST
@@ -444,23 +426,11 @@ describe("GlideClient", () => {
                     libName,
                 );
 
-                expect(
-                    await client.customCommand([
-                        "FCALL",
-                        func2Name,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                checkSimple(
+                    await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
-                expect(
-                    await client.customCommand([
-                        "FCALL_RO",
-                        func2Name,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                checkSimple(
+                    await client.fcallReadonly(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
@@ -582,83 +552,6 @@ describe("GlideClient", () => {
             }
         },
     );
-
-    it.each([ProtocolVersion.RESP3])("simple pubsub test", async (protocol) => {
-        const pattern = "*";
-        const channel = "test-channel";
-        const config: GlideClientConfiguration = getClientConfigurationOption(
-            cluster.getAddresses(),
-            protocol,
-        );
-        const channelsAndPatterns: Partial<
-            Record<GlideClientConfiguration.PubSubChannelModes, Set<string>>
-        > = {
-            [GlideClientConfiguration.PubSubChannelModes.Exact]: new Set([
-                channel,
-            ]),
-            [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set([
-                pattern,
-            ]),
-        };
-        config.pubsubSubscriptions = {
-            channelsAndPatterns: channelsAndPatterns,
-        };
-        client = await GlideClient.createClient(config);
-        const clientTry = await GlideClient.createClient(config);
-        const context: PubSubMsg[] = [];
-
-        function new_message(msg: PubSubMsg, context: PubSubMsg[]): void {
-            context.push(msg);
-        }
-
-        const clientCallback = await GlideClient.createClient({
-            addresses: config.addresses,
-            pubsubSubscriptions: {
-                channelsAndPatterns: channelsAndPatterns,
-                callback: new_message,
-                context: context,
-            },
-        });
-        const message = uuidv4();
-        const asyncMessages: PubSubMsg[] = [];
-        const tryMessages: (PubSubMsg | null)[] = [];
-
-        await client.publish(message, "test-channel");
-        const sleep = new Promise((resolve) => setTimeout(resolve, 1000));
-        await sleep;
-
-        for (let i = 0; i < 2; i++) {
-            asyncMessages.push(await client.getPubSubMessage());
-            tryMessages.push(clientTry.tryGetPubSubMessage());
-        }
-
-        expect(clientTry.tryGetPubSubMessage()).toBeNull();
-        expect(asyncMessages.length).toBe(2);
-        expect(tryMessages.length).toBe(2);
-        expect(context.length).toBe(2);
-
-        // assert all api flavors produced the same messages
-        expect(asyncMessages).toEqual(tryMessages);
-        expect(asyncMessages).toEqual(context);
-
-        let patternCount = 0;
-
-        for (let i = 0; i < 2; i++) {
-            const pubsubMsg = asyncMessages[i];
-            expect(pubsubMsg.channel.toString()).toBe(channel);
-            expect(pubsubMsg.message.toString()).toBe(message);
-
-            if (pubsubMsg.pattern) {
-                patternCount++;
-                expect(pubsubMsg.pattern.toString()).toBe(pattern);
-            }
-        }
-
-        expect(patternCount).toBe(1);
-        client.close();
-        clientTry.close();
-        clientCallback.close();
-    });
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {

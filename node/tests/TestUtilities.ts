@@ -11,6 +11,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     BitmapIndexType,
+    BitwiseOperation,
     ClusterTransaction,
     GeoUnit,
     GlideClient,
@@ -359,6 +360,7 @@ export async function transactionTest(
     const key16 = "{key}" + uuidv4(); // list
     const key17 = "{key}" + uuidv4(); // bitmap
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
+    const key19 = "{key}" + uuidv4(); // bitmap
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -649,6 +651,13 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     args.push(1);
 
+    baseTransaction.set(key19, "abcdef");
+    args.push("OK");
+    baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
+    args.push(6);
+    baseTransaction.get(key19);
+    args.push("`bc`ab");
+
     if (gte("7.0.0", version)) {
         baseTransaction.bitcount(
             key17,
@@ -696,6 +705,10 @@ export async function transactionTest(
         args.push(libName);
         baseTransaction.functionLoad(code, true);
         args.push(libName);
+        baseTransaction.fcall(funcName, [], ["one", "two"]);
+        args.push("one");
+        baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
+        args.push("one");
         baseTransaction.functionDelete(libName);
         args.push("OK");
         baseTransaction.functionFlush();
