@@ -24,17 +24,28 @@ fun nettyTransport(): String {
 
 dependencies {
     testImplementation(kotlin("test"))
-    implementation("io.valkey:valkey-glide:1.0.1:$classifier")
+    implementation("io.valkey:valkey-glide:1.+:$classifier")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.1")
 }
 
 tasks.test {
     useJUnitPlatform()
 }
+
 kotlin {
     jvmToolchain(11)
 }
 
-application {
-    mainClass = "org.example.MainKt"
+tasks.register<JavaExec>("runStandalone") {
+    group = "application"
+    description = "Run the standalone example"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "org.example.StandaloneExample"
+}
+
+tasks.register<JavaExec>("runCluster") {
+    group = "application"
+    description = "Run the cluster example"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "org.example.ClusterExample"
 }
