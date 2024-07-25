@@ -3599,7 +3599,7 @@ export class BaseClient {
      * // Output: 5.5 - A new member is added to the sorted set with the score of 5.5.
      * ```
      */
-    public zincrby(
+    public async zincrby(
         key: string,
         increment: number,
         member: string,
