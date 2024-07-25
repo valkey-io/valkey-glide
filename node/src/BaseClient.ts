@@ -3595,7 +3595,7 @@ export class BaseClient {
      * // ]
      * ```
      */
-    public geosearch(
+    public async geosearch(
         key: string,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
