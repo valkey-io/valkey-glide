@@ -2,17 +2,17 @@ package org.example
 
 import glide.api.GlideClusterClient
 import glide.api.logging.Logger
+import glide.api.models.commands.InfoOptions
 import glide.api.models.configuration.GlideClusterClientConfiguration
 import glide.api.models.configuration.NodeAddress
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES
 import glide.api.models.exceptions.ClosingException
 import glide.api.models.exceptions.ConnectionException
 import glide.api.models.exceptions.ExecAbortException
 import glide.api.models.exceptions.TimeoutException
-import glide.api.models.commands.InfoOptions
+import java.util.concurrent.CancellationException
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
-import java.util.concurrent.CancellationException
-import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES
 
 object ClusterExample {
 
@@ -54,7 +54,7 @@ object ClusterExample {
         val getResponse = client.get("foo").await()
         Logger.log(Logger.Level.INFO, "app", "Get response is $getResponse")
 
-        // Send PING to all primaries (according to Redis's PING request_policy)
+        // Send PING to all primaries (according to Valkey's PING request_policy)
         val pong = client.ping().await()
         Logger.log(Logger.Level.INFO, "app", "Ping response is $pong")
 
@@ -65,6 +65,11 @@ object ClusterExample {
                 .build(),
             ALL_NODES
         ).await()
+        Logger.log(
+            Logger.Level.INFO,
+            "app",
+            "INFO REPLICATION responses from all nodes are=\n$infoReplResps",
+        )
     }
 
     /**
