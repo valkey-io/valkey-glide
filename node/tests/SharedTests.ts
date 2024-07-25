@@ -5055,6 +5055,11 @@ export function runBaseTests<Context>(config: {
                     client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0),
                 ).rejects.toThrow(RequestError);
 
+                // incorrect argument: timeout can not be a negative number
+                await expect(
+                    client.bzmpop([key1], ScoreFilter.MAX, -1, 10),
+                ).rejects.toThrow(RequestError);
+
                 // check that order of entries in the response is preserved
                 const entries: Record<string, number> = {};
 

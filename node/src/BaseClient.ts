@@ -3674,7 +3674,7 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
@@ -3689,7 +3689,7 @@ export class BaseClient {
      * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
      * ```
      */
-    public zmpop(
+    public async zmpop(
         keys: string[],
         modifier: ScoreFilter,
         count?: number,
@@ -3706,14 +3706,14 @@ export class BaseClient {
      *
      * @remarks
      *      1. When in cluster mode, all `keys` must map to the same hash slot.
-     *      2. `BZMPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+     *      2. `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
      *         for more details and best practices.
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
      * @param timeout - The number of seconds to wait for a blocking operation to complete.
      *     A value of 0 will block indefinitely.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
@@ -3728,7 +3728,7 @@ export class BaseClient {
      * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
      * ```
      */
-    public bzmpop(
+    public async bzmpop(
         keys: string[],
         modifier: ScoreFilter,
         timeout: number,

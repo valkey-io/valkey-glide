@@ -2171,7 +2171,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the
      *     element was popped, and a member-score `Record` of the popped element.
@@ -2187,15 +2187,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
      * checked in the order they are provided. Blocks the connection when there are no members
      * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of `ZMPOP`.
+     * `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
+     * for more details and best practices.
      *
      * See https://valkey.io/commands/bzmpop/ for more details.
      *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
      * @param timeout - The number of seconds to wait for a blocking operation to complete.
      *     A value of 0 will block indefinitely.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
