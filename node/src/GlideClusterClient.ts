@@ -820,19 +820,28 @@ export class GlideClusterClient extends BaseClient {
      * @param options - Parameters to filter and request additional info.
      * @param route - The command will be routed to a random route, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
-     * @returns Info about all or selected libraries and their functions.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
      * ```typescript
      * // Request info for specific library including the source code
-     * const result1 = await client.functionList({ libNamePattern: "myLib", withCode: true });
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
      * // Request info for all libraries
      * const result2 = await client.functionList();
      * console.log(result2); // Output:
-     *
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
      * ```
      */
-    public functionList(
+    public async functionList(
         options?: FunctionListOptions,
         route?: Routes,
     ): Promise<ClusterResponse<FunctionListResponse>> {

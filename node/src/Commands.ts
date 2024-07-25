@@ -1697,9 +1697,9 @@ export function createFunctionLoad(
 /** Optional arguments for `FUNCTION LIST` command. */
 export type FunctionListOptions = {
     /** A wildcard pattern for matching library names. */
-    readonly libNamePattern?: string;
+    libNamePattern?: string;
     /** Specifies whether to request the library code from the server or not. */
-    readonly withCode?: boolean;
+    withCode?: boolean;
 };
 
 /** Type of the response of `FUNCTION LIST` command. */
