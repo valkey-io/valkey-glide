@@ -3694,7 +3694,7 @@ export class BaseClient {
     public close(errorMessage?: string): void {
         this.isClosed = true;
         this.promiseCallbackFunctions.forEach(([, reject]) => {
-            reject(new ClosingError(errorMessage));
+            reject(new ClosingError(errorMessage || ""));
         });
 
         // Handle pubsub futures
@@ -3749,10 +3749,17 @@ export class BaseClient {
     ): Promise<TConnection> {
         const path = await StartSocketConnection();
         const socket = await this.GetSocket(path);
-        return await this.__createClientInternal<TConnection>(
-            options,
-            socket,
-            constructor,
-        );
+
+        try {
+            return await this.__createClientInternal<TConnection>(
+                options,
+                socket,
+                constructor,
+            );
+        } catch (err) {
+            // Ensure socket is closed
+            socket.end();
+            throw err;
+        }
     }
 }
