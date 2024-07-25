@@ -10,6 +10,7 @@ import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitwiseOperation,
     ClusterTransaction,
     GeoUnit,
     GlideClient,
@@ -397,6 +398,7 @@ export async function transactionTest(
     const key16 = "{key}" + uuidv4(); // list
     const key17 = "{key}" + uuidv4(); // bitmap
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
+    const key19 = "{key}" + uuidv4(); // bitmap
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -724,6 +726,16 @@ export async function transactionTest(
     baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
     responseData.push(["bitcount(key17, new BitOffsetOptions(1, 1))", 6]);
 
+    baseTransaction.set(key19, "abcdef");
+    responseData.push(['set(key19, "abcdef")', "OK"]);
+    baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
+    responseData.push([
+        "bitop(BitwiseOperation.AND, key19, [key19, key17])",
+        6,
+    ]);
+    baseTransaction.get(key19);
+    responseData.push(["get(key19)", "`bc`ab"]);
+
     if (gte("7.0.0", version)) {
         baseTransaction.bitcount(
             key17,
@@ -781,6 +793,13 @@ export async function transactionTest(
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
         responseData.push(["functionLoad(code, true)", libName]);
+        baseTransaction.fcall(funcName, [], ["one", "two"]);
+        responseData.push(['fcall(funcName, [], ["one", "two"])', "one"]);
+        baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
+        responseData.push([
+            'fcallReadonly(funcName, [], ["one", "two"]',
+            "one",
+        ]);
         baseTransaction.functionDelete(libName);
         responseData.push(["functionDelete(libName)", "OK"]);
         baseTransaction.functionFlush();
