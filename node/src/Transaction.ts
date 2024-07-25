@@ -6,6 +6,7 @@ import {
     AggregationType,
     BitwiseOperation,
     ExpireOptions,
+    GeoUnit,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -39,6 +40,8 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createFCall,
+    createFCallReadOnly,
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
@@ -144,7 +147,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    GeoUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -1874,6 +1876,42 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     *
+     * Command Response - The invoked function's return value.
+     */
+    public fcall(func: string, keys: string[], args: string[]): T {
+        return this.addAndReturn(createFCall(func, keys, args));
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     *
+     * Command Response - The invoked function's return value.
+     */
+    public fcallReadonly(func: string, keys: string[], args: string[]): T {
+        return this.addAndReturn(createFCallReadOnly(func, keys, args));
     }
 
     /**
