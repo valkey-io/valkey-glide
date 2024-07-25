@@ -13,7 +13,9 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
+    FlushMode,
     GeoUnit,
+    GeospatialData,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
@@ -24,10 +26,6 @@ import {
     ScoreFilter,
     Transaction,
 } from "..";
-import { BitOffsetOptions } from "../build-ts/src/commands/BitOffsetOptions";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 beforeAll(() => {
     Logger.init("info");
@@ -526,20 +524,10 @@ export async function transactionTest(
         field + "3",
     ]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
-    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
-    responseData.push([
-        'lpos(key16, field + "1", new LPosOptions({ rank: 2 }))',
-        1,
-    ]);
-    baseTransaction.lpos(
-        key16,
-        field + "1",
-        new LPosOptions({ rank: 2, count: 0 }),
-    );
-    responseData.push([
-        'lpos(key16, field + "1", new LPosOptions({ rank: 2, count: 0 }))',
-        [1],
-    ]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2 })', 1]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2, count: 0 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2, count: 0 })', [1]]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -743,8 +731,8 @@ export async function transactionTest(
     responseData.push(['set(key17, "foobar")', "OK"]);
     baseTransaction.bitcount(key17);
     responseData.push(["bitcount(key17)", 26]);
-    baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
-    responseData.push(["bitcount(key17, new BitOffsetOptions(1, 1))", 6]);
+    baseTransaction.bitcount(key17, { start: 1, end: 1 });
+    responseData.push(["bitcount(key17, { start: 1, end: 1 })", 6]);
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
@@ -759,10 +747,11 @@ export async function transactionTest(
     responseData.push(["get(key19)", "`bc`ab"]);
 
     if (gte("7.0.0", version)) {
-        baseTransaction.bitcount(
-            key17,
-            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
-        );
+        baseTransaction.bitcount(key17, {
+            start: 5,
+            end: 30,
+            indexType: BitmapIndexType.BIT,
+        });
         responseData.push([
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
             17,
@@ -780,9 +769,9 @@ export async function transactionTest(
     responseData.push(["pfcount([key11])", 3]);
     baseTransaction.geoadd(
         key18,
-        new Map([
-            ["Palermo", new GeospatialData(13.361389, 38.115556)],
-            ["Catania", new GeospatialData(15.087269, 37.502669)],
+        new Map<string, GeospatialData>([
+            ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
+            ["Catania", { longitude: 15.087269, latitude: 37.502669 }],
         ]),
     );
     responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);

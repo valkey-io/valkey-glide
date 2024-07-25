@@ -13,11 +13,15 @@ import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
     BitmapIndexType,
+    BitOffsetOptions,
     BitwiseOperation,
     ExpireOptions,
+    GeoAddOptions,
+    GeospatialData,
     GeoUnit,
     InsertPosition,
     KeyWeight,
+    LPosOptions,
     ListDirection,
     RangeByIndex,
     RangeByLex,
@@ -140,10 +144,6 @@ import {
     createZRevRankWithScore,
     createZScore,
 } from "./Commands";
-import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
-import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
     ConfigurationError,
@@ -2388,7 +2388,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zadd method to update scores in an existing sorted set
-     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, { conditionalChange: "onlyIfExists", changed: true });
+     * const options = { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, changed: true };
+     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, options);
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
@@ -3567,8 +3568,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
-     * console.log(await client.lpos("myList", "e", new LPosOptions({ rank: 2 }))); // Output: 5 - the second occurrence of "e" is at index 5.
-     * console.log(await client.lpos("myList", "e", new LPosOptions({ count: 3 }))); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
+     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurrence of "e" is at index 5.
+     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
      * ```
      */
     public lpos(
@@ -3594,9 +3595,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
-     * console.log(await client.bitcount("my_key2", OffsetOptions(1, 3))); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
-     * console.log(await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
-     * console.log(await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key2", { start: 1, end: 3 })); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+     * console.log(await client.bitcount("my_key3", { start: 1, end: 1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
      * ```
      */
     public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
@@ -3619,8 +3620,11 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
-     * const num = await client.geoadd("mySortedSet", new Map([["Palermo", new GeospatialData(13.361389, 38.115556)]]), options);
+     * const options = {updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true};
+     * const membersToCoordinates = new Map<string, GeospatialData>([
+     *      ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
+     * ]);
+     * const num = await client.geoadd("mySortedSet", membersToCoordinates, options);
      * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
      * ```
      */
@@ -3648,7 +3652,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const data = new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]);
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
      * await client.geoadd("mySortedSet", data);
      * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
