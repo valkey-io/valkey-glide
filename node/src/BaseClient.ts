@@ -14,6 +14,7 @@ import {
     AggregationType,
     BitwiseOperation,
     ExpireOptions,
+    GeoUnit,
     InsertPosition,
     KeyWeight,
     RangeByIndex,
@@ -36,10 +37,12 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createFCall,
+    createFCallReadOnly,
     createGeoAdd,
     createGeoDist,
-    createGeoPos,
     createGeoHash,
+    createGeoPos,
     createGet,
     createGetBit,
     createGetDel,
@@ -131,7 +134,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    GeoUnit,
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
@@ -3365,6 +3367,63 @@ export class BaseClient {
      */
     public objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcall("Deep_Thought", [], []);
+     * console.log(response); // Output: Returns the function's return value.
+     * ```
+     */
+    public fcall(
+        func: string,
+        keys: string[],
+        args: string[],
+    ): Promise<string> {
+        return this.createWritePromise(createFCall(func, keys, args));
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallReadOnly("Deep_Thought", ["key1"], ["Answer", "to", "the",
+     *            "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"]);
+     * console.log(response); // Output: 42 # The return value on the function that was executed.
+     * ```
+     */
+    public fcallReadonly(
+        func: string,
+        keys: string[],
+        args: string[],
+    ): Promise<string> {
+        return this.createWritePromise(createFCallReadOnly(func, keys, args));
     }
 
     /**
