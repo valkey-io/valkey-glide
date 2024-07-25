@@ -1893,9 +1893,9 @@ export function createDBSize(): command_request.Command {
  */
 export type GeospatialData = {
     /** The longitude coordinate. */
-    readonly longitude: number;
+    longitude: number;
     /** The latitude coordinate. */
-    readonly latitude: number;
+    latitude: number;
 };
 
 /**
@@ -1980,20 +1980,20 @@ export function createGeoHash(
  */
 export type GeoSearchResultOptions = {
     /** Include the coordinate of the returned items. */
-    readonly withCoord?: boolean;
+    withCoord?: boolean;
     /**
      * Include the distance of the returned items from the specified center point.
      * The distance is returned in the same unit as specified for the `searchBy` argument.
      */
-    readonly withDist?: boolean;
+    withDist?: boolean;
     /** Include the geohash of the returned items. */
-    readonly withHash?: boolean;
+    withHash?: boolean;
     /** Indicates the order the result should be sorted in. */
-    readonly sortOrder?: SortOrder;
+    sortOrder?: SortOrder;
     /** Indicates the number of matches the result should be limited to. */
-    readonly count?: number;
+    count?: number;
     /** Whether to allow returning as enough matches are found. This requires `count` parameter to be set. */
-    readonly isAny?: boolean;
+    isAny?: boolean;
 };
 
 /** Defines the sort order for nested results. */
@@ -2009,19 +2009,19 @@ export type GeoSearchShape = GeoCircleShape | GeoBoxShape;
 /** Circle search shape defined by the radius value and measurement unit. */
 export type GeoCircleShape = {
     /** The radius to search by. */
-    readonly radius: number;
+    radius: number;
     /** The measurement unit of the radius. */
-    readonly unit: GeoUnit;
+    unit: GeoUnit;
 };
 
 /** Rectangle search shape defined by the width and height and measurement unit. */
 export type GeoBoxShape = {
     /** The width of the rectangle to search by. */
-    readonly width: number;
+    width: number;
     /** The height of the rectangle to search by. */
-    readonly height: number;
+    height: number;
     /** The measurement unit of the width and height. */
-    readonly unit: GeoUnit;
+    unit: GeoUnit;
 };
 
 export type SearchOrigin = CoordOrigin | MemberOrigin;
@@ -2029,13 +2029,13 @@ export type SearchOrigin = CoordOrigin | MemberOrigin;
 /** The search origin represented by a {@link GeospatialData} position. */
 export type CoordOrigin = {
     /** The pivot location to search from. */
-    readonly position: GeospatialData;
+    position: GeospatialData;
 };
 
 /** The search origin represented by an existing member. */
 export type MemberOrigin = {
     /** Member (location) name stored in the sorted set to use as a search pivot. */
-    readonly member: string;
+    member: string;
 };
 
 /**
