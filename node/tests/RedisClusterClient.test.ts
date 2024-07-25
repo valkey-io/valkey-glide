@@ -36,6 +36,7 @@ import {
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    validateTransactionResponse,
 } from "./TestUtilities";
 type Context = {
     client: GlideClusterClient;
@@ -247,7 +248,7 @@ describe("GlideClusterClient", () => {
                 cluster.getVersion(),
             );
             const result = await client.exec(transaction);
-            expect(intoString(result)).toEqual(intoString(expectedRes));
+            validateTransactionResponse(result, expectedRes);
         },
         TIMEOUT,
     );
