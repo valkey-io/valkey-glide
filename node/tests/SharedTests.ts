@@ -8,6 +8,8 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
     ExpireOptions,
+    GeoUnit,
+    GeospatialData,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
@@ -16,6 +18,7 @@ import {
     RequestError,
     ScoreFilter,
     Script,
+    SortOrder,
     parseInfoResponse,
 } from "../";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
@@ -27,20 +30,6 @@ import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
-import {
-    CoordOrigin,
-    MemberOrigin,
-} from "../build-ts/src/commands/geospatial/GeoSearchOrigin";
-import {
-    GeoSearchResultOptions,
-    SortOrder,
-} from "../build-ts/src/commands/geospatial/GeoSearchResultOptions";
-import {
-    GeoBoxShape,
-    GeoCircleShape,
-} from "../build-ts/src/commands/geospatial/GeoSearchShape";
-import { GeoUnit } from "../build-ts/src/commands/geospatial/GeoUnit";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import {
     Client,
     GetAndSetRandomValue,
@@ -4453,14 +4442,14 @@ export function runBaseTests<Context>(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const membersToCoordinates = new Map<string, GeospatialData>();
-                membersToCoordinates.set(
-                    "Palermo",
-                    new GeospatialData(13.361389, 38.115556),
-                );
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 37.502669),
-                );
+                membersToCoordinates.set("Palermo", {
+                    longitude: 13.361389,
+                    latitude: 38.115556,
+                });
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 37.502669,
+                });
 
                 // default geoadd
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
@@ -4488,10 +4477,10 @@ export function runBaseTests<Context>(config: {
                 expect(geopos).toEqual([null]);
 
                 // with update mode options
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 39),
-                );
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 39,
+                });
                 expect(
                     await client.geoadd(
                         key1,
@@ -4513,14 +4502,14 @@ export function runBaseTests<Context>(config: {
                 ).toBe(0);
 
                 // with changed option
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 40),
-                );
-                membersToCoordinates.set(
-                    "Tel-Aviv",
-                    new GeospatialData(32.0853, 34.7818),
-                );
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 40,
+                });
+                membersToCoordinates.set("Tel-Aviv", {
+                    longitude: 32.0853,
+                    latitude: 34.7818,
+                });
                 expect(
                     await client.geoadd(
                         key1,
@@ -4553,25 +4542,25 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(-181, 0)]]),
+                        new Map([["Place", { longitude: -181, latitude: 0 }]]),
                     ),
                 ).rejects.toThrow();
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(181, 0)]]),
+                        new Map([["Place", { longitude: 181, latitude: 0 }]]),
                     ),
                 ).rejects.toThrow();
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(0, 86)]]),
+                        new Map([["Place", { longitude: 0, latitude: 86 }]]),
                     ),
                 ).rejects.toThrow();
                 await expect(
                     client.geoadd(
                         key,
-                        new Map([["Place", new GeospatialData(0, -86)]]),
+                        new Map([["Place", { longitude: 0, latitude: -86 }]]),
                     ),
                 ).rejects.toThrow();
             }, protocol);
@@ -4605,12 +4594,10 @@ export function runBaseTests<Context>(config: {
                 const membersGeoData: GeospatialData[] = [];
 
                 for (let i = 0; i < membersCoordinates.length; i++) {
-                    membersGeoData.push(
-                        new GeospatialData(
-                            membersCoordinates[i][0],
-                            membersCoordinates[i][1],
-                        ),
-                    );
+                    membersGeoData.push({
+                        longitude: membersCoordinates[i][0],
+                        latitude: membersCoordinates[i][1],
+                    });
                 }
 
                 const membersToCoordinates = new Map<string, GeospatialData>();
@@ -4645,8 +4632,8 @@ export function runBaseTests<Context>(config: {
 
                 let searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                 );
                 // using set to compare, because results are reordrered
                 checkSimple(new Set(searchResult)).toEqual(membersSet);
@@ -4654,38 +4641,38 @@ export function runBaseTests<Context>(config: {
                 // order search result
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
-                    new GeoSearchResultOptions({ sortOrder: SortOrder.ASC }),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    { sortOrder: SortOrder.ASC },
                 );
                 checkSimple(searchResult).toEqual(members);
 
                 // order and query all extra data
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
-                    new GeoSearchResultOptions({
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    {
                         sortOrder: SortOrder.ASC,
                         withCoord: true,
                         withDist: true,
                         withHash: true,
-                    }),
+                    },
                 );
                 checkSimple(searchResult).toEqual(expectedResult);
 
                 // order, query and limit by 1
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
-                    new GeoSearchResultOptions({
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    {
                         sortOrder: SortOrder.ASC,
                         withCoord: true,
                         withDist: true,
                         withHash: true,
                         count: 1,
-                    }),
+                    },
                 );
                 checkSimple(searchResult).toEqual(expectedResult.slice(0, 1));
 
@@ -4693,13 +4680,13 @@ export function runBaseTests<Context>(config: {
                 const meters = 400 * 1000;
                 searchResult = await client.geosearch(
                     key,
-                    new MemberOrigin("Catania"),
-                    new GeoBoxShape(meters, meters, GeoUnit.METERS),
-                    new GeoSearchResultOptions({
+                    { member: "Catania" },
+                    { width: meters, height: meters, unit: GeoUnit.METERS },
+                    {
                         withDist: true,
                         withCoord: false,
                         sortOrder: SortOrder.DESC,
-                    }),
+                    },
                 );
                 checkSimple(searchResult).toEqual([
                     ["edge2", [236529.1799]],
@@ -4711,15 +4698,15 @@ export function runBaseTests<Context>(config: {
                 const feet = 400 * 3280.8399;
                 searchResult = await client.geosearch(
                     key,
-                    new MemberOrigin("Palermo"),
-                    new GeoBoxShape(feet, feet, GeoUnit.FEET),
-                    new GeoSearchResultOptions({
+                    { member: "Palermo" },
+                    { width: feet, height: feet, unit: GeoUnit.FEET },
+                    {
                         withDist: false,
                         withCoord: false,
                         withHash: true,
                         sortOrder: SortOrder.ASC,
                         count: 2,
-                    }),
+                    },
                 );
                 checkSimple(searchResult).toEqual([
                     ["Palermo", [3479099956230698]],
@@ -4730,9 +4717,9 @@ export function runBaseTests<Context>(config: {
                 const miles = 250;
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoBoxShape(miles, miles, GeoUnit.MILES),
-                    new GeoSearchResultOptions({ count: 1, isAny: true }),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: miles, height: miles, unit: GeoUnit.MILES },
+                    { count: 1, isAny: true },
                 );
                 expect(members.map((m) => Buffer.from(m))).toContainEqual(
                     searchResult[0],
@@ -4742,9 +4729,9 @@ export function runBaseTests<Context>(config: {
                 const feetRadius = 200 * 3280.8399;
                 searchResult = await client.geosearch(
                     key,
-                    new MemberOrigin("Catania"),
-                    new GeoCircleShape(feetRadius, GeoUnit.FEET),
-                    new GeoSearchResultOptions({ sortOrder: SortOrder.ASC }),
+                    { member: "Catania" },
+                    { radius: feetRadius, unit: GeoUnit.FEET },
+                    { sortOrder: SortOrder.ASC },
                 );
                 checkSimple(searchResult).toEqual(["Catania", "Palermo"]);
 
@@ -4752,20 +4739,20 @@ export function runBaseTests<Context>(config: {
                 const metersRadius = 200 * 1000;
                 searchResult = await client.geosearch(
                     key,
-                    new MemberOrigin("Catania"),
-                    new GeoCircleShape(metersRadius, GeoUnit.METERS),
-                    new GeoSearchResultOptions({ sortOrder: SortOrder.DESC }),
+                    { member: "Catania" },
+                    { radius: metersRadius, unit: GeoUnit.METERS },
+                    { sortOrder: SortOrder.DESC },
                 );
                 checkSimple(searchResult).toEqual(["Palermo", "Catania"]);
 
                 searchResult = await client.geosearch(
                     key,
-                    new MemberOrigin("Catania"),
-                    new GeoCircleShape(metersRadius, GeoUnit.METERS),
-                    new GeoSearchResultOptions({
+                    { member: "Catania" },
+                    { radius: metersRadius, unit: GeoUnit.METERS },
+                    {
                         sortOrder: SortOrder.DESC,
                         withHash: true,
-                    }),
+                    },
                 );
                 checkSimple(searchResult).toEqual([
                     ["Palermo", [3479099956230698]],
@@ -4775,9 +4762,9 @@ export function runBaseTests<Context>(config: {
                 // Test search by radius, unit: miles, from geospatial data
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoCircleShape(175, GeoUnit.MILES),
-                    new GeoSearchResultOptions({ sortOrder: SortOrder.DESC }),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 175, unit: GeoUnit.MILES },
+                    { sortOrder: SortOrder.DESC },
                 );
                 checkSimple(searchResult).toEqual([
                     "edge1",
@@ -4789,31 +4776,31 @@ export function runBaseTests<Context>(config: {
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoCircleShape(200, GeoUnit.KILOMETERS),
-                    new GeoSearchResultOptions({
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 200, unit: GeoUnit.KILOMETERS },
+                    {
                         sortOrder: SortOrder.ASC,
                         count: 2,
                         withHash: true,
                         withCoord: true,
                         withDist: true,
-                    }),
+                    },
                 );
                 checkSimple(searchResult).toEqual(expectedResult.slice(0, 2));
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoCircleShape(200, GeoUnit.KILOMETERS),
-                    new GeoSearchResultOptions({
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 200, unit: GeoUnit.KILOMETERS },
+                    {
                         sortOrder: SortOrder.ASC,
                         count: 1,
                         isAny: true,
                         withCoord: true,
                         withDist: true,
                         withHash: true,
-                    }),
+                    },
                 );
                 expect(members.map((m) => Buffer.from(m))).toContainEqual(
                     searchResult[0][0],
@@ -4822,18 +4809,18 @@ export function runBaseTests<Context>(config: {
                 // no members within the area
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoBoxShape(50, 50, GeoUnit.METERS),
-                    new GeoSearchResultOptions({ sortOrder: SortOrder.ASC }),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 50, height: 50, unit: GeoUnit.METERS },
+                    { sortOrder: SortOrder.ASC },
                 );
                 expect(searchResult).toEqual([]);
 
                 // no members within the area
                 searchResult = await client.geosearch(
                     key,
-                    new CoordOrigin(new GeospatialData(15, 37)),
-                    new GeoCircleShape(5, GeoUnit.METERS),
-                    new GeoSearchResultOptions({ sortOrder: SortOrder.ASC }),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 5, unit: GeoUnit.METERS },
+                    { sortOrder: SortOrder.ASC },
                 );
                 expect(searchResult).toEqual([]);
 
@@ -4841,8 +4828,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geosearch(
                         key,
-                        new MemberOrigin("non-existing-member"),
-                        new GeoCircleShape(100, GeoUnit.METERS),
+                        { member: "non-existing-member" },
+                        { radius: 100, unit: GeoUnit.METERS },
                     ),
                 ).rejects.toThrow(RequestError);
 
@@ -4852,8 +4839,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.geosearch(
                         key2,
-                        new CoordOrigin(new GeospatialData(15, 37)),
-                        new GeoCircleShape(100, GeoUnit.METERS),
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 100, unit: GeoUnit.METERS },
                     ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
@@ -4941,14 +4928,14 @@ export function runBaseTests<Context>(config: {
 
                 // adding the geo locations
                 const membersToCoordinates = new Map<string, GeospatialData>();
-                membersToCoordinates.set(
-                    member1,
-                    new GeospatialData(13.361389, 38.115556),
-                );
-                membersToCoordinates.set(
-                    member2,
-                    new GeospatialData(15.087269, 37.502669),
-                );
+                membersToCoordinates.set(member1, {
+                    longitude: 13.361389,
+                    latitude: 38.115556,
+                });
+                membersToCoordinates.set(member2, {
+                    longitude: 15.087269,
+                    latitude: 37.502669,
+                });
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
 
                 // checking result with default metric
@@ -4993,14 +4980,14 @@ export function runBaseTests<Context>(config: {
 
                 // adding the geo locations
                 const membersToCoordinates = new Map<string, GeospatialData>();
-                membersToCoordinates.set(
-                    "Palermo",
-                    new GeospatialData(13.361389, 38.115556),
-                );
-                membersToCoordinates.set(
-                    "Catania",
-                    new GeospatialData(15.087269, 37.502669),
-                );
+                membersToCoordinates.set("Palermo", {
+                    longitude: 13.361389,
+                    latitude: 38.115556,
+                });
+                membersToCoordinates.set("Catania", {
+                    longitude: 15.087269,
+                    latitude: 37.502669,
+                });
                 expect(await client.geoadd(key1, membersToCoordinates)).toBe(2);
 
                 // checking result with default metric

@@ -12,14 +12,23 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
+    GeoUnit,
+    GeospatialData,
     InsertPosition,
     KeyWeight,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -35,10 +44,10 @@ import {
     createExpire,
     createExpireAt,
     createGeoAdd,
-    createGeoSearch,
     createGeoDist,
-    createGeoPos,
     createGeoHash,
+    createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -133,18 +142,6 @@ import {
 } from "./Commands";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
-import {
-    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    SearchOrigin,
-} from "./commands/geospatial/GeoSearchOrigin";
-import { GeoSearchResultOptions } from "./commands/geospatial/GeoSearchResultOptions";
-import {
-    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GeoSearchShape,
-} from "./commands/geospatial/GeoSearchShape";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
 import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
@@ -163,7 +160,6 @@ import {
     connection_request,
     response,
 } from "./ProtobufMessage";
-import { GeoUnit } from "./commands/geospatial/GeoUnit";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -3464,25 +3460,25 @@ export class BaseClient {
      * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
      * @example
      * ```typescript
-     * const data = new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]);
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
      * await client.geoadd("mySortedSet", data);
      * // search for locations within 200 km circle around stored member named 'Palermo'
-     * const result1 = await client.geosearch("mySortedSet", new MemberOrigin("Palermo"), new GeoCircleShape(200, GeoUnit.KILOMETERS));
+     * const result1 = await client.geosearch("mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
      * console.log(result1); // Output: ['Palermo', 'Catania']
      *
      * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting additional info,
      * // limiting results by 2 best matches, ordered by ascending distance from the search area center
      * const result2 = await client.geosearch(
      *     "mySortedSet",
-     *     new CoordOrigin(new GeospatialData(15, 37)),
-     *     new GeoBoxShape(200, 300, GeoUnit.MILES)),
-     *     new GeoSearchResultOptions({
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
      *         sortOrder: SortOrder.ASC,
      *         count: 2,
      *         withCoord: true,
      *         withDist: true,
      *         withHash: true,
-     *     }),
+     *     },
      * );
      * console.log(result2); // Output:
      * // [

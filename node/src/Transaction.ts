@@ -4,16 +4,25 @@
 
 import {
     AggregationType,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
+    GeoUnit,
+    GeospatialData,
     InfoOptions,
     InsertPosition,
     KeyWeight,
     LolwutOptions,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -43,10 +52,10 @@ import {
     createFunctionFlush,
     createFunctionLoad,
     createGeoAdd,
-    createGeoSearch,
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -149,19 +158,6 @@ import { BitOffsetOptions } from "./commands/BitOffsetOptions";
 import { FlushMode } from "./commands/FlushMode";
 import { LPosOptions } from "./commands/LPosOptions";
 import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
-import {
-    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    SearchOrigin,
-} from "./commands/geospatial/GeoSearchOrigin";
-import { GeoSearchResultOptions } from "./commands/geospatial/GeoSearchResultOptions";
-import {
-    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GeoSearchShape,
-} from "./commands/geospatial/GeoSearchShape";
-import { GeoUnit } from "./commands/geospatial/GeoUnit";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.

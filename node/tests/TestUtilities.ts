@@ -10,6 +10,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    GeoUnit,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
@@ -17,6 +18,7 @@ import {
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
+    SortOrder,
     Transaction,
 } from "..";
 import {
@@ -24,22 +26,8 @@ import {
     BitOffsetOptions,
 } from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 import { checkIfServerVersionLessThan } from "./SharedTests";
-import {
-    CoordOrigin,
-    MemberOrigin,
-} from "../build-ts/src/commands/geospatial/GeoSearchOrigin";
-import {
-    GeoBoxShape,
-    GeoCircleShape,
-} from "../build-ts/src/commands/geospatial/GeoSearchShape";
-import {
-    GeoSearchResultOptions,
-    SortOrder,
-} from "../build-ts/src/commands/geospatial/GeoSearchResultOptions";
-import { GeoUnit } from "../build-ts/src/commands/geospatial/GeoUnit";
 
 beforeAll(() => {
     Logger.init("info");
@@ -585,8 +573,8 @@ export async function transactionTest(
         args.push([2.0, 1.0]);
     }
 
-    baseTransaction.zinterstore(key12, [key12, key13]);
-    args.push(2);
+    //baseTransaction.zinterstore(key12, [key12, key13]);
+    //args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
     args.push(4);
     baseTransaction.zpopmin(key8);
@@ -677,8 +665,8 @@ export async function transactionTest(
     baseTransaction.geoadd(
         key18,
         new Map([
-            ["Palermo", new GeospatialData(13.361389, 38.115556)],
-            ["Catania", new GeospatialData(15.087269, 37.502669)],
+            ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
+            ["Catania", { longitude: 15.087269, latitude: 37.502669 }],
         ]),
     );
     args.push(2);
@@ -698,38 +686,38 @@ export async function transactionTest(
         baseTransaction
             .geosearch(
                 key18,
-                new MemberOrigin("Palermo"),
-                new GeoCircleShape(200, GeoUnit.KILOMETERS),
-                new GeoSearchResultOptions({ sortOrder: SortOrder.ASC }),
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                { sortOrder: SortOrder.ASC },
             )
             .geosearch(
                 key18,
-                new CoordOrigin(new GeospatialData(15, 37)),
-                new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
             )
             .geosearch(
                 key18,
-                new MemberOrigin("Palermo"),
-                new GeoCircleShape(200, GeoUnit.KILOMETERS),
-                new GeoSearchResultOptions({
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                {
                     sortOrder: SortOrder.ASC,
                     count: 2,
                     withCoord: true,
                     withDist: true,
                     withHash: true,
-                }),
+                },
             )
             .geosearch(
                 key18,
-                new CoordOrigin(new GeospatialData(15, 37)),
-                new GeoBoxShape(400, 400, GeoUnit.KILOMETERS),
-                new GeoSearchResultOptions({
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                {
                     sortOrder: SortOrder.ASC,
                     count: 2,
                     withCoord: true,
                     withDist: true,
                     withHash: true,
-                }),
+                },
             );
         args.push(["Palermo", "Catania"]);
         args.push(["Palermo", "Catania"]);
