@@ -1684,11 +1684,13 @@ export function createFunctionList(
     options?: FunctionListOptions,
 ): command_request.Command {
     const args: string[] = [];
+
     if (options) {
         if (options.libNamePattern)
             args.push("LIBRARYNAME", options.libNamePattern);
         if (options.withCode) args.push("WITHCODE");
     }
+
     return createCommand(RequestType.FunctionList, args);
 }
 

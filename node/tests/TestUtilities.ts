@@ -32,7 +32,7 @@ import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialDa
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 beforeAll(() => {
-    //Logger.init("info");
+    Logger.init("info");
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -362,11 +362,14 @@ export function checkFunctionListResponse(
     // TODO rework after #1953 https://github.com/valkey-io/valkey-glide/pull/1953
     expect(response.length).toBeGreaterThan(0);
     let hasLib = false;
+
     for (const lib of response) {
         hasLib = lib["library_name"] == libName;
+
         if (hasLib) {
             const functions = lib["functions"];
             expect(functions.length).toEqual(functionDescriptions.size);
+
             for (const functionData of functions) {
                 const functionInfo = functionData as Record<
                     string,
@@ -384,9 +387,11 @@ export function checkFunctionListResponse(
 
                 checkSimple(flags).toEqual(functionFlags.get(name));
             }
+
             if (libCode) {
                 checkSimple(lib["library_code"]).toEqual(libCode);
             }
+
             break;
         }
     }
@@ -845,6 +850,8 @@ export async function transactionTest(
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
         responseData.push(["functionLoad(code, true)", libName]);
+        baseTransaction.functionList({ libNamePattern: "another" });
+        responseData.push(['functionList("another")', []]);
         baseTransaction.fcall(funcName, [], ["one", "two"]);
         responseData.push(['fcall(funcName, [], ["one", "two"])', "one"]);
         baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
@@ -860,6 +867,11 @@ export async function transactionTest(
         responseData.push(["functionFlush(FlushMode.ASYNC)", "OK"]);
         baseTransaction.functionFlush(FlushMode.SYNC);
         responseData.push(["functionFlush(FlushMode.SYNC)", "OK"]);
+        baseTransaction.functionList({
+            libNamePattern: libName,
+            withCode: true,
+        });
+        responseData.push(["functionList({ libName, true})", []]);
     }
 
     return responseData;
