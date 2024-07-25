@@ -74,8 +74,8 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
-        BitOffsetOptions,
         BitmapIndexType,
+        BitOffsetOptions,
         BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
@@ -130,8 +130,8 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
-        BitOffsetOptions,
         BitmapIndexType,
+        BitOffsetOptions,
         BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
