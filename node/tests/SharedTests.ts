@@ -5075,57 +5075,8 @@ export function runBaseTests<Context>(config: {
                     expect(result[1]).toEqual(entries);
                 }
 
-                // await expect(
-                //     client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0),
-                // ).toThrow(TimeoutError);
-                //         async def endless_bzmpop_call():
-                //             await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
-
-                // bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-                // avoid having the test block forever
-                // await expect(new Promise((resolve) =>
-                //     setTimeout(() => {
-                //         resolve(
-                //             client.bzmpop(
-                //                 ["non_existent_key"],
-                //                 ScoreFilter.MAX,
-                //                 0,
-                //             ),
-                //         );
-                //     }, 0.5),
-                // )).toThrow(TimeoutError);
-                // await expect(client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)).toThrow();
-
-                // const bzmpopPromise = client.bzmpop(
-                //     ["non_existent_key"],
-                //     ScoreFilter.MAX,
-                //     0,
-                // );
-                // const timeout = (
-                //     prom: Promise<[string, [Record<string, number>]] | null>,
-                //     time: number | undefined,
-                // ) =>
-                //     Promise.race([
-                //         prom,
-                //         new Promise(() => setTimeout(() => { throw new TimeoutError("timeout");}, time)),
-                //     ]);
-
-                // try {
-                //     await timeout(bzmpopPromise, 0.5);
-                // } catch (e) {
-                //     console.log(e);
-                // }
-
-                //     await expect(async () => await Promise.race([
-                //         client.bzmpop(
-                //             ["non_existent_key"],
-                //             ScoreFilter.MAX,
-                //             0,
-                //         ),
-                //         new Promise((_, reject) =>
-                //             setTimeout(() => reject(new TimeoutError("timeout")), 0.5),
-                //         )
-                //     ])).toThrow(TimeoutError);
+                // TODO: add test case with 0 timeout (no timeout) should never time out,
+                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,
