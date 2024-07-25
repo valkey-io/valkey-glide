@@ -18,6 +18,7 @@ import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    checkFunctionListResponse,
     checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
@@ -382,16 +383,7 @@ describe("GlideClient", () => {
                     new Map([[funcName, "return args[1]"]]),
                     true,
                 );
-                // TODO use commands instead of customCommand once implemented
-                // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
@@ -402,7 +394,23 @@ describe("GlideClient", () => {
                     await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
-                // TODO verify with FUNCTION LIST
+                let functionList = await client.functionList({
+                    libNamePattern: libName,
+                });
+                let expectedDescription = new Map<string, string | null>([
+                    [funcName, null],
+                ]);
+                let expectedFlags = new Map<string, string[]>([
+                    [funcName, ["no-writes"]],
+                ]);
+
+                checkFunctionListResponse(
+                    functionList,
+                    libName,
+                    expectedDescription,
+                    expectedFlags,
+                );
+
                 // re-load library without replace
 
                 await expect(client.functionLoad(code)).rejects.toThrow(
@@ -426,6 +434,24 @@ describe("GlideClient", () => {
                 );
                 checkSimple(await client.functionLoad(newCode, true)).toEqual(
                     libName,
+                );
+
+                functionList = await client.functionList({ withCode: true });
+                expectedDescription = new Map<string, string | null>([
+                    [funcName, null],
+                    [func2Name, null],
+                ]);
+                expectedFlags = new Map<string, string[]>([
+                    [funcName, ["no-writes"]],
+                    [func2Name, ["no-writes"]],
+                ]);
+
+                checkFunctionListResponse(
+                    functionList,
+                    libName,
+                    expectedDescription,
+                    expectedFlags,
+                    newCode,
                 );
 
                 checkSimple(
@@ -459,16 +485,8 @@ describe("GlideClient", () => {
                     true,
                 );
 
-                // TODO use commands instead of customCommand once implemented
                 // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
@@ -480,16 +498,8 @@ describe("GlideClient", () => {
                     "OK",
                 );
 
-                // TODO use commands instead of customCommand once implemented
                 // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
@@ -517,32 +527,16 @@ describe("GlideClient", () => {
                     new Map([[funcName, "return args[1]"]]),
                     true,
                 );
-                // TODO use commands instead of customCommand once implemented
                 // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
                 // Delete the function
                 expect(await client.functionDelete(libName)).toEqual("OK");
 
-                // TODO use commands instead of customCommand once implemented
-                // verify function does not exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                // verify function does not yet exist
+                expect(await client.functionList()).toEqual([]);
 
                 // deleting a non-existing library
                 await expect(client.functionDelete(libName)).rejects.toThrow(

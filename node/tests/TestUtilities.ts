@@ -12,6 +12,7 @@ import {
     BaseClientConfiguration,
     BitwiseOperation,
     ClusterTransaction,
+    FunctionListResponse,
     GeoUnit,
     GlideClient,
     GlideClusterClient,
@@ -31,7 +32,7 @@ import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialDa
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 beforeAll(() => {
-    Logger.init("info");
+    //Logger.init("info");
 });
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -340,6 +341,57 @@ export function compareMaps(
     map2: Record<string, unknown>,
 ): boolean {
     return JSON.stringify(map) == JSON.stringify(map2);
+}
+
+/**
+ * Validate whether `FUNCTION LIST` response contains required info.
+ *
+ * @param response - The response from server.
+ * @param libName - Expected library name.
+ * @param functionDescriptions - Expected function descriptions. Key - function name, value - description.
+ * @param functionFlags - Expected function flags. Key - function name, value - flags set.
+ * @param libCode - Expected library to check if given.
+ */
+export function checkFunctionListResponse(
+    response: FunctionListResponse,
+    libName: string,
+    functionDescriptions: Map<string, string | null>,
+    functionFlags: Map<string, string[]>,
+    libCode?: string,
+) {
+    // TODO rework after #1953 https://github.com/valkey-io/valkey-glide/pull/1953
+    expect(response.length).toBeGreaterThan(0);
+    let hasLib = false;
+    for (const lib of response) {
+        hasLib = lib["library_name"] == libName;
+        if (hasLib) {
+            const functions = lib["functions"];
+            expect(functions.length).toEqual(functionDescriptions.size);
+            for (const functionData of functions) {
+                const functionInfo = functionData as Record<
+                    string,
+                    string | string[]
+                >;
+                const name = (
+                    functionInfo["name"] as unknown as Buffer
+                ).toString(); // not a string - suprise
+                const flags = (
+                    functionInfo["flags"] as unknown as Buffer[]
+                ).map((f) => f.toString());
+                checkSimple(functionInfo["description"]).toEqual(
+                    functionDescriptions.get(name),
+                );
+
+                checkSimple(flags).toEqual(functionFlags.get(name));
+            }
+            if (libCode) {
+                checkSimple(lib["library_code"]).toEqual(libCode);
+            }
+            break;
+        }
+    }
+
+    expect(hasLib).toBeTruthy();
 }
 
 /**

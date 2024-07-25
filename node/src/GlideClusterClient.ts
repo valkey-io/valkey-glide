@@ -10,6 +10,8 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -27,6 +29,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createInfo,
     createLolwut,
@@ -803,6 +806,38 @@ export class GlideClusterClient extends BaseClient {
     public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
         return this.createWritePromise(
             createFunctionFlush(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @param route - The command will be routed to a random route, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns Info about all or selected libraries and their functions.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     *
+     * ```
+     */
+    public functionList(
+        options?: FunctionListOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionListResponse>> {
+        return this.createWritePromise(
+            createFunctionList(options),
             toProtobufRoute(route),
         );
     }

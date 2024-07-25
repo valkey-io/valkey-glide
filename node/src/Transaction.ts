@@ -6,6 +6,8 @@ import {
     AggregationType,
     BitwiseOperation,
     ExpireOptions,
+    FunctionListOptions,
+    FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoUnit,
     InfoOptions,
     InsertPosition,
@@ -46,6 +48,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createGeoAdd,
     createGeoDist,
@@ -1958,6 +1961,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public functionFlush(mode?: FlushMode): T {
         return this.addAndReturn(createFunctionFlush(mode));
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     *
+     * Command Response - Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     */
+    public functionList(options?: FunctionListOptions): T {
+        return this.addAndReturn(createFunctionList(options));
     }
 
     /**
