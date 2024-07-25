@@ -5,7 +5,7 @@ Ensure that you have an instance of Valkey running on "localhost" on "6379". Oth
 To run the Standalone example:
 ```
 cd valkey-glide/examples/java
-./gradlew :runStandlone
+./gradlew :runStandalone
 ```
 To run the Cluster example:
 ```

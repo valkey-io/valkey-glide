@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.examples;
 
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
-
 import glide.api.GlideClusterClient;
 import glide.api.logging.Logger;
 import glide.api.models.ClusterValue;
@@ -16,6 +14,12 @@ import glide.api.models.exceptions.TimeoutException;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+
+import static glide.api.logging.Logger.Level.ERROR;
+import static glide.api.logging.Logger.Level.INFO;
+import static glide.api.logging.Logger.Level.WARN;
+import static glide.api.logging.Logger.log;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 
 public class ClusterExample {
 
@@ -63,21 +67,21 @@ public class ClusterExample {
 
         // Send SET and GET
         CompletableFuture<String> setResponse = client.set("foo", "bar");
-        Logger.log(Logger.Level.INFO, "app", "Set response is " + setResponse.get());
+        log(INFO, "app", "Set response is " + setResponse.get());
 
         CompletableFuture<String> getResponse = client.get("foo");
-        Logger.log(Logger.Level.INFO, "app", "Get response is " + getResponse.get());
+        log(INFO, "app", "Get response is " + getResponse.get());
 
         // Send PING to all primaries (according to Valkey's PING request_policy)
         CompletableFuture<String> pong = client.ping();
-        Logger.log(Logger.Level.INFO, "app", "Ping response is " + pong.get());
+        log(INFO, "app", "Ping response is " + pong.get());
 
         // Send INFO REPLICATION with routing option to all nodes
         ClusterValue<String> infoResponse =
                 client.info(
                         InfoOptions.builder().section(InfoOptions.Section.REPLICATION).build(), ALL_NODES).get();
-        Logger.log(
-                Logger.Level.INFO,
+        log(
+                INFO,
                 "app",
                 "INFO REPLICATION responses from all nodes are " + infoResponse.getMultiValue());
     }
@@ -90,17 +94,14 @@ public class ClusterExample {
     private static void execAppLogic() throws ExecutionException {
 
         while (true) {
-            GlideClusterClient client = null;
-            try {
-                client = createClient();
+            try (GlideClusterClient client = createClient()) {
                 appLogic(client);
                 return;
-
             } catch (CancellationException e) {
-                Logger.log(Logger.Level.ERROR, "glide", "Request cancelled: " + e.getMessage());
+                log(ERROR, "glide", "Request cancelled: " + e.getMessage());
                 throw e;
             } catch (InterruptedException e) {
-                Logger.log(Logger.Level.ERROR, "glide", "Client interrupted: " + e.getMessage());
+                log(ERROR, "glide", "Client interrupted: " + e.getMessage());
                 Thread.currentThread().interrupt(); // Restore interrupt status
                 throw new CancellationException("Client was interrupted.");
             } catch (ExecutionException e) {
@@ -109,38 +110,27 @@ public class ClusterExample {
                     // If the error message contains "NOAUTH", raise the exception
                     // because it indicates a critical authentication issue.
                     if (e.getMessage().contains("NOAUTH")) {
-                        Logger.log(
-                            Logger.Level.ERROR, "glide", "Authentication error encountered: " + e.getMessage());
+                        log(
+                            ERROR, "glide", "Authentication error encountered: " + e.getMessage());
                         throw e;
                     } else {
-                        Logger.log(
-                            Logger.Level.WARN,
+                        log(
+                            WARN,
                             "glide",
                             "Client has closed and needs to be re-created: " + e.getMessage());
                     }
                 } else if (e.getCause() instanceof ConnectionException) {
                     // The client wasn't able to reestablish the connection within the given retries
-                    Logger.log(Logger.Level.ERROR, "glide", "Connection error encountered: " + e.getMessage());
+                    log(ERROR, "glide", "Connection error encountered: " + e.getMessage());
                     throw e;
                 } else if (e.getCause() instanceof TimeoutException) {
                     // A request timed out. You may choose to retry the execution based on your application's
                     // logic
-                    Logger.log(Logger.Level.ERROR, "glide", "Timeout encountered: " + e.getMessage());
+                    log(ERROR, "glide", "Timeout encountered: " + e.getMessage());
                     throw e;
                 } else {
-                    Logger.log(Logger.Level.ERROR, "glide", "Execution error encountered: " + e.getCause());
+                    log(ERROR, "glide", "Execution error encountered: " + e.getCause());
                     throw e;
-                }
-            } finally {
-                if (client != null) {
-                    try {
-                        client.close();
-                    } catch (Exception e) {
-                        Logger.log(
-                                Logger.Level.WARN,
-                                "glide",
-                                "Error encountered while closing the client: " + e.getMessage());
-                    }
                 }
             }
         }
@@ -155,7 +145,7 @@ public class ClusterExample {
      */
     public static void main(String[] args) throws ExecutionException {
         // In this example, we will utilize the client's logger for all log messages
-        Logger.setLoggerConfig(Logger.Level.INFO);
+        Logger.setLoggerConfig(INFO);
         // Optional - set the logger to write to a file
         // Logger.setLoggerConfig(Logger.Level.INFO, file)
         execAppLogic();
