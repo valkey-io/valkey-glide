@@ -264,26 +264,6 @@ public class Main {
 ### Scala and Kotlin Examples
 See [our Scala and Kotlin examples](../examples/) to learn how to use Valkey GLIDE in Scala and Kotlin projects.
 
-#### Scala
-To run the Scala examples, from the `examples/scala/example` directory, execute:
-```shell
-# Run the standalone example
-sbt "runMain StandaloneExample"
-
-# Run the cluster example
-sbt "runMain ClusterExample"
-```
-
-#### Kotlin
-To run the Kotlin example, from the `examples/kotlin/example` directory, execute:
-```shell
-# Run the standalone example
-./gradlew runStandalone
-
-# Run the cluster example
-./gradlew runCluster
-```
-
 ### Accessing tests
 For more examples, you can refer to the test folder [unit tests](./client/src/test/java/glide/api) and [integration tests](./integTest/src/test/java/glide).
 
