@@ -10,6 +10,7 @@ import {
     InfoOptions,
     InsertPosition,
     KeyWeight,
+    ListDirection,
     LolwutOptions,
     RangeByIndex,
     RangeByLex,
@@ -72,6 +73,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -705,6 +707,33 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public llen(key: string): T {
         return this.addAndReturn(createLLen(key));
+    }
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at `source`
+     * depending on `whereFrom`, and pushes the element at the first/last element of the list
+     * stored at `destination` depending on `whereTo`, see {@link ListDirection}.
+     *
+     * See https://valkey.io/commands/lmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     *
+     * Command Response - The popped element, or `null` if `source` does not exist.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public lmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+    ): T {
+        return this.addAndReturn(
+            createLMove(source, destination, whereFrom, whereTo),
+        );
     }
 
     /**
