@@ -19,5 +19,5 @@ val platformClassifier = {
   }
 }
 
-libraryDependencies += "io.valkey" % "valkey-glide" % "1.0.1" classifier platformClassifier
+libraryDependencies += "io.valkey" % "valkey-glide" % "1+" classifier platformClassifier
 
