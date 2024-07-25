@@ -13,7 +13,9 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
+    FlushMode,
     GeoUnit,
+    GeospatialData,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
@@ -24,11 +26,6 @@ import {
     ScoreFilter,
     Transaction,
 } from "..";
-import {
-    BitmapIndexType,
-    FlushMode,
-    GeospatialData,
-} from "../build-ts/src/Commands";
 
 beforeAll(() => {
     Logger.init("info");
@@ -527,18 +524,18 @@ export async function transactionTest(
         field + "3",
     ]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
-    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
+    baseTransaction.lpos(key16, field + "1", { rank: 2 });
     responseData.push([
-        'lpos(key16, field + "1", new LPosOptions({ rank: 2 }))',
+        'lpos(key16, field + "1", { rank: 2 })',
         1,
     ]);
     baseTransaction.lpos(
         key16,
         field + "1",
-        new LPosOptions({ rank: 2, count: 0 }),
+       { rank: 2, count: 0 },
     );
     responseData.push([
-        'lpos(key16, field + "1", new LPosOptions({ rank: 2, count: 0 }))',
+        'lpos(key16, field + "1", { rank: 2, count: 0 })',
         [1],
     ]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
@@ -744,8 +741,8 @@ export async function transactionTest(
     responseData.push(['set(key17, "foobar")', "OK"]);
     baseTransaction.bitcount(key17);
     responseData.push(["bitcount(key17)", 26]);
-    baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
-    responseData.push(["bitcount(key17, new BitOffsetOptions(1, 1))", 6]);
+    baseTransaction.bitcount(key17, { start: 1, end: 1 });
+    responseData.push(["bitcount(key17, { start: 1, end: 1 })", 6]);
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
@@ -762,7 +759,7 @@ export async function transactionTest(
     if (gte("7.0.0", version)) {
         baseTransaction.bitcount(
             key17,
-            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
+            { start: 5, end: 30, indexType: BitmapIndexType.BIT },
         );
         responseData.push([
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",

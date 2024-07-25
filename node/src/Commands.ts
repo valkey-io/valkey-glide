@@ -1700,19 +1700,6 @@ export function createFunctionLoad(
 }
 
 /**
- * Enumeration specifying if index arguments are BYTE indexes or BIT indexes.
- * Can be specified in {@link BitOffsetOptions}, which is an optional argument to the {@link BaseClient.bitcount|bitcount} command.
- *
- * since - Valkey version 7.0.0.
- */
-export enum BitmapIndexType {
-    /** Specifies that indexes provided to {@link BitOffsetOptions} are byte indexes. */
-    BYTE = "BYTE",
-    /** Specifies that indexes provided to {@link BitOffsetOptions} are bit indexes. */
-    BIT = "BIT",
-}
-
-/**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
  * The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
