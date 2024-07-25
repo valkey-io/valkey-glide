@@ -2,10 +2,15 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+// This file contains tests common for standalone and cluster clients, it covers API defined in
+// BaseClient.ts - commands which manipulate with keys.
+// Each test cases has access to a client instance and, optionally, to a cluster - object, which
+// represents a running server instance. See first 2 test cases as examples.
+
 import { expect, it } from "@jest/globals";
-import { exec } from "child_process";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BitwiseOperation,
     ClosingError,
     ExpireOptions,
     GeoUnit,
@@ -21,6 +26,7 @@ import {
     SortOrder,
     parseInfoResponse,
 } from "../";
+import { RedisCluster } from "../../utils/TestUtils";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     BitOffsetOptions,
@@ -40,39 +46,6 @@ import {
     intoString,
 } from "./TestUtilities";
 
-async function getVersion(): Promise<[number, number, number]> {
-    const versionString = await new Promise<string>((resolve, reject) => {
-        exec(`redis-server -v`, (error, stdout) => {
-            if (error) {
-                reject(error);
-            } else {
-                resolve(stdout);
-            }
-        });
-    });
-    const version = versionString.split("v=")[1].split(" ")[0];
-    const numbers = version?.split(".");
-
-    if (numbers.length != 3) {
-        return [0, 0, 0];
-    }
-
-    return [parseInt(numbers[0]), parseInt(numbers[1]), parseInt(numbers[2])];
-}
-
-export async function checkIfServerVersionLessThan(
-    minVersion: string,
-): Promise<boolean> {
-    const version = await getVersion();
-    const versionToCompare =
-        version[0].toString() +
-        "." +
-        version[1].toString() +
-        "." +
-        version[2].toString();
-    return versionToCompare < minVersion;
-}
-
 export type BaseClient = GlideClient | GlideClusterClient;
 
 export function runBaseTests<Context>(config: {
@@ -82,6 +55,7 @@ export function runBaseTests<Context>(config: {
     ) => Promise<{
         context: Context;
         client: BaseClient;
+        cluster: RedisCluster;
     }>;
     close: (context: Context, testSucceeded: boolean) => void;
     timeout?: number;
@@ -93,15 +67,18 @@ export function runBaseTests<Context>(config: {
     });
 
     const runTest = async (
-        test: (client: BaseClient) => Promise<void>,
+        test: (client: BaseClient, cluster: RedisCluster) => Promise<void>,
         protocol: ProtocolVersion,
         clientName?: string,
     ) => {
-        const { context, client } = await config.init(protocol, clientName);
+        const { context, client, cluster } = await config.init(
+            protocol,
+            clientName,
+        );
         let testSucceeded = false;
 
         try {
-            await test(client);
+            await test(client, cluster);
             testSucceeded = true;
         } finally {
             config.close(context, testSucceeded);
@@ -111,8 +88,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.2.0")) {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.2.0")) {
                     return;
                 }
 
@@ -493,6 +470,131 @@ export function runBaseTests<Context>(config: {
                         "value is not an integer",
                     );
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bitop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const keys = [key1, key2];
+                const destination = `{key}-${uuidv4()}`;
+                const nonExistingKey1 = `{key}-${uuidv4()}`;
+                const nonExistingKey2 = `{key}-${uuidv4()}`;
+                const nonExistingKey3 = `{key}-${uuidv4()}`;
+                const nonExistingKeys = [
+                    nonExistingKey1,
+                    nonExistingKey2,
+                    nonExistingKey3,
+                ];
+                const setKey = `{key}-${uuidv4()}`;
+                const value1 = "foobar";
+                const value2 = "abcdef";
+
+                checkSimple(await client.set(key1, value1)).toEqual("OK");
+                checkSimple(await client.set(key2, value2)).toEqual("OK");
+                expect(
+                    await client.bitop(BitwiseOperation.AND, destination, keys),
+                ).toEqual(6);
+                checkSimple(await client.get(destination)).toEqual("`bc`ab");
+                expect(
+                    await client.bitop(BitwiseOperation.OR, destination, keys),
+                ).toEqual(6);
+                checkSimple(await client.get(destination)).toEqual("goofev");
+
+                // reset values for simplicity of results in XOR
+                checkSimple(await client.set(key1, "a")).toEqual("OK");
+                checkSimple(await client.set(key2, "b")).toEqual("OK");
+                expect(
+                    await client.bitop(BitwiseOperation.XOR, destination, keys),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("\u0003");
+
+                // test single source key
+                expect(
+                    await client.bitop(BitwiseOperation.AND, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("a");
+                expect(
+                    await client.bitop(BitwiseOperation.OR, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("a");
+                expect(
+                    await client.bitop(BitwiseOperation.XOR, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("a");
+                expect(
+                    await client.bitop(BitwiseOperation.NOT, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("�");
+
+                expect(await client.setbit(key1, 0, 1)).toEqual(0);
+                expect(
+                    await client.bitop(BitwiseOperation.NOT, destination, [
+                        key1,
+                    ]),
+                ).toEqual(1);
+                checkSimple(await client.get(destination)).toEqual("\u001e");
+
+                // stores null when all keys hold empty strings
+                expect(
+                    await client.bitop(
+                        BitwiseOperation.AND,
+                        destination,
+                        nonExistingKeys,
+                    ),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+                expect(
+                    await client.bitop(
+                        BitwiseOperation.OR,
+                        destination,
+                        nonExistingKeys,
+                    ),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+                expect(
+                    await client.bitop(
+                        BitwiseOperation.XOR,
+                        destination,
+                        nonExistingKeys,
+                    ),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+                expect(
+                    await client.bitop(BitwiseOperation.NOT, destination, [
+                        nonExistingKey1,
+                    ]),
+                ).toEqual(0);
+                expect(await client.get(destination)).toBeNull();
+
+                // invalid argument - source key list cannot be empty
+                await expect(
+                    client.bitop(BitwiseOperation.OR, destination, []),
+                ).rejects.toThrow(RequestError);
+
+                // invalid arguments - NOT cannot be passed more than 1 key
+                await expect(
+                    client.bitop(BitwiseOperation.NOT, destination, keys),
+                ).rejects.toThrow(RequestError);
+
+                expect(await client.sadd(setKey, ["foo"])).toEqual(1);
+                // invalid argument - source key has the wrong type
+                await expect(
+                    client.bitop(BitwiseOperation.AND, destination, [setKey]),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
@@ -1413,8 +1515,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sintercard test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
 
@@ -1754,8 +1856,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `smismember test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -1852,7 +1954,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `expire, pexpire and ttl with positive timeout_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 checkSimple(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.expire(key, 10)).toEqual(true);
@@ -1860,7 +1962,7 @@ export function runBaseTests<Context>(config: {
                 /// set command clears the timeout.
                 checkSimple(await client.set(key, "bar")).toEqual("OK");
                 const versionLessThan =
-                    await checkIfServerVersionLessThan("7.0.0");
+                    cluster.checkIfServerVersionLessThan("7.0.0");
 
                 if (versionLessThan) {
                     expect(await client.pexpire(key, 10000)).toEqual(true);
@@ -1898,7 +2000,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `expireAt, pexpireAt and ttl with positive timeout_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 checkSimple(await client.set(key, "foo")).toEqual("OK");
                 expect(
@@ -1909,7 +2011,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 const versionLessThan =
-                    await checkIfServerVersionLessThan("7.0.0");
+                    cluster.checkIfServerVersionLessThan("7.0.0");
 
                 if (versionLessThan) {
                     expect(
@@ -2218,8 +2320,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zintercard test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
 
@@ -2261,8 +2363,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zdiff test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -2331,8 +2433,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zdiffstore test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -2434,8 +2536,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zmscore test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("6.2.0")) {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
                     return;
                 }
 
@@ -3171,14 +3273,14 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrank test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const membersScores = { one: 1.5, two: 2, three: 3 };
                 expect(await client.zadd(key1, membersScores)).toEqual(3);
                 expect(await client.zrank(key1, "one")).toEqual(0);
 
-                if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+                if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
                     expect(await client.zrankWithScore(key1, "one")).toEqual([
                         0, 1.5,
                     ]);
@@ -3206,14 +3308,14 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrevrank test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const nonSetKey = uuidv4();
                 const membersScores = { one: 1.5, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
                 expect(await client.zrevrank(key, "three")).toEqual(0);
 
-                if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+                if (!cluster.checkIfServerVersionLessThan("7.2.0")) {
                     expect(await client.zrevrankWithScore(key, "one")).toEqual([
                         2, 1.5,
                     ]);
@@ -3907,7 +4009,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "object encoding test_%p",
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const string_key = uuidv4();
                 const list_key = uuidv4();
                 const hashtable_key = uuidv4();
@@ -3920,9 +4022,9 @@ export function runBaseTests<Context>(config: {
                 const stream_key = uuidv4();
                 const non_existing_key = uuidv4();
                 const versionLessThan7 =
-                    await checkIfServerVersionLessThan("7.0.0");
+                    cluster.checkIfServerVersionLessThan("7.0.0");
                 const versionLessThan72 =
-                    await checkIfServerVersionLessThan("7.2.0");
+                    cluster.checkIfServerVersionLessThan("7.2.0");
 
                 expect(await client.objectEncoding(non_existing_key)).toEqual(
                     null,
@@ -4354,7 +4456,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bitcount test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const value = "foobar";
@@ -4384,7 +4486,7 @@ export function runBaseTests<Context>(config: {
                     client.bitcount(key2, new BitOffsetOptions(1, 1)),
                 ).rejects.toThrow(RequestError);
 
-                if (await checkIfServerVersionLessThan("7.0.0")) {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     await expect(
                         client.bitcount(
                             key1,
@@ -4571,9 +4673,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `geosearch test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                // TODO update version check after #1993 https://github.com/valkey-io/valkey-glide/pull/1993
-                if (await checkIfServerVersionLessThan("6.2.0")) return;
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
                 const key = uuidv4();
 
@@ -4851,8 +4952,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zmpop test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                if (await checkIfServerVersionLessThan("7.0.0")) return;
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const nonExistingKey = "{key}-0" + uuidv4();

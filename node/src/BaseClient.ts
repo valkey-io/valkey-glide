@@ -12,6 +12,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -37,12 +38,15 @@ import {
     createBLPop,
     createBRPop,
     createBitCount,
+    createBitOp,
     createDecr,
     createDecrBy,
     createDel,
     createExists,
     createExpire,
     createExpireAt,
+    createFCall,
+    createFCallReadOnly,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
@@ -985,6 +989,39 @@ export class BaseClient {
      */
     public decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
+    }
+
+    /**
+     * Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+     * `destination`.
+     *
+     * See https://valkey.io/commands/bitop/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param operation - The bitwise operation to perform.
+     * @param destination - The key that will store the resulting string.
+     * @param keys - The list of keys to perform the bitwise operation on.
+     * @returns The size of the string stored in `destination`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "A"); // "A" has binary value 01000001
+     * await client.set("key2", "B"); // "B" has binary value 01000010
+     * const result1 = await client.bitop(BitwiseOperation.AND, "destination", ["key1", "key2"]);
+     * console.log(result1); // Output: 1 - The size of the resulting string stored in "destination" is 1.
+     *
+     * const result2 = await client.get("destination");
+     * console.log(result2); // Output: "@" - "@" has binary value 01000000
+     * ```
+     */
+    public bitop(
+        operation: BitwiseOperation,
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
+        return this.createWritePromise(
+            createBitOp(operation, destination, keys),
+        );
     }
 
     /**
@@ -3338,6 +3375,63 @@ export class BaseClient {
      */
     public objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcall("Deep_Thought", [], []);
+     * console.log(response); // Output: Returns the function's return value.
+     * ```
+     */
+    public fcall(
+        func: string,
+        keys: string[],
+        args: string[],
+    ): Promise<string> {
+        return this.createWritePromise(createFCall(func, keys, args));
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallReadOnly("Deep_Thought", ["key1"], ["Answer", "to", "the",
+     *            "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"]);
+     * console.log(response); // Output: 42 # The return value on the function that was executed.
+     * ```
+     */
+    public fcallReadonly(
+        func: string,
+        keys: string[],
+        args: string[],
+    ): Promise<string> {
+        return this.createWritePromise(createFCallReadOnly(func, keys, args));
     }
 
     /**

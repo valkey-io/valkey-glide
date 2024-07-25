@@ -22,7 +22,7 @@ import {
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/commands/FlushMode.js";
 import { command_request } from "../src/ProtobufMessage";
-import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
+import { runBaseTests } from "./SharedTests";
 import {
     checkSimple,
     convertStringArrayToBuffer,
@@ -164,7 +164,10 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new Transaction();
-            const expectedRes = await transactionTest(transaction);
+            const expectedRes = await transactionTest(
+                transaction,
+                cluster.getVersion(),
+            );
             transaction.select(0);
             const result = await client.exec(transaction);
             expectedRes.push("OK");
@@ -369,7 +372,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function load test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -397,22 +400,10 @@ describe("GlideClient", () => {
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
                 checkSimple(
-                    await client.customCommand([
-                        "FCALL",
-                        funcName,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcall(funcName, [], ["one", "two"]),
                 ).toEqual("one");
                 checkSimple(
-                    await client.customCommand([
-                        "FCALL_RO",
-                        funcName,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                    await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
                 // TODO verify with FUNCTION LIST
@@ -441,23 +432,11 @@ describe("GlideClient", () => {
                     libName,
                 );
 
-                expect(
-                    await client.customCommand([
-                        "FCALL",
-                        func2Name,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                checkSimple(
+                    await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
-                expect(
-                    await client.customCommand([
-                        "FCALL_RO",
-                        func2Name,
-                        "0",
-                        "one",
-                        "two",
-                    ]),
+                checkSimple(
+                    await client.fcallReadonly(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
@@ -469,7 +448,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function flush test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -528,7 +507,7 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function delete test_%p",
         async (protocol) => {
-            if (await checkIfServerVersionLessThan("7.0.0")) return;
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
             const client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -667,7 +646,7 @@ describe("GlideClient", () => {
             options.clientName = clientName;
             testsFailed += 1;
             client = await GlideClient.createClient(options);
-            return { client, context: { client } };
+            return { client, context: { client }, cluster };
         },
         close: (context: Context, testSucceeded: boolean) => {
             if (testSucceeded) {

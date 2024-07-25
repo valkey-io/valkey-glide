@@ -4,6 +4,7 @@
 
 import {
     AggregationType,
+    BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -31,6 +32,7 @@ import {
     createBLPop,
     createBRPop,
     createBitCount,
+    createBitOp,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -46,6 +48,8 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createFCall,
+    createFCallReadOnly,
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
@@ -401,6 +405,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public decrBy(key: string, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
+    }
+
+    /**
+     * Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+     * `destination`.
+     *
+     * See https://valkey.io/commands/bitop/ for more details.
+     *
+     * @param operation - The bitwise operation to perform.
+     * @param destination - The key that will store the resulting string.
+     * @param keys - The list of keys to perform the bitwise operation on.
+     *
+     * Command Response - The size of the string stored in `destination`.
+     */
+    public bitop(
+        operation: BitwiseOperation,
+        destination: string,
+        keys: string[],
+    ): T {
+        return this.addAndReturn(createBitOp(operation, destination, keys));
     }
 
     /**
@@ -1860,6 +1884,42 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     *
+     * Command Response - The invoked function's return value.
+     */
+    public fcall(func: string, keys: string[], args: string[]): T {
+        return this.addAndReturn(createFCall(func, keys, args));
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
+     *     all names of keys that a function accesses must be explicitly provided as `keys`.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     *
+     * Command Response - The invoked function's return value.
+     */
+    public fcallReadonly(func: string, keys: string[], args: string[]): T {
+        return this.addAndReturn(createFCallReadOnly(func, keys, args));
     }
 
     /**

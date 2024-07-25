@@ -446,6 +446,28 @@ export function createDecrBy(
 }
 
 /**
+ * Enumeration defining the bitwise operation to use in the {@link BaseClient.bitop|bitop} command. Specifies the
+ * bitwise operation to perform between the passed in keys.
+ */
+export enum BitwiseOperation {
+    AND = "AND",
+    OR = "OR",
+    XOR = "XOR",
+    NOT = "NOT",
+}
+
+/**
+ * @internal
+ */
+export function createBitOp(
+    operation: BitwiseOperation,
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.BitOp, [operation, destination, ...keys]);
+}
+
+/**
  * @internal
  */
 export function createGetBit(
@@ -1586,10 +1608,47 @@ export function createBLPop(
 /**
  * @internal
  */
+export function createFCall(
+    func: string,
+    keys: string[],
+    args: string[],
+): command_request.Command {
+    let params: string[] = [];
+    params = params.concat(func, keys.length.toString(), keys, args);
+    return createCommand(RequestType.FCall, params);
+}
+
+/**
+ * @internal
+ */
+export function createFCallReadOnly(
+    func: string,
+    keys: string[],
+    args: string[],
+): command_request.Command {
+    let params: string[] = [];
+    params = params.concat(func, keys.length.toString(), keys, args);
+    return createCommand(RequestType.FCallReadOnly, params);
+}
+
+/**
+ * @internal
+ */
 export function createFunctionDelete(
     libraryCode: string,
 ): command_request.Command {
     return createCommand(RequestType.FunctionDelete, [libraryCode]);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FunctionFlush, []);
+    }
 }
 
 /**
@@ -1613,17 +1672,6 @@ export function createBitCount(
     const args = [key];
     if (options) args.push(...options.toArgs());
     return createCommand(RequestType.BitCount, args);
-}
-
-/**
- * @internal
- */
-export function createFunctionFlush(mode?: FlushMode): command_request.Command {
-    if (mode) {
-        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
-    } else {
-        return createCommand(RequestType.FunctionFlush, []);
-    }
 }
 
 export type StreamReadOptions = {

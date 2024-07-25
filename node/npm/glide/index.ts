@@ -76,6 +76,7 @@ function initialize() {
     const {
         BitOffsetOptions,
         BitmapIndexType,
+        BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
         CoordOrigin,
@@ -139,6 +140,7 @@ function initialize() {
     module.exports = {
         BitOffsetOptions,
         BitmapIndexType,
+        BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
         CoordOrigin,
