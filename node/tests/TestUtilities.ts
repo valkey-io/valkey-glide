@@ -10,6 +10,7 @@ import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
     GeoUnit,
@@ -23,10 +24,7 @@ import {
     ScoreFilter,
     Transaction,
 } from "..";
-import {
-    BitmapIndexType,
-    BitOffsetOptions,
-} from "../build-ts/src/commands/BitOffsetOptions";
+import { BitOffsetOptions } from "../build-ts/src/commands/BitOffsetOptions";
 import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
@@ -745,6 +743,8 @@ export async function transactionTest(
     responseData.push(["bitcount(key17)", 26]);
     baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
     responseData.push(["bitcount(key17, new BitOffsetOptions(1, 1))", 6]);
+    baseTransaction.bitpos(key17, 1);
+    responseData.push(["bitpos(key17, 1)", 1]);
 
     baseTransaction.set(key19, "abcdef");
     responseData.push(['set(key19, "abcdef")', "OK"]);
@@ -764,6 +764,11 @@ export async function transactionTest(
         responseData.push([
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
             17,
+        ]);
+        baseTransaction.bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT);
+        responseData.push([
+            "bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT)",
+            46,
         ]);
     }
 

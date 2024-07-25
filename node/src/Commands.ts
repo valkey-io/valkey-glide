@@ -1706,6 +1706,47 @@ export function createBitCount(
     return createCommand(RequestType.BitCount, args);
 }
 
+/**
+ * Enumeration specifying if index arguments are BYTE indexes or BIT indexes.
+ * Can be specified in {@link BitOffsetOptions}, which is an optional argument to the {@link BaseClient.bitcount|bitcount} command.
+ * Can also be specified as an optional argument to the {@link BaseClient.bitposInverval|bitposInterval} command.
+ *
+ * since - Valkey version 7.0.0.
+ */
+export enum BitmapIndexType {
+    /** Specifies that provided indexes are byte indexes. */
+    BYTE = "BYTE",
+    /** Specifies that provided indexes are bit indexes. */
+    BIT = "BIT",
+}
+
+/**
+ * @internal
+ */
+export function createBitPos(
+    key: string,
+    bit: number,
+    start?: number,
+    end?: number,
+    indexType?: BitmapIndexType,
+): command_request.Command {
+    const args = [key, bit.toString()];
+
+    if (start !== undefined) {
+        args.push(start.toString());
+    }
+
+    if (end !== undefined) {
+        args.push(end.toString());
+    }
+
+    if (indexType) {
+        args.push(indexType);
+    }
+
+    return createCommand(RequestType.BitPos, args);
+}
+
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
