@@ -2186,7 +2186,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
      * checked in the order they are provided. Blocks the connection when there are no members
-     * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of `ZMPOP`.
+     * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
      *
      * See https://valkey.io/commands/bzmpop/ for more details.
      *
