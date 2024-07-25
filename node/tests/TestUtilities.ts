@@ -10,7 +10,11 @@ import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitFieldGet,
+    BitFieldSet,
     BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
     BitwiseOperation,
     ClusterTransaction,
     FlushMode,
@@ -24,7 +28,9 @@ import {
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
+    SignedEncoding,
     Transaction,
+    UnsignedEncoding,
 } from "..";
 
 beforeAll(() => {
@@ -750,6 +756,16 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
+    if (gte("6.0.0", version)) {
+        baseTransaction.bitfieldReadOnly(key17, [
+            new BitFieldGet(new SignedEncoding(5), new BitOffset(3)),
+        ]);
+        responseData.push([
+            "bitfieldReadOnly(key17, [new BitFieldGet(...)])",
+            [6],
+        ]);
+    }
+
     baseTransaction.set(key19, "abcdef");
     responseData.push(['set(key19, "abcdef")', "OK"]);
     baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
@@ -776,6 +792,15 @@ export async function transactionTest(
             46,
         ]);
     }
+
+    baseTransaction.bitfield(key17, [
+        new BitFieldSet(
+            new UnsignedEncoding(10),
+            new BitOffsetMultiplier(3),
+            4,
+        ),
+    ]);
+    responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
