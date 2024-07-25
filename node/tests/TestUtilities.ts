@@ -679,6 +679,12 @@ export async function transactionTest(
         responseData.push(["zmpop([key14], MAX)", [key14, { two: 2.0 }]]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
         responseData.push(["zmpop([key14], MAX, 1)", [key14, { one: 1.0 }]]);
+        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        responseData.push(2);
+        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
+        responseData.push([key14, { two: 2.0 }]);
+        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
+        responseData.push([key14, { one: 1.0 }]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });

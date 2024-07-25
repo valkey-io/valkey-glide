@@ -2086,6 +2086,30 @@ export function createZMPop(
 /**
  * @internal
  */
+export function createBZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    timeout: number,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [
+        timeout.toString(),
+        keys.length.toString(),
+        ...keys,
+        modifier,
+    ];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.BZMPop, args);
+}
+
+/**
+ * @internal
+ */
 export function createZIncrBy(
     key: string,
     increment: number,

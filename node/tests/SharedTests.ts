@@ -5002,6 +5002,136 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bzmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const nonExistingKey = "{key}-0" + uuidv4();
+                const stringKey = "{key}-string" + uuidv4();
+
+                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
+                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
+                    2,
+                );
+
+                checkSimple(
+                    await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
+                ).toEqual([key1, { b1: 2 }]);
+                checkSimple(
+                    await client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10),
+                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+
+                // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+                expect(
+                    await client.bzmpop([nonExistingKey], ScoreFilter.MAX, 0.5),
+                ).toBeNull;
+                expect(
+                    await client.bzmpop(
+                        [nonExistingKey],
+                        ScoreFilter.MAX,
+                        0.55,
+                        1,
+                    ),
+                ).toBeNull;
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: key list should not be empty
+                await expect(
+                    client.bzmpop([], ScoreFilter.MAX, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: count should be greater than 0
+                await expect(
+                    client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0),
+                ).rejects.toThrow(RequestError);
+
+                // check that order of entries in the response is preserved
+                const entries: Record<string, number> = {};
+
+                for (let i = 0; i < 10; i++) {
+                    // a0 => 0, a1 => 1 etc
+                    entries["a" + i] = i;
+                }
+
+                expect(await client.zadd(key2, entries)).toEqual(10);
+                const result = await client.bzmpop(
+                    [key2],
+                    ScoreFilter.MIN,
+                    0.1,
+                    10,
+                );
+
+                if (result) {
+                    expect(result[1]).toEqual(entries);
+                }
+
+                // await expect(
+                //     client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0),
+                // ).toThrow(TimeoutError);
+                //         async def endless_bzmpop_call():
+                //             await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
+
+                // bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+                // avoid having the test block forever
+                // await expect(new Promise((resolve) =>
+                //     setTimeout(() => {
+                //         resolve(
+                //             client.bzmpop(
+                //                 ["non_existent_key"],
+                //                 ScoreFilter.MAX,
+                //                 0,
+                //             ),
+                //         );
+                //     }, 0.5),
+                // )).toThrow(TimeoutError);
+                // await expect(client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)).toThrow();
+
+                // const bzmpopPromise = client.bzmpop(
+                //     ["non_existent_key"],
+                //     ScoreFilter.MAX,
+                //     0,
+                // );
+                // const timeout = (
+                //     prom: Promise<[string, [Record<string, number>]] | null>,
+                //     time: number | undefined,
+                // ) =>
+                //     Promise.race([
+                //         prom,
+                //         new Promise(() => setTimeout(() => { throw new TimeoutError("timeout");}, time)),
+                //     ]);
+
+                // try {
+                //     await timeout(bzmpopPromise, 0.5);
+                // } catch (e) {
+                //     console.log(e);
+                // }
+
+                //     await expect(async () => await Promise.race([
+                //         client.bzmpop(
+                //             ["non_existent_key"],
+                //             ScoreFilter.MAX,
+                //             0,
+                //         ),
+                //         new Promise((_, reject) =>
+                //             setTimeout(() => reject(new TimeoutError("timeout")), 0.5),
+                //         )
+                //     ])).toThrow(TimeoutError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `geodist test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

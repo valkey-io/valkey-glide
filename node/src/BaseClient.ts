@@ -33,6 +33,7 @@ import {
     createBRPop,
     createBitCount,
     createBitOp,
+    createBZMPop,
     createBitPos,
     createDecr,
     createDecrBy,
@@ -3689,11 +3690,53 @@ export class BaseClient {
      * ```
      */
     public zmpop(
-        key: string[],
+        keys: string[],
         modifier: ScoreFilter,
         count?: number,
     ): Promise<[string, [Record<string, number>]] | null> {
-        return this.createWritePromise(createZMPop(key, modifier, count));
+        return this.createWritePromise(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
+     * checked in the order they are provided. Blocks the connection when there are no members
+     * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of `ZMPOP`.
+     *
+     * See https://valkey.io/commands/bzmpop/ for more details.
+     *
+     * @remarks
+     *      1. When in cluster mode, all `keys` must map to the same hash slot.
+     *      2. `BZMPOP` is a client blocking command, see https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands
+     *         for more details and best practices.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param count - The number of elements to pop.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete.
+     *     A value of 0 will block indefinitely.
+     * @returns A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("zSet1", { one: 1.0, two: 2.0, three: 3.0 });
+     * await client.zadd("zSet2", { four: 4.0 });
+     * console.log(await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.1, 2));
+     * // Output: [ "zSet1", { three: 3, two: 2 } ] - "three" with score 3 and "two" with score 2 were popped from "zSet1".
+     * ```
+     */
+    public bzmpop(
+        keys: string[],
+        modifier: ScoreFilter,
+        timeout: number,
+        count?: number,
+    ): Promise<[string, [Record<string, number>]] | null> {
+        return this.createWritePromise(
+            createBZMPop(keys, modifier, timeout, count),
+        );
     }
 
     /**
