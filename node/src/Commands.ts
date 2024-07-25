@@ -2082,3 +2082,18 @@ export function createZMPop(
 
     return createCommand(RequestType.ZMPop, args);
 }
+
+/**
+ * @internal
+ */
+export function createZIncrBy(
+    key: string,
+    increment: number,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZIncrBy, [
+        key,
+        increment.toString(),
+        member,
+    ]);
+}

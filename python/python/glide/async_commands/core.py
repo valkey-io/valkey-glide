@@ -4202,9 +4202,9 @@ class CoreCommands(Protocol):
             >>> await client.zincrby("my_sorted_set", 1.2, "member")
                 11.7  # The member existed in the set before score was altered, the new score is 11.7.
             >>> await client.zincrby("my_sorted_set", -1.7, "member")
-                10.0 # Negetive increment, decrements the score.
+                10.0 # Negative increment, decrements the score.
             >>> await client.zincrby("my_sorted_set", 5.5, "non_existing_member")
-                5.5  # A new memeber is added to the sorted set with the score being 5.5.
+                5.5  # A new member is added to the sorted set with the score being 5.5.
         """
         return cast(
             float,

@@ -151,6 +151,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    createZIncrBy,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 import { BitOffsetOptions } from "./commands/BitOffsetOptions";
@@ -2179,6 +2180,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Increments the score of `member` in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score.
+     * If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+     *
+     * See https://valkey.io/commands/zincrby/ for details.
+     *
+     * @param key - The key of the sorted set.
+     * @param increment - The score increment.
+     * @param member - A member of the sorted set.
+     *
+     * Command Response - The new score of `member`.
+     */
+    public zincrby(key: string, increment: number, member: string): T {
+        return this.addAndReturn(createZIncrBy(key, increment, member));
     }
 
     /**
