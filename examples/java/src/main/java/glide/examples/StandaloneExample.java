@@ -65,7 +65,7 @@ public class StandaloneExample {
         CompletableFuture<String> getResponse = client.get("foo");
         log(INFO, "app", "Get response is " + getResponse.get());
 
-        // Send PING to the primary node
+        // Send PING
         CompletableFuture<String> pong = client.ping();
         log(INFO, "app", "Ping response is " + pong.get());
     }
