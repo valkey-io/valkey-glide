@@ -477,9 +477,7 @@ export async function transactionTest(
     baseTransaction.lset(key5, 0, field + "3");
     responseData.push(['lset(key5, 0, field + "3")', "OK"]);
     baseTransaction.lrange(key5, 0, -1);
-    args.push([field + "3", field + "2"]);
     responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
-    baseTransaction.lpopCount(key5, 2);
 
     if (gte("6.2.0", version)) {
         baseTransaction.lmove(
@@ -488,16 +486,15 @@ export async function transactionTest(
             ListDirection.LEFT,
             ListDirection.LEFT,
         );
-        args.push(field + "3").toString();
-        responseData.push(["lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)", "field + "3""]);
-      
+        responseData.push([
+            "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
+            field + "3",
+        ]);
+
         baseTransaction.lpopCount(key5, 2);
-        args.push([field + "2"]);
         responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
-      
     } else {
         baseTransaction.lpopCount(key5, 2);
-        args.push([field + "3", field + "2"]);
         responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
     }
 
