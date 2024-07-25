@@ -1590,6 +1590,47 @@ export class BaseClient {
     }
 
     /**
+        Blocks the connection until it pops atomically and removes the left/right-most element to the
+        list stored at `source` depending on `where_from`, and pushes the element at the first/last element
+        of the list stored at `destination` depending on `where_to`.
+        `BLMOVE` is the blocking variant of `LMOVE`.
+
+        Note:
+            1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+            2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        See https://valkey.io/commands/blmove/ for details.
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+        Returns:
+            Optional[str]: The popped element, or None if `source` does not exist or if the operation timed-out.
+        Examples:
+            >>> await client.lpush("testKey1", ["two", "one"])
+            >>> await client.lpush("testKey2", ["four", "three"])
+            >>> await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1)
+            "one"
+            >>> await client.lrange("testKey1", 0, -1)
+            ["two"]
+            >>> updated_array2 = await client.lrange("testKey2", 0, -1)
+            ["one", "three", "four"]
+        Since: Redis version 6.2.0.
+     */
+    public async blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
+        );
+    }
+
+    /**
      * Sets the list element at `index` to `element`.
      * The index is zero-based, so `0` means the first element, `1` the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of
