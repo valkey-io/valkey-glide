@@ -45,6 +45,8 @@ iai-callgrind = "0.9"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = ["socket-layer"] } # always enable this feature in tests.
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)'] }
 
 [build-dependencies]
 protobuf-codegen = "3"
