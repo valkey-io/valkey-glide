@@ -818,8 +818,8 @@ export class GlideClusterClient extends BaseClient {
      * since Valkey version 7.0.0.
      *
      * @param options - Parameters to filter and request additional info.
-     * @param route - The command will be routed to a random route, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to a random route.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example

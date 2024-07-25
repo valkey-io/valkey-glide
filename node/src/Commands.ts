@@ -1717,9 +1717,12 @@ export function createFunctionList(
     const args: string[] = [];
 
     if (options) {
-        if (options.libNamePattern)
+        if (options.libNamePattern) {
             args.push("LIBRARYNAME", options.libNamePattern);
-        if (options.withCode) args.push("WITHCODE");
+        }
+        if (options.withCode) {
+            args.push("WITHCODE");
+        }
     }
 
     return createCommand(RequestType.FunctionList, args);
