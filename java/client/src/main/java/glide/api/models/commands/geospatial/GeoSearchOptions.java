@@ -15,7 +15,7 @@ import lombok.Builder;
  *       The distance is returned in the same unit as specified for the <code>searchBy
  *           </code> argument.
  *   <li>WITHCOORD: Also return the coordinate of the returned items.
- *   <li>WITHHASH: Also return the geohash of the returned items.
+ *   <li>WITHHASH: Also return the geohash of the returned items. for the general user.
  * </ul>
  *
  * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>

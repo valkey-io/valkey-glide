@@ -15,7 +15,7 @@ public final class GeoSearchOrigin {
     /** Valkey API keyword used to perform search from the position of a given member. */
     public static final String FROMMEMBER_VALKEY_API = "FROMMEMBER";
 
-    /** Valkey API keyword used to perform search from the given longitude & latitude position. */
+    /** Valkey API keyword used to perform search from the given longtitude & latitue position. */
     public static final String FROMLONLAT_VALKEY_API = "FROMLONLAT";
 
     /**

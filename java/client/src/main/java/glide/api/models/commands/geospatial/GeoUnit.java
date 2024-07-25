@@ -1,10 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.geospatial;
 
+import glide.api.commands.GeospatialIndicesBaseCommands;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/** Enumeration representing distance units options for the geospatial command. */
+/**
+ * Enumeration representing distance units options for the {@link
+ * GeospatialIndicesBaseCommands#geodist(String, String, String, GeoUnit)} command.
+ */
 @RequiredArgsConstructor
 @Getter
 public enum GeoUnit {

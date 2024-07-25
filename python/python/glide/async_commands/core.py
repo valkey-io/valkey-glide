@@ -3861,7 +3861,7 @@ class CoreCommands(Protocol):
                 from the sorted set or as a geospatial data (see `GeospatialData`).
             search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
                 For circular area search, see `GeoSearchByRadius`.
-                For rectangular area search, see `GeoSearchByBox`.
+                For rectengal area search, see `GeoSearchByBox`.
             order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
                     - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
                     - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
