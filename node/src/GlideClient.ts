@@ -10,6 +10,7 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
+    FlushMode,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -35,7 +36,6 @@ import {
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
-import { FlushMode } from "./commands/FlushMode";
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
 export namespace GlideClientConfiguration {

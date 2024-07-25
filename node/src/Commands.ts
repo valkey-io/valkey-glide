@@ -4,13 +4,14 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
-import { FlushMode } from "./commands/FlushMode";
-import { LPosOptions } from "./commands/LPosOptions";
 
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+import { BaseClient } from "src/BaseClient";
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+import { GlideClient } from "src/GlideClient";
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+import { GlideClusterClient } from "src/GlideClusterClient";
 import { command_request } from "./ProtobufMessage";
-import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 import RequestType = command_request.RequestType;
 
@@ -976,21 +977,25 @@ export function createTTL(key: string): command_request.Command {
     return createCommand(RequestType.TTL, [key]);
 }
 
+/**
+ * Options for updating elements of a sorted set key.
+ */
+export enum UpdateByScore {
+    /** Only update existing elements if the new score is less than the current score. */
+    LESS_THAN = "LT",
+    /** Only update existing elements if the new score is greater than the current score. */
+    GREATER_THAN = "GT",
+}
+
 export type ZAddOptions = {
     /**
-     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing
-     * elements. Equivalent to `NX` in the Redis API. `onlyIfExists` - Only update
-     * elements that already exist. Don't add new elements. Equivalent to `XX` in
-     * the Redis API.
+     * Options for handling existing members.
      */
-    conditionalChange?: "onlyIfExists" | "onlyIfDoesNotExist";
+    conditionalChange?: ConditionalChange;
     /**
-     * `scoreLessThanCurrent` - Only update existing elements if the new score is
-     * less than the current score. Equivalent to `LT` in the Redis API.
-     * `scoreGreaterThanCurrent` - Only update existing elements if the new score
-     * is greater than the current score. Equivalent to `GT` in the Redis API.
+     * Options for updating scores.
      */
-    updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+    updateOptions?: UpdateByScore;
     /**
      * Modify the return value from the number of new elements added, to the total number of elements changed.
      */
@@ -1009,22 +1014,22 @@ export function createZAdd(
     let args = [key];
 
     if (options) {
-        if (options.conditionalChange === "onlyIfExists") {
-            args.push("XX");
-        } else if (options.conditionalChange === "onlyIfDoesNotExist") {
-            if (options.updateOptions) {
+        if (options.conditionalChange) {
+            if (
+                options.conditionalChange ===
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                options.updateOptions
+            ) {
                 throw new Error(
                     `The GT, LT, and NX options are mutually exclusive. Cannot choose both ${options.updateOptions} and NX.`,
                 );
             }
 
-            args.push("NX");
+            args.push(options.conditionalChange);
         }
 
-        if (options.updateOptions === "scoreLessThanCurrent") {
-            args.push("LT");
-        } else if (options.updateOptions === "scoreGreaterThanCurrent") {
-            args.push("GT");
+        if (options.updateOptions) {
+            args.push(options.updateOptions);
         }
 
         if (options.changed) {
@@ -1695,6 +1700,27 @@ export function createFunctionLoad(
 }
 
 /**
+ * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
+ * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
+ * The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
+ * the last index of the string, `-2` being the penultimate, and so on.
+ *
+ * See https://valkey.io/commands/bitcount/ for more details.
+ */
+export type BitOffsetOptions = {
+    /** The starting offset index. */
+    start: number;
+    /** The ending offset index. */
+    end: number;
+    /**
+     * The index offset type. This option can only be specified if you are using server version 7.0.0 or above.
+     * Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}.
+     * If no index type is provided, the indexes will be assumed to be byte indexes.
+     */
+    indexType?: BitmapIndexType;
+};
+
+/**
  * @internal
  */
 export function createBitCount(
@@ -1702,7 +1728,13 @@ export function createBitCount(
     options?: BitOffsetOptions,
 ): command_request.Command {
     const args = [key];
-    if (options) args.push(...options.toArgs());
+
+    if (options) {
+        args.push(options.start.toString());
+        args.push(options.end.toString());
+        if (options.indexType) args.push(options.indexType);
+    }
+
     return createCommand(RequestType.BitCount, args);
 }
 
@@ -1745,6 +1777,24 @@ export function createBitPos(
     }
 
     return createCommand(RequestType.BitPos, args);
+}
+
+/**
+ * Defines flushing mode for {@link GlideClient.flushall}, {@link GlideClusterClient.flushall},
+ *      {@link GlideClient.functionFlush}, {@link GlideClusterClient.functionFlush},
+ *      {@link GlideClient.flushdb} and {@link GlideClusterClient.flushdb} commands.
+ *
+ * See https://valkey.io/commands/flushall/ and https://valkey.io/commands/flushdb/ for details.
+ */
+export enum FlushMode {
+    /**
+     * Flushes synchronously.
+     *
+     * since Valkey version 6.2.0.
+     */
+    SYNC = "SYNC",
+    /** Flushes asynchronously. */
+    ASYNC = "ASYNC",
 }
 
 export type StreamReadOptions = {
@@ -1933,6 +1983,20 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
 }
 
 /**
+ * Optional arguments to LPOS command.
+ *
+ * See https://valkey.io/commands/lpos/ for more details.
+ */
+export type LPosOptions = {
+    /** The rank of the match to return. */
+    rank?: number;
+    /** The specific number of matching indices from a list. */
+    count?: number;
+    /** The maximum number of comparisons to make between the element and the items in the list. */
+    maxLength?: number;
+};
+
+/**
  * @internal
  */
 export function createLPos(
@@ -1940,10 +2004,23 @@ export function createLPos(
     element: string,
     options?: LPosOptions,
 ): command_request.Command {
-    let args: string[] = [key, element];
+    const args: string[] = [key, element];
 
     if (options) {
-        args = args.concat(options.toArgs());
+        if (options.rank !== undefined) {
+            args.push("RANK");
+            args.push(options.rank.toString());
+        }
+
+        if (options.count !== undefined) {
+            args.push("COUNT");
+            args.push(options.count.toString());
+        }
+
+        if (options.maxLength !== undefined) {
+            args.push("MAXLEN");
+            args.push(options.maxLength.toString());
+        }
     }
 
     return createCommand(RequestType.LPos, args);
@@ -1957,6 +2034,48 @@ export function createDBSize(): command_request.Command {
 }
 
 /**
+ * An optional condition to the {@link BaseClient.geoadd} command.
+ */
+export enum ConditionalChange {
+    /**
+     * Only update elements that already exist. Don't add new elements. Equivalent to `XX` in the Valkey API.
+     */
+    ONLY_IF_EXISTS = "XX",
+
+    /**
+     * Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Valkey API.
+     */
+    ONLY_IF_DOES_NOT_EXIST = "NX",
+}
+
+/**
+ * Represents a geographic position defined by longitude and latitude.
+ * The exact limits, as specified by `EPSG:900913 / EPSG:3785 / OSGEO:41001` are the
+ * following:
+ *
+ *   Valid longitudes are from `-180` to `180` degrees.
+ *   Valid latitudes are from `-85.05112878` to `85.05112878` degrees.
+ */
+export type GeospatialData = {
+    /** The longitude coordinate. */
+    longitude: number;
+    /** The latitude coordinate. */
+    latitude: number;
+};
+
+/**
+ * Optional arguments for the GeoAdd command.
+ *
+ * See https://valkey.io/commands/geoadd/ for more details.
+ */
+export type GeoAddOptions = {
+    /** Options for handling existing members. See {@link ConditionalChange}. */
+    updateMode?: ConditionalChange;
+    /** If `true`, returns the count of changed elements instead of new elements added. */
+    changed?: boolean;
+};
+
+/**
  * @internal
  */
 export function createGeoAdd(
@@ -1967,11 +2086,20 @@ export function createGeoAdd(
     let args: string[] = [key];
 
     if (options) {
-        args = args.concat(options.toArgs());
+        if (options.updateMode) {
+            args.push(options.updateMode);
+        }
+
+        if (options.changed) {
+            args.push("CH");
+        }
     }
 
     membersToGeospatialData.forEach((coord, member) => {
-        args = args.concat(coord.toArgs());
+        args = args.concat([
+            coord.longitude.toString(),
+            coord.latitude.toString(),
+        ]);
         args.push(member);
     });
     return createCommand(RequestType.GeoAdd, args);

@@ -10,6 +10,7 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
+    FlushMode,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -34,7 +35,6 @@ import {
     createPublish,
     createTime,
 } from "./Commands";
-import { FlushMode } from "./commands/FlushMode";
 import { RequestError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
