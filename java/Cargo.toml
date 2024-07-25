@@ -22,3 +22,6 @@ bytes = { version = "1.6.0" }
 [profile.release]
 lto = true
 debug = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ffi_test)'] }
