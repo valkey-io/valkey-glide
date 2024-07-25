@@ -17,6 +17,7 @@ import {
     GeoUnit,
     InsertPosition,
     KeyWeight,
+    ListDirection,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -63,6 +64,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -1463,6 +1465,47 @@ export class BaseClient {
      */
     public llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
+    }
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at `source`
+     * depending on `whereTo`, and pushes the element at the first/last element of the list
+     * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
+     *
+     * See https://valkey.io/commands/lmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @returns The popped element, or `null` if `source` does not exist.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey1", ["two", "one"]);
+     * await client.lpush("testKey2", ["four", "three"]);
+     *
+     * const result1 = await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT);
+     * console.log(result1); // Output: "one".
+     *
+     * const updated_array_key1 = await client.lrange("testKey1", 0, -1);
+     * console.log(updated_array); // Output: "two".
+     *
+     * const updated_array_key2 = await client.lrange("testKey2", 0, -1);
+     * console.log(updated_array_key2); // Output: ["one", "three", "four"].
+     * ```
+     */
+    public async lmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+    ): Promise<string | null> {
+        return this.createWritePromise(
+            createLMove(source, destination, whereFrom, whereTo),
+        );
     }
 
     /**
