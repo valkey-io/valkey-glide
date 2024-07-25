@@ -82,6 +82,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove
     createLPop,
     createLPos,
     createLPush,
@@ -790,6 +791,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     *
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of `LMOVE`.
+     */
+    public blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+
+    ): T {
+        return this.addAndReturn(
+            createLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 

@@ -618,6 +618,25 @@ export function createLMove(
 /**
  * @internal
  */
+export function createBLMove(
+    source: string,
+    destination: string,
+    whereFrom: ListDirection,
+    whereTo: ListDirection,
+    timeout: number
+): command_request.Command {
+    return createCommand(RequestType.LMove, [
+        source,
+        destination,
+        whereFrom,
+        whereTo,
+        number
+    ]);
+}
+
+/**
+ * @internal
+ */
 export function createLSet(
     key: string,
     index: number,
