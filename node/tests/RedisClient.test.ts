@@ -27,6 +27,7 @@ import {
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    validateTransactionResponse,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -164,8 +165,9 @@ describe("GlideClient", () => {
             );
             transaction.select(0);
             const result = await client.exec(transaction);
-            expectedRes.push("OK");
-            expect(intoString(result)).toEqual(intoString(expectedRes));
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
         },
     );
 
