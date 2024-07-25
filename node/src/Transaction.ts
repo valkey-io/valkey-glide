@@ -1559,7 +1559,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If the sorted set does not exist or is empty, the response will be an empty `array`.
      */
     public zrandmemberWithCountWithScores(key: string, count: number): T {
-        return this.addAndReturn(createZRandMember(key, count));
+        return this.addAndReturn(createZRandMember(key, count, true));
     }
 
     /** Returns the string representation of the type of the value stored at `key`.

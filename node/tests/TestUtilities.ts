@@ -811,13 +811,16 @@ export async function transactionTest(
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
     baseTransaction.zadd(key21, { one: 1.0 });
-    args.push(1);
+    responseData.push(["zadd(key21, {one: 1.0}", 1]);
     baseTransaction.zrandmember(key21);
-    args.push("one");
+    responseData.push(["zrandmember(key21)", "one"]);
+    baseTransaction.zrandmemberWithCount(key21, 1);
+    responseData.push(["zrandmemberWithCountWithScores(key21, 1)", "one"]);
     baseTransaction.zrandmemberWithCountWithScores(key21, 1);
-    args.push(["one"]);
-    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
-    args.push(["one", 1.0]);
+    responseData.push([
+        "zrandmemberWithCountWithScores(key21, 1)",
+        [Buffer.from("one"), 1.0],
+    ]);
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");

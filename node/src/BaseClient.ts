@@ -185,6 +185,7 @@ export type ReturnType =
     | null
     | boolean
     | bigint
+    | Buffer
     | Set<ReturnType>
     | ReturnTypeMap
     | ReturnTypeAttribute
