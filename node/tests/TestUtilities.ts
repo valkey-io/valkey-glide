@@ -450,10 +450,13 @@ export async function transactionTest(
             ListDirection.LEFT,
         );
         args.push(field + "3").toString();
+        baseTransaction.lpopCount(key5, 2);
+        args.push([field + "2"]);
+    } else {
+        baseTransaction.lpopCount(key5, 2);
+        args.push([field + "3", field + "2"]);
     }
 
-    baseTransaction.lpopCount(key5, 2);
-    args.push([field + "2"]);
     baseTransaction.linsert(
         key5,
         InsertPosition.Before,
