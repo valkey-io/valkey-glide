@@ -2078,9 +2078,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
      *
-     * - {@link CoordOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
      *
-     * - {@link MemberOrigin} to use the given longitude and latitude coordinates.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
      *
      * @param searchBy - The query's shape options, could be one of:
      *

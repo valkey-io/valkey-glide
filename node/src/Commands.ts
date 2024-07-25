@@ -1973,7 +1973,6 @@ export function createGeoHash(
     return createCommand(RequestType.GeoHash, args);
 }
 
-// This type unites `GeoSearchResultOptions` and `GeoSearchOptions` of the java client
 /**
  * Optional parameters for {@link BaseClient.geosearch|geosearch} command which defines what should be included in the
  * search results and how results should be ordered and limited.

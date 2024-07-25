@@ -4685,7 +4685,7 @@ export function runBaseTests<Context>(config: {
                     "edge1",
                 ];
                 const membersSet: Set<string> = new Set(members);
-                const membersCoordinates: number[][] = [
+                const membersCoordinates: [number, number][] = [
                     [15.087269, 37.502669],
                     [13.361389, 38.115556],
                     [17.24151, 38.788135],
@@ -4694,11 +4694,8 @@ export function runBaseTests<Context>(config: {
 
                 const membersGeoData: GeospatialData[] = [];
 
-                for (let i = 0; i < membersCoordinates.length; i++) {
-                    membersGeoData.push({
-                        longitude: membersCoordinates[i][0],
-                        latitude: membersCoordinates[i][1],
-                    });
+                for (const [lon, lat] of membersCoordinates) {
+                    membersGeoData.push({ longitude: lon, latitude: lat });
                 }
 
                 const membersToCoordinates = new Map<string, GeospatialData>();
