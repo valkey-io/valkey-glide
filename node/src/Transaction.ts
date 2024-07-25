@@ -2187,11 +2187,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
      * checked in the order they are provided. Blocks the connection when there are no members
      * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of `ZMPOP`.
-     * `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
-     * for more details and best practices.
      *
      * See https://valkey.io/commands/bzmpop/ for more details.
      *
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
+     * for more details and best practices.
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
