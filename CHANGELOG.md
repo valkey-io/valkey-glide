@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added LMOVE command ([#2002](https://github.com/valkey-io/valkey-glide/pull/2002))
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))

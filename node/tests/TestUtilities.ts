@@ -17,6 +17,7 @@ import {
     GlideClusterClient,
     InsertPosition,
     Logger,
+    ListDirection,
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
@@ -399,6 +400,7 @@ export async function transactionTest(
     const key17 = "{key}" + uuidv4(); // bitmap
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
+    const key20 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -476,8 +478,26 @@ export async function transactionTest(
     responseData.push(['lset(key5, 0, field + "3")', "OK"]);
     baseTransaction.lrange(key5, 0, -1);
     responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
-    baseTransaction.lpopCount(key5, 2);
-    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction.lmove(
+            key5,
+            key20,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+        );
+        responseData.push([
+            "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
+            field + "3",
+        ]);
+
+        baseTransaction.lpopCount(key5, 2);
+        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
+    } else {
+        baseTransaction.lpopCount(key5, 2);
+        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+    }
+
     baseTransaction.linsert(
         key5,
         InsertPosition.Before,

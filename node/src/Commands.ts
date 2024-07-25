@@ -584,6 +584,37 @@ export function createLLen(key: string): command_request.Command {
 }
 
 /**
+ * Enumeration representing element popping or adding direction for the List Based Commands.
+ */
+export enum ListDirection {
+    /**
+     * Represents the option that elements should be popped from or added to the left side of a list.
+     */
+    LEFT = "LEFT",
+    /**
+     * Represents the option that elements should be popped from or added to the right side of a list.
+     */
+    RIGHT = "RIGHT",
+}
+
+/**
+ * @internal
+ */
+export function createLMove(
+    source: string,
+    destination: string,
+    whereFrom: ListDirection,
+    whereTo: ListDirection,
+): command_request.Command {
+    return createCommand(RequestType.LMove, [
+        source,
+        destination,
+        whereFrom,
+        whereTo,
+    ]);
+}
+
+/**
  * @internal
  */
 export function createLSet(
