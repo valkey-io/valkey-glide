@@ -123,6 +123,7 @@ import {
     createZDiff,
     createZDiffStore,
     createZDiffWithScores,
+    createZIncrBy,
     createZInterCard,
     createZInterstore,
     createZMPop,
@@ -3693,6 +3694,39 @@ export class BaseClient {
         count?: number,
     ): Promise<[string, [Record<string, number>]] | null> {
         return this.createWritePromise(createZMPop(key, modifier, count));
+    }
+
+    /**
+     * Increments the score of `member` in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score.
+     * If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+     *
+     * See https://valkey.io/commands/zincrby/ for details.
+     *
+     * @param key - The key of the sorted set.
+     * @param increment - The score increment.
+     * @param member - A member of the sorted set.
+     *
+     * @returns The new score of `member`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zincrBy method to increment the value of a member's score
+     * await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2});
+     * console.log(await client.zincrby("my_sorted_set", 1.2, "member"));
+     * // Output: 11.7 - The member existed in the set before score was altered, the new score is 11.7.
+     * console.log(await client.zincrby("my_sorted_set", -1.7, "member"));
+     * // Output: 10.0 - Negative increment, decrements the score.
+     * console.log(await client.zincrby("my_sorted_set", 5.5, "non_existing_member"));
+     * // Output: 5.5 - A new member is added to the sorted set with the score of 5.5.
+     * ```
+     */
+    public async zincrby(
+        key: string,
+        increment: number,
+        member: string,
+    ): Promise<number> {
+        return this.createWritePromise(createZIncrBy(key, increment, member));
     }
 
     /**
