@@ -525,19 +525,9 @@ export async function transactionTest(
     ]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
     baseTransaction.lpos(key16, field + "1", { rank: 2 });
-    responseData.push([
-        'lpos(key16, field + "1", { rank: 2 })',
-        1,
-    ]);
-    baseTransaction.lpos(
-        key16,
-        field + "1",
-       { rank: 2, count: 0 },
-    );
-    responseData.push([
-        'lpos(key16, field + "1", { rank: 2, count: 0 })',
-        [1],
-    ]);
+    responseData.push(['lpos(key16, field + "1", { rank: 2 })', 1]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2, count: 0 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2, count: 0 })', [1]]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -757,10 +747,11 @@ export async function transactionTest(
     responseData.push(["get(key19)", "`bc`ab"]);
 
     if (gte("7.0.0", version)) {
-        baseTransaction.bitcount(
-            key17,
-            { start: 5, end: 30, indexType: BitmapIndexType.BIT },
-        );
+        baseTransaction.bitcount(key17, {
+            start: 5,
+            end: 30,
+            indexType: BitmapIndexType.BIT,
+        });
         responseData.push([
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
             17,
