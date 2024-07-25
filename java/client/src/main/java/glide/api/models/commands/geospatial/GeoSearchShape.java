@@ -2,31 +2,19 @@
 package glide.api.models.commands.geospatial;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
-import lombok.Getter;
 
 /**
  * The query's shape for {@link GeospatialIndicesBaseCommands} command.
  *
  * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
  */
-@Getter
 public final class GeoSearchShape {
-    /** Valkey API keyword used to perform geosearch by radius. */
-    public static final String BYRADIUS_VALKEY_API = "BYRADIUS";
 
-    /** Valkey API keyword used to perform geosearch by box. */
-    public static final String BYBOX_VALKEY_API = "BYBOX";
-
-    /**
-     * The geosearch query's shape:
-     *
-     * <ul>
-     *   <li>BYRADIUS - Circular shaped query.
-     *   <li>BYBOX - Box shaped query.
-     * </ul>
-     */
+    /** The geosearch query's shape. */
     public enum SearchShape {
+        /** Circular shaped query. */
         BYRADIUS,
+        /** Rectangular shaped query. */
         BYBOX
     }
 
@@ -42,14 +30,14 @@ public final class GeoSearchShape {
     /** The box geosearch query's height. */
     private final double height;
 
-    /** The geosearch query's metric unit. */
+    /** The geosearch query's measurement unit. */
     private final GeoUnit unit;
 
     /**
-     * BYRADIUS constructor for GeoSearchShape
+     * Define a circular search area.
      *
      * @param radius The radius to search by.
-     * @param unit The unit of the radius.
+     * @param unit The measurement unit of the radius.
      */
     public GeoSearchShape(double radius, GeoUnit unit) {
         this.shape = SearchShape.BYRADIUS;
@@ -62,11 +50,11 @@ public final class GeoSearchShape {
     }
 
     /**
-     * BYBOX constructor for GeoSearchShape
+     * Define a rectangular search area.
      *
      * @param width The width to search by.
      * @param height The height to search by.
-     * @param unit The unit of the radius.
+     * @param unit The measurement unit of the width and height.
      */
     public GeoSearchShape(double width, double height, GeoUnit unit) {
         this.shape = SearchShape.BYBOX;
@@ -91,7 +79,7 @@ public final class GeoSearchShape {
                 return new String[] {
                     shape.toString(), Double.toString(width), Double.toString(height), unit.getValkeyAPI()
                 };
-            default:
+            default: // unreachable
                 return new String[] {};
         }
     }

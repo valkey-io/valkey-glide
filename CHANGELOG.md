@@ -1,4 +1,5 @@
 #### Changes
+* Java, Python: Update docs for GEOSEARCH command ([#2015](https://github.com/valkey-io/valkey-glide/pull/2015))
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
