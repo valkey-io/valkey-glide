@@ -571,10 +571,13 @@ export async function transactionTest(
         args.push(0);
         baseTransaction.zmscore(key12, ["two", "one"]);
         args.push([2.0, 1.0]);
+        baseTransaction.zinterstore(key12, [key12, key13]);
+        args.push(0);
+    } else {
+        baseTransaction.zinterstore(key12, [key12, key13]);
+        args.push(2);
     }
 
-    //baseTransaction.zinterstore(key12, [key12, key13]);
-    //args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
     args.push(4);
     baseTransaction.zpopmin(key8);
