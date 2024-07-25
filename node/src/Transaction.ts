@@ -147,7 +147,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    GeoUnit,
     createZIncrBy,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
