@@ -1086,7 +1086,11 @@ export class BaseClient {
      * console.log(result2); // Output: 10 - The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
      * ```
      */
-    public bitpos(key: string, bit: number, start?: number): Promise<number> {
+    public async bitpos(
+        key: string,
+        bit: number,
+        start?: number,
+    ): Promise<number> {
         return this.createWritePromise(createBitPos(key, bit, start));
     }
 
@@ -1123,7 +1127,7 @@ export class BaseClient {
      * console.log(result2); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
      * ```
      */
-    public bitposInterval(
+    public async bitposInterval(
         key: string,
         bit: number,
         start: number,
