@@ -1460,7 +1460,7 @@ export class BaseClient {
      * console.log(updated_array_key2); // Output: ["one", "three", "four"].
      * ```
      */
-    public lmove(
+    public async lmove(
         source: string,
         destination: string,
         whereFrom: ListDirection,
