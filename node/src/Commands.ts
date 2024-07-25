@@ -1885,7 +1885,7 @@ export function createDBSize(): command_request.Command {
 
 /**
  * Represents a geographic position defined by longitude and latitude.
- * The exact limits, as specified by `EPSG:900913 / EPSG:3785 / OSGEO:41001` are the
+ * The exact limits, as specified by `EPSG:900913` / `EPSG:3785` / `OSGEO:41001` are the
  * following:
  *
  *   Valid longitudes are from `-180` to `180` degrees.
@@ -1922,16 +1922,6 @@ export function createGeoAdd(
     return createCommand(RequestType.GeoAdd, args);
 }
 
-/**
- * @internal
- */
-export function createGeoPos(
-    key: string,
-    members: string[],
-): command_request.Command {
-    return createCommand(RequestType.GeoPos, [key].concat(members));
-}
-
 /** Enumeration representing distance units options. */
 export enum GeoUnit {
     /** Represents distance in meters. */
@@ -1942,6 +1932,16 @@ export enum GeoUnit {
     MILES = "mi",
     /** Represents distance in feet. */
     FEET = "ft",
+}
+
+/**
+ * @internal
+ */
+export function createGeoPos(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.GeoPos, [key].concat(members));
 }
 
 /**
