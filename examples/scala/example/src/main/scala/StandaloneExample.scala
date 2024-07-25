@@ -1,4 +1,3 @@
-import ClusterExample.execAppLogic
 import glide.api.GlideClient
 import glide.api.logging.Logger
 import glide.api.models.configuration.GlideClientConfiguration
@@ -10,7 +9,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FutureConverters.*
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 object StandaloneExample {
 

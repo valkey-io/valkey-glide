@@ -10,7 +10,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.jdk.CollectionConverters.*
 import scala.jdk.FutureConverters.*
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 object ClusterExample {
 
