@@ -1,6 +1,11 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.examples;
 
+import static glide.api.logging.Logger.Level.ERROR;
+import static glide.api.logging.Logger.Level.INFO;
+import static glide.api.logging.Logger.Level.WARN;
+import static glide.api.logging.Logger.log;
+
 import glide.api.GlideClient;
 import glide.api.logging.Logger;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -9,22 +14,20 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.TimeoutException;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-
-import static glide.api.logging.Logger.Level.ERROR;
-import static glide.api.logging.Logger.Level.INFO;
-import static glide.api.logging.Logger.Level.WARN;
-import static glide.api.logging.Logger.log;
 
 public class StandaloneExample {
 
     /**
      * Creates and returns a <code>GlideClient</code> instance.
      *
-     * This function initializes a <code>GlideClient</code> with the provided list of nodes.
-     * The list may contain either only primary node or a mix of primary and replica nodes. The <code>GlideClient
+     * <p>This function initializes a <code>GlideClient</code> with the provided list of nodes. The
+     * list may contain either only primary node or a mix of primary and replica nodes. The <code>
+     * GlideClient
      * </code> use these nodes to connect to the Standalone setup servers.
      *
      * @return A <code>GlideClient</code> connected to the provided node address.
@@ -32,16 +35,14 @@ public class StandaloneExample {
      * @throws ExecutionException if the client fails due to execution errors.
      * @throws InterruptedException if the operation is interrupted.
      */
-    public static GlideClient createClient() throws CancellationException, ExecutionException, InterruptedException {
-        String host = "localhost";
-        Integer port = 6379;
-
+    public static GlideClient createClient(List<NodeAddress> nodeList)
+            throws CancellationException, ExecutionException, InterruptedException {
         // Check `GlideClientConfiguration` for additional options.
         GlideClientConfiguration config =
                 GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(host).port(port).build())
+                        .addresses(nodeList)
                         // Enable this field if the servers are configured with TLS.
-                        //.useTLS(true);
+                        // .useTLS(true);
                         .build();
 
         GlideClient client = GlideClient.createClient(config).get();
@@ -77,8 +78,12 @@ public class StandaloneExample {
      */
     private static void execAppLogic() throws ExecutionException {
 
+        // Define list of nodes
+        List<NodeAddress> nodeList =
+                Collections.singletonList(NodeAddress.builder().host("localhost").port(6379).build());
+
         while (true) {
-            try (GlideClient client = createClient()) {
+            try (GlideClient client = createClient(nodeList)) {
                 appLogic(client);
                 return;
             } catch (CancellationException e) {
@@ -94,14 +99,10 @@ public class StandaloneExample {
                     // If the error message contains "NOAUTH", raise the exception
                     // because it indicates a critical authentication issue.
                     if (e.getMessage().contains("NOAUTH")) {
-                        log(
-                            ERROR, "glide", "Authentication error encountered: " + e.getMessage());
+                        log(ERROR, "glide", "Authentication error encountered: " + e.getMessage());
                         throw e;
                     } else {
-                        log(
-                            WARN,
-                            "glide",
-                            "Client has closed and needs to be re-created: " + e.getMessage());
+                        log(WARN, "glide", "Client has closed and needs to be re-created: " + e.getMessage());
                     }
                 } else if (e.getCause() instanceof ConnectionException) {
                     // The client wasn't able to reestablish the connection within the given retries
@@ -121,8 +122,8 @@ public class StandaloneExample {
     }
 
     /**
-     * The entry point of the standalone example. This method sets up the logger configuration
-     * and executes the main application logic.
+     * The entry point of the standalone example. This method sets up the logger configuration and
+     * executes the main application logic.
      *
      * @param args Command-line arguments passed to the application.
      * @throws ExecutionException if an error occurs during execution of the application logic.
