@@ -4,14 +4,20 @@
 
 import {
     AggregationType,
+    BitOffsetOptions,
+    BitmapIndexType,
     BitwiseOperation,
     ExpireOptions,
+    FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoAddOptions,
+    GeospatialData,
     GeoUnit,
     InfoOptions,
     InsertPosition,
     KeyWeight,
+    LPosOptions,
     ListDirection,
     LolwutOptions,
     RangeByIndex,
@@ -28,6 +34,7 @@ import {
     createBRPop,
     createBitCount,
     createBitOp,
+    createBitPos,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -152,13 +159,9 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    createZIncrBy,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
-import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { FlushMode } from "./commands/FlushMode";
-import { LPosOptions } from "./commands/LPosOptions";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -456,6 +459,59 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public setbit(key: string, offset: number, value: number): T {
         return this.addAndReturn(createSetBit(key, offset, value));
+    }
+
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The optional starting offset
+     * `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+     * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+     * the last byte of the list, `-2` being the penultimate, and so on.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - (Optional) The starting offset. If not supplied, the search will start at the beginning of the string.
+     *
+     * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+     *      If `start` was provided, the search begins at the offset indicated by `start`.
+     */
+    public bitpos(key: string, bit: number, start?: number): T {
+        return this.addAndReturn(createBitPos(key, bit, start));
+    }
+
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+     * `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+     * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+     * being the penultimate, and so on.
+     *
+     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
+     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+     * specified, `start=0` and `end=2` means to look at the first three bytes.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @param indexType - (Optional) The index offset type. This option can only be specified if you are using Valkey
+     *      version 7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no
+     *      index type is provided, the indexes will be assumed to be byte indexes.
+     *
+     * Command Response - The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the
+     *      binary value of the string held at `key`.
+     */
+    public bitposInterval(
+        key: string,
+        bit: number,
+        start: number,
+        end: number,
+        indexType?: BitmapIndexType,
+    ): T {
+        return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
     }
 
     /** Reads the configuration parameters of a running Redis server.
@@ -2142,6 +2198,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Increments the score of `member` in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score.
+     * If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+     *
+     * See https://valkey.io/commands/zincrby/ for details.
+     *
+     * @param key - The key of the sorted set.
+     * @param increment - The score increment.
+     * @param member - A member of the sorted set.
+     *
+     * Command Response - The new score of `member`.
+     */
+    public zincrby(key: string, increment: number, member: string): T {
+        return this.addAndReturn(createZIncrBy(key, increment, member));
     }
 
     /**

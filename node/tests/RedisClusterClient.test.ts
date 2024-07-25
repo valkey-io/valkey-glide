@@ -22,8 +22,8 @@ import {
     Routes,
     ScoreFilter,
 } from "..";
+import { FlushMode } from "../build-ts/src/Commands";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
