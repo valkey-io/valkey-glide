@@ -3757,6 +3757,7 @@ export class BaseClient {
                 constructor,
             );
         } catch (err) {
+            // Ensure socket is closed
             socket.end();
             throw err;
         }

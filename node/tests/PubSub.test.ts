@@ -288,6 +288,16 @@ describe("PubSub", () => {
         [false, MethodTesting.Callback],
     ];
 
+    /**
+     * Tests the basic happy path for exact PUBSUB functionality.
+     *
+     * This test covers the basic PUBSUB flow using three different methods:
+     * Async, Sync, and Callback. It verifies that a message published to a
+     * specific channel is correctly received by a subscriber.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     */
     it.each(testCases)(
         `pubsub exact happy path test_%p%p`,
         async (clusterMode, method) => {
@@ -3070,6 +3080,21 @@ describe("PubSub", () => {
             TIMEOUT,
         );
 
+        /**
+         * Tests publishing and receiving maximum size messages in sharded PUBSUB with callback method.
+         *
+         * This test verifies that very large messages (512MB - BulkString max size) can be published and received
+         * correctly. It ensures that the PUBSUB system
+         * can handle maximum size messages without errors and that callback
+         * retrieval methods can coexist and function correctly.
+         *
+         * The test covers the following scenarios:
+         * - Setting up PUBSUB subscription for a specific sharded channel.
+         * - Publishing a maximum size message to the channel.
+         * - Verifying that the messages are received correctly using callbacl method.
+         *
+         * @param clusterMode - Indicates if the test should be run in cluster mode.
+         */
         it.each([true])(
             "test pubsub sharded max size message callback_%p",
             async (clusterMode) => {
