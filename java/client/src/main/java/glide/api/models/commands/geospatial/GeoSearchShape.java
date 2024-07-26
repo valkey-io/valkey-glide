@@ -11,26 +11,17 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 public final class GeoSearchShape {
 
     /** The geosearch query's shape. */
-    public enum SearchShape {
+    enum SearchShape {
         /** Circular shaped query. */
         BYRADIUS,
         /** Rectangular shaped query. */
         BYBOX
     }
 
-    /** The geosearch query's shape. */
     private final SearchShape shape;
-
-    /** The circular geosearch query's radius. */
     private final double radius;
-
-    /** The box geosearch query's width. */
     private final double width;
-
-    /** The box geosearch query's height. */
     private final double height;
-
-    /** The geosearch query's measurement unit. */
     private final GeoUnit unit;
 
     /**

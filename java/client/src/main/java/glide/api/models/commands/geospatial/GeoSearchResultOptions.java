@@ -8,20 +8,16 @@ import java.util.List;
 
 /**
  * Optional arguments for {@link GeospatialIndicesBaseCommands#geosearch(String,
- * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions)} command that contains up to 2
+ * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions)} command that contains up to 3
  * optional input, including:
  *
  * <ul>
- *   <li>SortOrder: The query's order to sort the results by:
- *       <ul>
- *         <li>ASC: Sort returned items from the nearest to the farthest, relative to the center
- *             point.
- *         <li>DESC: Sort returned items from the farthest to the nearest, relative to the center
- *             point.
- *       </ul>
- *   <li>COUNT: Limits the results to the first N matching items, when the 'ANY' option is used, the
- *       command returns as soon as enough matches are found. This means that the results might may
- *       not be the ones closest to the origin.
+ *   <li>{@link SortOrder} to order the search results by the distance to the center point of the
+ *       search area.
+ *   <li><code>COUNT</code> to limits the number of search results.
+ *   <li><code>ANY</code> option, which could be used with <code>COUNT</code> only, makes command to
+ *       return as soon as enough matches are found. This means that the results might may not be
+ *       the ones closest to the origin.
  * </ul>
  *
  * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
@@ -45,35 +41,35 @@ public class GeoSearchResultOptions {
     /** Whether to allow returning as soon as enough matches are found. */
     private final boolean isAny;
 
-    /** Constructor with count only. */
+    /** Define number of search results. */
     public GeoSearchResultOptions(long count) {
         this.sortOrder = null;
         this.count = count;
         this.isAny = false;
     }
 
-    /** Constructor with count and the {@link #isAny} option. */
+    /** Define number of search results <code>ANY</code> option. */
     public GeoSearchResultOptions(long count, boolean isAny) {
         this.sortOrder = null;
         this.count = count;
         this.isAny = isAny;
     }
 
-    /** Constructor with sort order only. */
+    /** Define the sort order only. */
     public GeoSearchResultOptions(SortOrder order) {
         this.sortOrder = order;
         this.count = -1;
         this.isAny = false;
     }
 
-    /** Constructor with sort order and count. */
+    /** Define the sort order and count. */
     public GeoSearchResultOptions(SortOrder order, long count) {
         this.sortOrder = order;
         this.count = count;
         this.isAny = false;
     }
 
-    /** Constructor with sort order, count and {@link #isAny} option. */
+    /** Configure all parameters. */
     public GeoSearchResultOptions(SortOrder order, long count, boolean isAny) {
         this.sortOrder = order;
         this.count = count;
