@@ -1457,40 +1457,17 @@ export function runBaseTests<Context>(config: {
 
                 // BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
                 // avoid having the test block forever
-
-                // async setTimeout(() => {
-                // if (client instanceof GlideClient) {
-                //     expect(
-                //         await client.blmove(
-                //             "{SameSlot}non_existing_key",
-                //             key2,
-                //             ListDirection.LEFT,
-                //             ListDirection.RIGHT,
-                //             0,
-                //         ),
-                //     ).rejects.toThrow(TimeoutError);
-                // }
-                // }, 10000);
-
-                function delay(ms: number): Promise<void> {
-                    return new Promise((resolve) => setTimeout(resolve, ms));
-                }
-
-                // Async function using delay
                 async function blmove_timeout_test() {
-                    await delay(10000); // Wait for 10 seconds
-
-                    if (client instanceof GlideClusterClient) {
-                        expect(
-                            await client.blmove(
-                                "{SameSlot}non_existing_key",
-                                key2,
-                                ListDirection.LEFT,
-                                ListDirection.RIGHT,
-                                0,
-                            ),
-                        ).rejects.toThrow(TimeoutError);
-                    }
+                    await wait(50000);
+                    expect(
+                        await client.blmove(
+                            "{SameSlot}non_existing_key",
+                            key2,
+                            ListDirection.LEFT,
+                            ListDirection.RIGHT,
+                            0,
+                        ),
+                    ).rejects.toThrow(TimeoutError);
                 }
 
                 blmove_timeout_test();
