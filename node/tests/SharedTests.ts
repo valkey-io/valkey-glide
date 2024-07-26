@@ -29,7 +29,6 @@ import {
     Script,
     UpdateByScore,
     parseInfoResponse,
-    TimeoutError,
 } from "../";
 import { RedisCluster } from "../../utils/TestUtils";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
