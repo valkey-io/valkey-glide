@@ -10,25 +10,22 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
+    FlushMode,
     GeoUnit,
+    GeospatialData,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
     Logger,
+    ListDirection,
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
     Transaction,
 } from "..";
-import {
-    BitmapIndexType,
-    BitOffsetOptions,
-} from "../build-ts/src/commands/BitOffsetOptions";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
 
 beforeAll(() => {
     Logger.init("info");
@@ -399,6 +396,7 @@ export async function transactionTest(
     const key17 = "{key}" + uuidv4(); // bitmap
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
+    const key20 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -476,8 +474,26 @@ export async function transactionTest(
     responseData.push(['lset(key5, 0, field + "3")', "OK"]);
     baseTransaction.lrange(key5, 0, -1);
     responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
-    baseTransaction.lpopCount(key5, 2);
-    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction.lmove(
+            key5,
+            key20,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+        );
+        responseData.push([
+            "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
+            field + "3",
+        ]);
+
+        baseTransaction.lpopCount(key5, 2);
+        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
+    } else {
+        baseTransaction.lpopCount(key5, 2);
+        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+    }
+
     baseTransaction.linsert(
         key5,
         InsertPosition.Before,
@@ -508,20 +524,10 @@ export async function transactionTest(
         field + "3",
     ]);
     responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
-    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
-    responseData.push([
-        'lpos(key16, field + "1", new LPosOptions({ rank: 2 }))',
-        1,
-    ]);
-    baseTransaction.lpos(
-        key16,
-        field + "1",
-        new LPosOptions({ rank: 2, count: 0 }),
-    );
-    responseData.push([
-        'lpos(key16, field + "1", new LPosOptions({ rank: 2, count: 0 }))',
-        [1],
-    ]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2 })', 1]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2, count: 0 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2, count: 0 })', [1]]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
     baseTransaction.sunionstore(key7, [key7, key7]);
@@ -595,6 +601,8 @@ export async function transactionTest(
 
     baseTransaction.zaddIncr(key8, "member2", 1);
     responseData.push(['zaddIncr(key8, "member2", 1)', 3]);
+    baseTransaction.zincrby(key8, 0.3, "member1");
+    responseData.push(['zincrby(key8, 0.3, "member1")', 1.3]);
     baseTransaction.zrem(key8, ["member1"]);
     responseData.push(['zrem(key8, ["member1"])', 1]);
     baseTransaction.zcard(key8);
@@ -659,6 +667,18 @@ export async function transactionTest(
         responseData.push(["zmpop([key14], MAX)", [key14, { two: 2.0 }]]);
         baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
         responseData.push(["zmpop([key14], MAX, 1)", [key14, { one: 1.0 }]]);
+        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
+        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
+        responseData.push([
+            "bzmpop([key14], ScoreFilter.MAX, 0.1)",
+            [key14, { two: 2.0 }],
+        ]);
+        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
+        responseData.push([
+            "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
+            [key14, { one: 1.0 }],
+        ]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
@@ -729,8 +749,10 @@ export async function transactionTest(
     responseData.push(['set(key17, "foobar")', "OK"]);
     baseTransaction.bitcount(key17);
     responseData.push(["bitcount(key17)", 26]);
-    baseTransaction.bitcount(key17, new BitOffsetOptions(1, 1));
-    responseData.push(["bitcount(key17, new BitOffsetOptions(1, 1))", 6]);
+    baseTransaction.bitcount(key17, { start: 1, end: 1 });
+    responseData.push(["bitcount(key17, { start: 1, end: 1 })", 6]);
+    baseTransaction.bitpos(key17, 1);
+    responseData.push(["bitpos(key17, 1)", 1]);
 
     baseTransaction.set(key19, "abcdef");
     responseData.push(['set(key19, "abcdef")', "OK"]);
@@ -743,13 +765,19 @@ export async function transactionTest(
     responseData.push(["get(key19)", "`bc`ab"]);
 
     if (gte("7.0.0", version)) {
-        baseTransaction.bitcount(
-            key17,
-            new BitOffsetOptions(5, 30, BitmapIndexType.BIT),
-        );
+        baseTransaction.bitcount(key17, {
+            start: 5,
+            end: 30,
+            indexType: BitmapIndexType.BIT,
+        });
         responseData.push([
             "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
             17,
+        ]);
+        baseTransaction.bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT);
+        responseData.push([
+            "bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT)",
+            46,
         ]);
     }
 
@@ -759,9 +787,9 @@ export async function transactionTest(
     responseData.push(["pfcount([key11])", 3]);
     baseTransaction.geoadd(
         key18,
-        new Map([
-            ["Palermo", new GeospatialData(13.361389, 38.115556)],
-            ["Catania", new GeospatialData(15.087269, 37.502669)],
+        new Map<string, GeospatialData>([
+            ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
+            ["Catania", { longitude: 15.087269, latitude: 37.502669 }],
         ]),
     );
     responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);

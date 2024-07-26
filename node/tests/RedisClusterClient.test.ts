@@ -21,8 +21,8 @@ import {
     Routes,
     ScoreFilter,
 } from "..";
+import { FlushMode } from "../build-ts/src/Commands";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -333,6 +333,7 @@ describe("GlideClusterClient", () => {
                     client.sintercard(["abc", "zxy", "lkn"]),
                     client.zintercard(["abc", "zxy", "lkn"]),
                     client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
+                    client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
                 );
             }
 
