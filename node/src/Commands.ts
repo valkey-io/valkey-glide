@@ -1800,6 +1800,19 @@ export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
+export function createZLexCount(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZLexCount, args);
+}
+
 export function createZRank(
     key: string,
     member: string,

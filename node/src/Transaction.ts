@@ -170,6 +170,7 @@ import {
     createZIncrBy,
     createZInterCard,
     createZInterstore,
+    createZLexCount,
     createZMPop,
     createZMScore,
     createZPopMax,
@@ -1789,6 +1790,31 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZRemRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at <code>key</code> with scores between
+     * 'minLex' and 'maxLex'.
+     *
+     * See https://valkey.io/commands/zlexcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be an implementation of {@link InfLexBound}
+     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
+     *     and inclusivity.
+     * Command Response - The number of members in the specified lex range.
+     * - If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
+     * - If maxLex less than minLex, '0' is returned.
+     */
+    public zlexcount(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): T {
+        return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.

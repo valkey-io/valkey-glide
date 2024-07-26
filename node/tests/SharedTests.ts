@@ -4257,6 +4257,73 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zlexcount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                // In range negative to positive infinity.
+                expect(
+                    await client.zlexcount(
+                        key,
+                        "negativeInfinity",
+                        "positiveInfinity",
+                    ),
+                ).toEqual(3);
+
+                // In range a (exclusive) to c (inclusive)
+                expect(
+                    await client.zlexcount(
+                        key,
+                        { value: "a", isInclusive: false },
+                        "positiveInfinity",
+                    ),
+                ).toEqual(2);
+
+                // In range negative infinity to c (inclusive)
+                expect(
+                    await client.zlexcount(key, "negativeInfinity", {
+                        value: "c",
+                        isInclusive: true,
+                    }),
+                ).toEqual(3);
+
+                // Incorrect range start > end
+                expect(
+                    await client.zlexcount(key, "positiveInfinity", {
+                        value: "c",
+                        isInclusive: true,
+                    }),
+                ).toEqual(0);
+
+                // Non-existing key
+                expect(
+                    await client.zlexcount(
+                        "non_existing_key",
+                        "negativeInfinity",
+                        "positiveInfinity",
+                    ),
+                ).toEqual(0);
+
+                // Key exists, but it is not a set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.zlexcount(
+                        stringKey,
+                        "negativeInfinity",
+                        "positiveInfinity",
+                    ),
+                ).rejects.toThrow();
+                await expect(client.xlen(stringKey)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "time test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
