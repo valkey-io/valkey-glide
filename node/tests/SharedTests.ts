@@ -792,7 +792,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bitfield test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster) => {
+            await runTest(async (client: BaseClient) => {
                 const key1 = `{key}-${uuidv4()}`;
                 const key2 = `{key}-${uuidv4()}`;
                 const nonExistingKey = `{key}-${uuidv4()}`;
