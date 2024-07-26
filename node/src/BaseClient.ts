@@ -12,11 +12,17 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BitmapIndexType,
+    BitOffsetOptions,
     BitwiseOperation,
     ExpireOptions,
+    GeoAddOptions,
+    GeospatialData,
     GeoUnit,
     InsertPosition,
     KeyWeight,
+    LPosOptions,
+    ListDirection,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -31,6 +37,7 @@ import {
     createBRPop,
     createBitCount,
     createBitOp,
+    createBitPos,
     createDecr,
     createDecrBy,
     createDel,
@@ -63,6 +70,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -119,6 +127,7 @@ import {
     createZDiff,
     createZDiffStore,
     createZDiffWithScores,
+    createZIncrBy,
     createZInterCard,
     createZInterstore,
     createZMPop,
@@ -135,10 +144,6 @@ import {
     createZRevRankWithScore,
     createZScore,
 } from "./Commands";
-import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
-import { GeospatialData } from "./commands/geospatial/GeospatialData";
-import { LPosOptions } from "./commands/LPosOptions";
 import {
     ClosingError,
     ConfigurationError,
@@ -1060,6 +1065,83 @@ export class BaseClient {
         return this.createWritePromise(createSetBit(key, offset, value));
     }
 
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The optional starting offset
+     * `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+     * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+     * the last byte of the list, `-2` being the penultimate, and so on.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - (Optional) The starting offset. If not supplied, the search will start at the beginning of the string.
+     * @returns The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+     *      If `start` was provided, the search begins at the offset indicated by `start`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "A1");  // "A1" has binary value 01000001 00110001
+     * const result1 = await client.bitpos("key1", 1);
+     * console.log(result1); // Output: 1 - The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+     *
+     * const result2 = await client.bitpos("key1", 1, -1);
+     * console.log(result2); // Output: 10 - The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+     * ```
+     */
+    public async bitpos(
+        key: string,
+        bit: number,
+        start?: number,
+    ): Promise<number> {
+        return this.createWritePromise(createBitPos(key, bit, start));
+    }
+
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+     * `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+     * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+     * being the penultimate, and so on.
+     *
+     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
+     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+     * specified, `start=0` and `end=2` means to look at the first three bytes.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @param indexType - (Optional) The index offset type. This option can only be specified if you are using Valkey
+     *      version 7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no
+     *      index type is provided, the indexes will be assumed to be byte indexes.
+     * @returns The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
+     *      value of the string held at `key`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "A12");  // "A12" has binary value 01000001 00110001 00110010
+     * const result1 = await client.bitposInterval("key1", 1, 1, -1);
+     * console.log(result1); // Output: 10 - The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+     *
+     * const result2 = await client.bitposInterval("key1", 1, 2, 9, BitmapIndexType.BIT);
+     * console.log(result2); // Output: 7 - The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+     * ```
+     */
+    public async bitposInterval(
+        key: string,
+        bit: number,
+        start: number,
+        end: number,
+        indexType?: BitmapIndexType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createBitPos(key, bit, start, end, indexType),
+        );
+    }
+
     /** Retrieve the value associated with `field` in the hash stored at `key`.
      * See https://valkey.io/commands/hget/ for details.
      *
@@ -1463,6 +1545,47 @@ export class BaseClient {
      */
     public llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
+    }
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at `source`
+     * depending on `whereTo`, and pushes the element at the first/last element of the list
+     * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
+     *
+     * See https://valkey.io/commands/lmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @returns The popped element, or `null` if `source` does not exist.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey1", ["two", "one"]);
+     * await client.lpush("testKey2", ["four", "three"]);
+     *
+     * const result1 = await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT);
+     * console.log(result1); // Output: "one".
+     *
+     * const updated_array_key1 = await client.lrange("testKey1", 0, -1);
+     * console.log(updated_array); // Output: "two".
+     *
+     * const updated_array_key2 = await client.lrange("testKey2", 0, -1);
+     * console.log(updated_array_key2); // Output: ["one", "three", "four"].
+     * ```
+     */
+    public async lmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+    ): Promise<string | null> {
+        return this.createWritePromise(
+            createLMove(source, destination, whereFrom, whereTo),
+        );
     }
 
     /**
@@ -2265,7 +2388,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zadd method to update scores in an existing sorted set
-     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, { conditionalChange: "onlyIfExists", changed: true });
+     * const options = { conditionalChange: ConditionalChange.ONLY_IF_EXISTS, changed: true };
+     * const result = await client.zadd("existing_sorted_set", { member1: 15.0, member2: 5.5 }, options);
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
@@ -3444,8 +3568,8 @@ export class BaseClient {
      * @example
      * ```typescript
      * await client.rpush("myList", ["a", "b", "c", "d", "e", "e"]);
-     * console.log(await client.lpos("myList", "e", new LPosOptions({ rank: 2 }))); // Output: 5 - the second occurrence of "e" is at index 5.
-     * console.log(await client.lpos("myList", "e", new LPosOptions({ count: 3 }))); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
+     * console.log(await client.lpos("myList", "e", { rank: 2 })); // Output: 5 - the second occurrence of "e" is at index 5.
+     * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
      * ```
      */
     public lpos(
@@ -3471,9 +3595,9 @@ export class BaseClient {
      * @example
      * ```typescript
      * console.log(await client.bitcount("my_key1")); // Output: 2 - The string stored at "my_key1" contains 2 set bits.
-     * console.log(await client.bitcount("my_key2", OffsetOptions(1, 3))); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
-     * console.log(await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
-     * console.log(await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key2", { start: 1, end: 3 })); // Output: 2 - The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+     * console.log(await client.bitcount("my_key3", { start: 1, end: 1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the second bit of the string stored at "my_key3" is set.
+     * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
      * ```
      */
     public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
@@ -3496,8 +3620,11 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const options = new GeoAddOptions({updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true});
-     * const num = await client.geoadd("mySortedSet", new Map([["Palermo", new GeospatialData(13.361389, 38.115556)]]), options);
+     * const options = {updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true};
+     * const membersToCoordinates = new Map<string, GeospatialData>([
+     *      ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
+     * ]);
+     * const num = await client.geoadd("mySortedSet", membersToCoordinates, options);
      * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
      * ```
      */
@@ -3525,7 +3652,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const data = new Map([["Palermo", new GeospatialData(13.361389, 38.115556)], ["Catania", new GeospatialData(15.087269, 37.502669)]]);
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
      * await client.geoadd("mySortedSet", data);
      * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
@@ -3571,6 +3698,39 @@ export class BaseClient {
         count?: number,
     ): Promise<[string, [Record<string, number>]] | null> {
         return this.createWritePromise(createZMPop(key, modifier, count));
+    }
+
+    /**
+     * Increments the score of `member` in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score.
+     * If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+     *
+     * See https://valkey.io/commands/zincrby/ for details.
+     *
+     * @param key - The key of the sorted set.
+     * @param increment - The score increment.
+     * @param member - A member of the sorted set.
+     *
+     * @returns The new score of `member`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zincrBy method to increment the value of a member's score
+     * await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2});
+     * console.log(await client.zincrby("my_sorted_set", 1.2, "member"));
+     * // Output: 11.7 - The member existed in the set before score was altered, the new score is 11.7.
+     * console.log(await client.zincrby("my_sorted_set", -1.7, "member"));
+     * // Output: 10.0 - Negative increment, decrements the score.
+     * console.log(await client.zincrby("my_sorted_set", 5.5, "non_existing_member"));
+     * // Output: 5.5 - A new member is added to the sorted set with the score of 5.5.
+     * ```
+     */
+    public async zincrby(
+        key: string,
+        increment: number,
+        member: string,
+    ): Promise<number> {
+        return this.createWritePromise(createZIncrBy(key, increment, member));
     }
 
     /**
