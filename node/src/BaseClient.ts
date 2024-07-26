@@ -2903,10 +2903,8 @@ export class BaseClient {
     public async zrandmemberWithCountWithScores(
         key: string,
         count: number,
-    ): Promise<object[][]> {
-        return this.createWritePromise<object[][]>(
-            createZRandMember(key, count, true),
-        );
+    ): Promise<[string, number][]> {
+        return this.createWritePromise(createZRandMember(key, count, true));
     }
 
     /** Returns the length of the string value stored at `key`.
