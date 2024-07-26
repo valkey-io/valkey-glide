@@ -39,6 +39,7 @@
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
 * Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
+* Node: Added ZLEXCOUNT command ([#2022](https://github.com/valkey-io/valkey-glide/pull/2022))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

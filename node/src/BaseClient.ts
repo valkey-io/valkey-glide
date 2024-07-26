@@ -3299,26 +3299,22 @@ export class BaseClient {
      * See https://valkey.io/commands/zlexcount/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param minLex - The minimum lex to count from. Can be an implementation of {@link InfLexBound}
-     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
-     *     and inclusivity.
-     * @param maxLex - The maximum lex to count up to. Can be an implementation of {@link InfLexBound}
-     *     representing positive/negative infinity, or {@link LexBoundary} representing a specific lex
-     *     and inclusivity.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
      * @returns - The number of members in the specified lex range.
      * - If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
      * - If maxLex less than minLex, '0' is returned.
      *
      * @example
      * ```typescript
-     * const result = await client.zlexcount("my_sorted_set", {"c", true}, LexBound.POSITIVE_INFINITY);
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, 'positiveInfinity');
      * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
      *
-     * Long num2 = client.zlexcount("my_sorted_set", new ScoreBoundary("c", true), new ScoreBoundary("k", false)).get();
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
      * console.log(result); // Output: 1 - Indicates that there is one member with LexBoundary "c" <= score < "k" in the sorted set "my_sorted_set".
      * ```
      */
-    public zlexcount(
+    public async zlexcount(
         key: string,
         minLex: ScoreBoundary<string>,
         maxLex: ScoreBoundary<string>,

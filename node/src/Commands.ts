@@ -1800,6 +1800,9 @@ export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
+/**
+ * @internal
+ */
 export function createZLexCount(
     key: string,
     minLex: ScoreBoundary<string>,
