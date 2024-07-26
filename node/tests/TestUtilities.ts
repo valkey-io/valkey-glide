@@ -5,8 +5,8 @@
 import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
-import { v4 as uuidv4 } from "uuid";
 import { gte } from "semver";
+import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
@@ -697,6 +697,12 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction.copy(key9, key10, undefined, true);
+        responseData.push(["copy(key9, key10, undefined, true)", true]);
+    }
+
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);

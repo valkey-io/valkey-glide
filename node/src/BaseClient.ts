@@ -31,6 +31,7 @@ import {
     createBRPop,
     createBitCount,
     createBitOp,
+    createCopy,
     createDecr,
     createDecrBy,
     createDel,
@@ -3367,6 +3368,36 @@ export class BaseClient {
      */
     public objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key if the `destination` key does not
+     * yet exist.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - If the destination key should be removed before copying the value to it.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2", true);
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: string,
+        destination: string,
+        replace?: boolean,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, undefined, replace),
+        );
     }
 
     /**

@@ -1861,6 +1861,29 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
 }
 
 /**
+ *
+ * @internal
+ */
+export function createCopy(
+    source: string,
+    destination: string,
+    destinationDB?: number,
+    replace?: boolean,
+): command_request.Command {
+    let args: string[] = [source, destination];
+
+    if (destinationDB) {
+        args = args.concat("DB", destinationDB.toString());
+    }
+
+    if (replace) {
+        args.push("REPLACE");
+    }
+
+    return createCommand(RequestType.Copy, args);
+}
+
+/**
  * @internal
  */
 export function createLPos(

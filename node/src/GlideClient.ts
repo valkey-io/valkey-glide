@@ -18,6 +18,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -369,6 +370,37 @@ export class GlideClient extends BaseClient {
      */
     public time(): Promise<[string, string]> {
         return this.createWritePromise(createTime());
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
+     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - The alternative logical database index for the destination key.
+     * @param replace - If the destination key should be removed before copying the value to it.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2", 1, false);
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copyDB(
+        source: string,
+        destination: string,
+        destinationDB?: number,
+        replace?: boolean,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, destinationDB, replace),
+        );
     }
 
     /**

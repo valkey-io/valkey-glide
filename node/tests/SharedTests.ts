@@ -13,6 +13,7 @@ import {
     BitwiseOperation,
     ClosingError,
     ExpireOptions,
+    GeoUnit,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
@@ -22,8 +23,18 @@ import {
     ScoreFilter,
     Script,
     parseInfoResponse,
-    GeoUnit,
 } from "../";
+import { RedisCluster } from "../../utils/TestUtils";
+import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
+import {
+    BitOffsetOptions,
+    BitmapIndexType,
+} from "../build-ts/src/commands/BitOffsetOptions";
+import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
+import { FlushMode } from "../build-ts/src/commands/FlushMode";
+import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
+import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
+import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
 import {
     Client,
     GetAndSetRandomValue,
@@ -33,17 +44,6 @@ import {
     intoArray,
     intoString,
 } from "./TestUtilities";
-import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
-import {
-    BitmapIndexType,
-    BitOffsetOptions,
-} from "../build-ts/src/commands/BitOffsetOptions";
-import { LPosOptions } from "../build-ts/src/commands/LPosOptions";
-import { GeospatialData } from "../build-ts/src/commands/geospatial/GeospatialData";
-import { GeoAddOptions } from "../build-ts/src/commands/geospatial/GeoAddOptions";
-import { ConditionalChange } from "../build-ts/src/commands/ConditionalChange";
-import { FlushMode } from "../build-ts/src/commands/FlushMode";
-import { RedisCluster } from "../../utils/TestUtils";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -4245,6 +4245,54 @@ export function runBaseTests<Context>(config: {
                 expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
                     1,
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+                const source = `{key}-${uuidv4()}`;
+                const destination = `{key}-${uuidv4()}`;
+                const value1 = uuidv4();
+                const value2 = uuidv4();
+
+                // neither key exists
+                checkSimple(
+                    await client.copy(source, destination, false),
+                ).toEqual(false);
+                checkSimple(await client.copy(source, destination)).toEqual(
+                    false,
+                );
+
+                // source exists, destination does not
+                expect(await client.set(source, value1)).toEqual("OK");
+                checkSimple(
+                    await client.copy(source, destination, false),
+                ).toEqual(true);
+                checkSimple(await client.get(destination)).toEqual(value1);
+
+                // new value for source key
+                expect(await client.set(source, value2)).toEqual("OK");
+
+                // both exists, no REPLACE
+                checkSimple(await client.copy(source, destination)).toEqual(
+                    false,
+                );
+                checkSimple(
+                    await client.copy(source, destination, false),
+                ).toEqual(false);
+                checkSimple(await client.get(destination)).toEqual(value1);
+
+                // both exists, with REPLACE
+                checkSimple(
+                    await client.copy(source, destination, true),
+                ).toEqual(true);
+                checkSimple(await client.get(destination)).toEqual(value2);
             }, protocol);
         },
         config.timeout,

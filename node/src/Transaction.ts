@@ -31,6 +31,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createDecr,
@@ -1863,6 +1864,32 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public objectRefcount(key: string): T {
         return this.addAndReturn(createObjectRefcount(key));
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
+     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - The alternative logical database index for the destination key.
+     * @param replace - If the destination key should be removed before copying the value to it.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        destinationDB?: number, // ychen - should I remove this since copy with DB doesn't work under cluster mode
+        replace?: boolean,
+    ): T {
+        return this.addAndReturn(
+            createCopy(source, destination, destinationDB, replace),
+        );
     }
 
     /**
