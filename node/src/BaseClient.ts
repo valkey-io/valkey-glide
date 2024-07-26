@@ -2847,9 +2847,7 @@ export class BaseClient {
      * ```
      */
     public async zrandmember(key: string): Promise<string | null> {
-        return this.createWritePromise(createZRandMember(key)).then((result) =>
-            result === null ? null : "" + result,
-        );
+        return this.createWritePromise(createZRandMember(key));
     }
 
     /**
@@ -2877,9 +2875,7 @@ export class BaseClient {
         key: string,
         count: number,
     ): Promise<string[]> {
-        return this.createWritePromise<(string | null)[]>(
-            createZRandMember(key, count),
-        ).then((hashes) => hashes.map((hash) => "" + hash));
+        return this.createWritePromise(createZRandMember(key, count));
     }
 
     /**

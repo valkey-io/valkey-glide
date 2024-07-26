@@ -5178,13 +5178,14 @@ export function runBaseTests<Context>(config: {
                 const key2 = uuidv4();
 
                 const memberScores = { one: 1.0, two: 2.0 };
+                const elements = ["one", "two"];
                 expect(await client.zadd(key1, memberScores)).toBe(2);
 
                 // check random memember belongs to the set
                 const randmember = await client.zrandmember(key1);
 
-                if (randmember) {
-                    expect(memberScores).toHaveProperty(randmember);
+                if (randmember !== null) {
+                    checkSimple(randmember in elements).toEqual(true);
                 }
 
                 // non existing key should return null
@@ -5216,9 +5217,16 @@ export function runBaseTests<Context>(config: {
                 // Duplicate values are expected as count is negative
                 randMembers = await client.zrandmemberWithCount(key1, -4);
                 expect(randMembers.length).toBe(4);
-                expect(randMembers.length).not.toEqual(
-                    new Set(randMembers).size,
-                );
+                const randMemberSet = new Set<string>();
+
+                for (const member of randMembers) {
+                    const memberStr = member + "";
+                    if (!randMemberSet.has(memberStr)) {
+                        randMemberSet.add(memberStr);
+                    }
+                }
+
+                expect(randMembers.length).not.toEqual(randMemberSet.size);
 
                 // non existing key should return empty array
                 randMembers = await client.zrandmemberWithCount(
