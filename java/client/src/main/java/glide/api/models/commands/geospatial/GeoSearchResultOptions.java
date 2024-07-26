@@ -42,7 +42,7 @@ public class GeoSearchResultOptions {
     /** Indicates the number of matches the result should be limited to. */
     private final long count;
 
-    /** Whether to allow returning as enough matches are found. */
+    /** Whether to allow returning as soon as enough matches are found. */
     private final boolean isAny;
 
     /** Constructor with count only. */

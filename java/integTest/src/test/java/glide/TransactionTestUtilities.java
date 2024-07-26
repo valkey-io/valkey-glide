@@ -1120,8 +1120,8 @@ public class TransactionTestUtilities {
                                         }
                                     },
                                 }, // geosearch(geoKey1, (15,37), BYBOX(400,400,km), ASC, COUNT 2)
-                                2L, // geosearchstore(geoKey2, geoKey1, (15,37), (400,400,km), ASC, 2)
-                                2L, // geosearchstore(geoKey2, geoKey1, (15,37), (400,400,km), STOREDIST, ASC, 2)
+                                2L, // geosearchstore(geoKey2, geoKey1, (15, 37), (400, 400, km), ASC, 2)
+                                2L, // geosearchstore(geoKey2, geoKey1, (15, 37), (400, 400, km), STOREDIST, ASC, 2)
                             });
         }
 

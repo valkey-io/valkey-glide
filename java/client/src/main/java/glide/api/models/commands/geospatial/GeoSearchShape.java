@@ -34,7 +34,7 @@ public final class GeoSearchShape {
     private final GeoUnit unit;
 
     /**
-     * Define a circular search area.
+     * Defines a circular search area.
      *
      * @param radius The radius to search by.
      * @param unit The measurement unit of the radius.
@@ -50,7 +50,7 @@ public final class GeoSearchShape {
     }
 
     /**
-     * Define a rectangular search area.
+     * Defines a rectangular search area.
      *
      * @param width The width to search by.
      * @param height The height to search by.
