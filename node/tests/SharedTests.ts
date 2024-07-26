@@ -1123,7 +1123,7 @@ export function runBaseTests<Context>(config: {
                 // key exists but holds non hash type value
                 checkSimple(await client.set(key2, "value")).toEqual("OK");
                 await expect(client.hstrlen(key2, field)).rejects.toThrow(
-                    RedisError,
+                    RequestError,
                 );
             }, protocol);
         },
