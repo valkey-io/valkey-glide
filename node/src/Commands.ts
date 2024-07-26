@@ -623,14 +623,14 @@ export function createBLMove(
     destination: string,
     whereFrom: ListDirection,
     whereTo: ListDirection,
-    timeout: number
+    timeout: number,
 ): command_request.Command {
-    return createCommand(RequestType.LMove, [
+    return createCommand(RequestType.BLMove, [
         source,
         destination,
         whereFrom,
         whereTo,
-        number
+        timeout.toString(),
     ]);
 }
 
