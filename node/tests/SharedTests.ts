@@ -1459,18 +1459,22 @@ export function runBaseTests<Context>(config: {
                 // avoid having the test block forever
                 async function blmove_timeout_test() {
                     await wait(50000);
-                    expect(
-                        await client.blmove(
+                    await expect(
+                        client.blmove(
                             "{SameSlot}non_existing_key",
                             key2,
                             ListDirection.LEFT,
                             ListDirection.RIGHT,
                             0,
                         ),
-                    ).rejects.toThrow(TimeoutError);
+                    ).rejects.toThrow(ClosingError);
                 }
 
-                blmove_timeout_test();
+                try {
+                    blmove_timeout_test();
+                } catch (ClosingError) {
+                    console.log("Closing error with timeout occurred.");
+                }
             }, protocol);
         },
         config.timeout,

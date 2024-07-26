@@ -487,12 +487,21 @@ export async function transactionTest(
             field + "3",
         ]);
 
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
-    } else {
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+        baseTransaction.blmove(
+            key20,
+            key5,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+            3,
+        );
+        responseData.push([
+            "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
+            field + "3",
+        ]);
     }
+
+    baseTransaction.lpopCount(key5, 2);
+    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
 
     baseTransaction.linsert(
         key5,
