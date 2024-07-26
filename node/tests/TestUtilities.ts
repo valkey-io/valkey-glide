@@ -439,6 +439,8 @@ export async function transactionTest(
     responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
     responseData.push(["hset(key4, { [field]: value })", 1]);
+    baseTransaction.hstrlen(key4, field);
+    responseData.push(["hstrlen(key4, field)", value.length]);
     baseTransaction.hlen(key4);
     responseData.push(["hlen(key4)", 1]);
     baseTransaction.hsetnx(key4, field, value);
