@@ -1397,7 +1397,7 @@ export class BaseClient {
     /**
      * Returns the string length of the value associated with `field` in the hash stored at `key`.
      *
-     * See https://valkey.io/commands/hget/ for details.
+     * See https://valkey.io/commands/hstrlen/ for details.
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash.
@@ -1405,8 +1405,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of the hget method on an-existing field
-     * await client.hset("my_hash", "field", "value");
+     * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hstrlen("my_hash", "field");
      * console.log(result); // Output: 5
      * ```

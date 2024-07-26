@@ -8,6 +8,7 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
+import { RedisError } from "build-ts";
 import { v4 as uuidv4 } from "uuid";
 import {
     BitmapIndexType,
@@ -1121,7 +1122,9 @@ export function runBaseTests<Context>(config: {
 
                 // key exists but holds non hash type value
                 checkSimple(await client.set(key2, "value")).toEqual("OK");
-                await expect(client.hstrlen(key2, field)).rejects.toThrow();
+                await expect(client.hstrlen(key2, field)).rejects.toThrow(
+                    RedisError,
+                );
             }, protocol);
         },
         config.timeout,

@@ -684,7 +684,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the string length of the value associated with `field` in the hash stored at `key`.
      *
-     * See https://valkey.io/commands/hget/ for details.
+     * See https://valkey.io/commands/hstrlen/ for details.
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash.
