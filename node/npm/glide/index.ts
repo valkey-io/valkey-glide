@@ -74,8 +74,8 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
-        BitOffsetOptions,
         BitmapIndexType,
+        BitOffsetOptions,
         BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
@@ -101,6 +101,7 @@ function initialize() {
         PeriodicChecks,
         Logger,
         LPosOptions,
+        ListDirection,
         ExpireOptions,
         FlushMode,
         GeoUnit,
@@ -109,6 +110,7 @@ function initialize() {
         SetOptions,
         ZaddOptions,
         ScoreBoundry,
+        UpdateOptions,
         RangeByIndex,
         RangeByScore,
         RangeByLex,
@@ -138,8 +140,8 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
-        BitOffsetOptions,
         BitmapIndexType,
+        BitOffsetOptions,
         BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
@@ -165,6 +167,7 @@ function initialize() {
         PeriodicChecks,
         Logger,
         LPosOptions,
+        ListDirection,
         ExpireOptions,
         FlushMode,
         GeoUnit,
@@ -173,6 +176,7 @@ function initialize() {
         SetOptions,
         ZaddOptions,
         ScoreBoundry,
+        UpdateOptions,
         RangeByIndex,
         RangeByScore,
         RangeByLex,

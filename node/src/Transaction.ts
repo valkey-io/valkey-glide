@@ -4,18 +4,24 @@
 
 import {
     AggregationType,
+    BitOffsetOptions,
+    BitmapIndexType,
     BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
+    FlushMode,
+    GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
-    GeoUnit,
     GeospatialData,
+    GeoUnit,
     InfoOptions,
     InsertPosition,
     KeyWeight,
+    LPosOptions,
+    ListDirection,
     LolwutOptions,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
@@ -31,8 +37,10 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBZMPop,
     createBitCount,
     createBitOp,
+    createBitPos,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -81,6 +89,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -156,12 +165,9 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    createZIncrBy,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
-import { BitOffsetOptions } from "./commands/BitOffsetOptions";
-import { FlushMode } from "./commands/FlushMode";
-import { LPosOptions } from "./commands/LPosOptions";
-import { GeoAddOptions } from "./commands/geospatial/GeoAddOptions";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -461,6 +467,59 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSetBit(key, offset, value));
     }
 
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The optional starting offset
+     * `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+     * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+     * the last byte of the list, `-2` being the penultimate, and so on.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - (Optional) The starting offset. If not supplied, the search will start at the beginning of the string.
+     *
+     * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+     *      If `start` was provided, the search begins at the offset indicated by `start`.
+     */
+    public bitpos(key: string, bit: number, start?: number): T {
+        return this.addAndReturn(createBitPos(key, bit, start));
+    }
+
+    /**
+     * Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+     * `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+     * numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+     * being the penultimate, and so on.
+     *
+     * If you are using Valkey 7.0.0 or above, the optional `indexType` can also be provided to specify whether the
+     * `start` and `end` offsets specify BIT or BYTE offsets. If `indexType` is not provided, BYTE offsets
+     * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+     * specified, `start=0` and `end=2` means to look at the first three bytes.
+     *
+     * See https://valkey.io/commands/bitpos/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param bit - The bit value to match. Must be `0` or `1`.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @param indexType - (Optional) The index offset type. This option can only be specified if you are using Valkey
+     *      version 7.0.0 or above. Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}. If no
+     *      index type is provided, the indexes will be assumed to be byte indexes.
+     *
+     * Command Response - The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the
+     *      binary value of the string held at `key`.
+     */
+    public bitposInterval(
+        key: string,
+        bit: number,
+        start: number,
+        end: number,
+        indexType?: BitmapIndexType,
+    ): T {
+        return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
+    }
+
     /** Reads the configuration parameters of a running Redis server.
      * See https://valkey.io/commands/config-get/ for details.
      *
@@ -713,6 +772,33 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public llen(key: string): T {
         return this.addAndReturn(createLLen(key));
+    }
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at `source`
+     * depending on `whereFrom`, and pushes the element at the first/last element of the list
+     * stored at `destination` depending on `whereTo`, see {@link ListDirection}.
+     *
+     * See https://valkey.io/commands/lmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     *
+     * Command Response - The popped element, or `null` if `source` does not exist.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public lmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+    ): T {
+        return this.addAndReturn(
+            createLMove(source, destination, whereFrom, whereTo),
+        );
     }
 
     /**
@@ -2139,7 +2225,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the
      *     element was popped, and a member-score `Record` of the popped element.
@@ -2149,6 +2235,54 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
+     * checked in the order they are provided. Blocks the connection when there are no members
+     * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
+     *
+     * See https://valkey.io/commands/bzmpop/ for more details.
+     *
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
+     * for more details and best practices.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete.
+     *     A value of 0 will block indefinitely.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
+     *
+     * Command Response - A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public bzmpop(
+        keys: string[],
+        modifier: ScoreFilter,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBZMPop(keys, modifier, timeout, count));
+    }
+
+    /**
+     * Increments the score of `member` in the sorted set stored at `key` by `increment`.
+     * If `member` does not exist in the sorted set, it is added with `increment` as its score.
+     * If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+     *
+     * See https://valkey.io/commands/zincrby/ for details.
+     *
+     * @param key - The key of the sorted set.
+     * @param increment - The score increment.
+     * @param member - A member of the sorted set.
+     *
+     * Command Response - The new score of `member`.
+     */
+    public zincrby(key: string, increment: number, member: string): T {
+        return this.addAndReturn(createZIncrBy(key, increment, member));
     }
 
     /**
