@@ -1801,6 +1801,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
      * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
+     * 
      * Command Response - The number of members in the specified lex range.
      * - If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
      * - If maxLex less than minLex, '0' is returned.
