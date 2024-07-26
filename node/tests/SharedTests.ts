@@ -5221,6 +5221,7 @@ export function runBaseTests<Context>(config: {
 
                 for (const member of randMembers) {
                     const memberStr = member + "";
+
                     if (!randMemberSet.has(memberStr)) {
                         randMemberSet.add(memberStr);
                     }
