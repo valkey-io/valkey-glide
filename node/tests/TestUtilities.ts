@@ -729,7 +729,10 @@ export async function transactionTest(
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
     responseData.push(['zcount(key8, { value: 2 }, "positiveInfinity")', 4]);
     baseTransaction.zlexcount(key8, { value: "a" }, "positiveInfinity");
-    responseData.push(['zcount(key8, { value: 2 }, "positiveInfinity")', 4]);
+    responseData.push([
+        'zlexcount(key8, { value: "a" }, "positiveInfinity")',
+        4,
+    ]);
     baseTransaction.zpopmin(key8);
     responseData.push(["zpopmin(key8)", { member2: 3.0 }]);
     baseTransaction.zpopmax(key8);

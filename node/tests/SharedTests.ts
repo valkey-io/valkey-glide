@@ -4274,7 +4274,7 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(3);
 
-                // In range a (exclusive) to c (inclusive)
+                // In range a (exclusive) to positive infinity
                 expect(
                     await client.zlexcount(
                         key,
@@ -4316,8 +4316,7 @@ export function runBaseTests<Context>(config: {
                         "negativeInfinity",
                         "positiveInfinity",
                     ),
-                ).rejects.toThrow();
-                await expect(client.xlen(stringKey)).rejects.toThrow();
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
