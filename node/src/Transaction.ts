@@ -1514,13 +1514,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns a random element from the sorted set stored at `key`.
+     * Returns a random member from the sorted set stored at `key`.
      *
      * See https://valkey.io/commands/zrandmember/ for more details.
      *
      * @param keys - The key of the sorted set.
-     *
-     * Command Response - A string representing a random element from the sorted set.
+     * Command Response - A string representing a random member from the sorted set.
      *     If the sorted set does not exist or is empty, the response will be `null`.
      */
     public zrandmember(key: string): T {
@@ -1528,16 +1527,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns a random element from the sorted set stored at `key`.
+     * Returns random members from the sorted set stored at `key`.
      *
      * See https://valkey.io/commands/zrandmember/ for more details.
      *
      * @param keys - The key of the sorted set.
-     * @param count - The number of elements to return.
-     *     If `count` is positive, returns unique elements.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
      *     If negative, allows for duplicates.
-     *
-     * Command Response - An `array` of elements from the sorted set.
+     * Command Response - An `array` of members from the sorted set.
      *     If the sorted set does not exist or is empty, the response will be an empty `array`.
      */
     public zrandmemberWithCount(key: string, count: number): T {
@@ -1545,17 +1543,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns a random element from the sorted set stored at `key`.
+     * Returns random members with scores from the sorted set stored at `key`.
      *
      * See https://valkey.io/commands/zrandmember/ for more details.
      *
      * @param keys - The key of the sorted set.
-     * @param count - The number of elements to return.
-     *     If `count` is positive, returns unique elements.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
      *     If negative, allows for duplicates.
-     *
-     * Command Response -  An `array` of `[element, score]` `arrays`, where
-     *     element is a `string` and score is a `number`.
+     * Command Response - An `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
      *     If the sorted set does not exist or is empty, the response will be an empty `array`.
      */
     public zrandmemberWithCountWithScores(key: string, count: number): T {
