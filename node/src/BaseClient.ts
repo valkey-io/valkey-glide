@@ -3680,6 +3680,7 @@ export class BaseClient {
      * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
      *
      * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
+     *
      * @example
      * ```typescript
      * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
