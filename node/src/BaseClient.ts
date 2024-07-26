@@ -189,7 +189,8 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
-type RedisCredentials = {
+/** Represents the credentials for connecting to a server. */
+export type RedisCredentials = {
     /**
      * The username that will be used for authenticating connections to the Redis servers.
      * If not supplied, "default" will be used.
@@ -201,13 +202,21 @@ type RedisCredentials = {
     password: string;
 };
 
-type ReadFrom =
+/** Represents the client's read from strategy. */
+export enum ReadFrom {
     /** Always get from primary, in order to get the freshest data.*/
-    | "primary"
-    /** Spread the requests between all replicas in a round robin manner.
-        If no replica is available, route the requests to the primary.*/
-    | "preferReplica";
+    PRIMARY,
+    /**
+     * Spread the requests between all replicas in a round robin manner.
+     *
+     * If no replica is available, route the requests to the primary
+     */
+    PREFER_REPLICA,
+}
 
+/**
+ * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ */
 export type BaseClientConfiguration = {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
@@ -3197,13 +3206,14 @@ export class BaseClient {
         return this.createWritePromise(createXLen(key));
     }
 
-    private readonly MAP_READ_FROM_STRATEGY: Record<
-        ReadFrom,
+    private readonly MAP_READ_FROM_STRATEGY: Map<
+        ReadFrom | undefined,
         connection_request.ReadFrom
-    > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+    > = new Map([
+        [ReadFrom.PRIMARY, connection_request.ReadFrom.Primary],
+        [ReadFrom.PREFER_REPLICA, connection_request.ReadFrom.PreferReplica],
+        [undefined, connection_request.ReadFrom.Primary],
+    ]);
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -3835,9 +3845,7 @@ export class BaseClient {
     protected createClientRequest(
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
-        const readFrom = options.readFrom
-            ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
-            : undefined;
+        const readFrom = this.MAP_READ_FROM_STRATEGY.get(options.readFrom);
         const authenticationInfo =
             options.credentials !== undefined &&
             "password" in options.credentials
