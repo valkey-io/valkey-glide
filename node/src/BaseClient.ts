@@ -64,6 +64,7 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
+    createHStrlen,
     createHVals,
     createIncr,
     createIncrBy,
@@ -1391,6 +1392,26 @@ export class BaseClient {
      */
     public hvals(key: string): Promise<string[]> {
         return this.createWritePromise(createHVals(key));
+    }
+
+    /**
+     * Returns the string length of the value associated with `field` in the hash stored at `key`.
+     *
+     * See https://valkey.io/commands/hstrlen/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash.
+     * @returns The string length or `0` if `field` or `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("my_hash", {"field": "value"});
+     * const result = await client.hstrlen("my_hash", "field");
+     * console.log(result); // Output: 5
+     * ```
+     */
+    public hstrlen(key: string, field: string): Promise<number> {
+        return this.createWritePromise(createHStrlen(key, field));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
