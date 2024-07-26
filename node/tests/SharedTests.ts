@@ -1335,6 +1335,144 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `blmove list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const lpushArgs1 = ["2", "1"];
+                const lpushArgs2 = ["4", "3"];
+
+                // Initialize the tests
+                expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
+                expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
+
+                // Move from LEFT to LEFT with blocking
+                checkSimple(
+                    await client.blmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual("1");
+
+                // Move from LEFT to RIGHT with blocking
+                checkSimple(
+                    await client.blmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.RIGHT,
+                        0.1,
+                    ),
+                ).toEqual("2");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                    "4",
+                    "2",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+
+                // Move from RIGHT to LEFT non-existing destination with blocking
+                checkSimple(
+                    await client.blmove(
+                        key2,
+                        key1,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual("2");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                    "4",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual(["2"]);
+
+                // Move from RIGHT to RIGHT with blocking
+                checkSimple(
+                    await client.blmove(
+                        key2,
+                        key1,
+                        ListDirection.RIGHT,
+                        ListDirection.RIGHT,
+                        0.1,
+                    ),
+                ).toEqual("4");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "2",
+                    "4",
+                ]);
+
+                // Non-existing source key with blocking
+                expect(
+                    await client.blmove(
+                        "{key}-non_existing_key" + uuidv4(),
+                        key1,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual(null);
+
+                // Non-list source key with blocking
+                const key3 = "{key}-3" + uuidv4();
+                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                await expect(
+                    client.blmove(
+                        key3,
+                        key1,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Non-list destination key
+                await expect(
+                    client.blmove(
+                        key1,
+                        key3,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+                // avoid having the test block forever
+                if (client instanceof GlideClient) {
+                    expect(
+                        await client.blmove(
+                            "{SameSlot}non_existing_key",
+                            key2,
+                            ListDirection.LEFT,
+                            ListDirection.RIGHT,
+                            0,
+                        ),
+                    ).rejects.toThrow();
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lset test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
