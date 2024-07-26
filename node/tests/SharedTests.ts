@@ -1459,20 +1459,19 @@ export function runBaseTests<Context>(config: {
                 // avoid having the test block forever
 
                 // async setTimeout(() => {
-                    // if (client instanceof GlideClient) {
-                    //     expect(
-                    //         await client.blmove(
-                    //             "{SameSlot}non_existing_key",
-                    //             key2,
-                    //             ListDirection.LEFT,
-                    //             ListDirection.RIGHT,
-                    //             0,
-                    //         ),
-                    //     ).rejects.toThrow(TimeoutError);
-                    // }
+                // if (client instanceof GlideClient) {
+                //     expect(
+                //         await client.blmove(
+                //             "{SameSlot}non_existing_key",
+                //             key2,
+                //             ListDirection.LEFT,
+                //             ListDirection.RIGHT,
+                //             0,
+                //         ),
+                //     ).rejects.toThrow(TimeoutError);
+                // }
                 // }, 10000);
 
-                // Helper function to wrap setTimeout in a promise
                 function delay(ms: number): Promise<void> {
                     return new Promise((resolve) => setTimeout(resolve, ms));
                 }
