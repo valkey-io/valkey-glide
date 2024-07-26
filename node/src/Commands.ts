@@ -2270,7 +2270,7 @@ export function createZRandMember(
 ): command_request.Command {
     const args = [key];
 
-    if (count) {
+    if (count !== undefined) {
         args.push(count.toString());
     }
 
