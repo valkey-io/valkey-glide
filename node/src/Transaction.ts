@@ -1793,7 +1793,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the number of members in the sorted set stored at'key' with scores between 'minLex' and 'maxLex'.
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
      *
      * See https://valkey.io/commands/zlexcount/ for more details.
      *
