@@ -23,6 +23,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    InfScoreBoundary,
     InsertPosition,
     ListDirection,
     Logger,
@@ -726,11 +727,22 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
-    responseData.push(['zcount(key8, { value: 2 }, "positiveInfinity")', 4]);
-    baseTransaction.zlexcount(key8, { value: "a" }, "positiveInfinity");
+    baseTransaction.zcount(
+        key8,
+        { value: 2 },
+        InfScoreBoundary.PositiveInfinity,
+    );
     responseData.push([
-        'zlexcount(key8, { value: "a" }, "positiveInfinity")',
+        "zcount(key8, { value: 2 }, InfScoreBoundary.PositiveInfinity)",
+        4,
+    ]);
+    baseTransaction.zlexcount(
+        key8,
+        { value: "a" },
+        InfScoreBoundary.PositiveInfinity,
+    );
+    responseData.push([
+        'zlexcount(key8, { value: "a" }, InfScoreBoundary.PositiveInfinity)',
         4,
     ]);
     baseTransaction.zpopmin(key8);
@@ -741,8 +753,8 @@ export async function transactionTest(
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
-        "negativeInfinity",
-        "positiveInfinity",
+        InfScoreBoundary.NegativeInfinity,
+        InfScoreBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
 
