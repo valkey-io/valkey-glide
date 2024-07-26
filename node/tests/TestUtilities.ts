@@ -26,6 +26,7 @@ import {
     InfScoreBoundary,
     InsertPosition,
     ListDirection,
+    Logger,
     ProtocolVersion,
     ReturnType,
     ReturnTypeMap,
@@ -758,6 +759,12 @@ export async function transactionTest(
         InfScoreBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
+    baseTransaction.zremRangeByLex(
+        key8,
+        "negativeInfinity",
+        "positiveInfinity",
+    );
+    responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
     if (gte(version, "7.0.0")) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });

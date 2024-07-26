@@ -30,6 +30,8 @@ import {
     GeoSearchShape,
     GeoUnit,
     GeospatialData,
+    GeoUnit,
+    GeospatialData,
     InsertPosition,
     KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
@@ -162,6 +164,7 @@ import {
     createZRangeWithScores,
     createZRank,
     createZRem,
+    createZRemRangeByLex,
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZRevRank,
@@ -3259,6 +3262,41 @@ export class BaseClient {
         return this.createWritePromise(createZRemRangeByRank(key, start, end));
     }
 
+    /**
+     * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
+     * @returns the number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minLex` is greater than `maxLex`, 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
+     * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
+     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "mySortedSet".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByLex method when the sorted set does not exist
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", "negativeInfinity", { value: "e" });
+     * console.log(result); // Output: 0 - Indicates that no elements were removed.
+     * ```
+     */
+    public zremRangeByLex(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZRemRangeByLex(key, minLex, maxLex),
+        );
+    }
+
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
@@ -3272,14 +3310,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
-     * const result = await client.zremRangeByScore("non_existing_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * const result = await client.zremRangeByScore("non_existing_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */

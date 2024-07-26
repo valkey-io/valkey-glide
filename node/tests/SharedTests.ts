@@ -4234,6 +4234,62 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zremRangeByLex test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3, d: 4 };
+                expect(await client.zadd(key, membersScores)).toEqual(4);
+
+                expect(
+                    await client.zremRangeByLex(
+                        key,
+                        { value: "a", isInclusive: false },
+                        { value: "c" },
+                    ),
+                ).toEqual(2);
+
+                expect(
+                    await client.zremRangeByLex(
+                        key,
+                        { value: "d" },
+                        "positiveInfinity",
+                    ),
+                ).toEqual(1);
+
+                // MinLex > MaxLex
+                expect(
+                    await client.zremRangeByLex(
+                        key,
+                        { value: "a" },
+                        "negativeInfinity",
+                    ),
+                ).toEqual(0);
+
+                expect(
+                    await client.zremRangeByLex(
+                        "nonExistingKey",
+                        "negativeInfinity",
+                        "positiveInfinity",
+                    ),
+                ).toEqual(0);
+
+                // Key exists, but it is not a set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.zremRangeByLex(
+                        stringKey,
+                        "negativeInfinity",
+                        "positiveInfinity",
+                    ),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zremRangeByScore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

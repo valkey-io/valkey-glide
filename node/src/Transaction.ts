@@ -182,6 +182,7 @@ import {
     createZRangeWithScores,
     createZRank,
     createZRem,
+    createZRemRangeByLex,
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZRevRank,
@@ -1771,6 +1772,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByRank(key: string, start: number, end: number): T {
         return this.addAndReturn(createZRemRangeByRank(key, start, end));
+    }
+
+    /**
+     * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
+     * @returns the number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minLex` is greater than `maxLex`, 0 is returned.
+     */
+    public zremRangeByLex(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): T {
+        return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
     }
 
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
