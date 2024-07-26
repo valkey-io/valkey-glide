@@ -3293,8 +3293,7 @@ export class BaseClient {
     }
 
     /**
-     * Returns the number of members in the sorted set stored at <code>key</code> with scores between
-     * 'minLex' and 'maxLex'.
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
      *
      * See https://valkey.io/commands/zlexcount/ for more details.
      *
