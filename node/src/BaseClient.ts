@@ -72,6 +72,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -1590,33 +1591,40 @@ export class BaseClient {
     }
 
     /**
-        Blocks the connection until it pops atomically and removes the left/right-most element to the
-        list stored at `source` depending on `where_from`, and pushes the element at the first/last element
-        of the list stored at `destination` depending on `where_to`.
-        `BLMOVE` is the blocking variant of `LMOVE`.
-
-        Note:
-            1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
-            2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
-        See https://valkey.io/commands/blmove/ for details.
-        Args:
-            source (str): The key to the source list.
-            destination (str): The key to the destination list.
-            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
-            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
-        Returns:
-            Optional[str]: The popped element, or None if `source` does not exist or if the operation timed-out.
-        Examples:
-            >>> await client.lpush("testKey1", ["two", "one"])
-            >>> await client.lpush("testKey2", ["four", "three"])
-            >>> await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1)
-            "one"
-            >>> await client.lrange("testKey1", 0, -1)
-            ["two"]
-            >>> updated_array2 = await client.lrange("testKey2", 0, -1)
-            ["one", "three", "four"]
-        Since: Redis version 6.2.0.
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of `LMOVE`.
+     *
+     * Note:
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     *
+     * Since: Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey1", ["two", "one"]);
+     * await client.lpush("testKey2", ["four", "three"]);
+     * const result = await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
+     * console.log(result); // Output: "one"
+     *
+     * const result2 = await client.lrange("testKey1", 0, -1);
+     * console.log(result2);   // Output: "two"
+     *
+     * const updated_array2 = await client.lrange("testKey2", 0, -1);
+     * console.log(updated_array2); // Output: "one", "three", "four"]
+     * ```
      */
     public async blmove(
         source: string,
