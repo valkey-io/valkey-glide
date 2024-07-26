@@ -18,10 +18,11 @@ import {
     GlideClusterClient,
     InfoOptions,
     ProtocolVersion,
+    RequestError,
     Routes,
     ScoreFilter,
 } from "..";
-import { FlushMode } from "../build-ts/src/Commands";
+import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -318,6 +319,8 @@ describe("GlideClusterClient", () => {
                 client.pfcount(["abc", "zxy", "lkn"]),
                 client.sdiff(["abc", "zxy", "lkn"]),
                 client.sdiffstore("abc", ["zxy", "lkn"]),
+                client.sortStore("abc", "zyx"),
+                client.sortStore("abc", "zyx", { isAlpha: true }),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {
@@ -559,6 +562,90 @@ describe("GlideClusterClient", () => {
             expect(await client.dbsize()).toEqual(1);
             checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const key1 = "{sort}" + uuidv4();
+            const key2 = "{sort}" + uuidv4();
+            const key3 = "{sort}" + uuidv4();
+            const key4 = "{sort}" + uuidv4();
+            const key5 = "{sort}" + uuidv4();
+
+            expect(await client.sort(key3)).toEqual([]);
+            expect(await client.lpush(key1, ["2", "1", "4", "3"])).toEqual(4);
+            checkSimple(await client.sort(key1)).toEqual(["1", "2", "3", "4"]);
+
+            // sort RO
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                expect(await client.sortReadOnly(key3)).toEqual([]);
+                checkSimple(await client.sortReadOnly(key1)).toEqual([
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                ]);
+            }
+
+            // sort with store
+            expect(await client.sortStore(key1, key2)).toEqual(4);
+            checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                "1",
+                "2",
+                "3",
+                "4",
+            ]);
+
+            // SORT with strings require ALPHA
+            expect(
+                await client.rpush(key3, ["2", "1", "a", "x", "c", "4", "3"]),
+            ).toEqual(7);
+            await expect(client.sort(key3)).rejects.toThrow(RequestError);
+            checkSimple(await client.sort(key3, { isAlpha: true })).toEqual([
+                "1",
+                "2",
+                "3",
+                "4",
+                "a",
+                "c",
+                "x",
+            ]);
+
+            // check transaction and options
+            const transaction = new ClusterTransaction()
+                .lpush(key4, ["3", "1", "2"])
+                .sort(key4, {
+                    orderBy: SortOrder.DESC,
+                    limit: { count: 2, offset: 0 },
+                })
+                .sortStore(key4, key5, {
+                    orderBy: SortOrder.ASC,
+                    limit: { count: 100, offset: 1 },
+                })
+                .lrange(key5, 0, -1);
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                transaction.sortReadOnly(key4, {
+                    orderBy: SortOrder.DESC,
+                    limit: { count: 2, offset: 0 },
+                });
+            }
+
+            const result = await client.exec(transaction);
+            const expectedResult = [3, ["3", "2"], 2, ["2", "3"]];
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                expectedResult.push(["3", "2"]);
+            }
+
+            checkSimple(result).toEqual(expectedResult);
 
             client.close();
         },

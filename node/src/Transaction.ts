@@ -3,6 +3,10 @@
  */
 
 import {
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./BaseClient";
+
+import {
     AggregationType,
     BitOffsetOptions,
     BitmapIndexType,
@@ -157,6 +161,10 @@ import {
     createZRevRankWithScore,
     createZScore,
     createZIncrBy,
+    createSort,
+    SortOptions,
+    createSortReadOnly,
+    SortClusterOptions,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2270,6 +2278,66 @@ export class Transaction extends BaseTransaction<Transaction> {
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
     }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - The {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: string, options?: SortOptions): Transaction {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - The {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(key: string, options?: SortOptions): Transaction {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - The {@link SortOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: string,
+        destination: string,
+        options?: SortOptions,
+    ): Transaction {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
 }
 
 /**
@@ -2285,4 +2353,67 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - The {@link SortClusterOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: string, options?: SortClusterOptions): ClusterTransaction {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - The {@link SortClusterOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(
+        key: string,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - The {@link SortClusterOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: string,
+        destination: string,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
 }

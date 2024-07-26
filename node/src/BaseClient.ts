@@ -200,7 +200,7 @@ type RedisCredentials = {
     password: string;
 };
 
-type ReadFrom =
+export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.

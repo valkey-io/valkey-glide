@@ -2225,3 +2225,141 @@ export function createZIncrBy(
         member,
     ]);
 }
+
+/**
+ * Optional arguments to {@link GlideClient.sort|sort}, {@link GlideClient.sortStore|sortStore} and {@link GlideClient.sortReadOnly|sortReadOnly} commands.
+ *
+ * See https://valkey.io/commands/sort/ and https://valkey.io/commands/sort_ro/ for more details.
+ */
+export type SortOptions = SortClusterOptions & {
+    /**
+     * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
+     * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+     * from the key replaces the asterisk to create the key name. For example, if `key`
+     * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
+     * attribute of the objects, like their weights or timestamps.
+     */
+    byPattern?: string;
+
+    /**
+     * A pattern used to retrieve external keys' values, instead of the elements at `key`.
+     * The pattern should contain an asterisk (`*`) as a placeholder for the element values, where the
+     * value from `key` replaces the asterisk to create the `key` name. This
+     * allows the sorted elements to be transformed based on the related keys values. For example, if
+     * `key` contains IDs of users, `getPatterns` can be used to retrieve
+     * specific attributes of these users, such as their names or email addresses. E.g., if
+     * `getPatterns` is `name_*`, the command will return the values of the keys
+     * `name_<element>` for each sorted element. Multiple `getPatterns`
+     * arguments can be provided to retrieve multiple attributes. The special value `#` can
+     * be used to include the actual element from `key` being sorted. If not provided, only
+     * the sorted elements themselves are returned.<br>
+     *
+     * See https://valkey.io/commands/sort/ for more information.
+     */
+    getPatterns?: string[];
+};
+
+/**
+ * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
+ *
+ * See https://valkey.io/commands/sort/ and https://valkey.io/commands/sort_ro/ for more details.
+ */
+export type SortClusterOptions = {
+    /**
+     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
+     * more information.
+     */
+    limit?: Limit;
+
+    /** Options for sorting order of elements. */
+    orderBy?: SortOrder;
+
+    /**
+     * When `true`, sorts elements lexicographically. When `false` (default),
+     * sorts elements numerically. Use this when the list, set, or sorted set contains string values
+     * that cannot be converted into double precision floating point numbers.
+     */
+    isAlpha?: boolean;
+};
+
+/**
+ * The `LIMIT` argument is commonly used to specify a subset of results from the
+ * matching elements, similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
+ */
+export type Limit = {
+    /** The starting position of the range, zero based. */
+    offset: number;
+    /** The maximum number of elements to include in the range. A negative count returns all elements from the offset. */
+    count: number;
+};
+
+/** Defines the sort order for nested results. */
+export enum SortOrder {
+    /** Sort by ascending order. */
+    ASC = "ASC",
+    /** Sort by descending order. */
+    DESC = "DESC",
+}
+
+/**
+ * @internal
+ */
+export function createSort(
+    key: string,
+    options?: SortOptions,
+    destination?: string,
+): command_request.Command {
+    return createSortImpl(RequestType.Sort, key, options, destination);
+}
+
+/**
+ * @internal
+ */
+export function createSortReadOnly(
+    key: string,
+    options?: SortOptions,
+): command_request.Command {
+    return createSortImpl(RequestType.SortReadOnly, key, options);
+}
+
+/**
+ * @internal
+ */
+function createSortImpl(
+    cmd: RequestType,
+    key: string,
+    options?: SortOptions,
+    destination?: string,
+): command_request.Command {
+    const args: string[] = [key];
+
+    if (options) {
+        if (options.limit) {
+            args.push(
+                "LIMIT",
+                options.limit.offset.toString(),
+                options.limit.count.toString(),
+            );
+        }
+
+        if (options.orderBy) {
+            args.push(options.orderBy);
+        }
+
+        if (options.isAlpha) {
+            args.push("ALPHA");
+        }
+
+        if (options.byPattern) {
+            args.push("BY", options.byPattern);
+        }
+
+        if (options.getPatterns) {
+            options.getPatterns.forEach((p) => args.push("GET", p));
+        }
+    }
+
+    if (destination) args.push("STORE", destination);
+
+    return createCommand(cmd, args);
+}
