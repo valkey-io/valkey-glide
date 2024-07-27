@@ -1699,6 +1699,41 @@ export function createFunctionLoad(
     return createCommand(RequestType.FunctionLoad, args);
 }
 
+/** Optional arguments for `FUNCTION LIST` command. */
+export type FunctionListOptions = {
+    /** A wildcard pattern for matching library names. */
+    libNamePattern?: string;
+    /** Specifies whether to request the library code from the server or not. */
+    withCode?: boolean;
+};
+
+/** Type of the response of `FUNCTION LIST` command. */
+export type FunctionListResponse = Record<
+    string,
+    string | Record<string, string | string[]>[]
+>[];
+
+/**
+ * @internal
+ */
+export function createFunctionList(
+    options?: FunctionListOptions,
+): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.libNamePattern) {
+            args.push("LIBRARYNAME", options.libNamePattern);
+        }
+
+        if (options.withCode) {
+            args.push("WITHCODE");
+        }
+    }
+
+    return createCommand(RequestType.FunctionList, args);
+}
+
 /**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
