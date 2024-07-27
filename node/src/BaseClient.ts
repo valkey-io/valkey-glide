@@ -1609,7 +1609,6 @@ export class BaseClient {
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
-     *
      * Since: Valkey version 6.2.0.
      *
      * @example
