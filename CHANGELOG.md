@@ -1,5 +1,6 @@
 #### Changes
 * Node: Exported client configuration types ([#2023](https://github.com/valkey-io/valkey-glide/pull/2023))
+* Node: Added GEOSEARCH command ([#2007](https://github.com/valkey-io/valkey-glide/pull/2007))
 * Node: Added LMOVE command ([#2002](https://github.com/valkey-io/valkey-glide/pull/2002))
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
@@ -132,6 +133,7 @@
 * Node: Added ZRevRank command ([#1977](https://github.com/valkey-io/valkey-glide/pull/1977))
 * Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
 * Node: Added GeoHash command ([#1997](https://github.com/valkey-io/valkey-glide/pull/1997))
+* Node: Added HStrlen command ([#2020](https://github.com/valkey-io/valkey-glide/pull/2020))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

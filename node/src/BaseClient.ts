@@ -15,12 +15,18 @@ import {
     BitmapIndexType,
     BitOffsetOptions,
     BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
     GeospatialData,
     GeoUnit,
     InsertPosition,
     KeyWeight,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
     RangeByIndex,
@@ -28,6 +34,7 @@ import {
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -51,6 +58,7 @@ import {
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -64,6 +72,7 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
+    createHStrlen,
     createHVals,
     createIncr,
     createIncrBy,
@@ -1396,6 +1405,26 @@ export class BaseClient {
      */
     public hvals(key: string): Promise<string[]> {
         return this.createWritePromise(createHVals(key));
+    }
+
+    /**
+     * Returns the string length of the value associated with `field` in the hash stored at `key`.
+     *
+     * See https://valkey.io/commands/hstrlen/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash.
+     * @returns The string length or `0` if `field` or `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("my_hash", {"field": "value"});
+     * const result = await client.hstrlen("my_hash", "field");
+     * console.log(result); // Output: 5
+     * ```
+     */
+    public hstrlen(key: string, field: string): Promise<number> {
+        return this.createWritePromise(createHStrlen(key, field));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -3641,6 +3670,94 @@ export class BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createGeoAdd(key, membersToGeospatialData, options),
+        );
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @returns By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     *
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
+     *
+     * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
+     *
+     * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo'
+     * const result1 = await client.geosearch("mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
+     * console.log(result1); // Output: ['Palermo', 'Catania']
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting additional info,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * const result2 = await client.geosearch(
+     *     "mySortedSet",
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         withCoord: true,
+     *         withDist: true,
+     *         withHash: true,
+     *     },
+     * );
+     * console.log(result2); // Output:
+     * // [
+     * //     [
+     * //         'Catania',                                       // location name
+     * //         [
+     * //             56.4413,                                     // distance
+     * //             3479447370796909,                            // geohash of the location
+     * //             [15.087267458438873, 37.50266842333162],     // coordinates of the location
+     * //         ],
+     * //     ],
+     * //     [
+     * //         'Palermo',
+     * //         [
+     * //             190.4424,
+     * //             3479099956230698,
+     * //             [13.361389338970184, 38.1155563954963],
+     * //         ],
+     * //     ],
+     * // ]
+     * ```
+     */
+    public async geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): Promise<(Buffer | (number | number[])[])[]> {
+        return this.createWritePromise(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
         );
     }
 

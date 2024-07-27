@@ -24,6 +24,7 @@ import {
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
+    SortOrder,
     Transaction,
 } from "..";
 
@@ -439,6 +440,8 @@ export async function transactionTest(
     responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
     responseData.push(["hset(key4, { [field]: value })", 1]);
+    baseTransaction.hstrlen(key4, field);
+    responseData.push(["hstrlen(key4, field)", value.length]);
     baseTransaction.hlen(key4);
     responseData.push(["hlen(key4)", 1]);
     baseTransaction.hsetnx(key4, field, value);
@@ -807,6 +810,95 @@ export async function transactionTest(
         'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction
+            .geosearch(
+                key18,
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                { sortOrder: SortOrder.ASC },
+            )
+            .geosearch(
+                key18,
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+            )
+            .geosearch(
+                key18,
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                {
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                },
+            )
+            .geosearch(
+                key18,
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                {
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                },
+            );
+        responseData.push([
+            'geosearch(key18, "Palermo", R200 KM, ASC)',
+            ["Palermo", "Catania"],
+        ]);
+        responseData.push([
+            "geosearch(key18, (15, 37), 400x400 KM, ASC)",
+            ["Palermo", "Catania"],
+        ]);
+        responseData.push([
+            'geosearch(key18, "Palermo", R200 KM, ASC 2 3x true)',
+            [
+                [
+                    "Palermo",
+                    [
+                        0.0,
+                        3479099956230698,
+                        [13.361389338970184, 38.1155563954963],
+                    ],
+                ],
+                [
+                    "Catania",
+                    [
+                        166.2742,
+                        3479447370796909,
+                        [15.087267458438873, 37.50266842333162],
+                    ],
+                ],
+            ],
+        ]);
+        responseData.push([
+            "geosearch(key18, (15, 37), 400x400 KM, ASC 2 3x true)",
+            [
+                [
+                    "Catania",
+                    [
+                        56.4413,
+                        3479447370796909,
+                        [15.087267458438873, 37.50266842333162],
+                    ],
+                ],
+                [
+                    "Palermo",
+                    [
+                        190.4424,
+                        3479099956230698,
+                        [13.361389338970184, 38.1155563954963],
+                    ],
+                ],
+            ],
+        ]);
+    }
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
