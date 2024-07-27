@@ -15,8 +15,9 @@ import java.util.List;
  *   <li>{@link SortOrder} to order the search results by the distance to the center point of the
  *       search area.
  *   <li><code>COUNT</code> to limit the number of search results.
- *   <li><code>ANY</code>, which can only be used if <code>COUNT</code> is also provided. This option makes the command return as soon as enough matches are found. This means that the results might not be
- *       the ones closest to the origin.
+ *   <li><code>ANY</code>, which can only be used if <code>COUNT</code> is also provided. This
+ *       option makes the command return as soon as enough matches are found. This means that the
+ *       results might not be the ones closest to the origin.
  * </ul>
  *
  * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
@@ -47,7 +48,9 @@ public class GeoSearchResultOptions {
         this.isAny = false;
     }
 
-    /** Define number of search results, and whether or not the <code>ANY</code> option should be used. */
+    /**
+     * Define number of search results, and whether or not the <code>ANY</code> option should be used.
+     */
     public GeoSearchResultOptions(long count, boolean isAny) {
         this.sortOrder = null;
         this.count = count;
