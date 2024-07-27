@@ -336,6 +336,7 @@ describe("GlideClusterClient", () => {
                     client.sintercard(["abc", "zxy", "lkn"]),
                     client.zintercard(["abc", "zxy", "lkn"]),
                     client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
+                    client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
                 );
             }
 

@@ -1103,6 +1103,33 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hstrlen test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const field = uuidv4();
+
+                expect(await client.hset(key1, { field: "value" })).toBe(1);
+                expect(await client.hstrlen(key1, "field")).toBe(5);
+
+                // missing value
+                expect(await client.hstrlen(key1, "nonExistingField")).toBe(0);
+
+                // missing key
+                expect(await client.hstrlen(key2, "field")).toBe(0);
+
+                // key exists but holds non hash type value
+                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                await expect(client.hstrlen(key2, field)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -4959,6 +4986,92 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zincrby(stringKey, 0.5, "_"),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bzmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const nonExistingKey = "{key}-0" + uuidv4();
+                const stringKey = "{key}-string" + uuidv4();
+
+                expect(await client.zadd(key1, { a1: 1, b1: 2 })).toEqual(2);
+                expect(await client.zadd(key2, { a2: 0.1, b2: 0.2 })).toEqual(
+                    2,
+                );
+
+                checkSimple(
+                    await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
+                ).toEqual([key1, { b1: 2 }]);
+                checkSimple(
+                    await client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10),
+                ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
+
+                // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+                expect(
+                    await client.bzmpop([nonExistingKey], ScoreFilter.MAX, 0.5),
+                ).toBeNull;
+                expect(
+                    await client.bzmpop(
+                        [nonExistingKey],
+                        ScoreFilter.MAX,
+                        0.55,
+                        1,
+                    ),
+                ).toBeNull;
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: key list should not be empty
+                await expect(
+                    client.bzmpop([], ScoreFilter.MAX, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: count should be greater than 0
+                await expect(
+                    client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0),
+                ).rejects.toThrow(RequestError);
+
+                // incorrect argument: timeout can not be a negative number
+                await expect(
+                    client.bzmpop([key1], ScoreFilter.MAX, -1, 10),
+                ).rejects.toThrow(RequestError);
+
+                // check that order of entries in the response is preserved
+                const entries: Record<string, number> = {};
+
+                for (let i = 0; i < 10; i++) {
+                    // a0 => 0, a1 => 1 etc
+                    entries["a" + i] = i;
+                }
+
+                expect(await client.zadd(key2, entries)).toEqual(10);
+                const result = await client.bzmpop(
+                    [key2],
+                    ScoreFilter.MIN,
+                    0.1,
+                    10,
+                );
+
+                if (result) {
+                    expect(result[1]).toEqual(entries);
+                }
+
+                // TODO: add test case with 0 timeout (no timeout) should never time out,
+                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,

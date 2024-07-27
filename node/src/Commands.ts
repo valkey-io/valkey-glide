@@ -2214,6 +2214,30 @@ export function createZMPop(
 /**
  * @internal
  */
+export function createBZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    timeout: number,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [
+        timeout.toString(),
+        keys.length.toString(),
+        ...keys,
+        modifier,
+    ];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.BZMPop, args);
+}
+
+/**
+ * @internal
+ */
 export function createZIncrBy(
     key: string,
     increment: number,
@@ -2362,4 +2386,14 @@ function createSortImpl(
     if (destination) args.push("STORE", destination);
 
     return createCommand(cmd, args);
+}
+
+/**
+ * @internal
+ */
+export function createHStrlen(
+    key: string,
+    field: string,
+): command_request.Command {
+    return createCommand(RequestType.HStrlen, [key, field]);
 }

@@ -28,6 +28,7 @@
 * Node: Added FCALL and FCALL_RO commands ([#2011](https://github.com/valkey-io/valkey-glide/pull/2011))
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
+* Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
@@ -131,6 +132,7 @@
 * Node: Added ZRevRank command ([#1977](https://github.com/valkey-io/valkey-glide/pull/1977))
 * Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
 * Node: Added GeoHash command ([#1997](https://github.com/valkey-io/valkey-glide/pull/1997))
+* Node: Added HStrlen command ([#2020](https://github.com/valkey-io/valkey-glide/pull/2020))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

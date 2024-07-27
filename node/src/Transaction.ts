@@ -34,6 +34,7 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBZMPop,
     createBitCount,
     createBitOp,
     createBitPos,
@@ -76,6 +77,7 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
+    createHStrlen,
     createHVals,
     createIncr,
     createIncrBy,
@@ -685,6 +687,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hvals(key: string): T {
         return this.addAndReturn(createHVals(key));
+    }
+
+    /**
+     * Returns the string length of the value associated with `field` in the hash stored at `key`.
+     *
+     * See https://valkey.io/commands/hstrlen/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash.
+     *
+     * Command Response - The string length or `0` if `field` or `key` does not exist.
+     */
+    public hstrlen(key: string, field: string): T {
+        return this.addAndReturn(createHStrlen(key, field));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -2178,7 +2194,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the
      *     element was popped, and a member-score `Record` of the popped element.
@@ -2188,6 +2204,37 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
+     * checked in the order they are provided. Blocks the connection when there are no members
+     * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
+     *
+     * See https://valkey.io/commands/bzmpop/ for more details.
+     *
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
+     * for more details and best practices.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete.
+     *     A value of 0 will block indefinitely.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
+     *
+     * Command Response - A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public bzmpop(
+        keys: string[],
+        modifier: ScoreFilter,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBZMPop(keys, modifier, timeout, count));
     }
 
     /**
