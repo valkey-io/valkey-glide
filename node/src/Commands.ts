@@ -2096,28 +2096,23 @@ export function createGeoAdd(
     }
 
     membersToGeospatialData.forEach((coord, member) => {
-        args = args.concat([
+        args = args.concat(
             coord.longitude.toString(),
             coord.latitude.toString(),
-        ]);
-        args.push(member);
+            member,
+        );
     });
     return createCommand(RequestType.GeoAdd, args);
 }
 
-/**
- * Enumeration representing distance units options for the {@link geodist} command.
- */
+/** Enumeration representing distance units options. */
 export enum GeoUnit {
     /** Represents distance in meters. */
     METERS = "m",
-
     /** Represents distance in kilometers. */
     KILOMETERS = "km",
-
     /** Represents distance in miles. */
     MILES = "mi",
-
     /** Represents distance in feet. */
     FEET = "ft",
 }
@@ -2159,6 +2154,123 @@ export function createGeoHash(
 ): command_request.Command {
     const args: string[] = [key].concat(members);
     return createCommand(RequestType.GeoHash, args);
+}
+
+/**
+ * Optional parameters for {@link BaseClient.geosearch|geosearch} command which defines what should be included in the
+ * search results and how results should be ordered and limited.
+ */
+export type GeoSearchResultOptions = {
+    /** Include the coordinate of the returned items. */
+    withCoord?: boolean;
+    /**
+     * Include the distance of the returned items from the specified center point.
+     * The distance is returned in the same unit as specified for the `searchBy` argument.
+     */
+    withDist?: boolean;
+    /** Include the geohash of the returned items. */
+    withHash?: boolean;
+    /** Indicates the order the result should be sorted in. */
+    sortOrder?: SortOrder;
+    /** Indicates the number of matches the result should be limited to. */
+    count?: number;
+    /** Whether to allow returning as enough matches are found. This requires `count` parameter to be set. */
+    isAny?: boolean;
+};
+
+/** Defines the sort order for nested results. */
+export enum SortOrder {
+    /** Sort by ascending order. */
+    ASC = "ASC",
+    /** Sort by descending order. */
+    DESC = "DESC",
+}
+
+export type GeoSearchShape = GeoCircleShape | GeoBoxShape;
+
+/** Circle search shape defined by the radius value and measurement unit. */
+export type GeoCircleShape = {
+    /** The radius to search by. */
+    radius: number;
+    /** The measurement unit of the radius. */
+    unit: GeoUnit;
+};
+
+/** Rectangle search shape defined by the width and height and measurement unit. */
+export type GeoBoxShape = {
+    /** The width of the rectangle to search by. */
+    width: number;
+    /** The height of the rectangle to search by. */
+    height: number;
+    /** The measurement unit of the width and height. */
+    unit: GeoUnit;
+};
+
+export type SearchOrigin = CoordOrigin | MemberOrigin;
+
+/** The search origin represented by a {@link GeospatialData} position. */
+export type CoordOrigin = {
+    /** The pivot location to search from. */
+    position: GeospatialData;
+};
+
+/** The search origin represented by an existing member. */
+export type MemberOrigin = {
+    /** Member (location) name stored in the sorted set to use as a search pivot. */
+    member: string;
+};
+
+/**
+ * @internal
+ */
+export function createGeoSearch(
+    key: string,
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchResultOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if ("position" in searchFrom) {
+        args = args.concat(
+            "FROMLONLAT",
+            searchFrom.position.longitude.toString(),
+            searchFrom.position.latitude.toString(),
+        );
+    } else {
+        args = args.concat("FROMMEMBER", searchFrom.member);
+    }
+
+    if ("radius" in searchBy) {
+        args = args.concat(
+            "BYRADIUS",
+            searchBy.radius.toString(),
+            searchBy.unit,
+        );
+    } else {
+        args = args.concat(
+            "BYBOX",
+            searchBy.width.toString(),
+            searchBy.height.toString(),
+            searchBy.unit,
+        );
+    }
+
+    if (resultOptions) {
+        if (resultOptions.withCoord) args.push("WITHCOORD");
+        if (resultOptions.withDist) args.push("WITHDIST");
+        if (resultOptions.withHash) args.push("WITHHASH");
+
+        if (resultOptions.count) {
+            args.push("COUNT", resultOptions.count?.toString());
+
+            if (resultOptions.isAny) args.push("ANY");
+        }
+
+        if (resultOptions.sortOrder) args.push(resultOptions.sortOrder);
+    }
+
+    return createCommand(RequestType.GeoSearch, args);
 }
 
 /**
