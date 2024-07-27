@@ -7,9 +7,16 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
     GeospatialData,
     GeoUnit,
     InfoOptions,
@@ -18,11 +25,13 @@ import {
     LPosOptions,
     ListDirection,
     LolwutOptions,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -30,6 +39,7 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBZMPop,
     createBitCount,
     createBitOp,
     createBitPos,
@@ -54,11 +64,13 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -72,6 +84,7 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
+    createHStrlen,
     createHVals,
     createIncr,
     createIncrBy,
@@ -677,6 +690,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hvals(key: string): T {
         return this.addAndReturn(createHVals(key));
+    }
+
+    /**
+     * Returns the string length of the value associated with `field` in the hash stored at `key`.
+     *
+     * See https://valkey.io/commands/hstrlen/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash.
+     *
+     * Command Response - The string length or `0` if `field` or `key` does not exist.
+     */
+    public hstrlen(key: string, field: string): T {
+        return this.addAndReturn(createHStrlen(key, field));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
@@ -2046,6 +2073,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     *
+     * Command Response - Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     */
+    public functionList(options?: FunctionListOptions): T {
+        return this.addAndReturn(createFunctionList(options));
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -2145,6 +2187,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     *
+     * Command Response - By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     *
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`.
+     *
+     * - The geohash of the location as a integer `number`.
+     *
+     * - The coordinates as a two item `array` of floating point `number`s.
+     */
+    public geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
      * Returns the positions (longitude, latitude) of all the specified `members` of the
      * geospatial index represented by the sorted set at `key`.
      *
@@ -2170,7 +2258,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param count - The number of elements to pop.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the
      *     element was popped, and a member-score `Record` of the popped element.
@@ -2180,6 +2268,37 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
+    }
+
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given `keys` being
+     * checked in the order they are provided. Blocks the connection when there are no members
+     * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
+     *
+     * See https://valkey.io/commands/bzmpop/ for more details.
+     *
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
+     * for more details and best practices.
+     * @param keys - The keys of the sorted sets.
+     * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
+     *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete.
+     *     A value of 0 will block indefinitely.
+     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
+     *
+     * Command Response - A two-element `array` containing the key name of the set from which the element
+     *     was popped, and a member-score `Record` of the popped element.
+     *     If no member could be popped, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public bzmpop(
+        keys: string[],
+        modifier: ScoreFilter,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBZMPop(keys, modifier, timeout, count));
     }
 
     /**
