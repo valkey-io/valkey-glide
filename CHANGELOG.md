@@ -1,4 +1,5 @@
 #### Changes
+* Java, Python: Update docs for GEOSEARCH command ([#2017](https://github.com/valkey-io/valkey-glide/pull/2017))
 * Node: Added FUNCTION LIST command ([#2019](https://github.com/valkey-io/valkey-glide/pull/2019))
 * Node: Added GEOSEARCH command ([#2007](https://github.com/valkey-io/valkey-glide/pull/2007))
 * Node: Added LMOVE command ([#2002](https://github.com/valkey-io/valkey-glide/pull/2002))

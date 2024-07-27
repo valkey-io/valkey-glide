@@ -11,11 +11,11 @@ import lombok.Builder;
  * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions)} command, options include:
  *
  * <ul>
- *   <li>WITHDIST: Also return the distance of the returned items from the specified center point.
- *       The distance is returned in the same unit as specified for the <code>searchBy
- *           </code> argument.
- *   <li>WITHCOORD: Also return the coordinate of the returned items.
- *   <li>WITHHASH: Also return the geohash of the returned items. for the general user.
+ *   <li><code>WITHDIST</code>: Also return the distance of the returned items from the specified
+ *       center point. The distance is returned in the same unit as specified for the <code>searchBy
+ *       </code> argument.
+ *   <li><code>WITHCOORD</code>: Also return the coordinate of the returned items.
+ *   <li><code>WITHHASH</code>: Also return the geohash of the returned items.
  * </ul>
  *
  * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
