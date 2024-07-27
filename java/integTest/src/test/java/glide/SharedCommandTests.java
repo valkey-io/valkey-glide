@@ -12594,8 +12594,8 @@ public class SharedCommandTests {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
         String[] members = {"Catania", "Palermo", "edge2", "edge1"};
-        Set<String> members_set = Set.of(members);
-        GeospatialData[] members_coordinates = {
+        Set<String> membersSet = Set.of(members);
+        GeospatialData[] membersCoordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
             new GeospatialData(17.241510, 38.788135),
@@ -12636,18 +12636,18 @@ public class SharedCommandTests {
                                 key1,
                                 Map.of(
                                         members[0],
-                                        members_coordinates[0],
+                                        membersCoordinates[0],
                                         members[1],
-                                        members_coordinates[1],
+                                        membersCoordinates[1],
                                         members[2],
-                                        members_coordinates[2],
+                                        membersCoordinates[2],
                                         members[3],
-                                        members_coordinates[3]))
+                                        membersCoordinates[3]))
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
         assertTrue(
-                members_set.containsAll(
+                membersSet.containsAll(
                         Set.of(
                                 client
                                         .geosearch(
@@ -12732,26 +12732,26 @@ public class SharedCommandTests {
                         .get()[0]);
 
         // test search by radius, units: feet, from member
-        double feet_radius = 200 * 3280.8399;
+        double feetRadius = 200 * 3280.8399;
         assertArrayEquals(
                 new String[] {"Catania", "Palermo"},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOrigin("Catania"),
-                                new GeoSearchShape(feet_radius, GeoUnit.FEET),
+                                new GeoSearchShape(feetRadius, GeoUnit.FEET),
                                 new GeoSearchResultOptions(SortOrder.ASC))
                         .get());
 
         // Test search by radius, unit: meters, from member
-        double meters_radius = 200 * 1000;
+        double metersRadius = 200 * 1000;
         assertArrayEquals(
                 new String[] {"Palermo", "Catania"},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOrigin("Catania"),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 new GeoSearchResultOptions(SortOrder.DESC))
                         .get());
         assertDeepEquals(
@@ -12763,7 +12763,7 @@ public class SharedCommandTests {
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 GeoSearchOptions.builder().withhash().build())
                         .get());
 
@@ -12875,8 +12875,8 @@ public class SharedCommandTests {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         GlideString[] members = {gs("Catania"), gs("Palermo"), gs("edge2"), gs("edge1")};
-        Set<GlideString> members_set = Set.of(members);
-        GeospatialData[] members_coordinates = {
+        Set<GlideString> membersSet = Set.of(members);
+        GeospatialData[] membersCoordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
             new GeospatialData(17.241510, 38.788135),
@@ -12917,18 +12917,18 @@ public class SharedCommandTests {
                                 key1,
                                 Map.of(
                                         members[0],
-                                        members_coordinates[0],
+                                        membersCoordinates[0],
                                         members[1],
-                                        members_coordinates[1],
+                                        membersCoordinates[1],
                                         members[2],
-                                        members_coordinates[2],
+                                        membersCoordinates[2],
                                         members[3],
-                                        members_coordinates[3]))
+                                        membersCoordinates[3]))
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
         assertTrue(
-                members_set.containsAll(
+                membersSet.containsAll(
                         Set.of(
                                 client
                                         .geosearch(
@@ -13013,26 +13013,26 @@ public class SharedCommandTests {
                         .get()[0]);
 
         // test search by radius, units: feet, from member
-        double feet_radius = 200 * 3280.8399;
+        double feetRadius = 200 * 3280.8399;
         assertArrayEquals(
                 new GlideString[] {gs("Catania"), gs("Palermo")},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(feet_radius, GeoUnit.FEET),
+                                new GeoSearchShape(feetRadius, GeoUnit.FEET),
                                 new GeoSearchResultOptions(SortOrder.ASC))
                         .get());
 
         // Test search by radius, unit: meters, from member
-        double meters_radius = 200 * 1000;
+        double metersRadius = 200 * 1000;
         assertArrayEquals(
                 new GlideString[] {gs("Palermo"), gs("Catania")},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 new GeoSearchResultOptions(SortOrder.DESC))
                         .get());
 
@@ -13045,7 +13045,7 @@ public class SharedCommandTests {
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 GeoSearchOptions.builder().withhash().build())
                         .get());
         // Test search by radius, unit: miles, from geospatial data

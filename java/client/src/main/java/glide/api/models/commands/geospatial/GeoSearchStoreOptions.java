@@ -12,16 +12,10 @@ import lombok.Builder;
  */
 @Builder
 public final class GeoSearchStoreOptions {
-    /**
-     * Valkey API keyword used to perform geosearchstore and optionally sort the results with their
-     * distance from the center.
-     */
+    /** Valkey API keyword for {@link #storeDist} parameter. */
     public static final String GEOSEARCHSTORE_VALKEY_API = "STOREDIST";
 
-    /**
-     * boolean value indicating if the STOREDIST option should be included. Can be included in builder
-     * construction by using {@link GeoSearchStoreOptionsBuilder#storedist()}.
-     */
+    /** Configure sorting the results with their distance from the center. */
     private final boolean storeDist;
 
     /**
@@ -40,6 +34,7 @@ public final class GeoSearchStoreOptions {
     public static class GeoSearchStoreOptionsBuilder {
         public GeoSearchStoreOptionsBuilder() {}
 
+        /** Enable sorting the results with their distance from the center. */
         public GeoSearchStoreOptionsBuilder storedist() {
             return storeDist(true);
         }
