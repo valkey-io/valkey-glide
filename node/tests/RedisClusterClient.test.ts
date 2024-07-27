@@ -21,8 +21,8 @@ import {
     Routes,
     ScoreFilter,
 } from "..";
-import { FlushMode } from "../build-ts/src/Commands";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/Commands";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -325,6 +325,7 @@ describe("GlideClusterClient", () => {
                     client.zdiff(["abc", "zxy", "lkn"]),
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
+                    client.copy("abc", "zxy", true),
                 );
             }
 

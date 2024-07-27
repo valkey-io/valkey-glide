@@ -400,7 +400,7 @@ describe("GlideClient", () => {
                 expect(await client.select(index0)).toEqual("OK");
                 expect(await client.set(source, value2)).toEqual("OK");
 
-                // no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
+                // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
                 checkSimple(
                     await client.copyDB(source, destination, index1, false),
                 ).toEqual(false);

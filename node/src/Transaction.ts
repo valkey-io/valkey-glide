@@ -10,8 +10,8 @@ import {
     ExpireOptions,
     FlushMode,
     GeoAddOptions,
-    GeospatialData,
     GeoUnit,
+    GeospatialData,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -143,6 +143,7 @@ import {
     createZDiff,
     createZDiffStore,
     createZDiffWithScores,
+    createZIncrBy,
     createZInterCard,
     createZInterstore,
     createZMPop,
@@ -158,7 +159,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    createZIncrBy,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1958,19 +1958,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
-     * since Valkey version 6.2.0.
-     *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
-     * @param destinationDB - The alternative logical database index for the destination key.
-     * @param replace - If the destination key should be removed before copying the value to it.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     * @param replace - (Optional) If `ture`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
      *
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
      */
     public copy(
         source: string,
         destination: string,
-        destinationDB?: number, // ychen - should I remove this since copy with DB doesn't work under cluster mode
+        destinationDB?: number,
         replace?: boolean,
     ): T {
         return this.addAndReturn(

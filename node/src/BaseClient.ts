@@ -3496,18 +3496,19 @@ export class BaseClient {
     }
 
     /**
-     * Copies the value stored at the `source` to the `destination` key if the `destination` key does not
-     * yet exist.
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
      *
      * See https://valkey.io/commands/copy/ for more details.
-     *
-     * since Valkey version 6.2.0.
      *
      * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
-     * @param replace - If the destination key should be removed before copying the value to it.
+     * @param replace - (Optional) If `ture`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript

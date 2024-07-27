@@ -1994,7 +1994,7 @@ export function createCopy(
 ): command_request.Command {
     let args: string[] = [source, destination];
 
-    if (destinationDB) {
+    if (destinationDB !== undefined) {
         args = args.concat("DB", destinationDB.toString());
     }
 
