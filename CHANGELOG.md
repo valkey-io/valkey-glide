@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added FUNCTION LIST command ([#2019](https://github.com/valkey-io/valkey-glide/pull/2019))
 * Node: Added GEOSEARCH command ([#2007](https://github.com/valkey-io/valkey-glide/pull/2007))
 * Node: Added LMOVE command ([#2002](https://github.com/valkey-io/valkey-glide/pull/2002))
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
