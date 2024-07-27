@@ -9,14 +9,13 @@ import java.util.List;
 /**
  * Optional arguments for {@link GeospatialIndicesBaseCommands#geosearch(String,
  * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions)} command that contains up to 3
- * optional input, including:
+ * optional inputs, including:
  *
  * <ul>
  *   <li>{@link SortOrder} to order the search results by the distance to the center point of the
  *       search area.
- *   <li><code>COUNT</code> to limits the number of search results.
- *   <li><code>ANY</code> option, which could be used with <code>COUNT</code> only, makes command to
- *       return as soon as enough matches are found. This means that the results might may not be
+ *   <li><code>COUNT</code> to limit the number of search results.
+ *   <li><code>ANY</code>, which can only be used if <code>COUNT</code> is also provided. This option makes the command return as soon as enough matches are found. This means that the results might not be
  *       the ones closest to the origin.
  * </ul>
  *
@@ -48,7 +47,7 @@ public class GeoSearchResultOptions {
         this.isAny = false;
     }
 
-    /** Define number of search results <code>ANY</code> option. */
+    /** Define number of search results, and whether or not the <code>ANY</code> option should be used. */
     public GeoSearchResultOptions(long count, boolean isAny) {
         this.sortOrder = null;
         this.count = count;
