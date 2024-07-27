@@ -6,7 +6,7 @@ use super::reconnecting_connection::ReconnectingConnection;
 use super::{ConnectionRequest, NodeAddress, TlsMode};
 use crate::retry_strategies::RetryStrategy;
 use futures::{future, stream, StreamExt};
-#[cfg(standalone_heartbeat)]
+#[cfg(feature = "standalone_heartbeat")]
 use logger_core::log_debug;
 use logger_core::log_warn;
 use rand::Rng;
@@ -15,7 +15,7 @@ use redis::{PushInfo, RedisError, RedisResult, Value};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-#[cfg(standalone_heartbeat)]
+#[cfg(feature = "standalone_heartbeat")]
 use tokio::task;
 
 #[derive(Debug)]
@@ -185,7 +185,7 @@ impl StandaloneClient {
         }
         let read_from = get_read_from(connection_request.read_from);
 
-        #[cfg(standalone_heartbeat)]
+        #[cfg(feature = "standalone_heartbeat")]
         for node in nodes.iter() {
             Self::start_heartbeat(node.clone());
         }
@@ -363,7 +363,7 @@ impl StandaloneClient {
         }
     }
 
-    #[cfg(standalone_heartbeat)]
+    #[cfg(feature = "standalone_heartbeat")]
     fn start_heartbeat(reconnecting_connection: ReconnectingConnection) {
         task::spawn(async move {
             loop {

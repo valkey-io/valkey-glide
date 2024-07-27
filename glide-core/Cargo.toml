@@ -30,6 +30,7 @@ nanoid = "0.4.0"
 
 [features]
 socket-layer = ["directories", "integer-encoding", "num_cpus", "protobuf", "tokio-util"]
+standalone_heartbeat = []
 
 [dev-dependencies]
 rsevents = "0.3.1"

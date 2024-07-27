@@ -5,9 +5,8 @@ mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
-    use std::collections::HashMap;
-
     use crate::utilities::mocks::{Mock, ServerMock};
+    use std::collections::HashMap;
 
     use super::*;
     use glide_core::{
@@ -59,12 +58,12 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
-    #[cfg(standalone_heartbeat)]
+    #[cfg(feature = "standalone_heartbeat")]
     fn test_detect_disconnect_and_reconnect_using_heartbeat(#[values(false, true)] use_tls: bool) {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         block_on_all(async move {
             let mut test_basics = setup_test_basics(use_tls).await;
-            let server = test_basics.server;
+            let server = test_basics.server.expect("Server shouldn't be None");
             let address = server.get_client_addr();
             drop(server);
 
@@ -79,7 +78,7 @@ mod standalone_client_tests {
 
             let _new_server = receiver.await;
             tokio::time::sleep(
-                glide_core::client::HEARTBEAT_SLEEP_DURATION + Duration::from_secs(1),
+                glide_core::client::HEARTBEAT_SLEEP_DURATION + std::time::Duration::from_secs(1),
             )
             .await;
 
