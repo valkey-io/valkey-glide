@@ -22,6 +22,7 @@ import {
     BaseClientConfiguration,
     ClosingError,
     ClusterClientConfiguration,
+    Decoder,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
@@ -306,7 +307,7 @@ describe("SocketConnectionInternals", () => {
                         },
                     );
                 });
-                const result = await connection.get("foo");
+                const result = await connection.get("foo", Decoder.String);
                 console.log(result);
                 expect(result).toEqual(expected);
             });
@@ -354,7 +355,7 @@ describe("SocketConnectionInternals", () => {
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
             });
-            const result = await connection.get("foo");
+            const result = await connection.get("foo", Decoder.String);
             expect(result).toBeNull();
         });
     });

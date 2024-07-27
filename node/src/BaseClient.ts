@@ -310,7 +310,7 @@ export class BaseClient {
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
     private isClosed = false;
-    private defaultDecoder = Decoder.String;
+    private defaultDecoder; //= Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
@@ -359,7 +359,7 @@ export class BaseClient {
             }
         }
     }
-    private handleReadData(data: Buffer) {
+    private handleReadData(data: Buffer, decoder?: Decoder) {
         const buf = this.remainingReadData
             ? Buffer.concat([this.remainingReadData, data])
             : data;
@@ -389,14 +389,16 @@ export class BaseClient {
             if (message.isPush) {
                 this.processPush(message);
             } else {
-                this.processResponse(message);
+                this.processResponse(message, decoder);
             }
         }
 
         this.remainingReadData = undefined;
     }
 
-    processResponse(message: response.Response) {
+    processResponse(message: response.Response, decoder?: Decoder) {
+        decoder = decoder? decoder : this.defaultDecoder;
+        const stringDecoder = decoder === Decoder.String;
         if (message.closingError != null) {
             this.close(message.closingError);
             return;
@@ -406,26 +408,23 @@ export class BaseClient {
             this.promiseCallbackFunctions[message.callbackIdx];
         this.availableCallbackSlots.push(message.callbackIdx);
 
-            if (message.requestError != null) {
-                const errorType = getRequestErrorClass(
-                    message.requestError.type,
-                );
-                reject(
-                    new errorType(message.requestError.message ?? undefined),
-                );
-            } else if (message.respPointer != null) {
-                const pointer = message.respPointer;
-                resolve(pointer);
+        if (message.requestError != null) {
+            const errorType = getRequestErrorClass(message.requestError.type);
+            reject(new errorType(message.requestError.message ?? undefined));
+        } else if (message.respPointer != null) {
+            const pointer = message.respPointer;
 
-                
-            } else if (
-                message.constantResponse === response.ConstantResponse.OK
-            ) {
-                resolve("OK");
+            if (typeof pointer === "number") {
+                resolve(valueFromSplitPointer(0, pointer, stringDecoder));
             } else {
-                resolve(null);
+                resolve(valueFromSplitPointer(pointer.high, pointer.low, stringDecoder));
             }
+        } else if (message.constantResponse === response.ConstantResponse.OK) {
+            resolve("OK");
+        } else {
+            resolve(null);
         }
+    }
 
     processPush(response: response.Response) {
         if (response.closingError != null || !response.respPointer) {
@@ -464,16 +463,16 @@ export class BaseClient {
         // if logger has been initialized by the external-user on info level this log will be shown
         Logger.log("info", "Client lifetime", `construct client`);
         this.config = options;
+        this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
         this.requestTimeout =
             options?.requestTimeout ?? DEFAULT_TIMEOUT_IN_MILLISECONDS;
         this.socket = socket;
         this.socket
-            .on("data", (data) => this.handleReadData(data))
+            .on("data", (data) => { console.log("default decoder adar, " + this.defaultDecoder); this.handleReadData(data, this.defaultDecoder)})
             .on("error", (err) => {
                 console.error(`Server closed: ${err}`);
                 this.close();
             });
-        this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
     }
 
     private getCallbackIndex(): number {
@@ -483,18 +482,24 @@ export class BaseClient {
         );
     }
 
-    private writeBufferedRequestsToSocket() {
+    private writeBufferedRequestsToSocket(decoder?: Decoder) {
         this.writeInProgress = true;
         const requests = this.requestWriter.finish();
         this.requestWriter.reset();
 
         this.socket.write(requests, undefined, () => {
             if (this.requestWriter.len > 0) {
-                this.writeBufferedRequestsToSocket();
+                this.writeBufferedRequestsToSocket(decoder);
             } else {
                 this.writeInProgress = false;
             }
         });
+        // if (decoder){
+        //     this.socket.once("data", (data) => {
+        //         console.log("adar the decoder is " + decoder );
+        //         this.handleReadData(data, decoder);
+        //     });
+        // }
     }
 
     /**
@@ -508,7 +513,6 @@ export class BaseClient {
         decoder: Decoder = this.defaultDecoder,
         route?: command_request.Routes,
     ): Promise<T> {
-        var stringDecoder = decoder === Decoder.String? true : false;
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
@@ -517,17 +521,8 @@ export class BaseClient {
 
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [(pointer)=> {
-                let resolveAns;
-                if (typeof pointer === "number") {
-                    resolveAns = valueFromSplitPointer(0, pointer, stringDecoder);
-                } else {
-                    resolveAns = valueFromSplitPointer(pointer.high, pointer.low, stringDecoder);
-                }
-                
-                resolve(resolveAns);
-            }, reject];
-            this.writeOrBufferCommandRequest(callbackIndex, command, route);
+            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
+            this.writeOrBufferCommandRequest(callbackIndex, command, decoder, route);
         });
     }
 
@@ -537,7 +532,8 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation,
-        route?: command_request.Routes,
+            decoder?: Decoder,
+            route?: command_request.Routes,
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
@@ -562,12 +558,14 @@ export class BaseClient {
             (message: command_request.CommandRequest, writer: Writer) => {
                 command_request.CommandRequest.encodeDelimited(message, writer);
             },
+            decoder,
         );
     }
 
     private writeOrBufferRequest<TRequest>(
         message: TRequest,
         encodeDelimited: (message: TRequest, writer: Writer) => void,
+        decoder?: Decoder,
     ) {
         encodeDelimited(message, this.requestWriter);
 
@@ -575,7 +573,7 @@ export class BaseClient {
             return;
         }
 
-        this.writeBufferedRequestsToSocket();
+        this.writeBufferedRequestsToSocket(decoder);
     }
 
     // Define a common function to process the result of a transaction with set commands
@@ -653,7 +651,8 @@ export class BaseClient {
         });
     }
 
-    public tryGetPubSubMessage(): PubSubMsg | null {
+    public tryGetPubSubMessage(decoder? : Decoder): PubSubMsg | null {
+        decoder = decoder? decoder : this.defaultDecoder;
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
@@ -677,14 +676,17 @@ export class BaseClient {
 
         while (this.pendingPushNotification.length > 0 && !msg) {
             const pushNotification = this.pendingPushNotification.shift()!;
-            msg = this.notificationToPubSubMessageSafe(pushNotification);
+            msg = this.notificationToPubSubMessageSafe(pushNotification, decoder);
         }
 
         return msg;
     }
     notificationToPubSubMessageSafe(
         pushNotification: response.Response,
+        decoder?: Decoder,
     ): PubSubMsg | null {
+        decoder = decoder? decoder : this.defaultDecoder;
+        let stringDecoder = decoder === Decoder.String? true : false;
         let msg: PubSubMsg | null = null;
         const responsePointer = pushNotification.respPointer;
         let nextPushNotificationValue: Record<string, unknown> = {};
@@ -694,11 +696,13 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    stringDecoder
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    stringDecoder
                 ) as Record<string, unknown>;
             }
 
