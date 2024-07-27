@@ -203,16 +203,12 @@ export type RedisCredentials = {
 };
 
 /** Represents the client's read from strategy. */
-export enum ReadFrom {
+export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
-    PRIMARY,
-    /**
-     * Spread the requests between all replicas in a round robin manner.
-     *
-     * If no replica is available, route the requests to the primary
-     */
-    PREFER_REPLICA,
-}
+    | "primary"
+    /** Spread the requests between all replicas in a round robin manner.
+        If no replica is available, route the requests to the primary.*/
+    | "preferReplica";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
@@ -3206,14 +3202,13 @@ export class BaseClient {
         return this.createWritePromise(createXLen(key));
     }
 
-    private readonly MAP_READ_FROM_STRATEGY: Map<
-        ReadFrom | undefined,
+    private readonly MAP_READ_FROM_STRATEGY: Record<
+        ReadFrom,
         connection_request.ReadFrom
-    > = new Map([
-        [ReadFrom.PRIMARY, connection_request.ReadFrom.Primary],
-        [ReadFrom.PREFER_REPLICA, connection_request.ReadFrom.PreferReplica],
-        [undefined, connection_request.ReadFrom.Primary],
-    ]);
+    > = {
+        primary: connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
+    };
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -3845,7 +3840,9 @@ export class BaseClient {
     protected createClientRequest(
         options: BaseClientConfiguration,
     ): connection_request.IConnectionRequest {
-        const readFrom = this.MAP_READ_FROM_STRATEGY.get(options.readFrom);
+        const readFrom = options.readFrom
+            ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
+            : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
             "password" in options.credentials
