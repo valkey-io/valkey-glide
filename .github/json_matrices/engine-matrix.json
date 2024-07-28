@@ -5,12 +5,12 @@
     "run": "always"
   },
   {
-    "type": "valkey",
-    "version": "redis-7.0.15"
+    "type": "redis",
+    "version": "7.0"
   },
   {
-    "type": "valkey",
-    "version": "redis-6.2.14",
+    "type": "redis",
+    "version": "6.2",
     "run": "always"
   }
 ]

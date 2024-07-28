@@ -1,0 +1,54 @@
+inputs:
+    language-name:
+        description: "Language name"
+        required: true
+    dispatch-run-full-matrix:
+        description: "Run the full matrix"
+        required: false
+        default: "false"
+outputs:
+    engine-matrix-output:
+        description: "Engine matrix"
+        value: ${{ steps.load-engine-matrix.outputs.engine-matrix }}
+    host-matrix-output:
+        description: "Host matrix"
+        value: ${{ steps.load-host-matrix.outputs.host-matrix }}
+    version-matrix-output:
+        description: "Version matrix"
+        value: ${{ steps.create-version-matrix.outputs.version-matrix }}
+
+runs:
+    using: "composite"
+    steps:
+        - name: Load engine matrix
+          id: load-engine-matrix
+          shell: bash
+          run: |
+              if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" || "${{inputs.dispatch-run-full-matrix}}" == "false" ]]; then
+                echo "engine-matrix=$(jq -c '[.[] | select(.run == "always")]' < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+              else
+                echo "engine-matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
+              fi
+              echo "engine-matrix=$(cat $GITHUB_OUTPUT)"
+
+        - name: Load host matrix
+          id: load-host-matrix
+          shell: bash
+          run: |
+              if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" || "${{inputs.dispatch-run-full-matrix}}" == "false" ]]; then
+                echo 'host-matrix={"include":'"$(jq -c '[.[] | select(.run | type == "array" and contains(["always"]))]' .github/json_matrices/build-matrix.json)"'}' >> $GITHUB_OUTPUT
+              else
+                echo 'host-matrix={"include":'"$(jq -c '[.[] | select(.run | type == "array" and contains(["${{ inputs.language-name }}"]))]' .github/json_matrices/build-matrix.json)"'}' >> $GITHUB_OUTPUT
+              fi
+              echo "host-matrix=$(cat $GITHUB_OUTPUT)"
+
+        - name: Create version matrix
+          id: create-version-matrix
+          shell: bash
+          run: |
+              if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "push" || "${{inputs.dispatch-run-full-matrix}}" == "false" ]]; then
+                echo 'version-matrix={"include":'"$(jq -c '[.[] | select(.language == "${{ inputs.language-name }}") | .["always-run-versions"] | map({version: .})]' .github/json_matrices/supported-languages-versions.json)"'}' >> $GITHUB_OUTPUT
+              else
+                echo 'version-matrix={"include":'"$(jq -c '[.[] | select(.language == "${{ inputs.language-name }}") | (.versions // .["full-versions"]) | map({version: .})]' .github/json_matrices/supported-languages-versions.json)"'}' >> $GITHUB_OUTPUT
+              fi
+              echo "version-matrix=$(cat $GITHUB_OUTPUT)"
