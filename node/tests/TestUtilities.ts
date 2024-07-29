@@ -21,7 +21,6 @@ import {
     GlideClusterClient,
     InsertPosition,
     ListDirection,
-    Logger,
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
@@ -773,7 +772,6 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
-
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
