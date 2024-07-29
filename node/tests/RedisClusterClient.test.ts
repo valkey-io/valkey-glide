@@ -555,16 +555,12 @@ describe("GlideClusterClient", () => {
             const value2 = uuidv4();
 
             // neither key exists
-            expect(await client.copy(source, destination, true)).toEqual(
-                false,
-            );
+            expect(await client.copy(source, destination, true)).toEqual(false);
             expect(await client.copy(source, destination)).toEqual(false);
 
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
-            expect(await client.copy(source, destination, false)).toEqual(
-                true,
-            );
+            expect(await client.copy(source, destination, false)).toEqual(true);
             checkSimple(await client.get(destination)).toEqual(value1);
 
             // new value for source key
@@ -578,9 +574,7 @@ describe("GlideClusterClient", () => {
             checkSimple(await client.get(destination)).toEqual(value1);
 
             // both exists, with REPLACE
-            expect(await client.copy(source, destination, true)).toEqual(
-                true,
-            );
+            expect(await client.copy(source, destination, true)).toEqual(true);
             checkSimple(await client.get(destination)).toEqual(value2);
 
             //transaction tests
