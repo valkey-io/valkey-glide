@@ -14,6 +14,7 @@ import {
     BitwiseOperation,
     ClusterTransaction,
     FlushMode,
+    FunctionListResponse,
     GeoUnit,
     GeospatialData,
     GlideClient,
@@ -338,6 +339,62 @@ export function compareMaps(
     map2: Record<string, unknown>,
 ): boolean {
     return JSON.stringify(map) == JSON.stringify(map2);
+}
+
+/**
+ * Validate whether `FUNCTION LIST` response contains required info.
+ *
+ * @param response - The response from server.
+ * @param libName - Expected library name.
+ * @param functionDescriptions - Expected function descriptions. Key - function name, value - description.
+ * @param functionFlags - Expected function flags. Key - function name, value - flags set.
+ * @param libCode - Expected library to check if given.
+ */
+export function checkFunctionListResponse(
+    response: FunctionListResponse,
+    libName: string,
+    functionDescriptions: Map<string, string | null>,
+    functionFlags: Map<string, string[]>,
+    libCode?: string,
+) {
+    // TODO rework after #1953 https://github.com/valkey-io/valkey-glide/pull/1953
+    expect(response.length).toBeGreaterThan(0);
+    let hasLib = false;
+
+    for (const lib of response) {
+        hasLib = lib["library_name"] == libName;
+
+        if (hasLib) {
+            const functions = lib["functions"];
+            expect(functions.length).toEqual(functionDescriptions.size);
+
+            for (const functionData of functions) {
+                const functionInfo = functionData as Record<
+                    string,
+                    string | string[]
+                >;
+                const name = (
+                    functionInfo["name"] as unknown as Buffer
+                ).toString(); // not a string - suprise
+                const flags = (
+                    functionInfo["flags"] as unknown as Buffer[]
+                ).map((f) => f.toString());
+                checkSimple(functionInfo["description"]).toEqual(
+                    functionDescriptions.get(name),
+                );
+
+                checkSimple(flags).toEqual(functionFlags.get(name));
+            }
+
+            if (libCode) {
+                checkSimple(lib["library_code"]).toEqual(libCode);
+            }
+
+            break;
+        }
+    }
+
+    expect(hasLib).toBeTruthy();
 }
 
 /**
@@ -913,6 +970,8 @@ export async function transactionTest(
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
         responseData.push(["functionLoad(code, true)", libName]);
+        baseTransaction.functionList({ libNamePattern: "another" });
+        responseData.push(['functionList("another")', []]);
         baseTransaction.fcall(funcName, [], ["one", "two"]);
         responseData.push(['fcall(funcName, [], ["one", "two"])', "one"]);
         baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
@@ -928,6 +987,11 @@ export async function transactionTest(
         responseData.push(["functionFlush(FlushMode.ASYNC)", "OK"]);
         baseTransaction.functionFlush(FlushMode.SYNC);
         responseData.push(["functionFlush(FlushMode.SYNC)", "OK"]);
+        baseTransaction.functionList({
+            libNamePattern: libName,
+            withCode: true,
+        });
+        responseData.push(["functionList({ libName, true})", []]);
     }
 
     return responseData;
