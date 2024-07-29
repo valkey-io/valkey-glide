@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added LCS command ([#2049](https://github.com/valkey-io/valkey-glide/pull/2049))
 * Node: Exported client configuration types ([#2023](https://github.com/valkey-io/valkey-glide/pull/2023))
 * Java, Python: Update docs for GEOSEARCH command ([#2017](https://github.com/valkey-io/valkey-glide/pull/2017))
 * Node: Added FUNCTION LIST command ([#2019](https://github.com/valkey-io/valkey-glide/pull/2019))

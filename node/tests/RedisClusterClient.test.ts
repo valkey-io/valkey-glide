@@ -336,17 +336,14 @@ describe("GlideClusterClient", () => {
                     client.zintercard(["abc", "zxy", "lkn"]),
                     client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                     client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
+                    client.lcs("abc", "xyz"),
+                    client.lcsLen("abc", "xyz"),
+                    client.lcsIdx("abc", "xyz"),
                 );
             }
 
             for (const promise of promises) {
-                try {
-                    await promise;
-                } catch (e) {
-                    expect((e as Error).message.toLowerCase()).toContain(
-                        "crossslot",
-                    );
-                }
+                await expect(promise).rejects.toThrowError(/crossslot/i);
             }
 
             client.close();
