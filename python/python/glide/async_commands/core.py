@@ -3861,7 +3861,7 @@ class CoreCommands(Protocol):
                 from the sorted set or as a geospatial data (see `GeospatialData`).
             search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
                 For circular area search, see `GeoSearchByRadius`.
-                For rectengal area search, see `GeoSearchByBox`.
+                For rectangular area search, see `GeoSearchByBox`.
             order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
                     - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
                     - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
@@ -4202,9 +4202,9 @@ class CoreCommands(Protocol):
             >>> await client.zincrby("my_sorted_set", 1.2, "member")
                 11.7  # The member existed in the set before score was altered, the new score is 11.7.
             >>> await client.zincrby("my_sorted_set", -1.7, "member")
-                10.0 # Negetive increment, decrements the score.
+                10.0 # Negative increment, decrements the score.
             >>> await client.zincrby("my_sorted_set", 5.5, "non_existing_member")
-                5.5  # A new memeber is added to the sorted set with the score being 5.5.
+                5.5  # A new member is added to the sorted set with the score being 5.5.
         """
         return cast(
             float,

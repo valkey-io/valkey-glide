@@ -3,9 +3,18 @@
  */
 
 import * as net from "net";
-import { BaseClient, BaseClientConfiguration, ReturnType } from "./BaseClient";
 import {
+    BaseClient,
+    BaseClientConfiguration,
+    PubSubMsg,
+    ReturnType,
+} from "./BaseClient";
+import {
+    FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
+    LolwutOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -13,9 +22,20 @@ import {
     createConfigRewrite,
     createConfigSet,
     createCustomCommand,
+    createDBSize,
     createEcho,
+    createFCall,
+    createFCallReadOnly,
+    createFlushAll,
+    createFlushDB,
+    createFunctionDelete,
+    createFunctionFlush,
+    createFunctionList,
+    createFunctionLoad,
     createInfo,
+    createLolwut,
     createPing,
+    createPublish,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -48,6 +68,49 @@ export type PeriodicChecks =
      * Manually configured interval for periodic checks.
      */
     | PeriodicChecksManualInterval;
+
+/* eslint-disable-next-line @typescript-eslint/no-namespace */
+export namespace ClusterClientConfiguration {
+    /**
+     * Enum representing pubsub subscription modes.
+     * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
+     */
+    export enum PubSubChannelModes {
+        /**
+         * Use exact channel names.
+         */
+        Exact = 0,
+
+        /**
+         * Use channel name patterns.
+         */
+        Pattern = 1,
+
+        /**
+         * Use sharded pubsub. Available since Valkey version 7.0.
+         */
+        Sharded = 2,
+    }
+
+    export type PubSubSubscriptions = {
+        /**
+         * Channels and patterns by modes.
+         */
+        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
+
+        /**
+         * Optional callback to accept the incoming messages.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        callback?: (msg: PubSubMsg, context: any) => void;
+
+        /**
+         * Arbitrary context to pass to the callback.
+         */
+        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+        context?: any;
+    };
+}
 export type ClusterClientConfiguration = BaseClientConfiguration & {
     /**
      * Configure the periodic topology checks.
@@ -56,6 +119,12 @@ export type ClusterClientConfiguration = BaseClientConfiguration & {
      * If not set, `enabledDefaultConfigs` will be used.
      */
     periodicChecks?: PeriodicChecks;
+
+    /**
+     * PubSub subscriptions to be used for the client.
+     * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
+     */
+    pubsubSubscriptions?: ClusterClientConfiguration.PubSubSubscriptions;
 };
 
 /**
@@ -230,6 +299,7 @@ export class GlideClusterClient extends BaseClient {
             }
         }
 
+        this.configurePubsub(options, configuration);
         return configuration;
     }
 
@@ -566,5 +636,319 @@ export class GlideClusterClient extends BaseClient {
      */
     public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), toProtobufRoute(route));
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * See https://valkey.io/commands/lolwut/ for more details.
+     *
+     * @param options - The LOLWUT options.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *  case the client will route the command to the nodes defined by `route`.
+     * @returns A piece of generative computer art along with the current server version.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.lolwut({ version: 6, parameters: [40, 20] }, "allNodes");
+     * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
+     * ```
+     */
+    public lolwut(
+        options?: LolwutOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise(
+            createLolwut(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallWithRoute("Deep_Thought", [], "randomNode");
+     * console.log(response); // Output: Returns the function's return value.
+     * ```
+     */
+    public fcallWithRoute(
+        func: string,
+        args: string[],
+        route?: Routes,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(
+            createFCall(func, [], args),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallReadonlyWithRoute("Deep_Thought", ["Answer", "to", "the", "Ultimate",
+     *            "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], "randomNode");
+     * console.log(response); // Output: 42 # The return value on the function that was execute.
+     * ```
+     */
+    public fcallReadonlyWithRoute(
+        func: string,
+        args: string[],
+        route?: Routes,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(
+            createFCallReadOnly(func, [], args),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionDelete("libName");
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionDelete(
+        libraryCode: string,
+        route?: Routes,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionDelete(libraryCode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * See https://valkey.io/commands/function-load/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The source code that implements the library.
+     * @param replace - Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The library name that was loaded.
+     *
+     * @example
+     * ```typescript
+     * const code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
+     * const result = await client.functionLoad(code, true, 'allNodes');
+     * console.log(result); // Output: 'mylib'
+     * ```
+     */
+    public functionLoad(
+        libraryCode: string,
+        replace?: boolean,
+        route?: Routes,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionLoad(libraryCode, replace),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     *   case the client will route the command to the nodes defined by `route`.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFunctionFlush(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to a random route.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionListResponse>> {
+        return this.createWritePromise(
+            createFunctionList(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases. This command never fails.
+     *
+     * See https://valkey.io/commands/flushall/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushall(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFlushAll(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushdb(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFlushDB(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns the number of keys in the database.
+     *
+     * See https://valkey.io/commands/dbsize/ for more details.
+
+     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The number of keys in the database.
+     *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
+     *
+     * @example
+     * ```typescript
+     * const numKeys = await client.dbsize("allPrimaries");
+     * console.log("Number of keys across all primary nodes: ", numKeys);
+     * ```
+     */
+    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(createDBSize(), toProtobufRoute(route));
+    }
+
+    /** Publish a message on pubsub channel.
+     * This command aggregates PUBLISH and SPUBLISH commands functionalities.
+     * The mode is selected using the 'sharded' parameter.
+     * For both sharded and non-sharded mode, request is routed using hashed channel as key.
+     * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey version 7.0.
+     * @returns -  Number of subscriptions in primary node that received the message.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of publish command
+     * const result = await client.publish("Hi all!", "global-channel");
+     * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of spublish command
+     * const result = await client.publish("Hi all!", "global-channel", true);
+     * console.log(result); // Output: 2 - Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
+     * ```
+     */
+    public publish(
+        message: string,
+        channel: string,
+        sharded: boolean = false,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createPublish(message, channel, sharded),
+        );
     }
 }

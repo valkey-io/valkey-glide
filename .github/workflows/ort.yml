@@ -76,15 +76,11 @@ jobs:
               with: 
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
-                  ref: "20.1.0"
+                  ref: "26.0.0"
                   submodules: recursive
 
-            # Temporary workaround until ORT releases a version newer than 22.1.0 addressing https://github.com/oss-review-toolkit/ort/issues/8571.
-            # Upon resolution, remove this section and install the updated version instead of "20.1.0".
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.76 
-              with:
-                targets: ${{ inputs.target }}
+              uses: dtolnay/rust-toolchain@1.78 
 
             - name: Install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
@@ -100,7 +96,7 @@ jobs:
                 ort:
                   analyzer:
                     allowDynamicVersions: true
-                    enabledPackageManagers: [Cargo, NPM, PIP]
+                    enabledPackageManagers: [Cargo, NPM, PIP, GradleInspector]
                 EOF
                 cat ~/.ort/config/config.yml
 
@@ -215,4 +211,27 @@ jobs:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 EVENT_NAME: ${{ github.event_name }}
                 INPUT_VERSION: ${{ github.event.inputs.version }}
-  
+
+            - name: Get current date
+              id: date
+              run: |
+                CURR_DATE=$(date +'%Y-%m-%d-%H')
+                echo "date=${CURR_DATE}" >> $GITHUB_OUTPUT
+
+            - name: Upload the final package list
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: final-package-list-${{ steps.date.outputs.date }}
+                  path: |
+                      utils/final_package_list.txt
+                  retention-days: 30
+
+            - name: Upload the skipped package list
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: skipped-package-list-${{ steps.date.outputs.date }}
+                  path: |
+                      utils/skipped_package_list.txt
+                  retention-days: 30

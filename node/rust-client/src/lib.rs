@@ -163,9 +163,9 @@ pub fn init(level: Option<Level>, file_name: Option<&str>) -> Level {
 fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
     match val {
         Value::Nil => js_env.get_null().map(|val| val.into_unknown()),
-        Value::SimpleString(str) => js_env
-            .create_string_from_std(str)
-            .map(|val| val.into_unknown()),
+        Value::SimpleString(str) => Ok(js_env
+            .create_buffer_with_data(str.as_bytes().to_vec())?
+            .into_unknown()),
         Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
         Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
         Value::BulkString(data) => Ok(js_env.create_buffer_with_data(data)?.into_unknown()),
@@ -222,7 +222,16 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
 
             Ok(obj.into_unknown())
         }
-        Value::Push { kind: _, data: _ } => todo!(),
+        Value::Push { kind, data } => {
+            let mut obj = js_env.create_object()?;
+            obj.set_named_property("kind", format!("{kind:?}"))?;
+            let js_array_view = data
+                .into_iter()
+                .map(|item| redis_value_to_js(item, js_env))
+                .collect::<Result<Vec<_>, _>>()?;
+            obj.set_named_property("values", js_array_view)?;
+            Ok(obj.into_unknown())
+        }
     }
 }
 

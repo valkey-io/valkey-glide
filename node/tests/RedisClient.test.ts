@@ -14,17 +14,21 @@ import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import { GlideClient, ProtocolVersion, Transaction } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    checkFunctionListResponse,
     checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
+    generateLuaLibCode,
     getClientConfigurationOption,
     intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    validateTransactionResponse,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -123,26 +127,29 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "simple select test",
+        "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            let selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
             checkSimple(result).toEqual("OK");
 
-            selectResult = await client.select(1);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(1)).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
+            checkSimple(await client.flushdb()).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
 
-            selectResult = await client.select(0);
-            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.select(0)).toEqual("OK");
             checkSimple(await client.get(key)).toEqual(value);
+
+            expect(await client.dbsize()).toBeGreaterThan(0);
+            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.dbsize()).toEqual(0);
         },
     );
 
@@ -153,11 +160,15 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new Transaction();
-            const expectedRes = await transactionTest(transaction);
+            const expectedRes = await transactionTest(
+                transaction,
+                cluster.getVersion(),
+            );
             transaction.select(0);
             const result = await client.exec(transaction);
-            expectedRes.push("OK");
-            expect(intoString(result)).toEqual(intoString(expectedRes));
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
         },
     );
 
@@ -297,6 +308,247 @@ describe("GlideClient", () => {
         },
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lolwut test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const result = await client.lolwut();
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result2 = await client.lolwut({ parameters: [] });
+            expect(intoString(result2)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result3 = await client.lolwut({ parameters: [50, 20] });
+            expect(intoString(result3)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result4 = await client.lolwut({ version: 6 });
+            expect(intoString(result4)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            const result5 = await client.lolwut({
+                version: 5,
+                parameters: [30, 4, 4],
+            });
+            expect(intoString(result5)).toEqual(
+                expect.stringContaining("Redis ver. "),
+            );
+
+            // transaction tests
+            const transaction = new Transaction();
+            transaction.lolwut();
+            transaction.lolwut({ version: 5 });
+            transaction.lolwut({ parameters: [1, 2] });
+            transaction.lolwut({ version: 6, parameters: [42] });
+            const results = await client.exec(transaction);
+
+            if (results) {
+                for (const element of results) {
+                    expect(intoString(element)).toEqual(
+                        expect.stringContaining("Redis ver. "),
+                    );
+                }
+            } else {
+                throw new Error("Invalid LOLWUT transaction test results.");
+            }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function load test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+                expect(await client.functionList()).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                checkSimple(
+                    await client.fcall(funcName, [], ["one", "two"]),
+                ).toEqual("one");
+                checkSimple(
+                    await client.fcallReadonly(funcName, [], ["one", "two"]),
+                ).toEqual("one");
+
+                let functionList = await client.functionList({
+                    libNamePattern: libName,
+                });
+                let expectedDescription = new Map<string, string | null>([
+                    [funcName, null],
+                ]);
+                let expectedFlags = new Map<string, string[]>([
+                    [funcName, ["no-writes"]],
+                ]);
+
+                checkFunctionListResponse(
+                    functionList,
+                    libName,
+                    expectedDescription,
+                    expectedFlags,
+                );
+
+                // re-load library without replace
+
+                await expect(client.functionLoad(code)).rejects.toThrow(
+                    `Library '${libName}' already exists`,
+                );
+
+                // re-load library with replace
+                checkSimple(await client.functionLoad(code, true)).toEqual(
+                    libName,
+                );
+
+                // overwrite lib with new code
+                const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
+                const newCode = generateLuaLibCode(
+                    libName,
+                    new Map([
+                        [funcName, "return args[1]"],
+                        [func2Name, "return #args"],
+                    ]),
+                    true,
+                );
+                checkSimple(await client.functionLoad(newCode, true)).toEqual(
+                    libName,
+                );
+
+                functionList = await client.functionList({ withCode: true });
+                expectedDescription = new Map<string, string | null>([
+                    [funcName, null],
+                    [func2Name, null],
+                ]);
+                expectedFlags = new Map<string, string[]>([
+                    [funcName, ["no-writes"]],
+                    [func2Name, ["no-writes"]],
+                ]);
+
+                checkFunctionListResponse(
+                    functionList,
+                    libName,
+                    expectedDescription,
+                    expectedFlags,
+                    newCode,
+                );
+
+                checkSimple(
+                    await client.fcall(func2Name, [], ["one", "two"]),
+                ).toEqual(2);
+                checkSimple(
+                    await client.fcallReadonly(func2Name, [], ["one", "two"]),
+                ).toEqual(2);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function flush test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+
+                // verify function does not yet exist
+                expect(await client.functionList()).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                // Flush functions
+                expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
+                    "OK",
+                );
+                expect(await client.functionFlush(FlushMode.ASYNC)).toEqual(
+                    "OK",
+                );
+
+                // verify function does not yet exist
+                expect(await client.functionList()).toEqual([]);
+
+                // Attempt to re-load library without overwriting to ensure FLUSH was effective
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function delete test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            try {
+                const libName = "mylib1C" + uuidv4().replaceAll("-", "");
+                const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
+                const code = generateLuaLibCode(
+                    libName,
+                    new Map([[funcName, "return args[1]"]]),
+                    true,
+                );
+                // verify function does not yet exist
+                expect(await client.functionList()).toEqual([]);
+
+                checkSimple(await client.functionLoad(code)).toEqual(libName);
+
+                // Delete the function
+                expect(await client.functionDelete(libName)).toEqual("OK");
+
+                // verify function does not yet exist
+                expect(await client.functionList()).toEqual([]);
+
+                // deleting a non-existing library
+                await expect(client.functionDelete(libName)).rejects.toThrow(
+                    `Library not found`,
+                );
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
             const options = getClientConfigurationOption(
@@ -307,7 +559,7 @@ describe("GlideClient", () => {
             options.clientName = clientName;
             testsFailed += 1;
             client = await GlideClient.createClient(options);
-            return { client, context: { client } };
+            return { client, context: { client }, cluster };
         },
         close: (context: Context, testSucceeded: boolean) => {
             if (testSucceeded) {

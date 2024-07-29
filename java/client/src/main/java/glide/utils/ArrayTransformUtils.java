@@ -45,6 +45,44 @@ public class ArrayTransformUtils {
     }
 
     /**
+     * Converts a nested array of string keys and values of any type that can be converted in to an
+     * array of strings with alternating keys and values.
+     *
+     * @param args Nested array of string keys to values of any type to convert.
+     * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
+     */
+    public static String[] convertNestedArrayToKeyValueStringArray(String[][] args) {
+        for (String[] entry : args) {
+            if (entry.length != 2) {
+                throw new IllegalArgumentException(
+                        "Array entry had the wrong length. Expected length 2 but got length " + entry.length);
+            }
+        }
+        return Arrays.stream(args)
+                .flatMap(entry -> Stream.of(entry[0], entry[1]))
+                .toArray(String[]::new);
+    }
+
+    /**
+     * Converts a nested array of GlideString keys and values of any type in to an array of
+     * GlideStrings with alternating keys and values.
+     *
+     * @param args Nested array of GlideString keys to values of any type to convert.
+     * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
+     */
+    public static GlideString[] convertNestedArrayToKeyValueGlideStringArray(GlideString[][] args) {
+        for (GlideString[] entry : args) {
+            if (entry.length != 2) {
+                throw new IllegalArgumentException(
+                        "Array entry had the wrong length. Expected length 2 but got length " + entry.length);
+            }
+        }
+        return Arrays.stream(args)
+                .flatMap(entry -> Stream.of(entry[0], GlideString.gs(entry[1].toString())))
+                .toArray(GlideString[]::new);
+    }
+
+    /**
      * Converts a map of string keys and values of any type into an array of strings with alternating
      * values and keys.
      *
@@ -247,6 +285,25 @@ public class ArrayTransformUtils {
         return args.entrySet().stream()
                 .flatMap(
                         entry -> Stream.of(GlideString.of(entry.getKey()), GlideString.of(entry.getValue())))
+                .toArray(GlideString[]::new);
+    }
+
+    /**
+     * Converts a nested array of any type of keys and values in to an array of GlideString with
+     * alternating keys and values.
+     *
+     * @param args Nested array of keys to values of any type to convert.
+     * @return Array of GlideString [key1, value1, key2, value2, ...].
+     */
+    public static <T> GlideString[] flattenNestedArrayToGlideStringArray(T[][] args) {
+        for (T[] entry : args) {
+            if (entry.length != 2) {
+                throw new IllegalArgumentException(
+                        "Array entry had the wrong length. Expected length 2 but got length " + entry.length);
+            }
+        }
+        return Arrays.stream(args)
+                .flatMap(entry -> Stream.of(GlideString.of(entry[0]), GlideString.of(entry[1])))
                 .toArray(GlideString[]::new);
     }
 
