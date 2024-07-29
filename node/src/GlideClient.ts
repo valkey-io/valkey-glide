@@ -11,6 +11,8 @@ import {
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -26,6 +28,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createInfo,
     createLolwut,
@@ -455,6 +458,41 @@ export class GlideClient extends BaseClient {
      */
     public functionFlush(mode?: FlushMode): Promise<string> {
         return this.createWritePromise(createFunctionFlush(mode));
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+    ): Promise<FunctionListResponse> {
+        return this.createWritePromise(createFunctionList(options));
     }
 
     /**
