@@ -5,8 +5,13 @@
 import {
     AggregationType,
     BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSubCommands,
     BitmapIndexType,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitwiseOperation,
     ExpireOptions,
@@ -525,15 +530,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the string.
      * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
      *      any of the following:
+     *
      *          - {@link BitFieldGet}
      *          - {@link BitFieldSet}
      *          - {@link BitFieldIncrBy}
      *          - {@link BitFieldOverflow}
      *
      * Command Response - An array of results from the executed subcommands:
-     *      - {@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
-     *      - {@link BitFieldSet} returns the old value in {@link Offset} or {@link OffsetMultiplier}.
-     *      - {@link BitFieldIncrBy} returns the new value in {@link Offset} or {@link OffsetMultiplier}.
+     *
+     *      - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     *      - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     *      - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
      *      - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
      *        subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
      *        does not contribute a value to the array response.

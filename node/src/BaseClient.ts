@@ -13,8 +13,13 @@ import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
     BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSubCommands,
     BitmapIndexType,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitwiseOperation,
     ExpireOptions,
@@ -1156,14 +1161,17 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
      *      any of the following:
+     *
      *          - {@link BitFieldGet}
      *          - {@link BitFieldSet}
      *          - {@link BitFieldIncrBy}
      *          - {@link BitFieldOverflow}
+     *
      * @returns An array of results from the executed subcommands:
-     *      - {@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
-     *      - {@link BitFieldSet} returns the old value in {@link Offset} or {@link OffsetMultiplier}.
-     *      - {@link BitFieldIncrBy} returns the new value in {@link Offset} or {@link OffsetMultiplier}.
+     *
+     *      - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     *      - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     *      - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
      *      - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
      *        subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
      *        does not contribute a value to the array response.
@@ -1171,7 +1179,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * await client.set("key", "A");  // "A" has binary value 01000001
-     * const result = await client.bitfield("key", [new BitFieldSet(UnsignedEncoding(2), new Offset(1), 3), new BitFieldGet(new UnsignedEncoding(2), new Offset(1))]);
+     * const result = await client.bitfield("key", [new BitFieldSet(new UnsignedEncoding(2), new BitOffset(1), 3), new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
      * console.log(result); // Output: [2, 3] - The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
      * ```
      */
@@ -1196,7 +1204,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * await client.set("key", "A");  // "A" has binary value 01000001
-     * const result = await client.bitfieldReadOnly("key", [new BitFieldGet(new UnsignedEncoding(2), new Offset(1))]);
+     * const result = await client.bitfieldReadOnly("key", [new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
      * console.log(result); // Output: [2] - The value at offset 1 with an unsigned encoding of 2 is 2.
      * ```
      */
