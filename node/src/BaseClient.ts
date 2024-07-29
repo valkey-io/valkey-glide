@@ -441,9 +441,9 @@ export class BaseClient {
             const pointer = message.respPointer;
 
             if (typeof pointer === "number") {
-                resolve(valueFromSplitPointer(0, pointer));
+                resolve(valueFromSplitPointer(0, pointer, true));
             } else {
-                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
@@ -707,11 +707,13 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    true,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    true,
                 ) as Record<string, unknown>;
             }
 
