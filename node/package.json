@@ -55,6 +55,7 @@
         "eslint-plugin-tsdoc": "^0.2.17",
         "find-free-port": "^2.0.0",
         "jest": "^28.1.3",
+        "jest-html-reporter": "^3.10.2",
         "protobufjs-cli": "^1.1.1",
         "redis-server": "^1.2.2",
         "replace": "^1.2.2",
