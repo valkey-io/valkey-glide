@@ -917,18 +917,18 @@ export class BaseClient {
      *
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
-     * @returns `True` if all keys were set. `False` if no key was set.
+     * @returns `true` if all keys were set. `false` if no key was set.
      *
      * @example
      * ```typescript
      * const result1 = await client.msetnx({"key1": "value1", "key2": "value2"});
-     * console.log(result1); // Output: `True`
+     * console.log(result1); // Output: `true`
      *
      * const result2 = await client.msetnx({"key2": "value4", "key3": "value5"});
-     * console.log(result2); // Output: `False`
+     * console.log(result2); // Output: `false`
      * ```
      */
-    public async msetnx(keyValueMap: Record<string, string>): Promise<number> {
+    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
         return this.createWritePromise(createMSetNX(keyValueMap));
     }
 
