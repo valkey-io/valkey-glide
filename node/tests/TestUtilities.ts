@@ -5,8 +5,8 @@
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
-import { v4 as uuidv4 } from "uuid";
 import { gte } from "semver";
+import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
