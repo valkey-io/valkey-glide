@@ -1,7 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
@@ -144,6 +143,7 @@ import {
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -193,6 +193,7 @@ export type ReturnType =
     | null
     | boolean
     | bigint
+    | Buffer
     | Set<ReturnType>
     | ReturnTypeMap
     | ReturnTypeAttribute
@@ -2838,6 +2839,94 @@ export class BaseClient {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @returns A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmember("mySortedSet");
+     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmember("nonExistingSortedSet");
+     * console.log(payload2); // Output: null since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
+     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
+     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCountWithScores(
+        key: string,
+        count: number,
+    ): Promise<[string, number][]> {
+        return this.createWritePromise(createZRandMember(key, count, true));
     }
 
     /** Returns the length of the string value stored at `key`.
