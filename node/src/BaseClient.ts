@@ -1644,7 +1644,7 @@ export class BaseClient {
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
      * since Valkey version 6.2.0.
-     * 
+     *
      * @example
      * ```typescript
      * await client.lpush("testKey1", ["two", "one"]);
