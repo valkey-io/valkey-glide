@@ -1085,7 +1085,7 @@ public class TransactionTestUtilities {
                                 }, // geosearch(geoKey1, "Palermo", byradius(200, km))
                                 new String[] {
                                     "Palermo", "Catania"
-                                }, // geosearch(geoKey1, (15,37), bybox(200,200,km))
+                                }, // geosearch(geoKey1, (15, 37), bybox(400, 400, km))
                                 new Object[] {
                                     new Object[] {
                                         "Palermo",
@@ -1120,9 +1120,8 @@ public class TransactionTestUtilities {
                                         }
                                     },
                                 }, // geosearch(geoKey1, (15,37), BYBOX(400,400,km), ASC, COUNT 2)
-                                2L, // geosearch(geoKey2, geoKey1, (15,37), BYBOX(400,400,km), ASC, COUNT 2)
-                                2L, // geosearch(geoKey2, geoKey1, (15,37), BYBOX(400,400,km), STOREDIST, ASC, COUNT
-                                // 2)
+                                2L, // geosearchstore(geoKey2, geoKey1, (15, 37), (400, 400, km), ASC, 2)
+                                2L, // geosearchstore(geoKey2, geoKey1, (15, 37), (400, 400, km), STOREDIST, ASC, 2)
                             });
         }
 
