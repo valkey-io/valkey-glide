@@ -356,7 +356,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
-     * @returns `True` if all keys were set. `False` if no key was set.
+     * @returns `true` if all keys were set. `false` if no key was set.
      */
     public msetnx(keyValueMap: Record<string, string>): T {
         return this.addAndReturn(createMSetNX(keyValueMap));
