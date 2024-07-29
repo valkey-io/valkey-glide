@@ -91,6 +91,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -906,6 +907,29 @@ export class BaseClient {
      */
     public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @returns `True` if all keys were set. `False` if no key was set.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.msetnx({"key1": "value1", "key2": "value2"});
+     * console.log(result1); // Output: `True`
+     *
+     * const result2 = await client.msetnx({"key2": "value4", "key3": "value5"});
+     * console.log(result2); // Output: `False`
+     * ```
+     */
+    public async msetnx(keyValueMap: Record<string, string>): Promise<number> {
+        return this.createWritePromise(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
