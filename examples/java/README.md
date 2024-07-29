@@ -1,18 +1,14 @@
 ## Run
 
-Ensure that you have an instance of Valkey running on "localhost" on "6379". Otherwise, update glide.examples.ExamplesApp with a configuration that matches your server settings.
+Ensure that you have an instance of Valkey running on "localhost" on "6379". Otherwise, update glide.examples.StandaloneExample or glide.examples.ClusterExample with a configuration that matches your server settings.
 
-To run the example:
+To run the Standalone example:
 ```
 cd valkey-glide/examples/java
-./gradlew :run
+./gradlew :runStandalone
 ```
-
-You should expect to see the output:
+To run the Cluster example:
 ```
-> Task :run
-PING: PONG
-PING(found you): found you
-SET(apples, oranges): OK
-GET(apples): oranges
+cd valkey-glide/examples/java
+./gradlew :runCluster
 ```
