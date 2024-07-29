@@ -160,6 +160,7 @@ import {
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -1521,6 +1522,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * Command Response - A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     */
+    public zrandmember(key: string): T {
+        return this.addAndReturn(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCount(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCountWithScores(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count, true));
     }
 
     /** Returns the string representation of the type of the value stored at `key`.

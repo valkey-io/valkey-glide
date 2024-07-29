@@ -5446,6 +5446,139 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrandmember test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+
+                const memberScores = { one: 1.0, two: 2.0 };
+                const elements = ["one", "two"];
+                expect(await client.zadd(key1, memberScores)).toBe(2);
+
+                // check random memember belongs to the set
+                const randmember = await client.zrandmember(key1);
+
+                if (randmember !== null) {
+                    checkSimple(randmember in elements).toEqual(true);
+                }
+
+                // non existing key should return null
+                expect(await client.zrandmember("nonExistingKey")).toBeNull();
+
+                // Key exists, but is not a set
+                expect(await client.set(key2, "foo")).toBe("OK");
+                await expect(client.zrandmember(key2)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrandmemberWithCount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+
+                const memberScores = { one: 1.0, two: 2.0 };
+                expect(await client.zadd(key1, memberScores)).toBe(2);
+
+                // unique values are expected as count is positive
+                let randMembers = await client.zrandmemberWithCount(key1, 4);
+                expect(randMembers.length).toBe(2);
+                expect(randMembers.length).toEqual(new Set(randMembers).size);
+
+                // Duplicate values are expected as count is negative
+                randMembers = await client.zrandmemberWithCount(key1, -4);
+                expect(randMembers.length).toBe(4);
+                const randMemberSet = new Set<string>();
+
+                for (const member of randMembers) {
+                    const memberStr = member + "";
+
+                    if (!randMemberSet.has(memberStr)) {
+                        randMemberSet.add(memberStr);
+                    }
+                }
+
+                expect(randMembers.length).not.toEqual(randMemberSet.size);
+
+                // non existing key should return empty array
+                randMembers = await client.zrandmemberWithCount(
+                    "nonExistingKey",
+                    -4,
+                );
+                expect(randMembers.length).toBe(0);
+
+                // Key exists, but is not a set
+                expect(await client.set(key2, "foo")).toBe("OK");
+                await expect(
+                    client.zrandmemberWithCount(key2, 1),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrandmemberWithCountWithScores test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+
+                const memberScores = { one: 1.0, two: 2.0 };
+                const memberScoreMap = new Map<string, number>([
+                    ["one", 1.0],
+                    ["two", 2.0],
+                ]);
+                expect(await client.zadd(key1, memberScores)).toBe(2);
+
+                // unique values are expected as count is positive
+                let randMembers = await client.zrandmemberWithCountWithScores(
+                    key1,
+                    4,
+                );
+
+                for (const member of randMembers) {
+                    const key = String(member[0]);
+                    const score = Number(member[1]);
+                    expect(score).toEqual(memberScoreMap.get(key));
+                }
+
+                // Duplicate values are expected as count is negative
+                randMembers = await client.zrandmemberWithCountWithScores(
+                    key1,
+                    -4,
+                );
+                expect(randMembers.length).toBe(4);
+                const keys = [];
+
+                for (const member of randMembers) {
+                    keys.push(String(member[0]));
+                }
+
+                expect(randMembers.length).not.toEqual(new Set(keys).size);
+
+                // non existing key should return empty array
+                randMembers = await client.zrandmemberWithCountWithScores(
+                    "nonExistingKey",
+                    -4,
+                );
+                expect(randMembers.length).toBe(0);
+
+                // Key exists, but is not a set
+                expect(await client.set(key2, "foo")).toBe("OK");
+                await expect(
+                    client.zrandmemberWithCount(key2, 1),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
