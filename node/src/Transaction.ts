@@ -841,7 +841,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
-     * Since: Valkey version 6.2.0.
+     * since Valkey version 6.2.0.
      */
     public blmove(
         source: string,
