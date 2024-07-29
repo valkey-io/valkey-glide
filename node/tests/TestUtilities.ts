@@ -530,7 +530,7 @@ export async function transactionTest(
     baseTransaction.lrange(key5, 0, -1);
     responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.lmove(
             key5,
             key20,
@@ -612,7 +612,7 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     responseData.push(['sismember(key7, "bar")', true]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
@@ -641,7 +641,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, "member1");
     responseData.push(['zrank(key8, "member1")', 0]);
 
-    if (gte("7.2.0", version)) {
+    if (gte(version, "7.2.0")) {
         baseTransaction.zrankWithScore(key8, "member1");
         responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
     }
@@ -649,7 +649,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     responseData.push(['zrevrank(key8, "member5")', 0]);
 
-    if (gte("7.2.0", version)) {
+    if (gte(version, "7.2.0")) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
@@ -680,7 +680,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -711,7 +711,7 @@ export async function transactionTest(
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
@@ -813,7 +813,7 @@ export async function transactionTest(
     baseTransaction.get(key19);
     responseData.push(["get(key19)", "`bc`ab"]);
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.bitcount(key17, {
             start: 5,
             end: 30,
@@ -863,7 +863,7 @@ export async function transactionTest(
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction
             .geosearch(
                 key18,
@@ -960,7 +960,7 @@ export async function transactionTest(
         true,
     );
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.functionLoad(code);
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
