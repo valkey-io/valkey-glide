@@ -27,6 +27,7 @@ import {
     RequestError,
     ScoreFilter,
     Script,
+    SortOrder,
     UpdateByScore,
     parseInfoResponse,
     TimeoutError,
@@ -1098,6 +1099,33 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.hsetnx(key2, field, "value"),
                 ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hstrlen test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const field = uuidv4();
+
+                expect(await client.hset(key1, { field: "value" })).toBe(1);
+                expect(await client.hstrlen(key1, "field")).toBe(5);
+
+                // missing value
+                expect(await client.hstrlen(key1, "nonExistingField")).toBe(0);
+
+                // missing key
+                expect(await client.hstrlen(key2, "field")).toBe(0);
+
+                // key exists but holds non hash type value
+                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                await expect(client.hstrlen(key2, field)).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
@@ -4989,6 +5017,282 @@ export function runBaseTests<Context>(config: {
                         new Map([["Place", { longitude: 0, latitude: -86 }]]),
                     ),
                 ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geosearch test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+                const key = uuidv4();
+
+                const members: string[] = [
+                    "Catania",
+                    "Palermo",
+                    "edge2",
+                    "edge1",
+                ];
+                const membersSet: Set<string> = new Set(members);
+                const membersCoordinates: [number, number][] = [
+                    [15.087269, 37.502669],
+                    [13.361389, 38.115556],
+                    [17.24151, 38.788135],
+                    [12.758489, 38.788135],
+                ];
+
+                const membersGeoData: GeospatialData[] = [];
+
+                for (const [lon, lat] of membersCoordinates) {
+                    membersGeoData.push({ longitude: lon, latitude: lat });
+                }
+
+                const membersToCoordinates = new Map<string, GeospatialData>();
+
+                for (let i = 0; i < members.length; i++) {
+                    membersToCoordinates.set(members[i], membersGeoData[i]);
+                }
+
+                const expectedResult = [
+                    [
+                        members[0],
+                        [56.4413, 3479447370796909, membersCoordinates[0]],
+                    ],
+                    [
+                        members[1],
+                        [190.4424, 3479099956230698, membersCoordinates[1]],
+                    ],
+                    [
+                        members[2],
+                        [279.7403, 3481342659049484, membersCoordinates[2]],
+                    ],
+                    [
+                        members[3],
+                        [279.7405, 3479273021651468, membersCoordinates[3]],
+                    ],
+                ];
+
+                // geoadd
+                expect(await client.geoadd(key, membersToCoordinates)).toBe(
+                    members.length,
+                );
+
+                let searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                );
+                // using set to compare, because results are reordrered
+                checkSimple(new Set(searchResult)).toEqual(membersSet);
+
+                // order search result
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    { sortOrder: SortOrder.ASC },
+                );
+                checkSimple(searchResult).toEqual(members);
+
+                // order and query all extra data
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    {
+                        sortOrder: SortOrder.ASC,
+                        withCoord: true,
+                        withDist: true,
+                        withHash: true,
+                    },
+                );
+                checkSimple(searchResult).toEqual(expectedResult);
+
+                // order, query and limit by 1
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    {
+                        sortOrder: SortOrder.ASC,
+                        withCoord: true,
+                        withDist: true,
+                        withHash: true,
+                        count: 1,
+                    },
+                );
+                checkSimple(searchResult).toEqual(expectedResult.slice(0, 1));
+
+                // test search by box, unit: meters, from member, with distance
+                const meters = 400 * 1000;
+                searchResult = await client.geosearch(
+                    key,
+                    { member: "Catania" },
+                    { width: meters, height: meters, unit: GeoUnit.METERS },
+                    {
+                        withDist: true,
+                        withCoord: false,
+                        sortOrder: SortOrder.DESC,
+                    },
+                );
+                checkSimple(searchResult).toEqual([
+                    ["edge2", [236529.1799]],
+                    ["Palermo", [166274.1516]],
+                    ["Catania", [0.0]],
+                ]);
+
+                // test search by box, unit: feet, from member, with limited count 2, with hash
+                const feet = 400 * 3280.8399;
+                searchResult = await client.geosearch(
+                    key,
+                    { member: "Palermo" },
+                    { width: feet, height: feet, unit: GeoUnit.FEET },
+                    {
+                        withDist: false,
+                        withCoord: false,
+                        withHash: true,
+                        sortOrder: SortOrder.ASC,
+                        count: 2,
+                    },
+                );
+                checkSimple(searchResult).toEqual([
+                    ["Palermo", [3479099956230698]],
+                    ["edge1", [3479273021651468]],
+                ]);
+
+                // test search by box, unit: miles, from geospatial position, with limited ANY count to 1
+                const miles = 250;
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: miles, height: miles, unit: GeoUnit.MILES },
+                    { count: 1, isAny: true },
+                );
+                expect(members.map((m) => Buffer.from(m))).toContainEqual(
+                    searchResult[0],
+                );
+
+                // test search by radius, units: feet, from member
+                const feetRadius = 200 * 3280.8399;
+                searchResult = await client.geosearch(
+                    key,
+                    { member: "Catania" },
+                    { radius: feetRadius, unit: GeoUnit.FEET },
+                    { sortOrder: SortOrder.ASC },
+                );
+                checkSimple(searchResult).toEqual(["Catania", "Palermo"]);
+
+                // Test search by radius, unit: meters, from member
+                const metersRadius = 200 * 1000;
+                searchResult = await client.geosearch(
+                    key,
+                    { member: "Catania" },
+                    { radius: metersRadius, unit: GeoUnit.METERS },
+                    { sortOrder: SortOrder.DESC },
+                );
+                checkSimple(searchResult).toEqual(["Palermo", "Catania"]);
+
+                searchResult = await client.geosearch(
+                    key,
+                    { member: "Catania" },
+                    { radius: metersRadius, unit: GeoUnit.METERS },
+                    {
+                        sortOrder: SortOrder.DESC,
+                        withHash: true,
+                    },
+                );
+                checkSimple(searchResult).toEqual([
+                    ["Palermo", [3479099956230698]],
+                    ["Catania", [3479447370796909]],
+                ]);
+
+                // Test search by radius, unit: miles, from geospatial data
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 175, unit: GeoUnit.MILES },
+                    { sortOrder: SortOrder.DESC },
+                );
+                checkSimple(searchResult).toEqual([
+                    "edge1",
+                    "edge2",
+                    "Palermo",
+                    "Catania",
+                ]);
+
+                // Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 200, unit: GeoUnit.KILOMETERS },
+                    {
+                        sortOrder: SortOrder.ASC,
+                        count: 2,
+                        withHash: true,
+                        withCoord: true,
+                        withDist: true,
+                    },
+                );
+                checkSimple(searchResult).toEqual(expectedResult.slice(0, 2));
+
+                // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 200, unit: GeoUnit.KILOMETERS },
+                    {
+                        sortOrder: SortOrder.ASC,
+                        count: 1,
+                        isAny: true,
+                        withCoord: true,
+                        withDist: true,
+                        withHash: true,
+                    },
+                );
+                expect(members.map((m) => Buffer.from(m))).toContainEqual(
+                    searchResult[0][0],
+                );
+
+                // no members within the area
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 50, height: 50, unit: GeoUnit.METERS },
+                    { sortOrder: SortOrder.ASC },
+                );
+                expect(searchResult).toEqual([]);
+
+                // no members within the area
+                searchResult = await client.geosearch(
+                    key,
+                    { position: { longitude: 15, latitude: 37 } },
+                    { radius: 5, unit: GeoUnit.METERS },
+                    { sortOrder: SortOrder.ASC },
+                );
+                expect(searchResult).toEqual([]);
+
+                // member does not exist
+                await expect(
+                    client.geosearch(
+                        key,
+                        { member: "non-existing-member" },
+                        { radius: 100, unit: GeoUnit.METERS },
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // key exists but holds a non-ZSET value
+                const key2 = uuidv4();
+                expect(await client.set(key2, uuidv4())).toEqual("OK");
+                await expect(
+                    client.geosearch(
+                        key2,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 100, unit: GeoUnit.METERS },
+                    ),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
