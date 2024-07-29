@@ -6,19 +6,27 @@ import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
+import { gte } from "semver";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitmapIndexType,
+    BitwiseOperation,
     ClusterTransaction,
+    FlushMode,
+    FunctionListResponse,
+    GeoUnit,
+    GeospatialData,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
+    ListDirection,
     ProtocolVersion,
     ReturnType,
+    ScoreFilter,
+    SortOrder,
     Transaction,
 } from "..";
-import { checkIfServerVersionLessThan } from "./SharedTests";
-import { LPosOptions } from "../build-ts/src/command-options/LPosOptions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: Array<string>) {
@@ -26,6 +34,8 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
         builder.push("null");
     } else if (typeof obj === "string") {
         builder.push(obj);
+    } else if (typeof obj === "number") {
+        builder.push(obj.toPrecision(3));
     } else if (obj instanceof Uint8Array) {
         builder.push(obj.toString());
     } else if (obj instanceof Array) {
@@ -326,9 +336,100 @@ export function compareMaps(
     return JSON.stringify(map) == JSON.stringify(map2);
 }
 
+/**
+ * Validate whether `FUNCTION LIST` response contains required info.
+ *
+ * @param response - The response from server.
+ * @param libName - Expected library name.
+ * @param functionDescriptions - Expected function descriptions. Key - function name, value - description.
+ * @param functionFlags - Expected function flags. Key - function name, value - flags set.
+ * @param libCode - Expected library to check if given.
+ */
+export function checkFunctionListResponse(
+    response: FunctionListResponse,
+    libName: string,
+    functionDescriptions: Map<string, string | null>,
+    functionFlags: Map<string, string[]>,
+    libCode?: string,
+) {
+    // TODO rework after #1953 https://github.com/valkey-io/valkey-glide/pull/1953
+    expect(response.length).toBeGreaterThan(0);
+    let hasLib = false;
+
+    for (const lib of response) {
+        hasLib = lib["library_name"] == libName;
+
+        if (hasLib) {
+            const functions = lib["functions"];
+            expect(functions.length).toEqual(functionDescriptions.size);
+
+            for (const functionData of functions) {
+                const functionInfo = functionData as Record<
+                    string,
+                    string | string[]
+                >;
+                const name = (
+                    functionInfo["name"] as unknown as Buffer
+                ).toString(); // not a string - suprise
+                const flags = (
+                    functionInfo["flags"] as unknown as Buffer[]
+                ).map((f) => f.toString());
+                checkSimple(functionInfo["description"]).toEqual(
+                    functionDescriptions.get(name),
+                );
+
+                checkSimple(flags).toEqual(functionFlags.get(name));
+            }
+
+            if (libCode) {
+                checkSimple(lib["library_code"]).toEqual(libCode);
+            }
+
+            break;
+        }
+    }
+
+    expect(hasLib).toBeTruthy();
+}
+
+/**
+ * Check transaction response.
+ * @param response - Transaction result received from `exec` call.
+ * @param expectedResponseData - Expected result data from {@link transactionTest}.
+ */
+export function validateTransactionResponse(
+    response: ReturnType[] | null,
+    expectedResponseData: [string, ReturnType][],
+) {
+    const failedChecks: string[] = [];
+
+    for (let i = 0; i < expectedResponseData.length; i++) {
+        const [testName, expectedResponse] = expectedResponseData[i];
+
+        if (intoString(response?.[i]) != intoString(expectedResponse)) {
+            failedChecks.push(
+                `${testName} failed, expected <${JSON.stringify(expectedResponse)}>, actual <${JSON.stringify(response?.[i])}>`,
+            );
+        }
+    }
+
+    if (failedChecks.length > 0) {
+        throw new Error(
+            "Checks failed in transaction response:\n" +
+                failedChecks.join("\n"),
+        );
+    }
+}
+
+/**
+ * Populates a transaction with commands to test.
+ * @param baseTransaction - A transaction.
+ * @returns Array of tuples, where first element is a test name/description, second - expected return value.
+ */
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
-): Promise<ReturnType[]> {
+    version: string,
+): Promise<[string, ReturnType][]> {
     const key1 = "{key}" + uuidv4();
     const key2 = "{key}" + uuidv4();
     const key3 = "{key}" + uuidv4();
@@ -345,99 +446,131 @@ export async function transactionTest(
     const key14 = "{key}" + uuidv4(); // sorted set
     const key15 = "{key}" + uuidv4(); // list
     const key16 = "{key}" + uuidv4(); // list
+    const key17 = "{key}" + uuidv4(); // bitmap
+    const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
+    const key19 = "{key}" + uuidv4(); // bitmap
+    const key20 = "{key}" + uuidv4(); // list
     const field = uuidv4();
     const value = uuidv4();
-    const args: ReturnType[] = [];
+    // array of tuples - first element is test name/description, second - expected return value
+    const responseData: [string, ReturnType][] = [];
     baseTransaction.flushall();
-    args.push("OK");
+    responseData.push(["flushall()", "OK"]);
+    baseTransaction.flushall(FlushMode.SYNC);
+    responseData.push(["flushall(FlushMode.SYNC)", "OK"]);
+    baseTransaction.flushdb();
+    responseData.push(["flushdb()", "OK"]);
+    baseTransaction.flushdb(FlushMode.SYNC);
+    responseData.push(["flushdb(FlushMode.SYNC)", "OK"]);
     baseTransaction.dbsize();
-    args.push(0);
+    responseData.push(["dbsize()", 0]);
     baseTransaction.set(key1, "bar");
-    args.push("OK");
+    responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.getdel(key1);
-    args.push("bar");
+    responseData.push(["getdel(key1)", "bar"]);
     baseTransaction.set(key1, "bar");
-    args.push("OK");
+    responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.objectEncoding(key1);
-    args.push("embstr");
+    responseData.push(["objectEncoding(key1)", "embstr"]);
     baseTransaction.type(key1);
-    args.push("string");
+    responseData.push(["type(key1)", "string"]);
     baseTransaction.echo(value);
-    args.push(value);
+    responseData.push(["echo(value)", value]);
     baseTransaction.persist(key1);
-    args.push(false);
-    baseTransaction.set(key2, "baz", {
-        returnOldValue: true,
-    });
-    args.push(null);
+    responseData.push(["persist(key1)", false]);
+    baseTransaction.set(key2, "baz", { returnOldValue: true });
+    responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);
-    args.push(["bar", "baz"]);
+    responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseTransaction.mset({ [key3]: value });
-    args.push("OK");
+    responseData.push(["mset({ [key3]: value })", "OK"]);
     baseTransaction.mget([key1, key2]);
-    args.push(["bar", "baz"]);
+    responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
-    args.push(3);
+    responseData.push(["strlen(key1)", 3]);
     baseTransaction.del([key1]);
-    args.push(1);
+    responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
-    args.push(1);
+    responseData.push(["hset(key4, { [field]: value })", 1]);
+    baseTransaction.hstrlen(key4, field);
+    responseData.push(["hstrlen(key4, field)", value.length]);
     baseTransaction.hlen(key4);
-    args.push(1);
+    responseData.push(["hlen(key4)", 1]);
     baseTransaction.hsetnx(key4, field, value);
-    args.push(false);
+    responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
-    args.push([value]);
+    responseData.push(["hvals(key4)", [value]]);
     baseTransaction.hget(key4, field);
-    args.push(value);
+    responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
-    args.push({ [field]: value });
+    responseData.push(["hgetall(key4)", { [field]: value }]);
     baseTransaction.hdel(key4, [field]);
-    args.push(1);
+    responseData.push(["hdel(key4, [field])", 1]);
     baseTransaction.hmget(key4, [field]);
-    args.push([null]);
+    responseData.push(["hmget(key4, [field])", [null]]);
     baseTransaction.hexists(key4, field);
-    args.push(false);
+    responseData.push(["hexists(key4, field)", false]);
     baseTransaction.lpush(key5, [
         field + "1",
         field + "2",
         field + "3",
         field + "4",
     ]);
-    args.push(4);
+    responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
     baseTransaction.lpop(key5);
-    args.push(field + "4");
+    responseData.push(["lpop(key5)", field + "4"]);
     baseTransaction.llen(key5);
-    args.push(3);
+    responseData.push(["llen(key5)", 3]);
     baseTransaction.lrem(key5, 1, field + "1");
-    args.push(1);
+    responseData.push(['lrem(key5, 1, field + "1")', 1]);
     baseTransaction.ltrim(key5, 0, 1);
-    args.push("OK");
+    responseData.push(["ltrim(key5, 0, 1)", "OK"]);
     baseTransaction.lset(key5, 0, field + "3");
-    args.push("OK");
+    responseData.push(['lset(key5, 0, field + "3")', "OK"]);
     baseTransaction.lrange(key5, 0, -1);
-    args.push([field + "3", field + "2"]);
-    baseTransaction.lpopCount(key5, 2);
-    args.push([field + "3", field + "2"]);
+    responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction.lmove(
+            key5,
+            key20,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+        );
+        responseData.push([
+            "lmove(key5, key20, ListDirection.LEFT, ListDirection.LEFT)",
+            field + "3",
+        ]);
+
+        baseTransaction.lpopCount(key5, 2);
+        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
+    } else {
+        baseTransaction.lpopCount(key5, 2);
+        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+    }
+
     baseTransaction.linsert(
         key5,
         InsertPosition.Before,
         "nonExistingPivot",
         "element",
     );
-    args.push(0);
+    responseData.push(["linsert", 0]);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
-    args.push(3);
+    responseData.push([
+        'rpush(key6, [field + "1", field + "2", field + "3"])',
+        3,
+    ]);
     baseTransaction.lindex(key6, 0);
-    args.push(field + "1");
+    responseData.push(["lindex(key6, 0)", field + "1"]);
     baseTransaction.rpop(key6);
-    args.push(field + "3");
+    responseData.push(["rpop(key6)", field + "3"]);
     baseTransaction.rpopCount(key6, 2);
-    args.push([field + "2", field + "1"]);
+    responseData.push(["rpopCount(key6, 2)", [field + "2", field + "1"]]);
     baseTransaction.rpushx(key15, ["_"]); // key15 is empty
-    args.push(0);
+    responseData.push(['rpushx(key15, ["_"])', 0]);
     baseTransaction.lpushx(key15, ["_"]);
-    args.push(0);
+    responseData.push(['lpushx(key15, ["_"])', 0]);
     baseTransaction.rpush(key16, [
         field + "1",
         field + "1",
@@ -445,59 +578,58 @@ export async function transactionTest(
         field + "3",
         field + "3",
     ]);
-    args.push(5);
-    baseTransaction.lpos(key16, field + "1", new LPosOptions({ rank: 2 }));
-    args.push(1);
-    baseTransaction.lpos(
-        key16,
-        field + "1",
-        new LPosOptions({ rank: 2, count: 0 }),
-    );
-    args.push([1]);
+    responseData.push(["rpush(key16, [1, 1, 2, 3, 3,])", 5]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2 })', 1]);
+    baseTransaction.lpos(key16, field + "1", { rank: 2, count: 0 });
+    responseData.push(['lpos(key16, field + "1", { rank: 2, count: 0 })', [1]]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
-    args.push(2);
+    responseData.push(['sadd(key7, ["bar", "foo"])', 2]);
     baseTransaction.sunionstore(key7, [key7, key7]);
-    args.push(2);
+    responseData.push(["sunionstore(key7, [key7, key7])", 2]);
     baseTransaction.sunion([key7, key7]);
-    args.push(new Set(["bar", "foo"]));
+    responseData.push(["sunion([key7, key7])", new Set(["bar", "foo"])]);
     baseTransaction.sinter([key7, key7]);
-    args.push(new Set(["bar", "foo"]));
+    responseData.push(["sinter([key7, key7])", new Set(["bar", "foo"])]);
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.sintercard([key7, key7]);
-        args.push(2);
+        responseData.push(["sintercard([key7, key7])", 2]);
         baseTransaction.sintercard([key7, key7], 1);
-        args.push(1);
+        responseData.push(["sintercard([key7, key7], 1)", 1]);
     }
 
     baseTransaction.sinterstore(key7, [key7, key7]);
-    args.push(2);
+    responseData.push(["sinterstore(key7, [key7, key7])", 2]);
     baseTransaction.sdiff([key7, key7]);
-    args.push(new Set());
+    responseData.push(["sdiff([key7, key7])", new Set()]);
     baseTransaction.sdiffstore(key7, [key7]);
-    args.push(2);
+    responseData.push(["sdiffstore(key7, [key7])", 2]);
     baseTransaction.srem(key7, ["foo"]);
-    args.push(1);
+    responseData.push(['srem(key7, ["foo"])', 1]);
     baseTransaction.scard(key7);
-    args.push(1);
+    responseData.push(["scard(key7)", 1]);
     baseTransaction.sismember(key7, "bar");
-    args.push(true);
+    responseData.push(['sismember(key7, "bar")', true]);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    if (gte("6.2.0", version)) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
-        args.push([true, true, false]);
+        responseData.push([
+            'smismember(key7, ["bar", "foo", "baz"])',
+            [true, true, false],
+        ]);
     }
 
     baseTransaction.smembers(key7);
-    args.push(new Set(["bar"]));
+    responseData.push(["smembers(key7)", new Set(["bar"])]);
     baseTransaction.spop(key7);
-    args.push("bar");
+    responseData.push(["spop(key7)", "bar"]);
     baseTransaction.spopCount(key7, 2);
-    args.push(new Set());
+    responseData.push(["spopCount(key7, 2)", new Set()]);
     baseTransaction.smove(key7, key7, "non_existing_member");
-    args.push(false);
+    responseData.push(['smove(key7, key7, "non_existing_member")', false]);
     baseTransaction.scard(key7);
-    args.push(0);
+    responseData.push(["scard(key7)", 0]);
     baseTransaction.zadd(key8, {
         member1: 1,
         member2: 2,
@@ -505,104 +637,320 @@ export async function transactionTest(
         member4: 4,
         member5: 5,
     });
-    args.push(5);
+    responseData.push(["zadd(key8, { ... } ", 5]);
     baseTransaction.zrank(key8, "member1");
-    args.push(0);
+    responseData.push(['zrank(key8, "member1")', 0]);
 
-    if (!(await checkIfServerVersionLessThan("7.2.0"))) {
+    if (gte("7.2.0", version)) {
         baseTransaction.zrankWithScore(key8, "member1");
-        args.push([0, 1]);
+        responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
+    }
+
+    baseTransaction.zrevrank(key8, "member5");
+    responseData.push(['zrevrank(key8, "member5")', 0]);
+
+    if (gte("7.2.0", version)) {
+        baseTransaction.zrevrankWithScore(key8, "member5");
+        responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
 
     baseTransaction.zaddIncr(key8, "member2", 1);
-    args.push(3);
+    responseData.push(['zaddIncr(key8, "member2", 1)', 3]);
+    baseTransaction.zincrby(key8, 0.3, "member1");
+    responseData.push(['zincrby(key8, 0.3, "member1")', 1.3]);
     baseTransaction.zrem(key8, ["member1"]);
-    args.push(1);
+    responseData.push(['zrem(key8, ["member1"])', 1]);
     baseTransaction.zcard(key8);
-    args.push(4);
-    baseTransaction.zscore(key8, "member2");
-    args.push(3.0);
-    baseTransaction.zrange(key8, { start: 0, stop: -1 });
-    args.push(["member2", "member3", "member4", "member5"]);
-    baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
-    args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
-    baseTransaction.zadd(key12, { one: 1, two: 2 });
-    args.push(2);
-    baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
-    args.push(3);
+    responseData.push(["zcard(key8)", 4]);
 
-    if (!(await checkIfServerVersionLessThan("6.2.0"))) {
+    baseTransaction.zscore(key8, "member2");
+    responseData.push(['zscore(key8, "member2")', 3.0]);
+    baseTransaction.zrange(key8, { start: 0, stop: -1 });
+    responseData.push([
+        "zrange(key8, { start: 0, stop: -1 })",
+        ["member2", "member3", "member4", "member5"],
+    ]);
+    baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
+    responseData.push([
+        "zrangeWithScores(key8, { start: 0, stop: -1 })",
+        { member2: 3, member3: 3.5, member4: 4, member5: 5 },
+    ]);
+    baseTransaction.zadd(key12, { one: 1, two: 2 });
+    responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
+    baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
+    responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
+
+    if (gte("6.2.0", version)) {
         baseTransaction.zdiff([key13, key12]);
-        args.push(["three"]);
+        responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
-        args.push({ three: 3.5 });
+        responseData.push(["zdiffWithScores([key13, key12])", { three: 3.5 }]);
+        baseTransaction.zdiffstore(key13, [key13, key13]);
+        responseData.push(["zdiffstore(key13, [key13, key13])", 0]);
+        baseTransaction.zmscore(key12, ["two", "one"]);
+        responseData.push(['zmscore(key12, ["two", "one"]', [2.0, 1.0]]);
+        baseTransaction.zinterstore(key12, [key12, key13]);
+        responseData.push(["zinterstore(key12, [key12, key13])", 0]);
+    } else {
+        baseTransaction.zinterstore(key12, [key12, key13]);
+        responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zinterstore(key12, [key12, key13]);
-    args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
-    args.push(4);
+    responseData.push(['zcount(key8, { value: 2 }, "positiveInfinity")', 4]);
     baseTransaction.zpopmin(key8);
-    args.push({ member2: 3.0 });
+    responseData.push(["zpopmin(key8)", { member2: 3.0 }]);
     baseTransaction.zpopmax(key8);
-    args.push({ member5: 5 });
+    responseData.push(["zpopmax(key8)", { member5: 5 }]);
     baseTransaction.zremRangeByRank(key8, 1, 1);
-    args.push(1);
+    responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
         "negativeInfinity",
         "positiveInfinity",
     );
-    args.push(1); // key8 is now empty
+    responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
-        args.push(2);
+        responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
-        args.push(0);
+        responseData.push(["zintercard([key8, key14])", 0]);
         baseTransaction.zintercard([key8, key14], 1);
-        args.push(0);
+        responseData.push(["zintercard([key8, key14], 1)", 0]);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX);
+        responseData.push(["zmpop([key14], MAX)", [key14, { two: 2.0 }]]);
+        baseTransaction.zmpop([key14], ScoreFilter.MAX, 1);
+        responseData.push(["zmpop([key14], MAX, 1)", [key14, { one: 1.0 }]]);
+        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
+        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1);
+        responseData.push([
+            "bzmpop([key14], ScoreFilter.MAX, 0.1)",
+            [key14, { two: 2.0 }],
+        ]);
+        baseTransaction.bzmpop([key14], ScoreFilter.MAX, 0.1, 1);
+        responseData.push([
+            "bzmpop([key14], ScoreFilter.MAX, 0.1, 1)",
+            [key14, { one: 1.0 }],
+        ]);
     }
 
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
-    args.push("0-1");
+    responseData.push([
+        'xadd(key9, [["field", "value1"]], { id: "0-1" })',
+        "0-1",
+    ]);
     baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
-    args.push("0-2");
+    responseData.push([
+        'xadd(key9, [["field", "value2"]], { id: "0-2" })',
+        "0-2",
+    ]);
     baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
-    args.push("0-3");
+    responseData.push([
+        'xadd(key9, [["field", "value3"]], { id: "0-3" })',
+        "0-3",
+    ]);
     baseTransaction.xlen(key9);
-    args.push(3);
+    responseData.push(["xlen(key9)", 3]);
     baseTransaction.xread({ [key9]: "0-1" });
-    args.push({
-        [key9]: {
-            "0-2": [["field", "value2"]],
-            "0-3": [["field", "value3"]],
+    responseData.push([
+        'xread({ [key9]: "0-1" })',
+        {
+            [key9]: {
+                "0-2": [["field", "value2"]],
+                "0-3": [["field", "value3"]],
+            },
         },
-    });
+    ]);
     baseTransaction.xtrim(key9, {
         method: "minid",
         threshold: "0-2",
         exact: true,
     });
-    args.push(1);
+    responseData.push([
+        'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
+        1,
+    ]);
     baseTransaction.rename(key9, key10);
-    args.push("OK");
+    responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
-    args.push(1);
+    responseData.push(["exists([key10])", 1]);
     baseTransaction.renamenx(key10, key9);
-    args.push(true);
+    responseData.push(["renamenx(key10, key9)", true]);
     baseTransaction.exists([key9, key10]);
-    args.push(1);
+    responseData.push(["exists([key9, key10])", 1]);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
-    args.push(3);
+    responseData.push([
+        'rpush(key6, [field + "1", field + "2", field + "3"])',
+        3,
+    ]);
     baseTransaction.brpop([key6], 0.1);
-    args.push([key6, field + "3"]);
+    responseData.push(["brpop([key6], 0.1)", [key6, field + "3"]]);
     baseTransaction.blpop([key6], 0.1);
-    args.push([key6, field + "1"]);
+    responseData.push(["blpop([key6], 0.1)", [key6, field + "1"]]);
+
+    baseTransaction.setbit(key17, 1, 1);
+    responseData.push(["setbit(key17, 1, 1)", 0]);
+    baseTransaction.getbit(key17, 1);
+    responseData.push(["getbit(key17, 1)", 1]);
+    baseTransaction.set(key17, "foobar");
+    responseData.push(['set(key17, "foobar")', "OK"]);
+    baseTransaction.bitcount(key17);
+    responseData.push(["bitcount(key17)", 26]);
+    baseTransaction.bitcount(key17, { start: 1, end: 1 });
+    responseData.push(["bitcount(key17, { start: 1, end: 1 })", 6]);
+    baseTransaction.bitpos(key17, 1);
+    responseData.push(["bitpos(key17, 1)", 1]);
+
+    baseTransaction.set(key19, "abcdef");
+    responseData.push(['set(key19, "abcdef")', "OK"]);
+    baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
+    responseData.push([
+        "bitop(BitwiseOperation.AND, key19, [key19, key17])",
+        6,
+    ]);
+    baseTransaction.get(key19);
+    responseData.push(["get(key19)", "`bc`ab"]);
+
+    if (gte("7.0.0", version)) {
+        baseTransaction.bitcount(key17, {
+            start: 5,
+            end: 30,
+            indexType: BitmapIndexType.BIT,
+        });
+        responseData.push([
+            "bitcount(key17, new BitOffsetOptions(5, 30, BitmapIndexType.BIT))",
+            17,
+        ]);
+        baseTransaction.bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT);
+        responseData.push([
+            "bitposInterval(key17, 1, 44, 50, BitmapIndexType.BIT)",
+            46,
+        ]);
+    }
+
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
-    args.push(1);
+    responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
     baseTransaction.pfcount([key11]);
-    args.push(3);
+    responseData.push(["pfcount([key11])", 3]);
+    baseTransaction.geoadd(
+        key18,
+        new Map<string, GeospatialData>([
+            ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
+            ["Catania", { longitude: 15.087269, latitude: 37.502669 }],
+        ]),
+    );
+    responseData.push(["geoadd(key18, { Palermo: ..., Catania: ... })", 2]);
+    baseTransaction.geopos(key18, ["Palermo", "Catania"]);
+    responseData.push([
+        'geopos(key18, ["Palermo", "Catania"])',
+        [
+            [13.36138933897018433, 38.11555639549629859],
+            [15.08726745843887329, 37.50266842333162032],
+        ],
+    ]);
+    baseTransaction.geodist(key18, "Palermo", "Catania");
+    responseData.push(['geodist(key18, "Palermo", "Catania")', 166274.1516]);
+    baseTransaction.geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS);
+    responseData.push([
+        'geodist(key18, "Palermo", "Catania", GeoUnit.KILOMETERS)',
+        166.2742,
+    ]);
+    baseTransaction.geohash(key18, ["Palermo", "Catania", "NonExisting"]);
+    responseData.push([
+        'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
+        ["sqc8b49rny0", "sqdtr74hyu0", null],
+    ]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction
+            .geosearch(
+                key18,
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                { sortOrder: SortOrder.ASC },
+            )
+            .geosearch(
+                key18,
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+            )
+            .geosearch(
+                key18,
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                {
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                },
+            )
+            .geosearch(
+                key18,
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                {
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                },
+            );
+        responseData.push([
+            'geosearch(key18, "Palermo", R200 KM, ASC)',
+            ["Palermo", "Catania"],
+        ]);
+        responseData.push([
+            "geosearch(key18, (15, 37), 400x400 KM, ASC)",
+            ["Palermo", "Catania"],
+        ]);
+        responseData.push([
+            'geosearch(key18, "Palermo", R200 KM, ASC 2 3x true)',
+            [
+                [
+                    "Palermo",
+                    [
+                        0.0,
+                        3479099956230698,
+                        [13.361389338970184, 38.1155563954963],
+                    ],
+                ],
+                [
+                    "Catania",
+                    [
+                        166.2742,
+                        3479447370796909,
+                        [15.087267458438873, 37.50266842333162],
+                    ],
+                ],
+            ],
+        ]);
+        responseData.push([
+            "geosearch(key18, (15, 37), 400x400 KM, ASC 2 3x true)",
+            [
+                [
+                    "Catania",
+                    [
+                        56.4413,
+                        3479447370796909,
+                        [15.087267458438873, 37.50266842333162],
+                    ],
+                ],
+                [
+                    "Palermo",
+                    [
+                        190.4424,
+                        3479099956230698,
+                        [13.361389338970184, 38.1155563954963],
+                    ],
+                ],
+            ],
+        ]);
+    }
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
@@ -612,12 +960,34 @@ export async function transactionTest(
         true,
     );
 
-    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+    if (gte("7.0.0", version)) {
         baseTransaction.functionLoad(code);
-        args.push(libName);
+        responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
-        args.push(libName);
+        responseData.push(["functionLoad(code, true)", libName]);
+        baseTransaction.functionList({ libNamePattern: "another" });
+        responseData.push(['functionList("another")', []]);
+        baseTransaction.fcall(funcName, [], ["one", "two"]);
+        responseData.push(['fcall(funcName, [], ["one", "two"])', "one"]);
+        baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
+        responseData.push([
+            'fcallReadonly(funcName, [], ["one", "two"]',
+            "one",
+        ]);
+        baseTransaction.functionDelete(libName);
+        responseData.push(["functionDelete(libName)", "OK"]);
+        baseTransaction.functionFlush();
+        responseData.push(["functionFlush()", "OK"]);
+        baseTransaction.functionFlush(FlushMode.ASYNC);
+        responseData.push(["functionFlush(FlushMode.ASYNC)", "OK"]);
+        baseTransaction.functionFlush(FlushMode.SYNC);
+        responseData.push(["functionFlush(FlushMode.SYNC)", "OK"]);
+        baseTransaction.functionList({
+            libNamePattern: libName,
+            withCode: true,
+        });
+        responseData.push(["functionList({ libName, true})", []]);
     }
 
-    return args;
+    return responseData;
 }

@@ -5772,6 +5772,112 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        String foo1 = "foo1";
+        String bar1 = "bar1";
+
+        String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
+        String streamId = client.xadd(key, entry).get();
+        // get everything from the stream
+        Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        String[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys_with_options(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String field = UUID.randomUUID().toString();
+        String foo1 = "foo1";
+        String bar1 = "bar1";
+
+        String[][] entry = new String[][] {{field, foo1}, {field, bar1}};
+        String streamId = client.xadd(key, entry, StreamAddOptions.builder().build()).get();
+        // get everything from the stream
+        Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        String[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field = gs(UUID.randomUUID().toString());
+        GlideString foo1 = gs("foo1");
+        GlideString bar1 = gs("bar1");
+
+        GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
+        GlideString streamId = client.xadd(key, entry).get();
+        // get everything from the stream
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        GlideString[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_duplicate_entry_keys_with_options_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field = gs(UUID.randomUUID().toString());
+        GlideString foo1 = gs("foo1");
+        GlideString bar1 = gs("bar1");
+
+        GlideString[][] entry = new GlideString[][] {{field, foo1}, {field, bar1}};
+        GlideString streamId = client.xadd(key, entry, StreamAddOptionsBinary.builder().build()).get();
+        // get everything from the stream
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(1, result.size());
+        GlideString[][] actualEntry = result.get(streamId);
+        assertDeepEquals(entry, actualEntry);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_wrong_length_entries(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String timestamp = "0-1";
+
+        // Entry too long
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client
+                                .xadd(
+                                        key,
+                                        new String[][] {
+                                            new String[] {"field1", "foo1"}, new String[] {"field2", "bar2", "oh no"}
+                                        },
+                                        StreamAddOptions.builder().id(timestamp).build())
+                                .get());
+
+        // Entry too short
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                        client
+                                .xadd(
+                                        key,
+                                        new String[][] {new String[] {"field1", "foo1"}, new String[] {"oh no"}},
+                                        StreamAddOptions.builder().id(timestamp).build())
+                                .get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xadd_xlen_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -6291,6 +6397,12 @@ public class SharedCommandTests {
                 client.xrevrange(key, IdBound.ofExclusive(5), IdBound.ofExclusive(streamId2), 1L).get();
         assertEquals(1, newRevResult.size());
         assertNotNull(newRevResult.get(streamId3));
+
+        // xrange, xrevrange should return null with a zero/negative count
+        assertNull(client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX, 0L).get());
+        assertNull(client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN, 0L).get());
+        assertNull(client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX, -5L).get());
+        assertNull(client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN, -1L).get());
 
         // xrange against an emptied stream
         assertEquals(3, client.xdel(key, new String[] {streamId1, streamId2, streamId3}).get());
@@ -12482,8 +12594,8 @@ public class SharedCommandTests {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
         String[] members = {"Catania", "Palermo", "edge2", "edge1"};
-        Set<String> members_set = Set.of(members);
-        GeospatialData[] members_coordinates = {
+        Set<String> membersSet = Set.of(members);
+        GeospatialData[] membersCoordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
             new GeospatialData(17.241510, 38.788135),
@@ -12524,18 +12636,18 @@ public class SharedCommandTests {
                                 key1,
                                 Map.of(
                                         members[0],
-                                        members_coordinates[0],
+                                        membersCoordinates[0],
                                         members[1],
-                                        members_coordinates[1],
+                                        membersCoordinates[1],
                                         members[2],
-                                        members_coordinates[2],
+                                        membersCoordinates[2],
                                         members[3],
-                                        members_coordinates[3]))
+                                        membersCoordinates[3]))
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
         assertTrue(
-                members_set.containsAll(
+                membersSet.containsAll(
                         Set.of(
                                 client
                                         .geosearch(
@@ -12620,26 +12732,26 @@ public class SharedCommandTests {
                         .get()[0]);
 
         // test search by radius, units: feet, from member
-        double feet_radius = 200 * 3280.8399;
+        double feetRadius = 200 * 3280.8399;
         assertArrayEquals(
                 new String[] {"Catania", "Palermo"},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOrigin("Catania"),
-                                new GeoSearchShape(feet_radius, GeoUnit.FEET),
+                                new GeoSearchShape(feetRadius, GeoUnit.FEET),
                                 new GeoSearchResultOptions(SortOrder.ASC))
                         .get());
 
         // Test search by radius, unit: meters, from member
-        double meters_radius = 200 * 1000;
+        double metersRadius = 200 * 1000;
         assertArrayEquals(
                 new String[] {"Palermo", "Catania"},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOrigin("Catania"),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 new GeoSearchResultOptions(SortOrder.DESC))
                         .get());
         assertDeepEquals(
@@ -12651,7 +12763,7 @@ public class SharedCommandTests {
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 GeoSearchOptions.builder().withhash().build())
                         .get());
 
@@ -12763,8 +12875,8 @@ public class SharedCommandTests {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         GlideString[] members = {gs("Catania"), gs("Palermo"), gs("edge2"), gs("edge1")};
-        Set<GlideString> members_set = Set.of(members);
-        GeospatialData[] members_coordinates = {
+        Set<GlideString> membersSet = Set.of(members);
+        GeospatialData[] membersCoordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
             new GeospatialData(17.241510, 38.788135),
@@ -12805,18 +12917,18 @@ public class SharedCommandTests {
                                 key1,
                                 Map.of(
                                         members[0],
-                                        members_coordinates[0],
+                                        membersCoordinates[0],
                                         members[1],
-                                        members_coordinates[1],
+                                        membersCoordinates[1],
                                         members[2],
-                                        members_coordinates[2],
+                                        membersCoordinates[2],
                                         members[3],
-                                        members_coordinates[3]))
+                                        membersCoordinates[3]))
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
         assertTrue(
-                members_set.containsAll(
+                membersSet.containsAll(
                         Set.of(
                                 client
                                         .geosearch(
@@ -12901,26 +13013,26 @@ public class SharedCommandTests {
                         .get()[0]);
 
         // test search by radius, units: feet, from member
-        double feet_radius = 200 * 3280.8399;
+        double feetRadius = 200 * 3280.8399;
         assertArrayEquals(
                 new GlideString[] {gs("Catania"), gs("Palermo")},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(feet_radius, GeoUnit.FEET),
+                                new GeoSearchShape(feetRadius, GeoUnit.FEET),
                                 new GeoSearchResultOptions(SortOrder.ASC))
                         .get());
 
         // Test search by radius, unit: meters, from member
-        double meters_radius = 200 * 1000;
+        double metersRadius = 200 * 1000;
         assertArrayEquals(
                 new GlideString[] {gs("Palermo"), gs("Catania")},
                 client
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 new GeoSearchResultOptions(SortOrder.DESC))
                         .get());
 
@@ -12933,7 +13045,7 @@ public class SharedCommandTests {
                         .geosearch(
                                 key1,
                                 new MemberOriginBinary(gs("Catania")),
-                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchShape(metersRadius, GeoUnit.METERS),
                                 GeoSearchOptions.builder().withhash().build())
                         .get());
         // Test search by radius, unit: miles, from geospatial data

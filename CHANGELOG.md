@@ -1,17 +1,44 @@
 #### Changes
+* Java, Python: Update docs for GEOSEARCH command ([#2017](https://github.com/valkey-io/valkey-glide/pull/2017))
+* Node: Added FUNCTION LIST command ([#2019](https://github.com/valkey-io/valkey-glide/pull/2019))
+* Node: Added GEOSEARCH command ([#2007](https://github.com/valkey-io/valkey-glide/pull/2007))
+* Node: Added LMOVE command ([#2002](https://github.com/valkey-io/valkey-glide/pull/2002))
+* Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
+* Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
+* Node: Added BITPOS command ([#1998](https://github.com/valkey-io/valkey-glide/pull/1998))
+* Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
+* Node: Added BITOP command ([#2012](https://github.com/valkey-io/valkey-glide/pull/2012))
+* Node: Added GETBIT command ([#1989](https://github.com/valkey-io/valkey-glide/pull/1989))
+* Node: Added SETBIT command ([#1978](https://github.com/valkey-io/valkey-glide/pull/1978))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
 * Node: Added SDIFFSTORE command ([#1931](https://github.com/valkey-io/valkey-glide/pull/1931))
 * Node: Added ZDIFF command ([#1972](https://github.com/valkey-io/valkey-glide/pull/1972))
+* Node: Added ZDIFFSTORE command ([#1985](https://github.com/valkey-io/valkey-glide/pull/1985))
 * Node: Added SINTERCARD command ([#1956](https://github.com/valkey-io/valkey-glide/pull/1956))
 * Node: Added SINTERSTORE command ([#1929](https://github.com/valkey-io/valkey-glide/pull/1929))
 * Node: Added SUNION command ([#1919](https://github.com/valkey-io/valkey-glide/pull/1919))
 * Node: Added SMISMEMBER command ([#1955](https://github.com/valkey-io/valkey-glide/pull/1955))
 * Node: Added SDIFF command ([#1924](https://github.com/valkey-io/valkey-glide/pull/1924))
+* Node: Added ZMSCORE command ([#1987](https://github.com/valkey-io/valkey-glide/pull/1987))
 * Node: Added LOLWUT command ([#1934](https://github.com/valkey-io/valkey-glide/pull/1934))
 * Node: Added LPOS command ([#1927](https://github.com/valkey-io/valkey-glide/pull/1927))
 * Node: Added FUNCTION LOAD command ([#1969](https://github.com/valkey-io/valkey-glide/pull/1969))
+* Node: Added FUNCTION DELETE command ([#1990](https://github.com/valkey-io/valkey-glide/pull/1990))
+* Node: Added FUNCTION FLUSH command ([#1984](https://github.com/valkey-io/valkey-glide/pull/1984))
+* Node: Added FCALL and FCALL_RO commands ([#2011](https://github.com/valkey-io/valkey-glide/pull/2011))
+* Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
+* Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
+* Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
+
+#### Breaking Changes
+* Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
+
+#### Fixes
+* Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
+* Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
+* Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count  ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
 
 ## 1.0.0 (2024-07-09)
 
@@ -103,6 +130,11 @@
 * Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/valkey-io/valkey-glide/pull/1814))
 * Node: Added FlushAll command ([#1958](https://github.com/valkey-io/valkey-glide/pull/1958))
 * Node: Added DBSize command ([#1932](https://github.com/valkey-io/valkey-glide/pull/1932))
+* Node: Added GeoAdd command ([#1980](https://github.com/valkey-io/valkey-glide/pull/1980))
+* Node: Added ZRevRank command ([#1977](https://github.com/valkey-io/valkey-glide/pull/1977))
+* Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
+* Node: Added GeoHash command ([#1997](https://github.com/valkey-io/valkey-glide/pull/1997))
+* Node: Added HStrlen command ([#2020](https://github.com/valkey-io/valkey-glide/pull/2020))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

@@ -4,8 +4,13 @@
 
 import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
-import { LPosOptions } from "./command-options/LPosOptions";
 
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+import { BaseClient } from "src/BaseClient";
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+import { GlideClient } from "src/GlideClient";
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+import { GlideClusterClient } from "src/GlideClusterClient";
 import { command_request } from "./ProtobufMessage";
 
 import RequestType = command_request.RequestType;
@@ -443,6 +448,53 @@ export function createDecrBy(
 }
 
 /**
+ * Enumeration defining the bitwise operation to use in the {@link BaseClient.bitop|bitop} command. Specifies the
+ * bitwise operation to perform between the passed in keys.
+ */
+export enum BitwiseOperation {
+    AND = "AND",
+    OR = "OR",
+    XOR = "XOR",
+    NOT = "NOT",
+}
+
+/**
+ * @internal
+ */
+export function createBitOp(
+    operation: BitwiseOperation,
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    return createCommand(RequestType.BitOp, [operation, destination, ...keys]);
+}
+
+/**
+ * @internal
+ */
+export function createGetBit(
+    key: string,
+    offset: number,
+): command_request.Command {
+    return createCommand(RequestType.GetBit, [key, offset.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createSetBit(
+    key: string,
+    offset: number,
+    value: number,
+): command_request.Command {
+    return createCommand(RequestType.SetBit, [
+        key,
+        offset.toString(),
+        value.toString(),
+    ]);
+}
+
+/**
  * @internal
  */
 export function createHDel(
@@ -530,6 +582,37 @@ export function createLRange(
  */
 export function createLLen(key: string): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
+}
+
+/**
+ * Enumeration representing element popping or adding direction for the List Based Commands.
+ */
+export enum ListDirection {
+    /**
+     * Represents the option that elements should be popped from or added to the left side of a list.
+     */
+    LEFT = "LEFT",
+    /**
+     * Represents the option that elements should be popped from or added to the right side of a list.
+     */
+    RIGHT = "RIGHT",
+}
+
+/**
+ * @internal
+ */
+export function createLMove(
+    source: string,
+    destination: string,
+    whereFrom: ListDirection,
+    whereTo: ListDirection,
+): command_request.Command {
+    return createCommand(RequestType.LMove, [
+        source,
+        destination,
+        whereFrom,
+        whereTo,
+    ]);
 }
 
 /**
@@ -894,21 +977,29 @@ export function createTTL(key: string): command_request.Command {
     return createCommand(RequestType.TTL, [key]);
 }
 
+/**
+ * Options for updating elements of a sorted set key.
+ */
+export enum UpdateByScore {
+    /** Only update existing elements if the new score is less than the current score. */
+    LESS_THAN = "LT",
+    /** Only update existing elements if the new score is greater than the current score. */
+    GREATER_THAN = "GT",
+}
+
 export type ZAddOptions = {
     /**
-     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing
-     * elements. Equivalent to `NX` in the Redis API. `onlyIfExists` - Only update
-     * elements that already exist. Don't add new elements. Equivalent to `XX` in
-     * the Redis API.
+     * Options for handling existing members.
      */
-    conditionalChange?: "onlyIfExists" | "onlyIfDoesNotExist";
+    conditionalChange?: ConditionalChange;
     /**
-     * `scoreLessThanCurrent` - Only update existing elements if the new score is
-     * less than the current score. Equivalent to `LT` in the Redis API.
-     * `scoreGreaterThanCurrent` - Only update existing elements if the new score
-     * is greater than the current score. Equivalent to `GT` in the Redis API.
+     * Options for updating scores.
      */
-    updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
+    updateOptions?: UpdateByScore;
+    /**
+     * Modify the return value from the number of new elements added, to the total number of elements changed.
+     */
+    changed?: boolean;
 };
 
 /**
@@ -918,32 +1009,36 @@ export function createZAdd(
     key: string,
     membersScoresMap: Record<string, number>,
     options?: ZAddOptions,
-    changedOrIncr?: "CH" | "INCR",
+    incr: boolean = false,
 ): command_request.Command {
     let args = [key];
 
     if (options) {
-        if (options.conditionalChange === "onlyIfExists") {
-            args.push("XX");
-        } else if (options.conditionalChange === "onlyIfDoesNotExist") {
-            if (options.updateOptions) {
+        if (options.conditionalChange) {
+            if (
+                options.conditionalChange ===
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                options.updateOptions
+            ) {
                 throw new Error(
                     `The GT, LT, and NX options are mutually exclusive. Cannot choose both ${options.updateOptions} and NX.`,
                 );
             }
 
-            args.push("NX");
+            args.push(options.conditionalChange);
         }
 
-        if (options.updateOptions === "scoreLessThanCurrent") {
-            args.push("LT");
-        } else if (options.updateOptions === "scoreGreaterThanCurrent") {
-            args.push("GT");
+        if (options.updateOptions) {
+            args.push(options.updateOptions);
+        }
+
+        if (options.changed) {
+            args.push("CH");
         }
     }
 
-    if (changedOrIncr) {
-        args.push(changedOrIncr);
+    if (incr) {
+        args.push("INCR");
     }
 
     args = args.concat(
@@ -1055,11 +1150,32 @@ export function createZDiffWithScores(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createZDiffStore(
+    destination: string,
+    keys: string[],
+): command_request.Command {
+    const args: string[] = [destination, keys.length.toString(), ...keys];
+    return createCommand(RequestType.ZDiffStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
 ): command_request.Command {
     return createCommand(RequestType.ZScore, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZMScore(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
 export type ScoreBoundary<T> =
@@ -1529,12 +1645,191 @@ export function createBLPop(
 /**
  * @internal
  */
+export function createFCall(
+    func: string,
+    keys: string[],
+    args: string[],
+): command_request.Command {
+    let params: string[] = [];
+    params = params.concat(func, keys.length.toString(), keys, args);
+    return createCommand(RequestType.FCall, params);
+}
+
+/**
+ * @internal
+ */
+export function createFCallReadOnly(
+    func: string,
+    keys: string[],
+    args: string[],
+): command_request.Command {
+    let params: string[] = [];
+    params = params.concat(func, keys.length.toString(), keys, args);
+    return createCommand(RequestType.FCallReadOnly, params);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionDelete(
+    libraryCode: string,
+): command_request.Command {
+    return createCommand(RequestType.FunctionDelete, [libraryCode]);
+}
+
+/**
+ * @internal
+ */
+export function createFunctionFlush(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FunctionFlush, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FunctionFlush, []);
+    }
+}
+
+/**
+ * @internal
+ */
 export function createFunctionLoad(
     libraryCode: string,
     replace?: boolean,
 ): command_request.Command {
     const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
     return createCommand(RequestType.FunctionLoad, args);
+}
+
+/** Optional arguments for `FUNCTION LIST` command. */
+export type FunctionListOptions = {
+    /** A wildcard pattern for matching library names. */
+    libNamePattern?: string;
+    /** Specifies whether to request the library code from the server or not. */
+    withCode?: boolean;
+};
+
+/** Type of the response of `FUNCTION LIST` command. */
+export type FunctionListResponse = Record<
+    string,
+    string | Record<string, string | string[]>[]
+>[];
+
+/**
+ * @internal
+ */
+export function createFunctionList(
+    options?: FunctionListOptions,
+): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.libNamePattern) {
+            args.push("LIBRARYNAME", options.libNamePattern);
+        }
+
+        if (options.withCode) {
+            args.push("WITHCODE");
+        }
+    }
+
+    return createCommand(RequestType.FunctionList, args);
+}
+
+/**
+ * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
+ * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
+ * The offsets can also be negative numbers indicating offsets starting at the end of the string, with `-1` being
+ * the last index of the string, `-2` being the penultimate, and so on.
+ *
+ * See https://valkey.io/commands/bitcount/ for more details.
+ */
+export type BitOffsetOptions = {
+    /** The starting offset index. */
+    start: number;
+    /** The ending offset index. */
+    end: number;
+    /**
+     * The index offset type. This option can only be specified if you are using server version 7.0.0 or above.
+     * Could be either {@link BitmapIndexType.BYTE} or {@link BitmapIndexType.BIT}.
+     * If no index type is provided, the indexes will be assumed to be byte indexes.
+     */
+    indexType?: BitmapIndexType;
+};
+
+/**
+ * @internal
+ */
+export function createBitCount(
+    key: string,
+    options?: BitOffsetOptions,
+): command_request.Command {
+    const args = [key];
+
+    if (options) {
+        args.push(options.start.toString());
+        args.push(options.end.toString());
+        if (options.indexType) args.push(options.indexType);
+    }
+
+    return createCommand(RequestType.BitCount, args);
+}
+
+/**
+ * Enumeration specifying if index arguments are BYTE indexes or BIT indexes.
+ * Can be specified in {@link BitOffsetOptions}, which is an optional argument to the {@link BaseClient.bitcount|bitcount} command.
+ * Can also be specified as an optional argument to the {@link BaseClient.bitposInverval|bitposInterval} command.
+ *
+ * since - Valkey version 7.0.0.
+ */
+export enum BitmapIndexType {
+    /** Specifies that provided indexes are byte indexes. */
+    BYTE = "BYTE",
+    /** Specifies that provided indexes are bit indexes. */
+    BIT = "BIT",
+}
+
+/**
+ * @internal
+ */
+export function createBitPos(
+    key: string,
+    bit: number,
+    start?: number,
+    end?: number,
+    indexType?: BitmapIndexType,
+): command_request.Command {
+    const args = [key, bit.toString()];
+
+    if (start !== undefined) {
+        args.push(start.toString());
+    }
+
+    if (end !== undefined) {
+        args.push(end.toString());
+    }
+
+    if (indexType) {
+        args.push(indexType);
+    }
+
+    return createCommand(RequestType.BitPos, args);
+}
+
+/**
+ * Defines flushing mode for {@link GlideClient.flushall}, {@link GlideClusterClient.flushall},
+ *      {@link GlideClient.functionFlush}, {@link GlideClusterClient.functionFlush},
+ *      {@link GlideClient.flushdb} and {@link GlideClusterClient.flushdb} commands.
+ *
+ * See https://valkey.io/commands/flushall/ and https://valkey.io/commands/flushdb/ for details.
+ */
+export enum FlushMode {
+    /**
+     * Flushes synchronously.
+     *
+     * since Valkey version 6.2.0.
+     */
+    SYNC = "SYNC",
+    /** Flushes asynchronously. */
+    ASYNC = "ASYNC",
 }
 
 export type StreamReadOptions = {
@@ -1701,24 +1996,6 @@ export function createLolwut(options?: LolwutOptions): command_request.Command {
 }
 
 /**
- * Defines flushing mode for:
- *
- * `FLUSHALL` command.
- *
- * See https://valkey.io/commands/flushall/ for details.
- */
-export enum FlushMode {
-    /**
-     * Flushes synchronously.
-     *
-     * since Valkey 6.2 and above.
-     */
-    SYNC = "SYNC",
-    /** Flushes asynchronously. */
-    ASYNC = "ASYNC",
-}
-
-/**
  * @internal
  */
 export function createFlushAll(mode?: FlushMode): command_request.Command {
@@ -1732,15 +2009,53 @@ export function createFlushAll(mode?: FlushMode): command_request.Command {
 /**
  * @internal
  */
+export function createFlushDB(mode?: FlushMode): command_request.Command {
+    if (mode) {
+        return createCommand(RequestType.FlushDB, [mode.toString()]);
+    } else {
+        return createCommand(RequestType.FlushDB, []);
+    }
+}
+
+/**
+ * Optional arguments to LPOS command.
+ *
+ * See https://valkey.io/commands/lpos/ for more details.
+ */
+export type LPosOptions = {
+    /** The rank of the match to return. */
+    rank?: number;
+    /** The specific number of matching indices from a list. */
+    count?: number;
+    /** The maximum number of comparisons to make between the element and the items in the list. */
+    maxLength?: number;
+};
+
+/**
+ * @internal
+ */
 export function createLPos(
     key: string,
     element: string,
     options?: LPosOptions,
 ): command_request.Command {
-    let args: string[] = [key, element];
+    const args: string[] = [key, element];
 
     if (options) {
-        args = args.concat(options.toArgs());
+        if (options.rank !== undefined) {
+            args.push("RANK");
+            args.push(options.rank.toString());
+        }
+
+        if (options.count !== undefined) {
+            args.push("COUNT");
+            args.push(options.count.toString());
+        }
+
+        if (options.maxLength !== undefined) {
+            args.push("MAXLEN");
+            args.push(options.maxLength.toString());
+        }
     }
 
     return createCommand(RequestType.LPos, args);
@@ -1751,4 +2066,343 @@ export function createLPos(
  */
 export function createDBSize(): command_request.Command {
     return createCommand(RequestType.DBSize, []);
+}
+
+/**
+ * An optional condition to the {@link BaseClient.geoadd} command.
+ */
+export enum ConditionalChange {
+    /**
+     * Only update elements that already exist. Don't add new elements. Equivalent to `XX` in the Valkey API.
+     */
+    ONLY_IF_EXISTS = "XX",
+
+    /**
+     * Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Valkey API.
+     */
+    ONLY_IF_DOES_NOT_EXIST = "NX",
+}
+
+/**
+ * Represents a geographic position defined by longitude and latitude.
+ * The exact limits, as specified by `EPSG:900913 / EPSG:3785 / OSGEO:41001` are the
+ * following:
+ *
+ *   Valid longitudes are from `-180` to `180` degrees.
+ *   Valid latitudes are from `-85.05112878` to `85.05112878` degrees.
+ */
+export type GeospatialData = {
+    /** The longitude coordinate. */
+    longitude: number;
+    /** The latitude coordinate. */
+    latitude: number;
+};
+
+/**
+ * Optional arguments for the GeoAdd command.
+ *
+ * See https://valkey.io/commands/geoadd/ for more details.
+ */
+export type GeoAddOptions = {
+    /** Options for handling existing members. See {@link ConditionalChange}. */
+    updateMode?: ConditionalChange;
+    /** If `true`, returns the count of changed elements instead of new elements added. */
+    changed?: boolean;
+};
+
+/**
+ * @internal
+ */
+export function createGeoAdd(
+    key: string,
+    membersToGeospatialData: Map<string, GeospatialData>,
+    options?: GeoAddOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if (options) {
+        if (options.updateMode) {
+            args.push(options.updateMode);
+        }
+
+        if (options.changed) {
+            args.push("CH");
+        }
+    }
+
+    membersToGeospatialData.forEach((coord, member) => {
+        args = args.concat(
+            coord.longitude.toString(),
+            coord.latitude.toString(),
+            member,
+        );
+    });
+    return createCommand(RequestType.GeoAdd, args);
+}
+
+/** Enumeration representing distance units options. */
+export enum GeoUnit {
+    /** Represents distance in meters. */
+    METERS = "m",
+    /** Represents distance in kilometers. */
+    KILOMETERS = "km",
+    /** Represents distance in miles. */
+    MILES = "mi",
+    /** Represents distance in feet. */
+    FEET = "ft",
+}
+
+/**
+ * @internal
+ */
+export function createGeoPos(
+    key: string,
+    members: string[],
+): command_request.Command {
+    return createCommand(RequestType.GeoPos, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
+export function createGeoDist(
+    key: string,
+    member1: string,
+    member2: string,
+    geoUnit?: GeoUnit,
+): command_request.Command {
+    const args: string[] = [key, member1, member2];
+
+    if (geoUnit) {
+        args.push(geoUnit);
+    }
+
+    return createCommand(RequestType.GeoDist, args);
+}
+
+/**
+ * @internal
+ */
+export function createGeoHash(
+    key: string,
+    members: string[],
+): command_request.Command {
+    const args: string[] = [key].concat(members);
+    return createCommand(RequestType.GeoHash, args);
+}
+
+/**
+ * Optional parameters for {@link BaseClient.geosearch|geosearch} command which defines what should be included in the
+ * search results and how results should be ordered and limited.
+ */
+export type GeoSearchResultOptions = {
+    /** Include the coordinate of the returned items. */
+    withCoord?: boolean;
+    /**
+     * Include the distance of the returned items from the specified center point.
+     * The distance is returned in the same unit as specified for the `searchBy` argument.
+     */
+    withDist?: boolean;
+    /** Include the geohash of the returned items. */
+    withHash?: boolean;
+    /** Indicates the order the result should be sorted in. */
+    sortOrder?: SortOrder;
+    /** Indicates the number of matches the result should be limited to. */
+    count?: number;
+    /** Whether to allow returning as enough matches are found. This requires `count` parameter to be set. */
+    isAny?: boolean;
+};
+
+/** Defines the sort order for nested results. */
+export enum SortOrder {
+    /** Sort by ascending order. */
+    ASC = "ASC",
+    /** Sort by descending order. */
+    DESC = "DESC",
+}
+
+export type GeoSearchShape = GeoCircleShape | GeoBoxShape;
+
+/** Circle search shape defined by the radius value and measurement unit. */
+export type GeoCircleShape = {
+    /** The radius to search by. */
+    radius: number;
+    /** The measurement unit of the radius. */
+    unit: GeoUnit;
+};
+
+/** Rectangle search shape defined by the width and height and measurement unit. */
+export type GeoBoxShape = {
+    /** The width of the rectangle to search by. */
+    width: number;
+    /** The height of the rectangle to search by. */
+    height: number;
+    /** The measurement unit of the width and height. */
+    unit: GeoUnit;
+};
+
+export type SearchOrigin = CoordOrigin | MemberOrigin;
+
+/** The search origin represented by a {@link GeospatialData} position. */
+export type CoordOrigin = {
+    /** The pivot location to search from. */
+    position: GeospatialData;
+};
+
+/** The search origin represented by an existing member. */
+export type MemberOrigin = {
+    /** Member (location) name stored in the sorted set to use as a search pivot. */
+    member: string;
+};
+
+/**
+ * @internal
+ */
+export function createGeoSearch(
+    key: string,
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchResultOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if ("position" in searchFrom) {
+        args = args.concat(
+            "FROMLONLAT",
+            searchFrom.position.longitude.toString(),
+            searchFrom.position.latitude.toString(),
+        );
+    } else {
+        args = args.concat("FROMMEMBER", searchFrom.member);
+    }
+
+    if ("radius" in searchBy) {
+        args = args.concat(
+            "BYRADIUS",
+            searchBy.radius.toString(),
+            searchBy.unit,
+        );
+    } else {
+        args = args.concat(
+            "BYBOX",
+            searchBy.width.toString(),
+            searchBy.height.toString(),
+            searchBy.unit,
+        );
+    }
+
+    if (resultOptions) {
+        if (resultOptions.withCoord) args.push("WITHCOORD");
+        if (resultOptions.withDist) args.push("WITHDIST");
+        if (resultOptions.withHash) args.push("WITHHASH");
+
+        if (resultOptions.count) {
+            args.push("COUNT", resultOptions.count?.toString());
+
+            if (resultOptions.isAny) args.push("ANY");
+        }
+
+        if (resultOptions.sortOrder) args.push(resultOptions.sortOrder);
+    }
+
+    return createCommand(RequestType.GeoSearch, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRank(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZRevRankWithScore(
+    key: string,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZRevRank, [key, member, "WITHSCORE"]);
+}
+
+/**
+ * Mandatory option for zmpop.
+ * Defines which elements to pop from the sorted set.
+ */
+export enum ScoreFilter {
+    /** Pop elements with the highest scores. */
+    MAX = "MAX",
+    /** Pop elements with the lowest scores. */
+    MIN = "MIN",
+}
+
+/**
+ * @internal
+ */
+export function createZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString()].concat(keys);
+    args.push(modifier);
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.ZMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBZMPop(
+    keys: string[],
+    modifier: ScoreFilter,
+    timeout: number,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [
+        timeout.toString(),
+        keys.length.toString(),
+        ...keys,
+        modifier,
+    ];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.BZMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createZIncrBy(
+    key: string,
+    increment: number,
+    member: string,
+): command_request.Command {
+    return createCommand(RequestType.ZIncrBy, [
+        key,
+        increment.toString(),
+        member,
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createHStrlen(
+    key: string,
+    field: string,
+): command_request.Command {
+    return createCommand(RequestType.HStrlen, [key, field]);
 }

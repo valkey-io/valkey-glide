@@ -11,6 +11,8 @@ import {
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -22,8 +24,12 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
-    createFunctionLoad,
     createFlushAll,
+    createFlushDB,
+    createFunctionDelete,
+    createFunctionFlush,
+    createFunctionList,
+    createFunctionLoad,
     createInfo,
     createLolwut,
     createPing,
@@ -387,6 +393,26 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionDelete("libName");
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionDelete(libraryCode: string): Promise<string> {
+        return this.createWritePromise(createFunctionDelete(libraryCode));
+    }
+
+    /**
      * Loads a library to Valkey.
      *
      * See https://valkey.io/commands/function-load/ for details.
@@ -415,8 +441,62 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionFlush(mode?: FlushMode): Promise<string> {
+        return this.createWritePromise(createFunctionFlush(mode));
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+    ): Promise<FunctionListResponse> {
+        return this.createWritePromise(createFunctionList(options));
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
-     * The command will be routed to all primary nodes.
      *
      * See https://valkey.io/commands/flushall/ for more details.
      *
@@ -430,11 +510,25 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public flushall(mode?: FlushMode): Promise<string> {
-        if (mode) {
-            return this.createWritePromise(createFlushAll(mode));
-        } else {
-            return this.createWritePromise(createFlushAll());
-        }
+        return this.createWritePromise(createFlushAll(mode));
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushdb(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushdb(mode?: FlushMode): Promise<string> {
+        return this.createWritePromise(createFlushDB(mode));
     }
 
     /**

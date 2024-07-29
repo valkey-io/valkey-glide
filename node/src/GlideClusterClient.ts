@@ -11,6 +11,8 @@ import {
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
     createClientGetName,
@@ -22,8 +24,14 @@ import {
     createCustomCommand,
     createDBSize,
     createEcho,
-    createFunctionLoad,
+    createFCall,
+    createFCallReadOnly,
     createFlushAll,
+    createFlushDB,
+    createFunctionDelete,
+    createFunctionFlush,
+    createFunctionList,
+    createFunctionLoad,
     createInfo,
     createLolwut,
     createPing,
@@ -657,6 +665,95 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Invokes a previously loaded function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallWithRoute("Deep_Thought", [], "randomNode");
+     * console.log(response); // Output: Returns the function's return value.
+     * ```
+     */
+    public fcallWithRoute(
+        func: string,
+        args: string[],
+        route?: Routes,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(
+            createFCall(func, [], args),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * See https://valkey.io/commands/fcall/ for more details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param func - The function name.
+     * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The invoked function's return value.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.fcallReadonlyWithRoute("Deep_Thought", ["Answer", "to", "the", "Ultimate",
+     *            "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], "randomNode");
+     * console.log(response); // Output: 42 # The return value on the function that was execute.
+     * ```
+     */
+    public fcallReadonlyWithRoute(
+        func: string,
+        args: string[],
+        route?: Routes,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(
+            createFCallReadOnly(func, [], args),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * See https://valkey.io/commands/function-delete/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param libraryCode - The library name to delete.
+     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionDelete("libName");
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionDelete(
+        libraryCode: string,
+        route?: Routes,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createFunctionDelete(libraryCode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
      * Loads a library to Valkey.
      *
      * See https://valkey.io/commands/function-load/ for details.
@@ -689,13 +786,79 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Deletes all function libraries.
+     *
+     * See https://valkey.io/commands/function-flush/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     *   case the client will route the command to the nodes defined by `route`.
+     * @returns A simple OK response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.functionFlush(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFunctionFlush(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to a random route.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionListResponse>> {
+        return this.createWritePromise(
+            createFunctionList(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns `OK`.
      *
      * @example
@@ -707,6 +870,29 @@ export class GlideClusterClient extends BaseClient {
     public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
         return this.createWritePromise(
             createFlushAll(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * See https://valkey.io/commands/flushdb/ for more details.
+     *
+     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `OK`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.flushdb(FlushMode.SYNC);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(
+            createFlushDB(mode),
             toProtobufRoute(route),
         );
     }

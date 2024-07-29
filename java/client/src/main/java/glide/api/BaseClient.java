@@ -187,6 +187,8 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArr
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArrayBinary;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueGlideStringArray;
+import static glide.utils.ArrayTransformUtils.convertNestedArrayToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 
@@ -2589,8 +2591,19 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> xadd(@NonNull String key, @NonNull String[][] values) {
+        return xadd(key, values, StreamAddOptions.builder().build());
+    }
+
+    @Override
     public CompletableFuture<GlideString> xadd(
             @NonNull GlideString key, @NonNull Map<GlideString, GlideString> values) {
+        return xadd(key, values, StreamAddOptionsBinary.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<GlideString> xadd(
+            @NonNull GlideString key, @NonNull GlideString[][] values) {
         return xadd(key, values, StreamAddOptionsBinary.builder().build());
     }
 
@@ -2604,6 +2617,16 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> xadd(
+            @NonNull String key, @NonNull String[][] values, @NonNull StreamAddOptions options) {
+        String[] arguments =
+                ArrayUtils.addAll(
+                        ArrayUtils.addFirst(options.toArgs(), key),
+                        convertNestedArrayToKeyValueStringArray(values));
+        return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<GlideString> xadd(
             @NonNull GlideString key,
             @NonNull Map<GlideString, GlideString> values,
@@ -2613,6 +2636,21 @@ public abstract class BaseClient
                         .add(key)
                         .add(options.toArgs())
                         .add(convertMapToKeyValueGlideStringArray(values))
+                        .toArray();
+
+        return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> xadd(
+            @NonNull GlideString key,
+            @NonNull GlideString[][] values,
+            @NonNull StreamAddOptionsBinary options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add(convertNestedArrayToKeyValueGlideStringArray(values))
                         .toArray();
 
         return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
@@ -2706,7 +2744,9 @@ public abstract class BaseClient
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key);
         return commandManager.submitNewCommand(
-                XRange, arguments, response -> castMapOf2DArray(handleMapResponse(response), String.class));
+                XRange,
+                arguments,
+                response -> castMapOf2DArray(handleMapOrNullResponse(response), String.class));
     }
 
     @Override
@@ -2719,7 +2759,8 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRange,
                 arguments,
-                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
+                response ->
+                        castMapOf2DArray(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2752,7 +2793,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRevRange,
                 arguments,
-                response -> castMapOf2DArray(handleMapResponse(response), String.class));
+                response -> castMapOf2DArray(handleMapOrNullResponse(response), String.class));
     }
 
     @Override
@@ -2765,7 +2806,8 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRevRange,
                 arguments,
-                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
+                response ->
+                        castMapOf2DArray(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
