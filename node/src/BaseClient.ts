@@ -28,7 +28,6 @@ import {
     KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
-    MemberOrigin,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
