@@ -2893,7 +2893,7 @@ export class BaseClient {
      * @param count - The number of members to return.
      *     If `count` is positive, returns unique members.
      *     If negative, allows for duplicates.
-     * @returns An `array` of `[member, score]` `arrays`, where
+     * @returns A 2D `array` of `[member, score]` `arrays`, where
      *     member is a `string` and score is a `number`.
      *     If the sorted set does not exist or is empty, the response will be an empty `array`.
      *
