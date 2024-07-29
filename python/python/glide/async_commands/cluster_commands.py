@@ -920,6 +920,64 @@ class ClusterCommands(CoreCommands):
         )
         return cast(int, result)
 
+    async def pubsub_shardchannels(
+        self, pattern: Optional[TEncodable] = None
+    ) -> List[bytes]:
+        """
+        Lists the currently active shard channels.
+
+        See https://valkey.io/commands/pubsub-shardchannels for details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
+                                If not provided, all active shard channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active shard channels matching the given pattern.
+                    If no pattern is specified, all active shard channels are returned.
+
+        Examples:
+            >>> await client.pubsub_shardchannels()
+                [b'channel1', b'channel2']
+
+            >>> await client.pubsub_shardchannels("channel*")
+                [b'channel1', b'channel2']
+        """
+        command_args = [pattern] if pattern is not None else []
+        return cast(
+            List[bytes],
+            await self._execute_command(RequestType.PubSubSChannels, command_args),
+        )
+
+    async def pubsub_shardnumsub(
+        self, channels: List[TEncodable] = []
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+
+        See https://valkey.io/commands/pubsub-shardnumsub for details.
+
+        Args:
+            channels (Optional[List[str]]): The list of shard channels to query for the number of subscribers.
+                                            If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
+
+        Examples:
+            >>> subscribers = await client.pubsub_shardnumsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> await client.pubsub_shardnumsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            await self._execute_command(RequestType.PubSubSNumSub, channels),
+        )
+
     async def flushall(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
     ) -> TOK:

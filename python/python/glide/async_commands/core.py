@@ -6628,3 +6628,81 @@ class CoreCommands(Protocol):
             Union[int, List[int], None],
             await self._execute_command(RequestType.LPos, args),
         )
+
+    async def pubsub_channels(
+        self, pattern: Optional[TEncodable] = None
+    ) -> List[bytes]:
+        """
+        Lists the currently active channels.
+
+        See https://valkey.io/commands/pubsub-channels for details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
+                                If not provided, all active channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active channels matching the given pattern.
+                    If no pattern is specified, all active channels are returned.
+
+        Examples:
+            >>> await client.pubsub_channels()
+                [b"channel1", b"channel2"]
+
+            >>> await client.pubsub_channels("news.*")
+                [b"news.sports", "news.weather"]
+        """
+
+        return cast(
+            List[bytes],
+            await self._execute_command(
+                RequestType.PubSubChannels, [pattern] if pattern else []
+            ),
+        )
+
+    async def pubsub_numpat(self) -> int:
+        """
+        Returns the number of unique patterns that are subscribed to by clients.
+
+        Note: This is the total number of unique patterns all the clients are subscribed to,
+        not the count of clients subscribed to patterns.
+
+        See https://valkey.io/commands/pubsub-numpat for details.
+
+        Returns:
+            int: The number of unique patterns.
+
+        Examples:
+            >>> await client.pubsub_numpat()
+                3
+        """
+        return cast(int, await self._execute_command(RequestType.PubSubNumPat, []))
+
+    async def pubsub_numsub(
+        self, channels: List[TEncodable] = []
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+
+        See https://valkey.io/commands/pubsub-numsub for details.
+
+        Args:
+            channels (Optional[List[str]]): The list of channels to query for the number of subscribers.
+                                            If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
+
+        Examples:
+            >>> subscribers = await client.pubsub_numsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> await client.pubsub_numsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            await self._execute_command(RequestType.PubSubNumSub, channels),
+        )

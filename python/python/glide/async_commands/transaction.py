@@ -4780,6 +4780,60 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XClaim, args)
 
+    def pubsub_channels(
+        self: TTransaction, pattern: Optional[TEncodable] = None
+    ) -> TTransaction:
+        """
+        Lists the currently active channels.
+
+        See https://valkey.io/commands/pubsub-channels for details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
+                                If not provided, all active channels are returned.
+
+        Command response:
+            List[bytes]: A list of currently active channels matching the given pattern.
+                    If no pattern is specified, all active channels are returned.
+        """
+
+        return self.append_command(
+            RequestType.PubSubChannels, [pattern] if pattern else []
+        )
+
+    def pubsub_numpat(self: TTransaction) -> TTransaction:
+        """
+        Returns the number of unique patterns that are subscribed to by clients.
+
+        Note: This is the total number of unique patterns all the clients are subscribed to,
+        not the count of clients subscribed to patterns.
+
+        See https://valkey.io/commands/pubsub-numpat for details.
+
+        Command response:
+            int: The number of unique patterns.
+        """
+        return self.append_command(RequestType.PubSubNumPat, [])
+
+    def pubsub_numsub(
+        self: TTransaction, channels: List[TEncodable] = []
+    ) -> TTransaction:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+
+        See https://valkey.io/commands/pubsub-numsub for details.
+
+        Args:
+            channels (Optional[List[str]]): The list of channels to query for the number of subscribers.
+                                            If not provided, returns an empty map.
+
+        Command response:
+            Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
+        """
+        return self.append_command(RequestType.PubSubNumSub, channels)
+
 
 class Transaction(BaseTransaction):
     """
@@ -5171,5 +5225,43 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(
             RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
         )
+
+    def pubsub_shardchannels(
+        self, pattern: Optional[TEncodable] = None
+    ) -> "ClusterTransaction":
+        """
+        Lists the currently active shard channels.
+
+        See https://valkey.io/commands/pubsub-shardchannels for details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
+                                If not provided, all active shard channels are returned.
+
+        Command response:
+            List[bytes]: A list of currently active shard channels matching the given pattern.
+                    If no pattern is specified, all active shard channels are returned.
+        """
+        command_args = [pattern] if pattern is not None else []
+        return self.append_command(RequestType.PubSubSChannels, command_args)
+
+    def pubsub_shardnumsub(
+        self, channels: List[TEncodable] = []
+    ) -> "ClusterTransaction":
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+
+        See https://valkey.io/commands/pubsub-shardnumsub for details.
+
+        Args:
+            channels (Optional[List[str]]): The list of shard channels to query for the number of subscribers.
+                                            If not provided, returns an empty map.
+
+        Command response:
+            Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
+        """
+        return self.append_command(RequestType.PubSubSNumSub, channels)
 
     # TODO: add all CLUSTER commands
