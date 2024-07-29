@@ -25,9 +25,10 @@ import {
     GeoUnit,
     GeospatialData,
     InsertPosition,
-    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
+    KeyWeight,
     LPosOptions,
     ListDirection,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
