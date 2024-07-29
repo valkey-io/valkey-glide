@@ -11,8 +11,8 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
-    BitmapIndexType,
     BitOffsetOptions,
+    BitmapIndexType,
     BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
@@ -21,13 +21,13 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
-    GeospatialData,
     GeoUnit,
+    GeospatialData,
     InsertPosition,
     KeyWeight,
-    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -41,9 +41,9 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
+    createBZMPop,
     createBitCount,
     createBitOp,
-    createBZMPop,
     createBitPos,
     createDecr,
     createDecrBy,
