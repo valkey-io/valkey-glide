@@ -484,6 +484,8 @@ export async function transactionTest(
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseTransaction.mset({ [key3]: value });
     responseData.push(["mset({ [key3]: value })", "OK"]);
+    baseTransaction.msetnx({ [key3]: value });
+    responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
