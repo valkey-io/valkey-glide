@@ -14,9 +14,16 @@ import {
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
     GeospatialData,
     GeoUnit,
     InfoOptions,
@@ -25,11 +32,13 @@ import {
     LPosOptions,
     ListDirection,
     LolwutOptions,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -63,11 +72,13 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -157,6 +168,7 @@ import {
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -1564,6 +1576,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         );
     }
 
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * Command Response - A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     */
+    public zrandmember(key: string): T {
+        return this.addAndReturn(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCount(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCountWithScores(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count, true));
+    }
+
     /** Returns the string representation of the type of the value stored at `key`.
      * See https://valkey.io/commands/type/ for more details.
      *
@@ -2114,6 +2172,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     *
+     * Command Response - Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     */
+    public functionList(options?: FunctionListOptions): T {
+        return this.addAndReturn(createFunctionList(options));
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -2209,6 +2282,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createGeoAdd(key, membersToGeospatialData, options),
+        );
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     *
+     * Command Response - By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     *
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`.
+     *
+     * - The geohash of the location as a integer `number`.
+     *
+     * - The coordinates as a two item `array` of floating point `number`s.
+     */
+    public geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
         );
     }
 

@@ -1,7 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
@@ -22,12 +21,18 @@ import {
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
     GeospatialData,
     GeoUnit,
     InsertPosition,
     KeyWeight,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
     RangeByIndex,
@@ -35,6 +40,7 @@ import {
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamReadOptions,
@@ -59,6 +65,7 @@ import {
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -144,6 +151,7 @@ import {
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -193,12 +201,14 @@ export type ReturnType =
     | null
     | boolean
     | bigint
+    | Buffer
     | Set<ReturnType>
     | ReturnTypeMap
     | ReturnTypeAttribute
     | ReturnType[];
 
-type RedisCredentials = {
+/** Represents the credentials for connecting to a server. */
+export type RedisCredentials = {
     /**
      * The username that will be used for authenticating connections to the Redis servers.
      * If not supplied, "default" will be used.
@@ -210,13 +220,17 @@ type RedisCredentials = {
     password: string;
 };
 
-type ReadFrom =
+/** Represents the client's read from strategy. */
+export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
     | "preferReplica";
 
+/**
+ * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ */
 export type BaseClientConfiguration = {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
@@ -2898,6 +2912,94 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @returns A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmember("mySortedSet");
+     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmember("nonExistingSortedSet");
+     * console.log(payload2); // Output: null since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
+     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
+     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCountWithScores(
+        key: string,
+        count: number,
+    ): Promise<[string, number][]> {
+        return this.createWritePromise(createZRandMember(key, count, true));
+    }
+
     /** Returns the length of the string value stored at `key`.
      * See https://valkey.io/commands/strlen/ for more details.
      *
@@ -3732,6 +3834,94 @@ export class BaseClient {
     }
 
     /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @returns By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     *
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
+     *
+     * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
+     *
+     * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo'
+     * const result1 = await client.geosearch("mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
+     * console.log(result1); // Output: ['Palermo', 'Catania']
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting additional info,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * const result2 = await client.geosearch(
+     *     "mySortedSet",
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         withCoord: true,
+     *         withDist: true,
+     *         withHash: true,
+     *     },
+     * );
+     * console.log(result2); // Output:
+     * // [
+     * //     [
+     * //         'Catania',                                       // location name
+     * //         [
+     * //             56.4413,                                     // distance
+     * //             3479447370796909,                            // geohash of the location
+     * //             [15.087267458438873, 37.50266842333162],     // coordinates of the location
+     * //         ],
+     * //     ],
+     * //     [
+     * //         'Palermo',
+     * //         [
+     * //             190.4424,
+     * //             3479099956230698,
+     * //             [13.361389338970184, 38.1155563954963],
+     * //         ],
+     * //     ],
+     * // ]
+     * ```
+     */
+    public async geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): Promise<(Buffer | (number | number[])[])[]> {
+        return this.createWritePromise(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
      * Returns the positions (longitude, latitude) of all the specified `members` of the
      * geospatial index represented by the sorted set at `key`.
      *
@@ -3929,7 +4119,7 @@ export class BaseClient {
     ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
-            : undefined;
+            : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
             "password" in options.credentials

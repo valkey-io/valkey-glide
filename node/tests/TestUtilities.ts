@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { beforeAll, expect } from "@jest/globals";
+import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
@@ -18,24 +18,21 @@ import {
     BitwiseOperation,
     ClusterTransaction,
     FlushMode,
+    FunctionListResponse,
     GeoUnit,
     GeospatialData,
     GlideClient,
     GlideClusterClient,
     InsertPosition,
-    Logger,
     ListDirection,
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
     SignedEncoding,
+    SortOrder,
     Transaction,
     UnsignedEncoding,
 } from "..";
-
-beforeAll(() => {
-    Logger.init("info");
-});
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: Array<string>) {
@@ -346,6 +343,62 @@ export function compareMaps(
 }
 
 /**
+ * Validate whether `FUNCTION LIST` response contains required info.
+ *
+ * @param response - The response from server.
+ * @param libName - Expected library name.
+ * @param functionDescriptions - Expected function descriptions. Key - function name, value - description.
+ * @param functionFlags - Expected function flags. Key - function name, value - flags set.
+ * @param libCode - Expected library to check if given.
+ */
+export function checkFunctionListResponse(
+    response: FunctionListResponse,
+    libName: string,
+    functionDescriptions: Map<string, string | null>,
+    functionFlags: Map<string, string[]>,
+    libCode?: string,
+) {
+    // TODO rework after #1953 https://github.com/valkey-io/valkey-glide/pull/1953
+    expect(response.length).toBeGreaterThan(0);
+    let hasLib = false;
+
+    for (const lib of response) {
+        hasLib = lib["library_name"] == libName;
+
+        if (hasLib) {
+            const functions = lib["functions"];
+            expect(functions.length).toEqual(functionDescriptions.size);
+
+            for (const functionData of functions) {
+                const functionInfo = functionData as Record<
+                    string,
+                    string | string[]
+                >;
+                const name = (
+                    functionInfo["name"] as unknown as Buffer
+                ).toString(); // not a string - suprise
+                const flags = (
+                    functionInfo["flags"] as unknown as Buffer[]
+                ).map((f) => f.toString());
+                checkSimple(functionInfo["description"]).toEqual(
+                    functionDescriptions.get(name),
+                );
+
+                checkSimple(flags).toEqual(functionFlags.get(name));
+            }
+
+            if (libCode) {
+                checkSimple(lib["library_code"]).toEqual(libCode);
+            }
+
+            break;
+        }
+    }
+
+    expect(hasLib).toBeTruthy();
+}
+
+/**
  * Check transaction response.
  * @param response - Transaction result received from `exec` call.
  * @param expectedResponseData - Expected result data from {@link transactionTest}.
@@ -403,6 +456,7 @@ export async function transactionTest(
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
     const key20 = "{key}" + uuidv4(); // list
+    const key21 = "{key}" + uuidv4(); // zset random
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -834,6 +888,106 @@ export async function transactionTest(
         'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
+    baseTransaction.zadd(key21, { one: 1.0 });
+    responseData.push(["zadd(key21, {one: 1.0}", 1]);
+    baseTransaction.zrandmember(key21);
+    responseData.push(["zrandmember(key21)", "one"]);
+    baseTransaction.zrandmemberWithCount(key21, 1);
+    responseData.push(["zrandmemberWithCountWithScores(key21, 1)", "one"]);
+    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
+    responseData.push([
+        "zrandmemberWithCountWithScores(key21, 1)",
+        [Buffer.from("one"), 1.0],
+    ]);
+
+    if (gte("6.2.0", version)) {
+        baseTransaction
+            .geosearch(
+                key18,
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                { sortOrder: SortOrder.ASC },
+            )
+            .geosearch(
+                key18,
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+            )
+            .geosearch(
+                key18,
+                { member: "Palermo" },
+                { radius: 200, unit: GeoUnit.KILOMETERS },
+                {
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                },
+            )
+            .geosearch(
+                key18,
+                { position: { longitude: 15, latitude: 37 } },
+                { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                {
+                    sortOrder: SortOrder.ASC,
+                    count: 2,
+                    withCoord: true,
+                    withDist: true,
+                    withHash: true,
+                },
+            );
+        responseData.push([
+            'geosearch(key18, "Palermo", R200 KM, ASC)',
+            ["Palermo", "Catania"],
+        ]);
+        responseData.push([
+            "geosearch(key18, (15, 37), 400x400 KM, ASC)",
+            ["Palermo", "Catania"],
+        ]);
+        responseData.push([
+            'geosearch(key18, "Palermo", R200 KM, ASC 2 3x true)',
+            [
+                [
+                    "Palermo",
+                    [
+                        0.0,
+                        3479099956230698,
+                        [13.361389338970184, 38.1155563954963],
+                    ],
+                ],
+                [
+                    "Catania",
+                    [
+                        166.2742,
+                        3479447370796909,
+                        [15.087267458438873, 37.50266842333162],
+                    ],
+                ],
+            ],
+        ]);
+        responseData.push([
+            "geosearch(key18, (15, 37), 400x400 KM, ASC 2 3x true)",
+            [
+                [
+                    "Catania",
+                    [
+                        56.4413,
+                        3479447370796909,
+                        [15.087267458438873, 37.50266842333162],
+                    ],
+                ],
+                [
+                    "Palermo",
+                    [
+                        190.4424,
+                        3479099956230698,
+                        [13.361389338970184, 38.1155563954963],
+                    ],
+                ],
+            ],
+        ]);
+    }
 
     const libName = "mylib1C" + uuidv4().replaceAll("-", "");
     const funcName = "myfunc1c" + uuidv4().replaceAll("-", "");
@@ -848,6 +1002,8 @@ export async function transactionTest(
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
         responseData.push(["functionLoad(code, true)", libName]);
+        baseTransaction.functionList({ libNamePattern: "another" });
+        responseData.push(['functionList("another")', []]);
         baseTransaction.fcall(funcName, [], ["one", "two"]);
         responseData.push(['fcall(funcName, [], ["one", "two"])', "one"]);
         baseTransaction.fcallReadonly(funcName, [], ["one", "two"]);
@@ -863,6 +1019,11 @@ export async function transactionTest(
         responseData.push(["functionFlush(FlushMode.ASYNC)", "OK"]);
         baseTransaction.functionFlush(FlushMode.SYNC);
         responseData.push(["functionFlush(FlushMode.SYNC)", "OK"]);
+        baseTransaction.functionList({
+            libNamePattern: libName,
+            withCode: true,
+        });
+        responseData.push(["functionList({ libName, true})", []]);
     }
 
     return responseData;
