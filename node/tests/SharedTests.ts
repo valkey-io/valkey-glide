@@ -42,7 +42,6 @@ import {
     intoArray,
     intoString,
 } from "./TestUtilities";
-import { check } from "prettier";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
