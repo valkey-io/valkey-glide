@@ -29,6 +29,7 @@ import {
     Script,
     UpdateByScore,
     parseInfoResponse,
+    TimeoutError,
 } from "../";
 import { RedisCluster } from "../../utils/TestUtils";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
@@ -1454,26 +1455,8 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).rejects.toThrow(RequestError);
 
-                // BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
-                // avoid having the test block forever
-                async function blmove_timeout_test() {
-                    await wait(50000);
-                    await expect(
-                        client.blmove(
-                            "{SameSlot}non_existing_key",
-                            key2,
-                            ListDirection.LEFT,
-                            ListDirection.RIGHT,
-                            0,
-                        ),
-                    ).rejects.toThrow(ClosingError);
-                }
-
-                try {
-                    blmove_timeout_test();
-                } catch (ClosingError) {
-                    console.log("Closing error with timeout occurred.");
-                }
+                // TODO: add test case with 0 timeout (no timeout) should never time out,
+                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,
