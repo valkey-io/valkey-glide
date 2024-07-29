@@ -1594,9 +1594,9 @@ export class BaseClient {
      * Blocks the connection until it pops atomically and removes the left/right-most element to the
      * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
      * of the list stored at `destination` depending on `whereTo`.
-     * `BLMOVE` is the blocking variant of `LMOVE`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
      *
-     * Note:
+     * @remarks
      * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
      * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
      *
@@ -1622,7 +1622,7 @@ export class BaseClient {
      * console.log(result2);   // Output: "two"
      *
      * const updated_array2 = await client.lrange("testKey2", 0, -1);
-     * console.log(updated_array2); // Output: "one", "three", "four"]
+     * console.log(updated_array2); // Output: ["one", "three", "four"]
      * ```
      */
     public async blmove(

@@ -17,6 +17,7 @@ import {
     ClusterTransaction,
     GlideClusterClient,
     InfoOptions,
+    ListDirection,
     ProtocolVersion,
     Routes,
     ScoreFilter,
@@ -322,6 +323,13 @@ describe("GlideClusterClient", () => {
 
             if (gte(cluster.getVersion(), "6.2.0")) {
                 promises.push(
+                    client.blmove(
+                        "abc",
+                        "def",
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.2,
+                    ),
                     client.zdiff(["abc", "zxy", "lkn"]),
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
