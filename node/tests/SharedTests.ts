@@ -1103,6 +1103,33 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hstrlen test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const field = uuidv4();
+
+                expect(await client.hset(key1, { field: "value" })).toBe(1);
+                expect(await client.hstrlen(key1, "field")).toBe(5);
+
+                // missing value
+                expect(await client.hstrlen(key1, "nonExistingField")).toBe(0);
+
+                // missing key
+                expect(await client.hstrlen(key2, "field")).toBe(0);
+
+                // key exists but holds non hash type value
+                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                await expect(client.hstrlen(key2, field)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

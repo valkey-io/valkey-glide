@@ -2273,3 +2273,13 @@ export function createZIncrBy(
         member,
     ]);
 }
+
+/**
+ * @internal
+ */
+export function createHStrlen(
+    key: string,
+    field: string,
+): command_request.Command {
+    return createCommand(RequestType.HStrlen, [key, field]);
+}
