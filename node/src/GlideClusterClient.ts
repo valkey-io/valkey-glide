@@ -656,17 +656,17 @@ export class GlideClusterClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.copy("set1", "set2", { replace: true });
+     * const result = await client.copy("set1", "set2", true);
      * console.log(result); // Output: true - "set1" was copied to "set2".
      * ```
      */
     public async copy(
         source: string,
         destination: string,
-        options?: { replace?: boolean },
+        replace?: boolean,
     ): Promise<boolean> {
         return this.createWritePromise(
-            createCopy(source, destination, options),
+            createCopy(source, destination, { replace: replace }),
         );
     }
 

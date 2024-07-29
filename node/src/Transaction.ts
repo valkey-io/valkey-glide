@@ -2392,14 +2392,17 @@ export class Transaction extends BaseTransaction<Transaction> {
     }
 
     /**
-     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
-     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      *
@@ -2431,8 +2434,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
 
     /**
-     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
-     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
@@ -2448,8 +2451,10 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     public copy(
         source: string,
         destination: string,
-        options?: { replace?: boolean },
+        replace?: boolean,
     ): ClusterTransaction {
-        return this.addAndReturn(createCopy(source, destination, options));
+        return this.addAndReturn(
+            createCopy(source, destination, { replace: replace }),
+        );
     }
 }

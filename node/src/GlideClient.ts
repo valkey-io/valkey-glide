@@ -377,7 +377,7 @@ export class GlideClient extends BaseClient {
 
     /**
      * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
-     * the value will be copied to the databased specified, otherwise the current database will be used.
+     * the value will be copied to the database specified, otherwise the current database will be used.
      * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
      * no action.
      *
@@ -386,6 +386,7 @@ export class GlideClient extends BaseClient {
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
@@ -393,6 +394,14 @@ export class GlideClient extends BaseClient {
      * since Valkey version 6.2.0.
      *
      * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2");
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { replace: true });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
      * ```typescript
      * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
      * console.log(result); // Output: true - "set1" was copied to "set2".

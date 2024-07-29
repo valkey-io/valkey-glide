@@ -384,7 +384,7 @@ describe("GlideClient", () => {
             const index2 = 2;
 
             // neither key exists
-            checkSimple(
+            expect(
                 await client.copy(source, destination, {
                     destinationDB: index1,
                     replace: false,
@@ -393,7 +393,7 @@ describe("GlideClient", () => {
 
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
-            checkSimple(
+            expect(
                 await client.copy(source, destination, {
                     destinationDB: index1,
                     replace: false,
@@ -407,13 +407,13 @@ describe("GlideClient", () => {
             expect(await client.set(source, value2)).toEqual("OK");
 
             // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
-            checkSimple(
+            expect(
                 await client.copy(source, destination, {
                     destinationDB: index1,
                     replace: false,
                 }),
             ).toEqual(false);
-            checkSimple(
+            expect(
                 await client.copy(source, destination, {
                     destinationDB: index2,
                     replace: false,
@@ -429,7 +429,7 @@ describe("GlideClient", () => {
             // both exists, with REPLACE, when value isn't the same, source always get copied to
             // destination
             expect(await client.select(index0)).toEqual("OK");
-            checkSimple(
+            expect(
                 await client.copy(source, destination, {
                     destinationDB: index1,
                     replace: true,

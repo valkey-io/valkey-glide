@@ -327,7 +327,7 @@ describe("GlideClusterClient", () => {
                     client.zdiff(["abc", "zxy", "lkn"]),
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
-                    client.copy("abc", "zxy", { replace: true }),
+                    client.copy("abc", "zxy", true),
                 );
             }
 
@@ -555,38 +555,38 @@ describe("GlideClusterClient", () => {
             const value2 = uuidv4();
 
             // neither key exists
-            checkSimple(
-                await client.copy(source, destination, { replace: true }),
-            ).toEqual(false);
-            checkSimple(await client.copy(source, destination)).toEqual(false);
+            expect(await client.copy(source, destination, true)).toEqual(
+                false,
+            );
+            expect(await client.copy(source, destination)).toEqual(false);
 
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
-            checkSimple(
-                await client.copy(source, destination, { replace: false }),
-            ).toEqual(true);
+            expect(await client.copy(source, destination, false)).toEqual(
+                true,
+            );
             checkSimple(await client.get(destination)).toEqual(value1);
 
             // new value for source key
             expect(await client.set(source, value2)).toEqual("OK");
 
             // both exists, no REPLACE
-            checkSimple(await client.copy(source, destination)).toEqual(false);
-            checkSimple(
-                await client.copy(source, destination, { replace: false }),
-            ).toEqual(false);
+            expect(await client.copy(source, destination)).toEqual(false);
+            expect(await client.copy(source, destination, false)).toEqual(
+                false,
+            );
             checkSimple(await client.get(destination)).toEqual(value1);
 
             // both exists, with REPLACE
-            checkSimple(
-                await client.copy(source, destination, { replace: true }),
-            ).toEqual(true);
+            expect(await client.copy(source, destination, true)).toEqual(
+                true,
+            );
             checkSimple(await client.get(destination)).toEqual(value2);
 
             //transaction tests
             const transaction = new ClusterTransaction();
             transaction.set(source, value1);
-            transaction.copy(source, destination, { replace: true });
+            transaction.copy(source, destination, true);
             transaction.get(destination);
             const results = await client.exec(transaction);
 
