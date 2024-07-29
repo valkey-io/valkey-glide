@@ -198,7 +198,8 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
-type RedisCredentials = {
+/** Represents the credentials for connecting to a server. */
+export type RedisCredentials = {
     /**
      * The username that will be used for authenticating connections to the Redis servers.
      * If not supplied, "default" will be used.
@@ -210,13 +211,17 @@ type RedisCredentials = {
     password: string;
 };
 
-type ReadFrom =
+/** Represents the client's read from strategy. */
+export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
     | "preferReplica";
 
+/**
+ * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ */
 export type BaseClientConfiguration = {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
@@ -3954,7 +3959,7 @@ export class BaseClient {
     ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
-            : undefined;
+            : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
             "password" in options.credentials
