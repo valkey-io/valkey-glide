@@ -8,6 +8,8 @@ lerna-debug.log*
 .pnpm-debug.log*
 rust-client/index.*
 
+# Test reports
+*.html
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
