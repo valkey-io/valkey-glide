@@ -1989,17 +1989,18 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
 export function createCopy(
     source: string,
     destination: string,
-    destinationDB?: number,
-    replace?: boolean,
+    options?: { destinationDB?: number; replace?: boolean },
 ): command_request.Command {
     let args: string[] = [source, destination];
 
-    if (destinationDB !== undefined) {
-        args = args.concat("DB", destinationDB.toString());
-    }
+    if (options) {
+        if (options.destinationDB !== undefined) {
+            args = args.concat("DB", options.destinationDB.toString());
+        }
 
-    if (replace) {
-        args.push("REPLACE");
+        if (options.replace) {
+            args.push("REPLACE");
+        }
     }
 
     return createCommand(RequestType.Copy, args);

@@ -1953,33 +1953,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
-     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
-     *
-     * See https://valkey.io/commands/copy/ for more details.
-     *
-     * @param source - The key to the source value.
-     * @param destination - The key where the value should be copied to.
-     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
-     * @param replace - (Optional) If `ture`, the `destination` key should be removed before copying the
-     *     value to it. If not provided, no action will be performed if the key already exists.
-     *
-     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
-     */
-    public copy(
-        source: string,
-        destination: string,
-        destinationDB?: number,
-        replace?: boolean,
-    ): T {
-        return this.addAndReturn(
-            createCopy(source, destination, destinationDB, replace),
-        );
-    }
-
-    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -2330,6 +2303,30 @@ export class Transaction extends BaseTransaction<Transaction> {
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
     }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
+     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Transaction {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
 }
 
 /**
@@ -2345,4 +2342,27 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key on `destinationDB`. When `replace`
+     * is true, removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        options?: { replace?: boolean },
+    ): ClusterTransaction {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
 }

@@ -19,8 +19,8 @@ import {
     GlideClient,
     GlideClusterClient,
     InsertPosition,
-    Logger,
     ListDirection,
+    Logger,
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
@@ -717,11 +717,6 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
-
-    if (gte("6.2.0", version)) {
-        baseTransaction.copy(key9, key10, undefined, true);
-        responseData.push(["copy(key9, key10, undefined, true)", true]);
-    }
 
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);

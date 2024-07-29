@@ -382,69 +382,73 @@ describe("GlideClient", () => {
             const index1 = 1;
             const index2 = 2;
 
-            try {
-                // neither key exists
-                checkSimple(
-                    await client.copyDB(source, destination, index1, false),
-                ).toEqual(false);
+            // neither key exists
+            checkSimple(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
 
-                // source exists, destination does not
-                expect(await client.set(source, value1)).toEqual("OK");
-                checkSimple(
-                    await client.copyDB(source, destination, index1, false),
-                ).toEqual(true);
-                expect(await client.select(index1)).toEqual("OK");
-                checkSimple(await client.get(destination)).toEqual(value1);
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            checkSimple(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value1);
 
-                // new value for source key
-                expect(await client.select(index0)).toEqual("OK");
-                expect(await client.set(source, value2)).toEqual("OK");
+            // new value for source key
+            expect(await client.select(index0)).toEqual("OK");
+            expect(await client.set(source, value2)).toEqual("OK");
 
-                // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
-                checkSimple(
-                    await client.copyDB(source, destination, index1, false),
-                ).toEqual(false);
-                checkSimple(
-                    await client.copyDB(source, destination, index2, false),
-                ).toEqual(true);
+            // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
+            checkSimple(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+            checkSimple(
+                await client.copy(source, destination, {
+                    destinationDB: index2,
+                    replace: false,
+                }),
+            ).toEqual(true);
 
-                // new value only gets copied to DB 2
-                expect(await client.select(index1)).toEqual("OK");
-                checkSimple(await client.get(destination)).toEqual(value1);
-                expect(await client.select(index2)).toEqual("OK");
-                checkSimple(await client.get(destination)).toEqual(value2);
+            // new value only gets copied to DB 2
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.select(index2)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value2);
 
-                // both exists, with REPLACE, when value isn't the same, source always get copied to
-                // destination
-                expect(await client.select(index0)).toEqual("OK");
-                checkSimple(
-                    await client.copyDB(source, destination, index1, true),
-                ).toEqual(true);
-                expect(await client.select(index1)).toEqual("OK");
-                checkSimple(await client.get(destination)).toEqual(value2);
-            } finally {
-                // switching back to db 0
-                await client.select(index0);
-            }
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            expect(await client.select(index0)).toEqual("OK");
+            checkSimple(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value2);
 
-            // transaction tests
-            try {
-                const transaction = new Transaction();
-                transaction.select(index1);
-                transaction.set(source, value1);
-                transaction.copy(source, destination, index1, true);
-                transaction.get(destination);
-                const results = await client.exec(transaction);
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(index1);
+            transaction.set(source, value1);
+            transaction.copy(source, destination, {
+                destinationDB: index1,
+                replace: true,
+            });
+            transaction.get(destination);
+            const results = await client.exec(transaction);
 
-                if (results != null) {
-                    checkSimple(results.length).toEqual(4);
-                    checkSimple(results[2]).toEqual(true);
-                    checkSimple(results[3]).toEqual(value1);
-                }
-            } finally {
-                // switching back to db 0
-                await client.select(index0);
-            }
+            checkSimple(results).toEqual(["OK", "OK", true, value1]);
 
             client.close();
         },

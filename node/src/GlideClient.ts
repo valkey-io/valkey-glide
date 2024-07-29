@@ -383,7 +383,7 @@ export class GlideClient extends BaseClient {
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param destinationDB - (Optional) The alternative logical database index for the destination key.
-     * @param replace - (Optional) If `ture`, the `destination` key should be removed before copying the
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
      *
@@ -391,18 +391,17 @@ export class GlideClient extends BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.copy("set1", "set2", 1, false);
+     * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
      * console.log(result); // Output: true - "set1" was copied to "set2".
      * ```
      */
-    public async copyDB(
+    public async copy(
         source: string,
         destination: string,
-        destinationDB?: number,
-        replace?: boolean,
+        options?: { destinationDB?: number; replace?: boolean },
     ): Promise<boolean> {
         return this.createWritePromise(
-            createCopy(source, destination, destinationDB, replace),
+            createCopy(source, destination, options),
         );
     }
 

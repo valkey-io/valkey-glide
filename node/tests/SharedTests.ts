@@ -4483,54 +4483,6 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "copy test_%p",
-        async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
-
-                const source = `{key}-${uuidv4()}`;
-                const destination = `{key}-${uuidv4()}`;
-                const value1 = uuidv4();
-                const value2 = uuidv4();
-
-                // neither key exists
-                checkSimple(
-                    await client.copy(source, destination, false),
-                ).toEqual(false);
-                checkSimple(await client.copy(source, destination)).toEqual(
-                    false,
-                );
-
-                // source exists, destination does not
-                expect(await client.set(source, value1)).toEqual("OK");
-                checkSimple(
-                    await client.copy(source, destination, false),
-                ).toEqual(true);
-                checkSimple(await client.get(destination)).toEqual(value1);
-
-                // new value for source key
-                expect(await client.set(source, value2)).toEqual("OK");
-
-                // both exists, no REPLACE
-                checkSimple(await client.copy(source, destination)).toEqual(
-                    false,
-                );
-                checkSimple(
-                    await client.copy(source, destination, false),
-                ).toEqual(false);
-                checkSimple(await client.get(destination)).toEqual(value1);
-
-                // both exists, with REPLACE
-                checkSimple(
-                    await client.copy(source, destination, true),
-                ).toEqual(true);
-                checkSimple(await client.get(destination)).toEqual(value2);
-            }, protocol);
-        },
-        config.timeout,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `flushall test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
