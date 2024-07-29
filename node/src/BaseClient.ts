@@ -168,6 +168,8 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    ZScanOptions,
+    createZScan,
 } from "./Commands";
 import {
     ClosingError,
@@ -4234,6 +4236,14 @@ export class BaseClient {
         member: string,
     ): Promise<number> {
         return this.createWritePromise(createZIncrBy(key, increment, member));
+    }
+
+    public async zscan(
+        key: string,
+        cursor: string,
+        options?: ZScanOptions,
+    ): Promise<[string, [string]]> {
+        return this.createWritePromise(createZScan(key, cursor, options));
     }
 
     /**

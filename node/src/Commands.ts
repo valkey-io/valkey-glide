@@ -2999,3 +2999,33 @@ export function createTouch(keys: string[]): command_request.Command {
 export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
 }
+
+export type BaseScanOptions = {
+    readonly match?: string;
+    readonly count?: number;
+};
+
+export type ZScanOptions = BaseScanOptions;
+
+/**
+ * @internal
+ */
+export function createZScan(
+    key: string,
+    cursor: string,
+    options?: ZScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        if (options.match) {
+            args = args.concat("MATCH", options.match);
+        }
+
+        if (options.count !== undefined) {
+            args = args.concat("COUNT", options.count.toString());
+        }
+    }
+
+    return createCommand(RequestType.ZScan, args);
+}

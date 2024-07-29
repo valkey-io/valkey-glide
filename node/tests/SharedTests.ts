@@ -5899,6 +5899,140 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zscan test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const initialCursor = "0";
+                const defaultCount = 20;
+                const resultCursorIndex = 0;
+                const resultCollectionIndex = 1;
+
+                // Setup test data - use a large number of entries to force an iterative cursor.
+                const numberMap: Record<string, number> = {};
+                const expectedNumberMapArray: string[] = [];
+
+                for (let i = 0; i < 50000; i++) {
+                    expectedNumberMapArray.push(i.toString());
+                    expectedNumberMapArray.push(i.toString());
+                    numberMap[i.toString()] = i;
+                }
+
+                const charMembers = ["a", "b", "c", "d", "e"];
+                const charMap: Record<string, number> = {};
+                const expectedCharMapArray: string[] = [];
+
+                for (let i = 0; i < charMembers.length; i++) {
+                    expectedCharMapArray.push(charMembers[i]);
+                    expectedCharMapArray.push(i.toString());
+                    charMap[charMembers[i]] = i;
+                }
+
+                // Empty set
+                let result = await client.zscan(key1, initialCursor);
+                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
+                checkSimple(result[resultCollectionIndex]).toEqual([]);
+
+                // Negative cursor
+                result = await client.zscan(key1, "-1");
+                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
+                checkSimple(result[resultCollectionIndex]).toEqual([]);
+
+                // Result contains the whole set
+                expect(await client.zadd(key1, charMap)).toEqual(
+                    charMembers.length,
+                );
+                result = await client.zscan(key1, initialCursor);
+                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex].length).toEqual(
+                    expectedCharMapArray.length,
+                );
+                checkSimple(result[resultCollectionIndex]).toEqual(
+                    expectedCharMapArray,
+                );
+
+                result = await client.zscan(key1, initialCursor, {
+                    match: "a",
+                });
+                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
+                checkSimple(result[resultCollectionIndex]).toEqual(["a", "0"]);
+
+                // Result contains a subset of the key
+                expect(await client.zadd(key1, numberMap)).toEqual(
+                    Object.keys(numberMap).length,
+                );
+                result = await client.zscan(key1, initialCursor);
+                let resultCursor = result[resultCursorIndex];
+                let resultIterationCollection = result[resultCollectionIndex];
+                let fullResultMap: string[] = resultIterationCollection;
+                let nextResult;
+                let nextResultCursor;
+
+                // 0 is returned for the cursor of the last iteration.
+                while (resultCursor != "0") {
+                    nextResult = await client.zscan(key1, resultCursor);
+                    nextResultCursor = nextResult[resultCursorIndex];
+                    expect(nextResultCursor).not.toEqual(resultCursor);
+
+                    expect(nextResult[resultCollectionIndex]).not.toEqual(
+                        resultIterationCollection,
+                    );
+                    fullResultMap = fullResultMap.concat(
+                        result[resultCollectionIndex],
+                    );
+                    resultIterationCollection =
+                        nextResult[resultCollectionIndex];
+                    resultCursor = nextResultCursor;
+                }
+
+                // TODO: Check full map. Can not use checkSimple as it converts it to string where order matters
+                // Fetching by cursor is randomized.
+
+                // Test match pattern
+                result = await client.zscan(key1, initialCursor, {
+                    match: "*",
+                });
+                expect(intoString(result[resultCursorIndex])).not.toEqual(
+                    initialCursor,
+                );
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(defaultCount);
+
+                // Test count
+                result = await client.zscan(key1, initialCursor, { count: 20 });
+                expect(intoString(result[resultCursorIndex])).not.toEqual("0");
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(20);
+
+                // Test count with match returns a non-empty list
+                result = await client.zscan(key1, initialCursor, {
+                    match: "1*",
+                    count: 20,
+                });
+                expect(intoString(result[resultCursorIndex])).not.toEqual("0");
+                expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
+
+                // Exceptions
+                // Non-set key
+                await checkSimple(client.set(key2, "test")).toEqual("OK");
+
+                // with pytest.raises(RequestError):
+                //     await redis_client.zscan(key2, initial_cursor)
+                // with pytest.raises(RequestError):
+                //     await redis_client.zscan(key2, initial_cursor, match="test", count=20)
+
+                // # Negative count
+                // with pytest.raises(RequestError):
+                //     await redis_client.zscan(key2, initial_cursor, count=-1)
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `bzmpop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster: RedisCluster) => {
