@@ -477,6 +477,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = `{key}-${uuidv4()}`;
                 const key2 = `{key}-${uuidv4()}`;
+                const key3 = `{key}-${uuidv4()}`;
                 const keys = [key1, key2];
                 const destination = `{key}-${uuidv4()}`;
                 const nonExistingKey1 = `{key}-${uuidv4()}`;
@@ -529,14 +530,17 @@ export function runBaseTests<Context>(config: {
                     ]),
                 ).toEqual(1);
                 expect(await client.get(destination)).toEqual("a");
+
+                // Sets to a string (not a space character) with value 11000010 10011110.
+                expect(await client.set(key3, "")).toEqual("OK");
+                expect(await client.getbit(key3, 0)).toEqual(1);
                 expect(
                     await client.bitop(BitwiseOperation.NOT, destination, [
-                        key1,
+                        key3,
                     ]),
-                ).toEqual(1);
-                // First bit is flipped to 1 and throws 'utf-8' codec can't decode byte 0x9e in position 0:
-                // invalid start byte. TODO: discuss this case
-                // expect(intoString(await client.get(destination))).toEqual("�");
+                ).toEqual(2);
+                // Value becomes 00111101 01100001.
+                expect(await client.get(destination)).toEqual("=a");
 
                 expect(await client.setbit(key1, 0, 1)).toEqual(0);
                 expect(
