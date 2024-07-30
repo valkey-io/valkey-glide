@@ -2516,9 +2516,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of keys that were updated. A key is ignored if it doesn't exist.
      */
     public touch(keys: string[]): T {
-        return this.addAndReturn(
-            createTouch(keys),
-        );
+        return this.addAndReturn(createTouch(keys));
     }
 }
 

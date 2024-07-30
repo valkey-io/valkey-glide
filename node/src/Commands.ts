@@ -2780,8 +2780,6 @@ export function createZRandMember(
 /**
  * @internal
  */
-export function createTouch(
-    keys: string[],
-): command_request.Command {
+export function createTouch(keys: string[]): command_request.Command {
     return createCommand(RequestType.Touch, keys);
 }

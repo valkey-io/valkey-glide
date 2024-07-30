@@ -4190,7 +4190,7 @@ export class BaseClient {
         );
     }
 
-     /**
+    /**
      * Updates the last access time of the specified keys.
      *
      * See https://valkey.io/commands/touch/ for more details.
@@ -4208,9 +4208,7 @@ export class BaseClient {
      * ```
      */
     public touch(keys: string[]): Promise<number> {
-        return this.createWritePromise(
-            createTouch(keys),
-        );
+        return this.createWritePromise(createTouch(keys));
     }
 
     /**

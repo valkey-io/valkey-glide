@@ -5865,9 +5865,13 @@ export function runBaseTests<Context>(config: {
                 const key2 = `{key}-${uuidv4()}`;
                 const nonExistingKey = `{key}-${uuidv4()}`;
 
-                expect(await client.mset({[key1]: "value1", [key2]: "value2"})).toEqual("OK");
-                expect(await client.touch([key1, key2])).toEqual(2)
-                expect(await client.touch([key2, nonExistingKey, key1])).toEqual(2)
+                expect(
+                    await client.mset({ [key1]: "value1", [key2]: "value2" }),
+                ).toEqual("OK");
+                expect(await client.touch([key1, key2])).toEqual(2);
+                expect(
+                    await client.touch([key2, nonExistingKey, key1]),
+                ).toEqual(2);
             }, protocol);
         },
         config.timeout,
