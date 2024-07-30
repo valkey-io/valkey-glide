@@ -441,8 +441,10 @@ export class BaseClient {
             const pointer = message.respPointer;
 
             if (typeof pointer === "number") {
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/1953
                 resolve(valueFromSplitPointer(0, pointer, true));
             } else {
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/1953
                 resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
