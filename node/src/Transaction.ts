@@ -9,10 +9,10 @@ import {
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSubCommands,
-    BitmapIndexType,
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
+    BitmapIndexType,
     BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
