@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added BLMOVE command ([#2027](https://github.com/valkey-io/valkey-glide/pull/2027))
 * Node: Exported client configuration types ([#2023](https://github.com/valkey-io/valkey-glide/pull/2023))
 * Java, Python: Update docs for GEOSEARCH command ([#2017](https://github.com/valkey-io/valkey-glide/pull/2017))
 * Python: Update docs for BITFIELD and BITFIELD_RO commands ([#2048](https://github.com/valkey-io/valkey-glide/pull/2048))
