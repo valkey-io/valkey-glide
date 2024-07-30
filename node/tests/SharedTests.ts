@@ -344,6 +344,12 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.get(key3)).toEqual(null);
                 checkSimple(await client.get(key2)).toEqual(value);
+
+                // empty map and RequestError is thrown
+                const emptyMap = {};
+                await expect(client.msetnx(emptyMap)).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
