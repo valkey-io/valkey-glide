@@ -2457,7 +2457,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * See https://valkey.io/commands/sort for more details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions}.
+     * @param options - (Optional) {@link SortOptions}.
      *
      * Command Response - An `Array` of sorted elements.
      */
@@ -2476,7 +2476,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions}.
+     * @param options - (Optional) {@link SortOptions}.
      *
      * Command Response - An `Array` of sorted elements
      */
@@ -2498,7 +2498,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
-     * @param options - The {@link SortOptions}.
+     * @param options - (Optional) {@link SortOptions}.
      *
      * Command Response - The number of elements in the sorted key stored at `destination`.
      */
@@ -2563,7 +2563,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * See https://valkey.io/commands/sort for more details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions}.
      *
      * Command Response - An `Array` of sorted elements.
      */
@@ -2582,7 +2582,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions}.
      *
      * Command Response - An `Array` of sorted elements
      */
@@ -2607,7 +2607,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
-     * @param options - The {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions}.
      *
      * Command Response - The number of elements in the sorted key stored at `destination`.
      */

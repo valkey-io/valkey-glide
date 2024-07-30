@@ -999,7 +999,7 @@ export class GlideClusterClient extends BaseClient {
      * See https://valkey.io/commands/sort for more details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions}.
      * @returns An `Array` of sorted elements.
      *
      * @example
@@ -1027,7 +1027,7 @@ export class GlideClusterClient extends BaseClient {
      * since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions}.
      * @returns An `Array` of sorted elements
      *
      * @example
@@ -1058,7 +1058,7 @@ export class GlideClusterClient extends BaseClient {
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
-     * @param options - The {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions}.
      * @returns The number of elements in the sorted key stored at `destination`.
      *
      * @example
