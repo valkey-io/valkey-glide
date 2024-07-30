@@ -301,6 +301,7 @@ describe("GlideClusterClient", () => {
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
+                client.msetnx({ abc: "xyz", def: "abc", hij: "def" }),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
                 client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),

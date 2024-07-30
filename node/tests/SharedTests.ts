@@ -318,6 +318,45 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `msetnx test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const key3 = "{key}-3" + uuidv4();
+                const nonExistingKey = uuidv4();
+                const value = uuidv4();
+                const keyValueMap1 = {
+                    [key1]: value,
+                    [key2]: value,
+                };
+                const keyValueMap2 = {
+                    [key2]: value,
+                    [key3]: value,
+                };
+
+                expect(await client.msetnx(keyValueMap1)).toEqual(true);
+
+                checkSimple(
+                    await client.mget([key1, key2, nonExistingKey]),
+                ).toEqual([value, value, null]);
+
+                expect(await client.msetnx(keyValueMap2)).toEqual(false);
+
+                expect(await client.get(key3)).toEqual(null);
+                checkSimple(await client.get(key2)).toEqual(value);
+
+                // empty map and RequestError is thrown
+                const emptyMap = {};
+                await expect(client.msetnx(emptyMap)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `incr, incrBy and incrByFloat with existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

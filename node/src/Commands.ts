@@ -346,6 +346,18 @@ export function createMSet(
 /**
  * @internal
  */
+export function createMSetNX(
+    keyValueMap: Record<string, string>,
+): command_request.Command {
+    return createCommand(
+        RequestType.MSetNX,
+        Object.entries(keyValueMap).flat(),
+    );
+}
+
+/**
+ * @internal
+ */
 export function createIncr(key: string): command_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
