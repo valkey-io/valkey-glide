@@ -380,15 +380,15 @@ export function checkFunctionListResponse(
                 const flags = (
                     functionInfo["flags"] as unknown as Buffer[]
                 ).map((f) => f.toString());
-                checkSimple(functionInfo["description"]).toEqual(
+                expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );
 
-                checkSimple(flags).toEqual(functionFlags.get(name));
+                expect(flags).toEqual(functionFlags.get(name));
             }
 
             if (libCode) {
-                checkSimple(lib["library_code"]).toEqual(libCode);
+                expect(lib["library_code"]).toEqual(libCode);
             }
 
             break;
