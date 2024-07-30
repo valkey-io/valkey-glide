@@ -442,9 +442,11 @@ export class BaseClient {
             const pointer = message.respPointer;
 
             if (typeof pointer === "number") {
-                resolve(valueFromSplitPointer(0, pointer));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(0, pointer, true));
             } else {
-                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
@@ -708,11 +710,15 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             }
 
