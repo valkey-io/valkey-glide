@@ -5,11 +5,15 @@
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
-import { v4 as uuidv4 } from "uuid";
 import { gte } from "semver";
+import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitFieldGet,
+    BitFieldSet,
+    BitOffset,
+    BitOffsetMultiplier,
     BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
@@ -24,8 +28,10 @@ import {
     ProtocolVersion,
     ReturnType,
     ScoreFilter,
+    SignedEncoding,
     SortOrder,
     Transaction,
+    UnsignedEncoding,
 } from "..";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -450,6 +456,7 @@ export async function transactionTest(
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
     const key20 = "{key}" + uuidv4(); // list
+    const key21 = "{key}" + uuidv4(); // zset random
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -532,7 +539,7 @@ export async function transactionTest(
     baseTransaction.lrange(key5, 0, -1);
     responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.lmove(
             key5,
             key20,
@@ -544,12 +551,21 @@ export async function transactionTest(
             field + "3",
         ]);
 
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
-    } else {
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+        baseTransaction.blmove(
+            key20,
+            key5,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+            3,
+        );
+        responseData.push([
+            "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
+            field + "3",
+        ]);
     }
+
+    baseTransaction.lpopCount(key5, 2);
+    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
 
     baseTransaction.linsert(
         key5,
@@ -614,7 +630,7 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     responseData.push(['sismember(key7, "bar")', true]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
@@ -643,7 +659,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, "member1");
     responseData.push(['zrank(key8, "member1")', 0]);
 
-    if (gte("7.2.0", version)) {
+    if (gte(version, "7.2.0")) {
         baseTransaction.zrankWithScore(key8, "member1");
         responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
     }
@@ -651,7 +667,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     responseData.push(['zrevrank(key8, "member5")', 0]);
 
-    if (gte("7.2.0", version)) {
+    if (gte(version, "7.2.0")) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
@@ -682,7 +698,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -713,7 +729,7 @@ export async function transactionTest(
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
@@ -805,6 +821,16 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
+    if (gte("6.0.0", version)) {
+        baseTransaction.bitfieldReadOnly(key17, [
+            new BitFieldGet(new SignedEncoding(5), new BitOffset(3)),
+        ]);
+        responseData.push([
+            "bitfieldReadOnly(key17, [new BitFieldGet(...)])",
+            [6],
+        ]);
+    }
+
     baseTransaction.set(key19, "abcdef");
     responseData.push(['set(key19, "abcdef")', "OK"]);
     baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
@@ -815,7 +841,7 @@ export async function transactionTest(
     baseTransaction.get(key19);
     responseData.push(["get(key19)", "`bc`ab"]);
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.bitcount(key17, {
             start: 5,
             end: 30,
@@ -831,6 +857,15 @@ export async function transactionTest(
             46,
         ]);
     }
+
+    baseTransaction.bitfield(key17, [
+        new BitFieldSet(
+            new UnsignedEncoding(10),
+            new BitOffsetMultiplier(3),
+            4,
+        ),
+    ]);
+    responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
 
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
@@ -864,8 +899,19 @@ export async function transactionTest(
         'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
+    baseTransaction.zadd(key21, { one: 1.0 });
+    responseData.push(["zadd(key21, {one: 1.0}", 1]);
+    baseTransaction.zrandmember(key21);
+    responseData.push(["zrandmember(key21)", "one"]);
+    baseTransaction.zrandmemberWithCount(key21, 1);
+    responseData.push(["zrandmemberWithCountWithScores(key21, 1)", "one"]);
+    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
+    responseData.push([
+        "zrandmemberWithCountWithScores(key21, 1)",
+        [Buffer.from("one"), 1.0],
+    ]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction
             .geosearch(
                 key18,
@@ -962,7 +1008,7 @@ export async function transactionTest(
         true,
     );
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.functionLoad(code);
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);

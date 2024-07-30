@@ -1,7 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
@@ -12,8 +11,15 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
-    BitmapIndexType,
+    BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSubCommands,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
+    BitmapIndexType,
     BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
@@ -22,13 +28,13 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
-    GeospatialData,
     GeoUnit,
+    GeospatialData,
     InsertPosition,
     KeyWeight,
-    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -42,9 +48,10 @@ import {
     ZAddOptions,
     createBLPop,
     createBRPop,
-    createBitCount,
-    createBitOp,
     createBZMPop,
+    createBitCount,
+    createBitField,
+    createBitOp,
     createBitPos,
     createDecr,
     createDecrBy,
@@ -81,6 +88,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -145,6 +153,7 @@ import {
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -194,6 +203,7 @@ export type ReturnType =
     | null
     | boolean
     | bigint
+    | Buffer
     | Set<ReturnType>
     | ReturnTypeMap
     | ReturnTypeAttribute
@@ -1181,6 +1191,69 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+     * `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
+     *      any of the following:
+     *
+     * - {@link BitFieldGet}
+     * - {@link BitFieldSet}
+     * - {@link BitFieldIncrBy}
+     * - {@link BitFieldOverflow}
+     *
+     * @returns An array of results from the executed subcommands:
+     *
+     * - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
+     *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
+     *   does not contribute a value to the array response.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "A");  // "A" has binary value 01000001
+     * const result = await client.bitfield("key", [new BitFieldSet(new UnsignedEncoding(2), new BitOffset(1), 3), new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
+     * console.log(result); // Output: [2, 3] - The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
+     * ```
+     */
+    public async bitfield(
+        key: string,
+        subcommands: BitFieldSubCommands[],
+    ): Promise<(number | null)[]> {
+        return this.createWritePromise(createBitField(key, subcommands));
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
+     * @returns An array of results from the {@link BitFieldGet} subcommands.
+     *
+     * since Valkey version 6.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "A");  // "A" has binary value 01000001
+     * const result = await client.bitfieldReadOnly("key", [new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
+     * console.log(result); // Output: [2] - The value at offset 1 with an unsigned encoding of 2 is 2.
+     * ```
+     */
+    public async bitfieldReadOnly(
+        key: string,
+        subcommands: BitFieldGet[],
+    ): Promise<number[]> {
+        return this.createWritePromise(createBitField(key, subcommands, true));
+    }
+
     /** Retrieve the value associated with `field` in the hash stored at `key`.
      * See https://valkey.io/commands/hget/ for details.
      *
@@ -1644,6 +1717,53 @@ export class BaseClient {
     ): Promise<string | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey1", ["two", "one"]);
+     * await client.lpush("testKey2", ["four", "three"]);
+     * const result = await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
+     * console.log(result); // Output: "one"
+     *
+     * const result2 = await client.lrange("testKey1", 0, -1);
+     * console.log(result2);   // Output: "two"
+     *
+     * const updated_array2 = await client.lrange("testKey2", 0, -1);
+     * console.log(updated_array2); // Output: ["one", "three", "four"]
+     * ```
+     */
+    public async blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 
@@ -2862,6 +2982,94 @@ export class BaseClient {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @returns A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmember("mySortedSet");
+     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmember("nonExistingSortedSet");
+     * console.log(payload2); // Output: null since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
+     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
+     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCountWithScores(
+        key: string,
+        count: number,
+    ): Promise<[string, number][]> {
+        return this.createWritePromise(createZRandMember(key, count, true));
     }
 
     /** Returns the length of the string value stored at `key`.
