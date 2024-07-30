@@ -912,6 +912,25 @@ export function createLMove(
 /**
  * @internal
  */
+export function createBLMove(
+    source: string,
+    destination: string,
+    whereFrom: ListDirection,
+    whereTo: ListDirection,
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.BLMove, [
+        source,
+        destination,
+        whereFrom,
+        whereTo,
+        timeout.toString(),
+    ]);
+}
+
+/**
+ * @internal
+ */
 export function createLSet(
     key: string,
     index: number,
