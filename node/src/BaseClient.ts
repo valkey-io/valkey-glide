@@ -59,6 +59,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createGeoAdd,
@@ -107,6 +108,7 @@ import {
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
@@ -2416,6 +2418,33 @@ export class BaseClient {
         return this.createWritePromise(
             createExpireAt(key, unixSeconds, option),
         );
+    }
+
+    /**
+     *  Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     *  To get the expiration with millisecond precision, use `pexpiretime`.
+     *
+     *  See https://valkey.io/commands/expiretime/ for details.
+     *
+     *  @param key - The `key` to determine the expiration value of.
+     *  @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * @example
+     * ```typescript
+     * const result1 = client.expiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = client.set(myKey, "value");
+     * console.log(result2); // Output: -1 - myKey has no associate expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = client.expireTime(myKey);
+     * console.log(result3); // Output: 718614954
+     * ```
+     * since - Redis version 7.0.0.
+     */
+    public expiretime(key: string): Promise<number> {
+        return this.createWritePromise(createExpireTime(key));
     }
 
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
