@@ -115,6 +115,7 @@ import {
     createLolwut,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -356,6 +357,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public mset(keyValueMap: Record<string, string>): T {
         return this.addAndReturn(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * Command Response - `true` if all keys were set. `false` if no key was set.
+     */
+    public msetnx(keyValueMap: Record<string, string>): T {
+        return this.addAndReturn(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
