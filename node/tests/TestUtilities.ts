@@ -794,6 +794,8 @@ export async function transactionTest(
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
     responseData.push(["exists([key10])", 1]);
+    baseTransaction.touch([key10]);
+    responseData.push(["touch([key10])", 1]);
     baseTransaction.renamenx(key10, key9);
     responseData.push(["renamenx(key10, key9)", true]);
     baseTransaction.exists([key9, key10]);
