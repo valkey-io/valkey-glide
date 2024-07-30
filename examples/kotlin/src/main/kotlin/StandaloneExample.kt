@@ -1,4 +1,4 @@
-package org.example
+package glide.examples
 
 import glide.api.GlideClient
 import glide.api.logging.Logger

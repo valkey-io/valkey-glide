@@ -40,12 +40,12 @@ tasks.register<JavaExec>("runStandalone") {
     group = "application"
     description = "Run the standalone example"
     classpath = sourceSets.main.get().runtimeClasspath
-    mainClass = "org.example.StandaloneExample"
+    mainClass = "glide.examples.StandaloneExample"
 }
 
 tasks.register<JavaExec>("runCluster") {
     group = "application"
     description = "Run the cluster example"
     classpath = sourceSets.main.get().runtimeClasspath
-    mainClass = "org.example.ClusterExample"
+    mainClass = "glide.examples.ClusterExample"
 }
