@@ -2441,8 +2441,7 @@ export function createLCS(
 
     if (options) {
         if (options.len) args.push("LEN");
-
-        if (options.idx) {
+        else if (options.idx) {
             args.push("IDX");
             if (options.idx.withMatchLen) args.push("WITHMATCHLEN");
             if (options.idx.minMatchLen !== undefined)

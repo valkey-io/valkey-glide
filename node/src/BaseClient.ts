@@ -4106,10 +4106,8 @@ export class BaseClient {
      * @returns A `Map` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
-     *
      *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as an integer. This value doesn't count `minMatchLen` filter.
-     *
+     *           stored as an integer. This value doesn't count towards the `minMatchLen` filter.
      *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by `key1` and `key2`.
