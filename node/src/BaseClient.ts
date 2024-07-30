@@ -709,12 +709,14 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
                     true,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
                     true,
                 ) as Record<string, unknown>;
             }
