@@ -2232,6 +2232,16 @@ export function createPfCount(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createPfMerge(
+    destination: string,
+    sourceKey: string[],
+): command_request.Command {
+    return createCommand(RequestType.PfMerge, [destination, ...sourceKey]);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): command_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
