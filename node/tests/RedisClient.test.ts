@@ -12,7 +12,7 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import { GlideClient, ProtocolVersion, Transaction } from "..";
+import { GlideClient, ProtocolVersion, Transaction , ListDirection } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
@@ -48,7 +48,7 @@ describe("GlideClient", () => {
             parseCommandLineArgs()["standalone-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? RedisCluster.initFromExistingCluster(
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
               )
             : await RedisCluster.createCluster(false, 1, 1);
@@ -124,6 +124,38 @@ describe("GlideClient", () => {
                 expect.not.stringContaining("# Latencystats"),
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands returns never timeout_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                    300,
+                ),
+            );
+
+            const blmovePromise = client.blmove(
+                "source",
+                "destination",
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+                0.1,
+            );
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(resolve, 500);
+            });
+
+            try {
+                await Promise.race([blmovePromise, timeoutPromise]);
+            } finally {
+                Promise.resolve(blmovePromise);
+                client.close();
+            }
+        },
+        5000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -360,6 +392,96 @@ describe("GlideClient", () => {
             } else {
                 throw new Error("Invalid LOLWUT transaction test results.");
             }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy with DB test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const source = `{key}-${uuidv4()}`;
+            const destination = `{key}-${uuidv4()}`;
+            const value1 = uuidv4();
+            const value2 = uuidv4();
+            const index0 = 0;
+            const index1 = 1;
+            const index2 = 2;
+
+            // neither key exists
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value1);
+
+            // new value for source key
+            expect(await client.select(index0)).toEqual("OK");
+            expect(await client.set(source, value2)).toEqual("OK");
+
+            // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index2,
+                    replace: false,
+                }),
+            ).toEqual(true);
+
+            // new value only gets copied to DB 2
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.select(index2)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value2);
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            expect(await client.select(index0)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value2);
+
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(index1);
+            transaction.set(source, value1);
+            transaction.copy(source, destination, {
+                destinationDB: index1,
+                replace: true,
+            });
+            transaction.get(destination);
+            const results = await client.exec(transaction);
+
+            checkSimple(results).toEqual(["OK", "OK", true, value1]);
 
             client.close();
         },

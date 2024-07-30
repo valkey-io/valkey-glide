@@ -4,6 +4,13 @@
 
 import {
     AggregationType,
+    BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSubCommands,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
@@ -41,6 +48,7 @@ import {
     createBRPop,
     createBZMPop,
     createBitCount,
+    createBitField,
     createBitOp,
     createBitPos,
     createClientGetName,
@@ -49,6 +57,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createDecr,
@@ -95,6 +104,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -526,6 +536,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
     }
 
+    /**
+     * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+     * `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
+     *      any of the following:
+     *
+     * - {@link BitFieldGet}
+     * - {@link BitFieldSet}
+     * - {@link BitFieldIncrBy}
+     * - {@link BitFieldOverflow}
+     *
+     * Command Response - An array of results from the executed subcommands:
+     *
+     * - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
+     *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
+     *   does not contribute a value to the array response.
+     */
+    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+        return this.addAndReturn(createBitField(key, subcommands));
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
+     *
+     * Command Response - An array of results from the {@link BitFieldGet} subcommands.
+     *
+     * since Valkey version 6.0.0.
+     */
+    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+        return this.addAndReturn(createBitField(key, subcommands, true));
+    }
+
     /** Reads the configuration parameters of a running Redis server.
      * See https://valkey.io/commands/config-get/ for details.
      *
@@ -818,6 +872,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     *
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     *
+     * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): T {
+        return this.addAndReturn(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 
@@ -2497,6 +2586,33 @@ export class Transaction extends BaseTransaction<Transaction> {
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
     }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Transaction {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
 }
 
 /**
@@ -2512,4 +2628,29 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        replace?: boolean,
+    ): ClusterTransaction {
+        return this.addAndReturn(
+            createCopy(source, destination, { replace: replace }),
+        );
+    }
 }

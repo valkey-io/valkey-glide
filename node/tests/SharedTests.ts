@@ -10,6 +10,13 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BitFieldGet,
+    BitFieldIncrBy,
+    BitFieldOverflow,
+    BitFieldSet,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitOverflowControl,
     BitmapIndexType,
     BitwiseOperation,
     ClosingError,
@@ -18,17 +25,19 @@ import {
     FlushMode,
     GeoUnit,
     GeospatialData,
-    ListDirection,
     GlideClient,
     GlideClusterClient,
     InfoOptions,
     InsertPosition,
+    ListDirection,
     ProtocolVersion,
     ReturnType,
     RequestError,
     ScoreFilter,
     Script,
+    SignedEncoding,
     SortOrder,
+    UnsignedEncoding,
     UpdateByScore,
     parseInfoResponse,
 } from "../";
@@ -783,6 +792,284 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bitfield test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const setKey = `{key}-${uuidv4()}`;
+                const foobar = "foobar";
+                const u2 = new UnsignedEncoding(2);
+                const u7 = new UnsignedEncoding(7);
+                const i3 = new SignedEncoding(3);
+                const i8 = new SignedEncoding(8);
+                const offset1 = new BitOffset(1);
+                const offset5 = new BitOffset(5);
+                const offset_multiplier4 = new BitOffsetMultiplier(4);
+                const offset_multiplier8 = new BitOffsetMultiplier(8);
+                const overflowSet = new BitFieldSet(u2, offset1, -10);
+                const overflowGet = new BitFieldGet(u2, offset1);
+
+                // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+                checkSimple(await client.set(key1, foobar)).toEqual("OK");
+
+                // SET tests
+                expect(
+                    await client.bitfield(key1, [
+                        // binary value becomes: 0(10)00110 01101111 01101111 01100010 01100001 01110010
+                        new BitFieldSet(u2, offset1, 2),
+                        // binary value becomes: 01000(011) 01101111 01101111 01100010 01100001 01110010
+                        new BitFieldSet(i3, offset5, 3),
+                        // binary value becomes: 01000011 01101111 01101111 0110(0010 010)00001 01110010
+                        new BitFieldSet(u7, offset_multiplier4, 18),
+                        // addressing with SET or INCRBY bits outside the current string length will enlarge the string,
+                        // zero-padding it, as needed, for the minimal length needed, according to the most far bit touched.
+                        //
+                        // binary value becomes:
+                        // 01000011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 (00010100)
+                        new BitFieldSet(i8, offset_multiplier8, 20),
+                        new BitFieldGet(u2, offset1),
+                        new BitFieldGet(i3, offset5),
+                        new BitFieldGet(u7, offset_multiplier4),
+                        new BitFieldGet(i8, offset_multiplier8),
+                    ]),
+                ).toEqual([3, -2, 19, 0, 2, 3, 18, 20]);
+
+                // INCRBY tests
+                expect(
+                    await client.bitfield(key1, [
+                        // binary value becomes:
+                        // 0(11)00011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
+                        new BitFieldIncrBy(u2, offset1, 1),
+                        // binary value becomes:
+                        // 01100(101) 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
+                        new BitFieldIncrBy(i3, offset5, 2),
+                        // binary value becomes:
+                        // 01100101 01101111 01101111 0110(0001 111)00001 01110010 00000000 00000000 00010100
+                        new BitFieldIncrBy(u7, offset_multiplier4, -3),
+                        // binary value becomes:
+                        // 01100101 01101111 01101111 01100001 11100001 01110010 00000000 00000000 (00011110)
+                        new BitFieldIncrBy(i8, offset_multiplier8, 10),
+                    ]),
+                ).toEqual([3, -3, 15, 30]);
+
+                // OVERFLOW WRAP is used by default if no OVERFLOW is specified
+                expect(
+                    await client.bitfield(key2, [
+                        overflowSet,
+                        new BitFieldOverflow(BitOverflowControl.WRAP),
+                        overflowSet,
+                        overflowGet,
+                    ]),
+                ).toEqual([0, 2, 2]);
+
+                // OVERFLOW affects only SET or INCRBY after OVERFLOW subcommand
+                expect(
+                    await client.bitfield(key2, [
+                        overflowSet,
+                        new BitFieldOverflow(BitOverflowControl.SAT),
+                        overflowSet,
+                        overflowGet,
+                        new BitFieldOverflow(BitOverflowControl.FAIL),
+                        overflowSet,
+                    ]),
+                ).toEqual([2, 2, 3, null]);
+
+                // if the key doesn't exist, the operation is performed as though the missing value was a string with all bits
+                // set to 0.
+                expect(
+                    await client.bitfield(nonExistingKey, [
+                        new BitFieldSet(
+                            new UnsignedEncoding(2),
+                            new BitOffset(3),
+                            2,
+                        ),
+                    ]),
+                ).toEqual([0]);
+
+                // empty subcommands argument returns an empty list
+                expect(await client.bitfield(key1, [])).toEqual([]);
+
+                // invalid argument - offset must be >= 0
+                await expect(
+                    client.bitfield(key1, [
+                        new BitFieldSet(
+                            new UnsignedEncoding(5),
+                            new BitOffset(-1),
+                            1,
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // invalid argument - encoding size must be > 0
+                await expect(
+                    client.bitfield(key1, [
+                        new BitFieldSet(
+                            new UnsignedEncoding(0),
+                            new BitOffset(1),
+                            1,
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // invalid argument - unsigned encoding must be < 64
+                await expect(
+                    client.bitfield(key1, [
+                        new BitFieldSet(
+                            new UnsignedEncoding(64),
+                            new BitOffset(1),
+                            1,
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // invalid argument - signed encoding must be < 65
+                await expect(
+                    client.bitfield(key1, [
+                        new BitFieldSet(
+                            new SignedEncoding(65),
+                            new BitOffset(1),
+                            1,
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // key exists, but it is not a string
+                expect(await client.sadd(setKey, [foobar])).toEqual(1);
+                await expect(
+                    client.bitfield(setKey, [
+                        new BitFieldSet(
+                            new SignedEncoding(3),
+                            new BitOffset(1),
+                            2,
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bitfieldReadOnly test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.0.0")) {
+                    return;
+                }
+
+                const key = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+                const setKey = `{key}-${uuidv4()}`;
+                const foobar = "foobar";
+                const unsignedOffsetGet = new BitFieldGet(
+                    new UnsignedEncoding(2),
+                    new BitOffset(1),
+                );
+
+                // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+                checkSimple(await client.set(key, foobar)).toEqual("OK");
+                expect(
+                    await client.bitfieldReadOnly(key, [
+                        // Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
+                        unsignedOffsetGet,
+                        // Get value in: 01100(110) 01101111 01101111 01100010 01100001 01110010 00010100
+                        new BitFieldGet(
+                            new SignedEncoding(3),
+                            new BitOffset(5),
+                        ),
+                        // Get value in: 01100110 01101111 01101(111 0110)0010 01100001 01110010 00010100
+                        new BitFieldGet(
+                            new UnsignedEncoding(7),
+                            new BitOffsetMultiplier(3),
+                        ),
+                        // Get value in: 01100110 01101111 (01101111) 01100010 01100001 01110010 00010100
+                        new BitFieldGet(
+                            new SignedEncoding(8),
+                            new BitOffsetMultiplier(2),
+                        ),
+                    ]),
+                ).toEqual([3, -2, 118, 111]);
+
+                // offset is greater than current length of string: the operation is performed like the missing part all
+                // consists of bits set to 0.
+                expect(
+                    await client.bitfieldReadOnly(key, [
+                        new BitFieldGet(
+                            new UnsignedEncoding(3),
+                            new BitOffset(100),
+                        ),
+                    ]),
+                ).toEqual([0]);
+
+                // similarly, if the key doesn't exist, the operation is performed as though the missing value was a string with
+                // all bits set to 0.
+                expect(
+                    await client.bitfieldReadOnly(nonExistingKey, [
+                        unsignedOffsetGet,
+                    ]),
+                ).toEqual([0]);
+
+                // empty subcommands argument returns an empty list
+                expect(await client.bitfieldReadOnly(key, [])).toEqual([]);
+
+                // invalid argument - offset must be >= 0
+                await expect(
+                    client.bitfieldReadOnly(key, [
+                        new BitFieldGet(
+                            new UnsignedEncoding(5),
+                            new BitOffset(-1),
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // invalid argument - encoding size must be > 0
+                await expect(
+                    client.bitfieldReadOnly(key, [
+                        new BitFieldGet(
+                            new UnsignedEncoding(0),
+                            new BitOffset(1),
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // invalid argument - unsigned encoding must be < 64
+                await expect(
+                    client.bitfieldReadOnly(key, [
+                        new BitFieldGet(
+                            new UnsignedEncoding(64),
+                            new BitOffset(1),
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // invalid argument - signed encoding must be < 65
+                await expect(
+                    client.bitfieldReadOnly(key, [
+                        new BitFieldGet(
+                            new SignedEncoding(65),
+                            new BitOffset(1),
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+
+                // key exists, but it is not a string
+                expect(await client.sadd(setKey, [foobar])).toEqual(1);
+                await expect(
+                    client.bitfieldReadOnly(setKey, [
+                        new BitFieldGet(
+                            new SignedEncoding(3),
+                            new BitOffset(1),
+                        ),
+                    ]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set with timeout parameter_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1358,6 +1645,133 @@ export function runBaseTests<Context>(config: {
                         ListDirection.LEFT,
                     ),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `blmove list_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const lpushArgs1 = ["2", "1"];
+                const lpushArgs2 = ["4", "3"];
+
+                // Initialize the tests
+                expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
+                expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
+
+                // Move from LEFT to LEFT with blocking
+                checkSimple(
+                    await client.blmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual("1");
+
+                // Move from LEFT to RIGHT with blocking
+                checkSimple(
+                    await client.blmove(
+                        key1,
+                        key2,
+                        ListDirection.LEFT,
+                        ListDirection.RIGHT,
+                        0.1,
+                    ),
+                ).toEqual("2");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                    "4",
+                    "2",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+
+                // Move from RIGHT to LEFT non-existing destination with blocking
+                checkSimple(
+                    await client.blmove(
+                        key2,
+                        key1,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual("2");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                    "4",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual(["2"]);
+
+                // Move from RIGHT to RIGHT with blocking
+                checkSimple(
+                    await client.blmove(
+                        key2,
+                        key1,
+                        ListDirection.RIGHT,
+                        ListDirection.RIGHT,
+                        0.1,
+                    ),
+                ).toEqual("4");
+
+                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                    "1",
+                    "3",
+                ]);
+                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                    "2",
+                    "4",
+                ]);
+
+                // Non-existing source key with blocking
+                expect(
+                    await client.blmove(
+                        "{key}-non_existing_key" + uuidv4(),
+                        key1,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual(null);
+
+                // Non-list source key with blocking
+                const key3 = "{key}-3" + uuidv4();
+                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                await expect(
+                    client.blmove(
+                        key3,
+                        key1,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // Non-list destination key
+                await expect(
+                    client.blmove(
+                        key1,
+                        key3,
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // TODO: add test case with 0 timeout (no timeout) should never time out,
+                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,
