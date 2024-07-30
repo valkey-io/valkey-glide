@@ -2454,6 +2454,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * To store the result into a new key, see {@link sortStore}.
      *
+     * See https://valkey.io/commands/sort for more details.
+     *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - The {@link SortOptions}.
      *
@@ -2490,6 +2492,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      * apply transformations on sorted elements, and store the result in a new key.
      *
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
      *
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      * @param key - The key of the list, set, or sorted set to be sorted.
@@ -2556,6 +2560,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * To store the result into a new key, see {@link sortStore}.
      *
+     * See https://valkey.io/commands/sort for more details.
+     *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - The {@link SortClusterOptions}.
      *
@@ -2595,6 +2601,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * apply transformations on sorted elements, and store the result in a new key.
      *
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
      *
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      * @param key - The key of the list, set, or sorted set to be sorted.

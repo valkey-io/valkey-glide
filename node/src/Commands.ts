@@ -2424,7 +2424,7 @@ export function createZIncrBy(
 /**
  * Optional arguments to {@link GlideClient.sort|sort}, {@link GlideClient.sortStore|sortStore} and {@link GlideClient.sortReadOnly|sortReadOnly} commands.
  *
- * See https://valkey.io/commands/sort/ and https://valkey.io/commands/sort_ro/ for more details.
+ * See https://valkey.io/commands/sort/ for more details.
  */
 export type SortOptions = SortClusterOptions & {
     /**
@@ -2447,9 +2447,7 @@ export type SortOptions = SortClusterOptions & {
      * `name_<element>` for each sorted element. Multiple `getPatterns`
      * arguments can be provided to retrieve multiple attributes. The special value `#` can
      * be used to include the actual element from `key` being sorted. If not provided, only
-     * the sorted elements themselves are returned.<br>
-     *
-     * See https://valkey.io/commands/sort/ for more information.
+     * the sorted elements themselves are returned.
      */
     getPatterns?: string[];
 };
@@ -2475,7 +2473,7 @@ type SortBaseOptions = {
 /**
  * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
  *
- * See https://valkey.io/commands/sort/ and https://valkey.io/commands/sort_ro/ for more details.
+ * See https://valkey.io/commands/sort/ for more details.
  */
 export type SortClusterOptions = SortBaseOptions;
 
