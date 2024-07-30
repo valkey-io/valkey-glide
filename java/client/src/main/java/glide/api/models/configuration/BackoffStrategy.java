@@ -4,6 +4,7 @@ package glide.api.models.configuration;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.ToString;
 
 /**
  * Represents the strategy used to determine how and when to reconnect, in case of connection
@@ -24,6 +25,7 @@ import lombok.NonNull;
  */
 @Getter
 @Builder
+@ToString
 public class BackoffStrategy {
     /**
      * Number of retry attempts that the client should perform when disconnected from the server,
