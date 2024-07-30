@@ -30,6 +30,7 @@ import {
     transactionTest,
     validateTransactionResponse,
 } from "./TestUtilities";
+import { ListDirection } from "..";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
 
@@ -124,6 +125,38 @@ describe("GlideClient", () => {
                 expect.not.stringContaining("# Latencystats"),
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "blocking timeout tests_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                    300,
+                ),
+            );
+
+            const blmovePromise = client.blmove(
+                "source",
+                "destination",
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+                0.1,
+            );
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(resolve, 500);
+            });
+
+            try {
+                await Promise.race([blmovePromise, timeoutPromise]);
+            } finally {
+                Promise.resolve(blmovePromise);
+                client.close();
+            }
+        },
+        5000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
