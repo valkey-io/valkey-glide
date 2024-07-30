@@ -2312,6 +2312,30 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
 }
 
 /**
+ *
+ * @internal
+ */
+export function createCopy(
+    source: string,
+    destination: string,
+    options?: { destinationDB?: number; replace?: boolean },
+): command_request.Command {
+    let args: string[] = [source, destination];
+
+    if (options) {
+        if (options.destinationDB !== undefined) {
+            args = args.concat("DB", options.destinationDB.toString());
+        }
+
+        if (options.replace) {
+            args.push("REPLACE");
+        }
+    }
+
+    return createCommand(RequestType.Copy, args);
+}
+
+/**
  * Optional arguments to LPOS command.
  *
  * See https://valkey.io/commands/lpos/ for more details.
