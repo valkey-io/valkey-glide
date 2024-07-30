@@ -473,6 +473,8 @@ export async function transactionTest(
     responseData.push(["dbsize()", 0]);
     baseTransaction.set(key1, "bar");
     responseData.push(['set(key1, "bar")', "OK"]);
+    baseTransaction.randomKey();
+    responseData.push(["randomKey()", key1]);
     baseTransaction.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
     baseTransaction.set(key1, "bar");

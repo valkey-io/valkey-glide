@@ -2776,3 +2776,7 @@ export function createZRandMember(
 
     return createCommand(RequestType.ZRandMember, args);
 }
+
+export function createRandomKey(): command_request.Command {
+    return createCommand(RequestType.RandomKey, []);
+}

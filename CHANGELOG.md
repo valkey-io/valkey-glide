@@ -16,6 +16,7 @@
 * Node: Added BITOP command ([#2012](https://github.com/valkey-io/valkey-glide/pull/2012))
 * Node: Added GETBIT command ([#1989](https://github.com/valkey-io/valkey-glide/pull/1989))
 * Node: Added SETBIT command ([#1978](https://github.com/valkey-io/valkey-glide/pull/1978))
+* Node: Added RANDOMKEY command ([#2057](https://github.com/valkey-io/valkey-glide/pull/2057))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
 * Node: Added SDIFFSTORE command ([#1931](https://github.com/valkey-io/valkey-glide/pull/1931))
