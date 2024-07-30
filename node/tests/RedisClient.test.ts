@@ -128,7 +128,7 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "blocking timeout tests_%p",
+        "check that blocking commands returns never timeout_%p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(
