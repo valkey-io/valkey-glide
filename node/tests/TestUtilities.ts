@@ -380,15 +380,15 @@ export function checkFunctionListResponse(
                 const flags = (
                     functionInfo["flags"] as unknown as Buffer[]
                 ).map((f) => f.toString());
-                checkSimple(functionInfo["description"]).toEqual(
+                expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );
 
-                checkSimple(flags).toEqual(functionFlags.get(name));
+                expect(flags).toEqual(functionFlags.get(name));
             }
 
             if (libCode) {
-                checkSimple(lib["library_code"]).toEqual(libCode);
+                expect(lib["library_code"]).toEqual(libCode);
             }
 
             break;
@@ -491,6 +491,8 @@ export async function transactionTest(
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseTransaction.mset({ [key3]: value });
     responseData.push(["mset({ [key3]: value })", "OK"]);
+    baseTransaction.msetnx({ [key3]: value });
+    responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
@@ -549,12 +551,21 @@ export async function transactionTest(
             field + "3",
         ]);
 
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
-    } else {
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+        baseTransaction.blmove(
+            key20,
+            key5,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+            3,
+        );
+        responseData.push([
+            "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
+            field + "3",
+        ]);
     }
+
+    baseTransaction.lpopCount(key5, 2);
+    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
 
     baseTransaction.linsert(
         key5,

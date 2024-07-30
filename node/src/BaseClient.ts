@@ -88,6 +88,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -98,6 +99,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -442,9 +444,11 @@ export class BaseClient {
             const pointer = message.respPointer;
 
             if (typeof pointer === "number") {
-                resolve(valueFromSplitPointer(0, pointer));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(0, pointer, true));
             } else {
-                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
@@ -708,11 +712,15 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             }
 
@@ -916,6 +924,29 @@ export class BaseClient {
      */
     public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @returns `true` if all keys were set. `false` if no key was set.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.msetnx({"key1": "value1", "key2": "value2"});
+     * console.log(result1); // Output: `true`
+     *
+     * const result2 = await client.msetnx({"key2": "value4", "key3": "value5"});
+     * console.log(result2); // Output: `false`
+     * ```
+     */
+    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
+        return this.createWritePromise(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1693,6 +1724,53 @@ export class BaseClient {
     ): Promise<string | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey1", ["two", "one"]);
+     * await client.lpush("testKey2", ["four", "three"]);
+     * const result = await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
+     * console.log(result); // Output: "one"
+     *
+     * const result2 = await client.lrange("testKey1", 0, -1);
+     * console.log(result2);   // Output: "two"
+     *
+     * const updated_array2 = await client.lrange("testKey2", 0, -1);
+     * console.log(updated_array2); // Output: ["one", "three", "four"]
+     * ```
+     */
+    public async blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 

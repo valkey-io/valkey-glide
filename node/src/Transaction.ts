@@ -103,6 +103,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -114,6 +115,7 @@ import {
     createLolwut,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -356,6 +358,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public mset(keyValueMap: Record<string, string>): T {
         return this.addAndReturn(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * Command Response - `true` if all keys were set. `false` if no key was set.
+     */
+    public msetnx(keyValueMap: Record<string, string>): T {
+        return this.addAndReturn(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -871,6 +886,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     *
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     *
+     * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): T {
+        return this.addAndReturn(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 
