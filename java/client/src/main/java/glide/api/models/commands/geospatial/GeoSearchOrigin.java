@@ -15,7 +15,7 @@ public final class GeoSearchOrigin {
     /** Valkey API keyword used to perform search from the position of a given member. */
     public static final String FROMMEMBER_VALKEY_API = "FROMMEMBER";
 
-    /** Valkey API keyword used to perform search from the given longtitude & latitue position. */
+    /** Valkey API keyword used to perform search from the given longitude & latitude position. */
     public static final String FROMLONLAT_VALKEY_API = "FROMLONLAT";
 
     /**
@@ -36,12 +36,6 @@ public final class GeoSearchOrigin {
     public static class CoordOrigin implements SearchOrigin {
         private final GeospatialData position;
 
-        /**
-         * Converts GeoSearchOrigin into a String[].
-         *
-         * @return String[] An array containing arguments corresponding to the starting point of the
-         *     query.
-         */
         public String[] toArgs() {
             return ArrayUtils.addAll(new String[] {FROMLONLAT_VALKEY_API}, position.toArgs());
         }
@@ -52,12 +46,6 @@ public final class GeoSearchOrigin {
     public static class MemberOrigin implements SearchOrigin {
         private final String member;
 
-        /**
-         * Converts GeoSearchOrigin into a String[].
-         *
-         * @return String[] An array containing arguments corresponding to the starting point of the
-         *     query.
-         */
         public String[] toArgs() {
             return new String[] {FROMMEMBER_VALKEY_API, member};
         }
@@ -68,12 +56,6 @@ public final class GeoSearchOrigin {
     public static class MemberOriginBinary implements SearchOrigin {
         private final GlideString member;
 
-        /**
-         * Converts GeoSearchOrigin into a String[].
-         *
-         * @return String[] An array containing arguments corresponding to the starting point of the
-         *     query.
-         */
         public String[] toArgs() {
             return new String[] {FROMMEMBER_VALKEY_API, member.toString()};
         }

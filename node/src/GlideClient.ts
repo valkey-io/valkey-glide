@@ -12,6 +12,8 @@ import {
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
     SortOptions,
@@ -21,6 +23,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -28,6 +31,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createInfo,
     createLolwut,
@@ -376,6 +380,48 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2");
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { replace: true });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: string,
+        destination: string,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, options),
+        );
+    }
+
+    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -459,6 +505,41 @@ export class GlideClient extends BaseClient {
      */
     public functionFlush(mode?: FlushMode): Promise<string> {
         return this.createWritePromise(createFunctionFlush(mode));
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+    ): Promise<FunctionListResponse> {
+        return this.createWritePromise(createFunctionList(options));
     }
 
     /**

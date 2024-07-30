@@ -12,6 +12,8 @@ import {
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
     SortClusterOptions,
@@ -21,6 +23,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -30,6 +33,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createInfo,
     createLolwut,
@@ -640,6 +644,37 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2", true);
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: string,
+        destination: string,
+        replace?: boolean,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, { replace: replace }),
+        );
+    }
+
+    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -807,6 +842,47 @@ export class GlideClusterClient extends BaseClient {
     public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
         return this.createWritePromise(
             createFunctionFlush(mode),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to a random route.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionListResponse>> {
+        return this.createWritePromise(
+            createFunctionList(options),
             toProtobufRoute(route),
         );
     }

@@ -18,6 +18,7 @@ import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    checkFunctionListResponse,
     checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
@@ -366,6 +367,96 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy with DB test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const source = `{key}-${uuidv4()}`;
+            const destination = `{key}-${uuidv4()}`;
+            const value1 = uuidv4();
+            const value2 = uuidv4();
+            const index0 = 0;
+            const index1 = 1;
+            const index2 = 2;
+
+            // neither key exists
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value1);
+
+            // new value for source key
+            expect(await client.select(index0)).toEqual("OK");
+            expect(await client.set(source, value2)).toEqual("OK");
+
+            // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index2,
+                    replace: false,
+                }),
+            ).toEqual(true);
+
+            // new value only gets copied to DB 2
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.select(index2)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value2);
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            expect(await client.select(index0)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            checkSimple(await client.get(destination)).toEqual(value2);
+
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(index1);
+            transaction.set(source, value1);
+            transaction.copy(source, destination, {
+                destinationDB: index1,
+                replace: true,
+            });
+            transaction.get(destination);
+            const results = await client.exec(transaction);
+
+            checkSimple(results).toEqual(["OK", "OK", true, value1]);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function load test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
@@ -382,16 +473,7 @@ describe("GlideClient", () => {
                     new Map([[funcName, "return args[1]"]]),
                     true,
                 );
-                // TODO use commands instead of customCommand once implemented
-                // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
@@ -402,7 +484,23 @@ describe("GlideClient", () => {
                     await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
-                // TODO verify with FUNCTION LIST
+                let functionList = await client.functionList({
+                    libNamePattern: libName,
+                });
+                let expectedDescription = new Map<string, string | null>([
+                    [funcName, null],
+                ]);
+                let expectedFlags = new Map<string, string[]>([
+                    [funcName, ["no-writes"]],
+                ]);
+
+                checkFunctionListResponse(
+                    functionList,
+                    libName,
+                    expectedDescription,
+                    expectedFlags,
+                );
+
                 // re-load library without replace
 
                 await expect(client.functionLoad(code)).rejects.toThrow(
@@ -426,6 +524,24 @@ describe("GlideClient", () => {
                 );
                 checkSimple(await client.functionLoad(newCode, true)).toEqual(
                     libName,
+                );
+
+                functionList = await client.functionList({ withCode: true });
+                expectedDescription = new Map<string, string | null>([
+                    [funcName, null],
+                    [func2Name, null],
+                ]);
+                expectedFlags = new Map<string, string[]>([
+                    [funcName, ["no-writes"]],
+                    [func2Name, ["no-writes"]],
+                ]);
+
+                checkFunctionListResponse(
+                    functionList,
+                    libName,
+                    expectedDescription,
+                    expectedFlags,
+                    newCode,
                 );
 
                 checkSimple(
@@ -459,16 +575,8 @@ describe("GlideClient", () => {
                     true,
                 );
 
-                // TODO use commands instead of customCommand once implemented
                 // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
@@ -480,16 +588,8 @@ describe("GlideClient", () => {
                     "OK",
                 );
 
-                // TODO use commands instead of customCommand once implemented
                 // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
@@ -517,32 +617,16 @@ describe("GlideClient", () => {
                     new Map([[funcName, "return args[1]"]]),
                     true,
                 );
-                // TODO use commands instead of customCommand once implemented
                 // verify function does not yet exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                expect(await client.functionList()).toEqual([]);
 
                 checkSimple(await client.functionLoad(code)).toEqual(libName);
 
                 // Delete the function
                 expect(await client.functionDelete(libName)).toEqual("OK");
 
-                // TODO use commands instead of customCommand once implemented
-                // verify function does not exist
-                expect(
-                    await client.customCommand([
-                        "FUNCTION",
-                        "LIST",
-                        "LIBRARYNAME",
-                        libName,
-                    ]),
-                ).toEqual([]);
+                // verify function does not yet exist
+                expect(await client.functionList()).toEqual([]);
 
                 // deleting a non-existing library
                 await expect(client.functionDelete(libName)).rejects.toThrow(
