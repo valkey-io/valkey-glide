@@ -4,6 +4,7 @@ package glide.api.models.configuration;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.ToString;
 
 /**
  * Represents the address and port of a node in the cluster or in standalone installation.
@@ -17,6 +18,7 @@ import lombok.NonNull;
  */
 @Getter
 @Builder
+@ToString
 public class NodeAddress {
     public static final String DEFAULT_HOST = "localhost";
     public static final Integer DEFAULT_PORT = 6379;
