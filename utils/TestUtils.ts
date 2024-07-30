@@ -40,21 +40,26 @@ export class RedisCluster {
     private clusterFolder: string | undefined;
     private version: string;
 
-    private constructor(addresses: [string, number][], clusterFolder?: string) {
+    private constructor(
+        version: string,
+        addresses: [string, number][],
+        clusterFolder?: string
+    ) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
-        this.version = RedisCluster.detectVersion();
+        this.version = version;
     }
 
-    private static detectVersion(): string {
-        exec(`redis-server -v`, (error, stdout) => {
-            if (error) {
-                throw error;
-            } else {
-                return stdout.split("v=")[1].split(" ")[0];
-            }
-        });
-        return "0.0.0"; // unreachable;
+    private static async detectVersion(): Promise<string> {
+        return new Promise<string>((resolve, reject) =>
+            exec(`redis-server -v`, (error, stdout) => {
+                if (error) {
+                    reject(error);
+                } else {
+                    resolve(stdout.split("v=")[1].split(" ")[0]);
+                }
+            })
+        );
     }
 
     public static createCluster(
@@ -93,17 +98,25 @@ export class RedisCluster {
                     } else {
                         const { clusterFolder, addresses: ports } =
                             parseOutput(stdout);
-                        resolve(new RedisCluster(ports, clusterFolder));
+
+                        resolve(
+                            RedisCluster.detectVersion().then(
+                                (ver) =>
+                                    new RedisCluster(ver, ports, clusterFolder)
+                            )
+                        );
                     }
                 }
             );
         });
     }
 
-    public static initFromExistingCluster(
+    public static async initFromExistingCluster(
         addresses: [string, number][]
-    ): RedisCluster {
-        return new RedisCluster(addresses, "");
+    ): Promise<RedisCluster> {
+        return RedisCluster.detectVersion().then(
+            (ver) => new RedisCluster(ver, addresses, "")
+        );
     }
 
     public ports(): number[] {
@@ -119,7 +132,7 @@ export class RedisCluster {
     }
 
     public checkIfServerVersionLessThan(minVersion: string): boolean {
-        return lt(minVersion, this.version);
+        return lt(this.version, minVersion);
     }
 
     public async close() {
