@@ -1,6 +1,5 @@
 plugins {
-    // Apply the application plugin to add support for building a CLI application in Java.
-    id 'application'
+    id "java"
     id "com.google.osdetector" version "1.7.3"
 }
 
@@ -11,10 +10,19 @@ repositories {
 }
 
 dependencies {
-    implementation "io.valkey:valkey-glide:1.0.1:${osdetector.classifier}"
+    implementation "io.valkey:valkey-glide:1.+:${osdetector.classifier}"
 }
 
-application {
-    // Define the main class for the application.
-    mainClass = 'glide.examples.ExamplesApp'
+task runStandalone(type: JavaExec) {
+    group = 'application'
+    description = 'Run the standalone example'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'glide.examples.StandaloneExample'
+}
+
+task runCluster(type: JavaExec) {
+    group = 'application'
+    description = 'Run the cluster example'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'glide.examples.ClusterExample'
 }
