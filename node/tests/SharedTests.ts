@@ -2239,7 +2239,7 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
-    it.only.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `streams trim options test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
