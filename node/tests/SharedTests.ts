@@ -5702,7 +5702,7 @@ export function runBaseTests<Context>(config: {
                 const randmember = await client.zrandmember(key1);
 
                 if (randmember !== null) {
-                    checkSimple(randmember in elements).toEqual(true);
+                    expect(elements.includes(randmember)).toEqual(true);
                 }
 
                 // non existing key should return null
