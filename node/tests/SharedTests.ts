@@ -809,7 +809,7 @@ export function runBaseTests<Context>(config: {
                 const overflowGet = new BitFieldGet(u2, offset1);
 
                 // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
-                checkSimple(await client.set(key1, foobar)).toEqual("OK");
+                expect(await client.set(key1, foobar)).toEqual("OK");
 
                 // SET tests
                 expect(
@@ -966,7 +966,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
-                checkSimple(await client.set(key, foobar)).toEqual("OK");
+                expect(await client.set(key, foobar)).toEqual("OK");
                 expect(
                     await client.bitfieldReadOnly(key, [
                         // Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
