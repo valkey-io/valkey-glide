@@ -48,7 +48,7 @@ describe("GlideClient", () => {
             parseCommandLineArgs()["standalone-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? RedisCluster.initFromExistingCluster(
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
               )
             : await RedisCluster.createCluster(false, 1, 1);

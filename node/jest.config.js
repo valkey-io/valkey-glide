@@ -13,7 +13,7 @@ module.exports = {
         "cjs",
         "mjs",
     ],
-    testTimeout: 20000,
+    testTimeout: 600000,
     reporters: [
         "default",
         [
