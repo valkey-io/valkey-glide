@@ -354,9 +354,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/msetnx/ for more details.
      *
-     * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
-     * @returns `true` if all keys were set. `false` if no key was set.
+     * Command Response - `true` if all keys were set. `false` if no key was set.
      */
     public msetnx(keyValueMap: Record<string, string>): T {
         return this.addAndReturn(createMSetNX(keyValueMap));
