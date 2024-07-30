@@ -4,6 +4,13 @@
 
 import {
     AggregationType,
+    BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSubCommands,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
@@ -41,6 +48,7 @@ import {
     createBRPop,
     createBZMPop,
     createBitCount,
+    createBitField,
     createBitOp,
     createBitPos,
     createClientGetName,
@@ -524,6 +532,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         indexType?: BitmapIndexType,
     ): T {
         return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
+    }
+
+    /**
+     * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+     * `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
+     *      any of the following:
+     *
+     * - {@link BitFieldGet}
+     * - {@link BitFieldSet}
+     * - {@link BitFieldIncrBy}
+     * - {@link BitFieldOverflow}
+     *
+     * Command Response - An array of results from the executed subcommands:
+     *
+     * - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
+     *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
+     *   does not contribute a value to the array response.
+     */
+    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+        return this.addAndReturn(createBitField(key, subcommands));
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
+     *
+     * Command Response - An array of results from the {@link BitFieldGet} subcommands.
+     *
+     * since Valkey version 6.0.0.
+     */
+    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+        return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
     /** Reads the configuration parameters of a running Redis server.

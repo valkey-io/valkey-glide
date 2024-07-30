@@ -495,6 +495,300 @@ export function createSetBit(
 }
 
 /**
+ * Represents a signed or unsigned argument encoding for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ */
+export interface BitEncoding {
+    /**
+     * Returns the encoding as a string argument to be used in the {@link BaseClient.bitfield|bitfield} or
+     * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+     *
+     * @returns The encoding as a string argument.
+     */
+    toArg(): string;
+}
+
+/**
+ * Represents a signed argument encoding.
+ */
+export class SignedEncoding implements BitEncoding {
+    private static readonly SIGNED_ENCODING_PREFIX = "i";
+    private readonly encoding: string;
+
+    /**
+     * Creates an instance of SignedEncoding.
+     *
+     * @param encodingLength - The bit size of the encoding. Must be less than 65 bits long.
+     */
+    constructor(encodingLength: number) {
+        this.encoding = `${SignedEncoding.SIGNED_ENCODING_PREFIX}${encodingLength.toString()}`;
+    }
+
+    public toArg(): string {
+        return this.encoding;
+    }
+}
+
+/**
+ * Represents an unsigned argument encoding.
+ */
+export class UnsignedEncoding implements BitEncoding {
+    private static readonly UNSIGNED_ENCODING_PREFIX = "u";
+    private readonly encoding: string;
+
+    /**
+     * Creates an instance of UnsignedEncoding.
+     *
+     * @param encodingLength - The bit size of the encoding. Must be less than 64 bits long.
+     */
+    constructor(encodingLength: number) {
+        this.encoding = `${UnsignedEncoding.UNSIGNED_ENCODING_PREFIX}${encodingLength.toString()}`;
+    }
+
+    public toArg(): string {
+        return this.encoding;
+    }
+}
+
+/**
+ * Represents an offset for an array of bits for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ */
+export interface BitFieldOffset {
+    /**
+     * Returns the offset as a string argument to be used in the {@link BaseClient.bitfield|bitfield} or
+     * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+     *
+     * @returns The offset as a string argument.
+     */
+    toArg(): string;
+}
+
+/**
+ * Represents an offset in an array of bits for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ *
+ * For example, if we have the binary `01101001` with offset of 1 for an unsigned encoding of size 4, then the value
+ * is 13 from `0(1101)001`.
+ */
+export class BitOffset implements BitFieldOffset {
+    private readonly offset: string;
+
+    /**
+     * Creates an instance of BitOffset.
+     *
+     * @param offset - The bit index offset in the array of bits. Must be greater than or equal to 0.
+     */
+    constructor(offset: number) {
+        this.offset = offset.toString();
+    }
+
+    public toArg(): string {
+        return this.offset;
+    }
+}
+
+/**
+ * Represents an offset in an array of bits for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands. The bit offset index is calculated as the numerical
+ * value of the offset multiplied by the encoding value.
+ *
+ * For example, if we have the binary 01101001 with offset multiplier of 1 for an unsigned encoding of size 4, then the
+ * value is 9 from `0110(1001)`.
+ */
+export class BitOffsetMultiplier implements BitFieldOffset {
+    private static readonly OFFSET_MULTIPLIER_PREFIX = "#";
+    private readonly offset: string;
+
+    /**
+     * Creates an instance of BitOffsetMultiplier.
+     *
+     * @param offset - The offset in the array of bits, which will be multiplied by the encoding value to get the final
+     *      bit index offset.
+     */
+    constructor(offset: number) {
+        this.offset = `${BitOffsetMultiplier.OFFSET_MULTIPLIER_PREFIX}${offset.toString()}`;
+    }
+
+    public toArg(): string {
+        return this.offset;
+    }
+}
+
+/**
+ * Represents subcommands for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ */
+export interface BitFieldSubCommands {
+    /**
+     * Returns the subcommand as a list of string arguments to be used in the {@link BaseClient.bitfield|bitfield} or
+     * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+     *
+     * @returns The subcommand as a list of string arguments.
+     */
+    toArgs(): string[];
+}
+
+/**
+ * Represents the "GET" subcommand for getting a value in the binary representation of the string stored in `key`.
+ */
+export class BitFieldGet implements BitFieldSubCommands {
+    private static readonly GET_COMMAND_STRING = "GET";
+    private readonly encoding: BitEncoding;
+    private readonly offset: BitFieldOffset;
+
+    /**
+     * Creates an instance of BitFieldGet.
+     *
+     * @param encoding - The bit encoding for the subcommand.
+     * @param offset - The offset in the array of bits from which to get the value.
+     */
+    constructor(encoding: BitEncoding, offset: BitFieldOffset) {
+        this.encoding = encoding;
+        this.offset = offset;
+    }
+
+    toArgs(): string[] {
+        return [
+            BitFieldGet.GET_COMMAND_STRING,
+            this.encoding.toArg(),
+            this.offset.toArg(),
+        ];
+    }
+}
+
+/**
+ * Represents the "SET" subcommand for setting bits in the binary representation of the string stored in `key`.
+ */
+export class BitFieldSet implements BitFieldSubCommands {
+    private static readonly SET_COMMAND_STRING = "SET";
+    private readonly encoding: BitEncoding;
+    private readonly offset: BitFieldOffset;
+    private readonly value: number;
+
+    /**
+     * Creates an instance of BitFieldSet
+     *
+     * @param encoding - The bit encoding for the subcommand.
+     * @param offset - The offset in the array of bits where the value will be set.
+     * @param value - The value to set the bits in the binary value to.
+     */
+    constructor(encoding: BitEncoding, offset: BitFieldOffset, value: number) {
+        this.encoding = encoding;
+        this.offset = offset;
+        this.value = value;
+    }
+
+    toArgs(): string[] {
+        return [
+            BitFieldSet.SET_COMMAND_STRING,
+            this.encoding.toArg(),
+            this.offset.toArg(),
+            this.value.toString(),
+        ];
+    }
+}
+
+/**
+ * Represents the "INCRBY" subcommand for increasing or decreasing bits in the binary representation of the string
+ * stored in `key`.
+ */
+export class BitFieldIncrBy implements BitFieldSubCommands {
+    private static readonly INCRBY_COMMAND_STRING = "INCRBY";
+    private readonly encoding: BitEncoding;
+    private readonly offset: BitFieldOffset;
+    private readonly increment: number;
+
+    /**
+     * Creates an instance of BitFieldIncrBy
+     *
+     * @param encoding - The bit encoding for the subcommand.
+     * @param offset - The offset in the array of bits where the value will be incremented.
+     * @param increment - The value to increment the bits in the binary value by.
+     */
+    constructor(
+        encoding: BitEncoding,
+        offset: BitFieldOffset,
+        increment: number,
+    ) {
+        this.encoding = encoding;
+        this.offset = offset;
+        this.increment = increment;
+    }
+
+    toArgs(): string[] {
+        return [
+            BitFieldIncrBy.INCRBY_COMMAND_STRING,
+            this.encoding.toArg(),
+            this.offset.toArg(),
+            this.increment.toString(),
+        ];
+    }
+}
+
+/**
+ * Enumeration specifying bit overflow controls for the {@link BaseClient.bitfield|bitfield} command.
+ */
+export enum BitOverflowControl {
+    /**
+     * Performs modulo when overflows occur with unsigned encoding. When overflows occur with signed encoding, the value
+     * restarts at the most negative value. When underflows occur with signed encoding, the value restarts at the most
+     * positive value.
+     */
+    WRAP = "WRAP",
+    /**
+     * Underflows remain set to the minimum value, and overflows remain set to the maximum value.
+     */
+    SAT = "SAT",
+    /**
+     * Returns `None` when overflows occur.
+     */
+    FAIL = "FAIL",
+}
+
+/**
+ * Represents the "OVERFLOW" subcommand that determines the result of the "SET" or "INCRBY"
+ * {@link BaseClient.bitfield|bitfield} subcommands when an underflow or overflow occurs.
+ */
+export class BitFieldOverflow implements BitFieldSubCommands {
+    private static readonly OVERFLOW_COMMAND_STRING = "OVERFLOW";
+    private readonly overflowControl: BitOverflowControl;
+
+    /**
+     * Creates an instance of BitFieldOverflow.
+     *
+     * @param overflowControl - The desired overflow behavior.
+     */
+    constructor(overflowControl: BitOverflowControl) {
+        this.overflowControl = overflowControl;
+    }
+
+    toArgs(): string[] {
+        return [BitFieldOverflow.OVERFLOW_COMMAND_STRING, this.overflowControl];
+    }
+}
+
+/**
+ * @internal
+ */
+export function createBitField(
+    key: string,
+    subcommands: BitFieldSubCommands[],
+    readOnly: boolean = false,
+): command_request.Command {
+    const requestType = readOnly
+        ? RequestType.BitFieldReadOnly
+        : RequestType.BitField;
+    let args: string[] = [key];
+
+    for (const subcommand of subcommands) {
+        args = args.concat(subcommand.toArgs());
+    }
+
+    return createCommand(requestType, args);
+}
+
+/**
  * @internal
  */
 export function createHDel(

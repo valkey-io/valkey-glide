@@ -5779,7 +5779,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.set("my_key", "A")  # "A" has binary value 01000001
             >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
-                [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
+                [2]  # The value at offset 1 with an unsigned encoding of 2 is 2.
 
         Since: Valkey version 6.0.0.
         """
