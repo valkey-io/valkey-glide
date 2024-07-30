@@ -7,6 +7,7 @@
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added BITPOS command ([#1998](https://github.com/valkey-io/valkey-glide/pull/1998))
+* Node: Added BITFIELD and BITFIELD_RO commands ([#2026](https://github.com/valkey-io/valkey-glide/pull/2026))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
 * Node: Added BITOP command ([#2012](https://github.com/valkey-io/valkey-glide/pull/2012))
