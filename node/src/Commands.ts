@@ -1503,20 +1503,20 @@ export function createZMScore(
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
-/**
- * Defines where to insert new elements into a list.
- */
 export enum InfScoreBoundary {
     /**
      * Positive infinity bound for sorted set.
      */
-    PositiveInfinity = "positiveInfinity",
+    PositiveInfinity = "+",
     /**
      * Negative infinity bound for sorted set.
      */
-    NegativeInfinity = "negativeInfinity",
+    NegativeInfinity = "-",
 }
 
+/**
+ * Defines where to insert new elements into a list.
+ */
 export type ScoreBoundary<T> =
     /**
      *  Represents an lower/upper boundary in a sorted set.
@@ -1602,11 +1602,11 @@ function getScoreBoundaryArg(
     isLex: boolean = false,
 ): string {
     if (score == InfScoreBoundary.PositiveInfinity) {
-        return isLex ? "+" : "+inf";
+        return InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf");
     }
 
     if (score == InfScoreBoundary.NegativeInfinity) {
-        return isLex ? "-" : "-inf";
+        return InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf");
     }
 
     if (score.isInclusive == false) {

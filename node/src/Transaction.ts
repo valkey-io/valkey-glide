@@ -1798,8 +1798,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/zlexcount/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
-     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
      *
      * Command Response - The number of members in the specified lex range.
      * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.

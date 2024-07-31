@@ -3313,7 +3313,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
-     * console.log(result); // Output: 1 - Indicates that there is one member with a lex scores between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
+     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
      * ```
      */
     public async zlexcount(
