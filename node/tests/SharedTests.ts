@@ -45,10 +45,8 @@ import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     Client,
     GetAndSetRandomValue,
-    checkSimple,
     compareMaps,
     getFirstResult,
-    intoString,
 } from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
@@ -284,12 +282,21 @@ export function runBaseTests<Context>(config: {
                 /// we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
                 /// after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
                 await client.set("foo", "bar");
-                const oldResult = await client.info([InfoOptions.Commandstats]);
-                const oldResultAsString = intoString(oldResult);
-                expect(oldResultAsString).toContain("cmdstat_set");
+                const oldResult =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
+                expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
-                const result = await client.info([InfoOptions.Commandstats]);
+                const result =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -338,14 +345,14 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.msetnx(keyValueMap1)).toEqual(true);
 
-                checkSimple(
-                    await client.mget([key1, key2, nonExistingKey]),
-                ).toEqual([value, value, null]);
+                expect(await client.mget([key1, key2, nonExistingKey])).toEqual(
+                    [value, value, null],
+                );
 
                 expect(await client.msetnx(keyValueMap2)).toEqual(false);
 
                 expect(await client.get(key3)).toEqual(null);
-                checkSimple(await client.get(key2)).toEqual(value);
+                expect(await client.get(key2)).toEqual(value);
 
                 // empty map and RequestError is thrown
                 const emptyMap = {};
@@ -1694,7 +1701,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
 
                 // Move from LEFT to LEFT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key1,
                         key2,
@@ -1705,7 +1712,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("1");
 
                 // Move from LEFT to RIGHT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key1,
                         key2,
@@ -1715,16 +1722,16 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                     "2",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+                expect(await client.lrange(key1, 0, -1)).toEqual([]);
 
                 // Move from RIGHT to LEFT non-existing destination with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key2,
                         key1,
@@ -1734,15 +1741,15 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual(["2"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2"]);
 
                 // Move from RIGHT to RIGHT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key2,
                         key1,
@@ -1752,14 +1759,8 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("4");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
-                    "1",
-                    "3",
-                ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
-                    "2",
-                    "4",
-                ]);
+                expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
                 // Non-existing source key with blocking
                 expect(
@@ -1774,7 +1775,7 @@ export function runBaseTests<Context>(config: {
 
                 // Non-list source key with blocking
                 const key3 = "{key}-3" + uuidv4();
-                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                expect(await client.set(key3, "value")).toEqual("OK");
                 await expect(
                     client.blmove(
                         key3,
