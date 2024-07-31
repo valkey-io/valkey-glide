@@ -186,7 +186,6 @@ function initialize() {
         GeoSearchShape,
         GeoSearchResultOptions,
         SortOrder,
-        GeoUnit,
         GeospatialData,
         GlideClient,
         GlideClusterClient,
