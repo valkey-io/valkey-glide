@@ -218,6 +218,11 @@ pub enum RequestType {
     Scan = 206,
     Wait = 208,
     XClaim = 209,
+    PubSubChannels = 210,
+    PubSubNumPat = 211,
+    PubSubNumSub = 212,
+    PubSubSChannels = 213,
+    PubSubSNumSub = 214,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -439,6 +444,11 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Wait => RequestType::Wait,
             ProtobufRequestType::XClaim => RequestType::XClaim,
             ProtobufRequestType::Scan => RequestType::Scan,
+            ProtobufRequestType::PubSubChannels => RequestType::PubSubChannels,
+            ProtobufRequestType::PubSubNumSub => RequestType::PubSubNumSub,
+            ProtobufRequestType::PubSubNumPat => RequestType::PubSubNumPat,
+            ProtobufRequestType::PubSubSChannels => RequestType::PubSubSChannels,
+            ProtobufRequestType::PubSubSNumSub => RequestType::PubSubSNumSub,
         }
     }
 }
@@ -658,6 +668,11 @@ impl RequestType {
             RequestType::Wait => Some(cmd("WAIT")),
             RequestType::XClaim => Some(cmd("XCLAIM")),
             RequestType::Scan => Some(cmd("SCAN")),
+            RequestType::PubSubChannels => Some(get_two_word_command("PUBSUB", "CHANNELS")),
+            RequestType::PubSubNumSub => Some(get_two_word_command("PUBSUB", "NUMSUB")),
+            RequestType::PubSubNumPat => Some(get_two_word_command("PUBSUB", "NUMPAT")),
+            RequestType::PubSubSChannels => Some(get_two_word_command("PUBSUB", "SHARDCHANNELS")),
+            RequestType::PubSubSNumSub => Some(get_two_word_command("PUBSUB", "SHARDNUMSUB")),
         }
     }
 }

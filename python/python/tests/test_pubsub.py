@@ -13,7 +13,7 @@ from glide.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
-from glide.constants import OK
+from glide.constants import OK, TEncodable
 from glide.exceptions import ConfigurationError
 from glide.glide_client import BaseClient, GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
@@ -2257,3 +2257,492 @@ class TestPubSub:
 
         with pytest.raises(ConfigurationError):
             await create_two_clients_with_pubsub(request, cluster_mode, pub_sub_exact)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_channels(self, request, cluster_mode: bool):
+        """
+        Tests the pubsub_channels command functionality.
+
+        This test verifies that the pubsub_channels command correctly returns
+        the active channels matching a specified pattern.
+        """
+        client1, client2, client = None, None, None
+        try:
+            channel1 = "test_channel1"
+            channel2 = "test_channel2"
+            channel3 = "some_channel3"
+            pattern = "test_*"
+
+            client = await create_client(request, cluster_mode)
+            # Assert no channels exists yet
+            assert await client.pubsub_channels() == []
+
+            pub_sub = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        channel1,
+                        channel2,
+                        channel3,
+                    }
+                },
+                {
+                    GlideClientConfiguration.PubSubChannelModes.Exact: {
+                        channel1,
+                        channel2,
+                        channel3,
+                    }
+                },
+            )
+
+            channel1_bytes = channel1.encode()
+            channel2_bytes = channel2.encode()
+            channel3_bytes = channel3.encode()
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub
+            )
+
+            # Test pubsub_channels without pattern
+            channels = await client2.pubsub_channels()
+            assert set(channels) == {channel1_bytes, channel2_bytes, channel3_bytes}
+
+            # Test pubsub_channels with pattern
+            channels_with_pattern = await client2.pubsub_channels(pattern)
+            assert set(channels_with_pattern) == {channel1_bytes, channel2_bytes}
+
+            # Test with non-matching pattern
+            non_matching_channels = await client2.pubsub_channels("non_matching_*")
+            assert len(non_matching_channels) == 0
+
+        finally:
+            await client_cleanup(client1, pub_sub if cluster_mode else None)
+            await client_cleanup(client2, None)
+            await client_cleanup(client, None)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_numpat(self, request, cluster_mode: bool):
+        """
+        Tests the pubsub_numpat command functionality.
+
+        This test verifies that the pubsub_numpat command correctly returns
+        the number of unique patterns that are subscribed to by clients.
+        """
+        client1, client2, client = None, None, None
+        try:
+            pattern1 = "test_*"
+            pattern2 = "another_*"
+
+            # Create a client and check initial number of patterns
+            client = await create_client(request, cluster_mode)
+            assert await client.pubsub_numpat() == 0
+
+            # Set up subscriptions with patterns
+            pub_sub = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
+                        pattern1,
+                        pattern2,
+                    }
+                },
+                {
+                    GlideClientConfiguration.PubSubChannelModes.Pattern: {
+                        pattern1,
+                        pattern2,
+                    }
+                },
+            )
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub
+            )
+
+            # Test pubsub_numpat
+            num_patterns = await client2.pubsub_numpat()
+            assert num_patterns == 2
+
+        finally:
+            await client_cleanup(client1, pub_sub if cluster_mode else None)
+            await client_cleanup(client2, None)
+            await client_cleanup(client, None)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_numsub(self, request, cluster_mode: bool):
+        """
+        Tests the pubsub_numsub command functionality.
+
+        This test verifies that the pubsub_numsub command correctly returns
+        the number of subscribers for specified channels.
+        """
+        client1, client2, client3, client4, client = None, None, None, None, None
+        try:
+            channel1 = "test_channel1"
+            channel2 = "test_channel2"
+            channel3 = "test_channel3"
+            channel4 = "test_channel4"
+
+            # Set up subscriptions
+            pub_sub1 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        channel1,
+                        channel2,
+                        channel3,
+                    }
+                },
+                {
+                    GlideClientConfiguration.PubSubChannelModes.Exact: {
+                        channel1,
+                        channel2,
+                        channel3,
+                    }
+                },
+            )
+            pub_sub2 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        channel2,
+                        channel3,
+                    }
+                },
+                {
+                    GlideClientConfiguration.PubSubChannelModes.Exact: {
+                        channel2,
+                        channel3,
+                    }
+                },
+            )
+            pub_sub3 = create_pubsub_subscription(
+                cluster_mode,
+                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel3}},
+                {GlideClientConfiguration.PubSubChannelModes.Exact: {channel3}},
+            )
+
+            channel1_bytes = channel1.encode()
+            channel2_bytes = channel2.encode()
+            channel3_bytes = channel3.encode()
+            channel4_bytes = channel4.encode()
+
+            # Create a client and check initial subscribers
+            client = await create_client(request, cluster_mode)
+            assert await client.pubsub_numsub([channel1, channel2, channel3]) == {
+                channel1_bytes: 0,
+                channel2_bytes: 0,
+                channel3_bytes: 0,
+            }
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub1, pub_sub2
+            )
+            client3, client4 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub3
+            )
+
+            # Test pubsub_numsub
+            subscribers = await client2.pubsub_numsub(
+                [channel1_bytes, channel2_bytes, channel3_bytes, channel4_bytes]
+            )
+            assert subscribers == {
+                channel1_bytes: 1,
+                channel2_bytes: 2,
+                channel3_bytes: 3,
+                channel4_bytes: 0,
+            }
+
+            # Test pubsub_numsub with no channels
+            empty_subscribers = await client2.pubsub_numsub()
+            assert empty_subscribers == {}
+
+        finally:
+            await client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            await client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            await client_cleanup(client3, pub_sub3 if cluster_mode else None)
+            await client_cleanup(client4, None)
+            await client_cleanup(client, None)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_pubsub_shardchannels(self, request, cluster_mode: bool):
+        """
+        Tests the pubsub_shardchannels command functionality.
+
+        This test verifies that the pubsub_shardchannels command correctly returns
+        the active sharded channels matching a specified pattern.
+        """
+        client1, client2, client = None, None, None
+        try:
+            channel1 = "test_shardchannel1"
+            channel2 = "test_shardchannel2"
+            channel3 = "some_shardchannel3"
+            pattern = "test_*"
+
+            client = await create_client(request, cluster_mode)
+            assert type(client) == GlideClusterClient
+            # Assert no sharded channels exist yet
+            assert await client.pubsub_shardchannels() == []
+
+            pub_sub = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        channel1,
+                        channel2,
+                        channel3,
+                    }
+                },
+                {},  # Empty dict for non-cluster mode as sharded channels are not supported
+            )
+
+            channel1_bytes = channel1.encode()
+            channel2_bytes = channel2.encode()
+            channel3_bytes = channel3.encode()
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub
+            )
+
+            min_version = "7.0.0"
+            if await check_if_server_version_lt(client1, min_version):
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+            assert type(client2) == GlideClusterClient
+
+            # Test pubsub_shardchannels without pattern
+            channels = await client2.pubsub_shardchannels()
+            assert set(channels) == {channel1_bytes, channel2_bytes, channel3_bytes}
+
+            # Test pubsub_shardchannels with pattern
+            channels_with_pattern = await client2.pubsub_shardchannels(pattern)
+            assert set(channels_with_pattern) == {channel1_bytes, channel2_bytes}
+
+            # Test with non-matching pattern
+            assert await client2.pubsub_shardchannels("non_matching_*") == []
+
+        finally:
+            await client_cleanup(client1, pub_sub if cluster_mode else None)
+            await client_cleanup(client2, None)
+            await client_cleanup(client, None)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_pubsub_shardnumsub(self, request, cluster_mode: bool):
+        """
+        Tests the pubsub_shardnumsub command functionality.
+
+        This test verifies that the pubsub_shardnumsub command correctly returns
+        the number of subscribers for specified sharded channels.
+        """
+        client1, client2, client3, client4, client = None, None, None, None, None
+        try:
+            channel1 = "test_shardchannel1"
+            channel2 = "test_shardchannel2"
+            channel3 = "test_shardchannel3"
+            channel4 = "test_shardchannel4"
+
+            # Set up subscriptions
+            pub_sub1 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        channel1,
+                        channel2,
+                        channel3,
+                    }
+                },
+                {},
+            )
+            pub_sub2 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        channel2,
+                        channel3,
+                    }
+                },
+                {},
+            )
+            pub_sub3 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        channel3
+                    }
+                },
+                {},
+            )
+
+            channel1_bytes = channel1.encode()
+            channel2_bytes = channel2.encode()
+            channel3_bytes = channel3.encode()
+            channel4_bytes = channel4.encode()
+
+            # Create a client and check initial subscribers
+            client = await create_client(request, cluster_mode)
+            assert type(client) == GlideClusterClient
+            assert await client.pubsub_shardnumsub([channel1, channel2, channel3]) == {
+                channel1_bytes: 0,
+                channel2_bytes: 0,
+                channel3_bytes: 0,
+            }
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub1, pub_sub2
+            )
+
+            min_version = "7.0.0"
+            if await check_if_server_version_lt(client1, min_version):
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+            client3, client4 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub3
+            )
+
+            assert type(client4) == GlideClusterClient
+
+            # Test pubsub_shardnumsub
+            subscribers = await client4.pubsub_shardnumsub(
+                [channel1, channel2, channel3, channel4]
+            )
+            assert subscribers == {
+                channel1_bytes: 1,
+                channel2_bytes: 2,
+                channel3_bytes: 3,
+                channel4_bytes: 0,
+            }
+
+            # Test pubsub_shardnumsub with no channels
+            empty_subscribers = await client4.pubsub_shardnumsub()
+            assert empty_subscribers == {}
+
+        finally:
+            await client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            await client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            await client_cleanup(client3, pub_sub3 if cluster_mode else None)
+            await client_cleanup(client4, None)
+            await client_cleanup(client, None)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_pubsub_channels_and_shardchannels_separation(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Tests that pubsub_channels doesn't return sharded channels and pubsub_shardchannels
+        doesn't return regular channels.
+        """
+        client1, client2 = None, None
+        try:
+            regular_channel = "regular_channel"
+            shard_channel = "shard_channel"
+
+            pub_sub = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        regular_channel
+                    },
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        shard_channel
+                    },
+                },
+                {GlideClientConfiguration.PubSubChannelModes.Exact: {regular_channel}},
+            )
+
+            regular_channel_bytes, shard_channel_bytes = (
+                regular_channel.encode(),
+                shard_channel.encode(),
+            )
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub
+            )
+
+            min_version = "7.0.0"
+            if await check_if_server_version_lt(client1, min_version):
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+            assert type(client2) == GlideClusterClient
+            # Test pubsub_channels
+            assert await client2.pubsub_channels() == [regular_channel_bytes]
+
+            # Test pubsub_shardchannels
+            assert await client2.pubsub_shardchannels() == [shard_channel_bytes]
+
+        finally:
+            await client_cleanup(client1, pub_sub if cluster_mode else None)
+            await client_cleanup(client2, None)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_pubsub_numsub_and_shardnumsub_separation(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Tests that pubsub_numsub doesn't count sharded channel subscribers and pubsub_shardnumsub
+        doesn't count regular channel subscribers.
+        """
+        client1, client2 = None, None
+        try:
+            regular_channel = "regular_channel"
+            shard_channel = "shard_channel"
+
+            pub_sub1 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        regular_channel
+                    },
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        shard_channel
+                    },
+                },
+                {},
+            )
+            pub_sub2 = create_pubsub_subscription(
+                cluster_mode,
+                {
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
+                        regular_channel
+                    },
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
+                        shard_channel
+                    },
+                },
+                {},
+            )
+
+            regular_channel_bytes: bytes = regular_channel.encode()
+            shard_channel_bytes: bytes = shard_channel.encode()
+
+            client1, client2 = await create_two_clients_with_pubsub(
+                request, cluster_mode, pub_sub1, pub_sub2
+            )
+
+            min_version = "7.0.0"
+            if await check_if_server_version_lt(client1, min_version):
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+            assert type(client2) == GlideClusterClient
+
+            # Test pubsub_numsub
+            regular_subscribers = await client2.pubsub_numsub(
+                [regular_channel_bytes, shard_channel_bytes]
+            )
+
+            assert regular_subscribers == {
+                regular_channel_bytes: 2,
+                shard_channel_bytes: 0,
+            }
+
+            # Test pubsub_shardnumsub
+            shard_subscribers = await client2.pubsub_shardnumsub(
+                [regular_channel_bytes, shard_channel_bytes]
+            )
+
+            assert shard_subscribers == {
+                regular_channel_bytes: 0,
+                shard_channel_bytes: 2,
+            }
+
+        finally:
+            await client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            await client_cleanup(client2, pub_sub2 if cluster_mode else None)

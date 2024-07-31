@@ -27,6 +27,7 @@ import {
     ListDirection,
     ProtocolVersion,
     ReturnType,
+    ReturnTypeMap,
     ScoreFilter,
     SignedEncoding,
     SortOrder,
@@ -374,12 +375,8 @@ export function checkFunctionListResponse(
                     string,
                     string | string[]
                 >;
-                const name = (
-                    functionInfo["name"] as unknown as Buffer
-                ).toString(); // not a string - suprise
-                const flags = (
-                    functionInfo["flags"] as unknown as Buffer[]
-                ).map((f) => f.toString());
+                const name = functionInfo["name"] as string;
+                const flags = functionInfo["flags"] as string[];
                 expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );
@@ -412,9 +409,23 @@ export function validateTransactionResponse(
     for (let i = 0; i < expectedResponseData.length; i++) {
         const [testName, expectedResponse] = expectedResponseData[i];
 
-        if (intoString(response?.[i]) != intoString(expectedResponse)) {
+        try {
+            expect(response?.[i]).toEqual(expectedResponse);
+        } catch (e) {
+            const expected =
+                expectedResponse instanceof Map
+                    ? JSON.stringify(Array.from(expectedResponse.entries()))
+                    : JSON.stringify(expectedResponse);
+            const actual =
+                response?.[i] instanceof Map
+                    ? JSON.stringify(
+                          Array.from(
+                              (response?.[i] as ReturnTypeMap)?.entries(),
+                          ),
+                      )
+                    : JSON.stringify(response?.[i]);
             failedChecks.push(
-                `${testName} failed, expected <${JSON.stringify(expectedResponse)}>, actual <${JSON.stringify(response?.[i])}>`,
+                `${testName} failed, expected <${expected}>, actual <${actual}>`,
             );
         }
     }
@@ -436,9 +447,9 @@ export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
     version: string,
 ): Promise<[string, ReturnType][]> {
-    const key1 = "{key}" + uuidv4();
-    const key2 = "{key}" + uuidv4();
-    const key3 = "{key}" + uuidv4();
+    const key1 = "{key}" + uuidv4(); // string
+    const key2 = "{key}" + uuidv4(); // string
+    const key3 = "{key}" + uuidv4(); // string
     const key4 = "{key}" + uuidv4();
     const key5 = "{key}" + uuidv4();
     const key6 = "{key}" + uuidv4();
@@ -636,7 +647,7 @@ export async function transactionTest(
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
-            [true, true, false],
+            [true, false, false],
         ]);
     }
 
@@ -906,11 +917,11 @@ export async function transactionTest(
     baseTransaction.zrandmember(key21);
     responseData.push(["zrandmember(key21)", "one"]);
     baseTransaction.zrandmemberWithCount(key21, 1);
-    responseData.push(["zrandmemberWithCountWithScores(key21, 1)", "one"]);
+    responseData.push(["zrandmemberWithCount(key21, 1)", ["one"]]);
     baseTransaction.zrandmemberWithCountWithScores(key21, 1);
     responseData.push([
         "zrandmemberWithCountWithScores(key21, 1)",
-        [Buffer.from("one"), 1.0],
+        [["one", 1.0]],
     ]);
 
     if (gte(version, "6.2.0")) {
@@ -1037,6 +1048,59 @@ export async function transactionTest(
             withCode: true,
         });
         responseData.push(["functionList({ libName, true})", []]);
+
+        baseTransaction
+            .mset({ [key1]: "abcd", [key2]: "bcde", [key3]: "wxyz" })
+            .lcs(key1, key2)
+            .lcs(key1, key3)
+            .lcsLen(key1, key2)
+            .lcsLen(key1, key3)
+            .lcsIdx(key1, key2)
+            .lcsIdx(key1, key2, { minMatchLen: 1 })
+            .lcsIdx(key1, key2, { withMatchLen: true })
+            .lcsIdx(key1, key2, { withMatchLen: true, minMatchLen: 1 })
+            .del([key1, key2, key3]);
+
+        responseData.push(
+            ['mset({[key1]: "abcd", [key2]: "bcde", [key3]: "wxyz"})', "OK"],
+            ["lcs(key1, key2)", "bcd"],
+            ["lcs(key1, key3)", ""],
+            ["lcsLen(key1, key2)", 3],
+            ["lcsLen(key1, key3)", 0],
+            [
+                "lcsIdx(key1, key2)",
+                {
+                    matches: [
+                        [
+                            [1, 3],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 3,
+                },
+            ],
+            [
+                "lcsIdx(key1, key2, {minMatchLen: 1})",
+                {
+                    matches: [
+                        [
+                            [1, 3],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 3,
+                },
+            ],
+            [
+                "lcsIdx(key1, key2, {withMatchLen: true})",
+                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
+            ],
+            [
+                "lcsIdx(key1, key2, {withMatchLen: true, minMatchLen: 1})",
+                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
+            ],
+            ["del([key1, key2, key3])", 3],
+        );
     }
 
     return responseData;
