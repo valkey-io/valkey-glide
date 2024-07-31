@@ -5743,16 +5743,16 @@ class CoreCommands(Protocol):
 
         Returns:
             List[Optional[int]]: An array of results from the executed subcommands:
-                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
-                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
-                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldGet` returns the value in `BitOffset` or `BitOffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `BitOffset` or `BitOffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `BitOffset` or `BitOffsetMultiplier`.
                 - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
                   underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
                   response.
 
         Examples:
             >>> await client.set("my_key", "A")  # "A" has binary value 01000001
-            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), Offset(1), 3), BitFieldGet(UnsignedEncoding(2), Offset(1))])
+            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), BitOffset(1), 3), BitFieldGet(UnsignedEncoding(2), BitOffset(1))])
                 [2, 3]  # The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
         """
         args = [key] + _create_bitfield_args(subcommands)
@@ -5779,7 +5779,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.set("my_key", "A")  # "A" has binary value 01000001
             >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
-                [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
+                [2]  # The value at offset 1 with an unsigned encoding of 2 is 2.
 
         Since: Valkey version 6.0.0.
         """

@@ -19,7 +19,6 @@ import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     checkFunctionListResponse,
-    checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -30,6 +29,7 @@ import {
     transactionTest,
     validateTransactionResponse,
 } from "./TestUtilities";
+import { ListDirection } from "..";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
 
@@ -48,7 +48,7 @@ describe("GlideClient", () => {
             parseCommandLineArgs()["standalone-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? RedisCluster.initFromExistingCluster(
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
               )
             : await RedisCluster.createCluster(false, 1, 1);
@@ -127,28 +127,60 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands returns never timeout_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                    300,
+                ),
+            );
+
+            const blmovePromise = client.blmove(
+                "source",
+                "destination",
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+                0.1,
+            );
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(resolve, 500);
+            });
+
+            try {
+                await Promise.race([blmovePromise, timeoutPromise]);
+            } finally {
+                Promise.resolve(blmovePromise);
+                client.close();
+            }
+        },
+        5000,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            checkSimple(await client.select(0)).toEqual("OK");
+            expect(await client.select(0)).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
-            checkSimple(result).toEqual("OK");
+            expect(result).toEqual("OK");
 
-            checkSimple(await client.select(1)).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
-            checkSimple(await client.flushdb()).toEqual("OK");
+            expect(await client.flushdb()).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.select(0)).toEqual("OK");
-            checkSimple(await client.get(key)).toEqual(value);
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.get(key)).toEqual(value);
 
             expect(await client.dbsize()).toBeGreaterThan(0);
-            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
         },
     );
@@ -367,6 +399,96 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy with DB test_%p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const source = `{key}-${uuidv4()}`;
+            const destination = `{key}-${uuidv4()}`;
+            const value1 = uuidv4();
+            const value2 = uuidv4();
+            const index0 = 0;
+            const index1 = 1;
+            const index2 = 2;
+
+            // neither key exists
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value1);
+
+            // new value for source key
+            expect(await client.select(index0)).toEqual("OK");
+            expect(await client.set(source, value2)).toEqual("OK");
+
+            // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: false,
+                }),
+            ).toEqual(false);
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index2,
+                    replace: false,
+                }),
+            ).toEqual(true);
+
+            // new value only gets copied to DB 2
+            expect(await client.select(index1)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value1);
+            expect(await client.select(index2)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value2);
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            expect(await client.select(index0)).toEqual("OK");
+            expect(
+                await client.copy(source, destination, {
+                    destinationDB: index1,
+                    replace: true,
+                }),
+            ).toEqual(true);
+            expect(await client.select(index1)).toEqual("OK");
+            expect(await client.get(destination)).toEqual(value2);
+
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(index1);
+            transaction.set(source, value1);
+            transaction.copy(source, destination, {
+                destinationDB: index1,
+                replace: true,
+            });
+            transaction.get(destination);
+            const results = await client.exec(transaction);
+
+            expect(results).toEqual(["OK", "OK", true, value1]);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function load test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
@@ -385,12 +507,12 @@ describe("GlideClient", () => {
                 );
                 expect(await client.functionList()).toEqual([]);
 
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
 
-                checkSimple(
+                expect(
                     await client.fcall(funcName, [], ["one", "two"]),
                 ).toEqual("one");
-                checkSimple(
+                expect(
                     await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
@@ -418,9 +540,7 @@ describe("GlideClient", () => {
                 );
 
                 // re-load library with replace
-                checkSimple(await client.functionLoad(code, true)).toEqual(
-                    libName,
-                );
+                expect(await client.functionLoad(code, true)).toEqual(libName);
 
                 // overwrite lib with new code
                 const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
@@ -432,7 +552,7 @@ describe("GlideClient", () => {
                     ]),
                     true,
                 );
-                checkSimple(await client.functionLoad(newCode, true)).toEqual(
+                expect(await client.functionLoad(newCode, true)).toEqual(
                     libName,
                 );
 
@@ -454,10 +574,10 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
-                checkSimple(
+                expect(
                     await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
-                checkSimple(
+                expect(
                     await client.fcallReadonly(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
             } finally {
@@ -488,7 +608,7 @@ describe("GlideClient", () => {
                 // verify function does not yet exist
                 expect(await client.functionList()).toEqual([]);
 
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
 
                 // Flush functions
                 expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
@@ -502,7 +622,7 @@ describe("GlideClient", () => {
                 expect(await client.functionList()).toEqual([]);
 
                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 client.close();
@@ -530,7 +650,7 @@ describe("GlideClient", () => {
                 // verify function does not yet exist
                 expect(await client.functionList()).toEqual([]);
 
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
 
                 // Delete the function
                 expect(await client.functionDelete(libName)).toEqual("OK");

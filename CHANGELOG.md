@@ -1,11 +1,16 @@
 #### Changes
+* Node: Added MSETNX command ([#2046](https://github.com/valkey-io/valkey-glide/pull/2046))
+* Node: Added BLMOVE command ([#2027](https://github.com/valkey-io/valkey-glide/pull/2027))
+* Node: Exported client configuration types ([#2023](https://github.com/valkey-io/valkey-glide/pull/2023))
 * Java, Python: Update docs for GEOSEARCH command ([#2017](https://github.com/valkey-io/valkey-glide/pull/2017))
+* Python: Update docs for BITFIELD and BITFIELD_RO commands ([#2048](https://github.com/valkey-io/valkey-glide/pull/2048))
 * Node: Added FUNCTION LIST command ([#2019](https://github.com/valkey-io/valkey-glide/pull/2019))
 * Node: Added GEOSEARCH command ([#2007](https://github.com/valkey-io/valkey-glide/pull/2007))
 * Node: Added LMOVE command ([#2002](https://github.com/valkey-io/valkey-glide/pull/2002))
 * Node: Added GEOPOS command ([#1991](https://github.com/valkey-io/valkey-glide/pull/1991))
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added BITPOS command ([#1998](https://github.com/valkey-io/valkey-glide/pull/1998))
+* Node: Added BITFIELD and BITFIELD_RO commands ([#2026](https://github.com/valkey-io/valkey-glide/pull/2026))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
 * Node: Added BITOP command ([#2012](https://github.com/valkey-io/valkey-glide/pull/2012))
@@ -28,6 +33,7 @@
 * Node: Added FUNCTION DELETE command ([#1990](https://github.com/valkey-io/valkey-glide/pull/1990))
 * Node: Added FUNCTION FLUSH command ([#1984](https://github.com/valkey-io/valkey-glide/pull/1984))
 * Node: Added FCALL and FCALL_RO commands ([#2011](https://github.com/valkey-io/valkey-glide/pull/2011))
+* Node: Added COPY command ([#2024](https://github.com/valkey-io/valkey-glide/pull/2024))
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
@@ -135,6 +141,7 @@
 * Node: Added GeoDist command ([#1988](https://github.com/valkey-io/valkey-glide/pull/1988))
 * Node: Added GeoHash command ([#1997](https://github.com/valkey-io/valkey-glide/pull/1997))
 * Node: Added HStrlen command ([#2020](https://github.com/valkey-io/valkey-glide/pull/2020))
+* Node: Added ZRandMember command ([#2013](https://github.com/valkey-io/valkey-glide/pull/2013))
 
 #### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/valkey-io/valkey-glide/pull/1494))

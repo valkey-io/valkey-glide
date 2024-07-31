@@ -4,6 +4,13 @@
 
 import {
     AggregationType,
+    BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSubCommands,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
@@ -17,8 +24,8 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
-    GeospatialData,
     GeoUnit,
+    GeospatialData,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -41,6 +48,7 @@ import {
     createBRPop,
     createBZMPop,
     createBitCount,
+    createBitField,
     createBitOp,
     createBitPos,
     createClientGetName,
@@ -49,6 +57,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createDecr,
@@ -94,6 +103,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -105,6 +115,7 @@ import {
     createLolwut,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -154,12 +165,14 @@ import {
     createZDiff,
     createZDiffStore,
     createZDiffWithScores,
+    createZIncrBy,
     createZInterCard,
     createZInterstore,
     createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
@@ -169,7 +182,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    createZIncrBy,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -347,6 +359,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createMSet(keyValueMap));
     }
 
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * Command Response - `true` if all keys were set. `false` if no key was set.
+     */
+    public msetnx(keyValueMap: Record<string, string>): T {
+        return this.addAndReturn(createMSetNX(keyValueMap));
+    }
+
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
      * See https://valkey.io/commands/incr/ for details.
      *
@@ -522,6 +547,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         indexType?: BitmapIndexType,
     ): T {
         return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
+    }
+
+    /**
+     * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+     * `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
+     *      any of the following:
+     *
+     * - {@link BitFieldGet}
+     * - {@link BitFieldSet}
+     * - {@link BitFieldIncrBy}
+     * - {@link BitFieldOverflow}
+     *
+     * Command Response - An array of results from the executed subcommands:
+     *
+     * - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
+     *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
+     *   does not contribute a value to the array response.
+     */
+    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+        return this.addAndReturn(createBitField(key, subcommands));
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
+     *
+     * Command Response - An array of results from the {@link BitFieldGet} subcommands.
+     *
+     * since Valkey version 6.0.0.
+     */
+    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+        return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
     /** Reads the configuration parameters of a running Redis server.
@@ -816,6 +885,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     *
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     *
+     * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): T {
+        return this.addAndReturn(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 
@@ -1521,6 +1625,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * Command Response - A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     */
+    public zrandmember(key: string): T {
+        return this.addAndReturn(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCount(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCountWithScores(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count, true));
     }
 
     /** Returns the string representation of the type of the value stored at `key`.
@@ -2389,6 +2539,33 @@ export class Transaction extends BaseTransaction<Transaction> {
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
     }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Transaction {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
 }
 
 /**
@@ -2404,4 +2581,29 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        replace?: boolean,
+    ): ClusterTransaction {
+        return this.addAndReturn(
+            createCopy(source, destination, { replace: replace }),
+        );
+    }
 }
