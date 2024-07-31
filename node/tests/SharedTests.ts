@@ -282,11 +282,21 @@ export function runBaseTests<Context>(config: {
                 /// we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
                 /// after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
                 await client.set("foo", "bar");
-                const oldResult = await client.info([InfoOptions.Commandstats]);
+                const oldResult =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
-                const result = await client.info([InfoOptions.Commandstats]);
+                const result =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
