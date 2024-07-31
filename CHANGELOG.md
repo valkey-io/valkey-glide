@@ -28,6 +28,7 @@
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
+* Node: Added XRANGE command ([](https://github.com/valkey-io/valkey-glide/pull/))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
