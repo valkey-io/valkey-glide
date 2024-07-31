@@ -3282,7 +3282,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
-     * const result = await client.zremRangeByLex("non_existing_sorted_set", "negativeInfinity", { value: "e" });
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfScoreBoundary.NegativeInfinity, { value: "e" });
      * console.log(result); // Output: 0 - Indicates that no elements were removed.
      * ```
      */
