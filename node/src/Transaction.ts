@@ -1321,6 +1321,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/expiretime/ for details.
      *
      * @param key - The `key` to determine the expiration value of.
+     *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
     public expireTime(key: string): T {

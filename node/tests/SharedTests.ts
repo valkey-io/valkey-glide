@@ -2785,7 +2785,56 @@ export function runBaseTests<Context>(config: {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
                     return;
                 }
-                
+
+                const key1 = uuidv4();
+
+                expect(await client.set(key1, "foo")).toEqual("OK");
+                expect(await client.ttl(key1)).toEqual(-1);
+
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(await client.expiretime(key1)).toEqual(-1);
+                    expect(await client.pexpiretime(key1)).toEqual(-1);
+                }
+
+                expect(await client.expire(key1, 10)).toEqual(true);
+                expect(await client.ttl(key1)).toBeLessThanOrEqual(10);
+
+                // set command clears the timeout.
+                expect(await client.set(key1, "bar")).toEqual("OK");
+
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(await client.pexpire(key1, 10000)).toEqual(true);
+                } else {
+                    expect(
+                        await client.pexpire(
+                            key1,
+                            10000,
+                            ExpireOptions.HasNoExpiry,
+                        ),
+                    ).toEqual(true);
+                }
+
+                expect(await client.ttl(key1)).toBeLessThanOrEqual(10000);
+
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(await client.expire(key1, 15000)).toEqual(true);
+                } else {
+                    expect(
+                        await client.pexpire(
+                            key1,
+                            15000,
+                            ExpireOptions.HasNoExpiry,
+                        ),
+                    ).toEqual(false);
+                    expect(await client.expiretime(key1)).toBeGreaterThan(
+                        Math.floor(Date.now() / 1000),
+                    );
+                    expect(await client.pexpiretime(key1)).toBeGreaterThan(
+                        Date.now(),
+                    );
+                }
+
+                expect(await client.ttl(key1)).toBeLessThan(15000);
             }, protocol);
         },
         config.timeout,
