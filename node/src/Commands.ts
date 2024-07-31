@@ -1503,15 +1503,25 @@ export function createZMScore(
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
-export type ScoreBoundary<T> =
+export enum InfScoreBoundary {
     /**
      * Positive infinity bound for sorted set.
      */
-    | `positiveInfinity`
+    PositiveInfinity = "+",
     /**
      * Negative infinity bound for sorted set.
      */
-    | `negativeInfinity`
+    NegativeInfinity = "-",
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export type ScoreBoundary<T> =
+    /**
+     *  Represents an lower/upper boundary in a sorted set.
+     */
+    | InfScoreBoundary
     /**
      *  Represents a specific numeric score boundary in a sorted set.
      */
@@ -1591,10 +1601,16 @@ function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
     isLex: boolean = false,
 ): string {
-    if (score == "positiveInfinity") {
-        return isLex ? "+" : "+inf";
-    } else if (score == "negativeInfinity") {
-        return isLex ? "-" : "-inf";
+    if (score == InfScoreBoundary.PositiveInfinity) {
+        return (
+            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
+        );
+    }
+
+    if (score == InfScoreBoundary.NegativeInfinity) {
+        return (
+            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
+        );
     }
 
     if (score.isInclusive == false) {
@@ -1798,6 +1814,22 @@ export function createZRemRangeByScore(
 
 export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createZLexCount(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZLexCount, args);
 }
 
 export function createZRank(
