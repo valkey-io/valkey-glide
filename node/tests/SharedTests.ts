@@ -1796,9 +1796,6 @@ export function runBaseTests<Context>(config: {
                         0.1,
                     ),
                 ).rejects.toThrow(RequestError);
-
-                // TODO: add test case with 0 timeout (no timeout) should never time out,
-                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,
