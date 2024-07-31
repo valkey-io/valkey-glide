@@ -1602,11 +1602,15 @@ function getScoreBoundaryArg(
     isLex: boolean = false,
 ): string {
     if (score == InfScoreBoundary.PositiveInfinity) {
-        return InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf");
+        return (
+            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
+        );
     }
 
     if (score == InfScoreBoundary.NegativeInfinity) {
-        return InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf");
+        return (
+            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
+        );
     }
 
     if (score.isInclusive == false) {
