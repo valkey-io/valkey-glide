@@ -2421,13 +2421,13 @@ export class BaseClient {
     }
 
     /**
-     *  Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
-     *  To get the expiration with millisecond precision, use `pexpiretime`.
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use `pexpiretime`.
      *
-     *  See https://valkey.io/commands/expiretime/ for details.
+     * See https://valkey.io/commands/expiretime/ for details.
      *
-     *  @param key - The `key` to determine the expiration value of.
-     *  @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      *
      * @example
      * ```typescript
@@ -2503,6 +2503,32 @@ export class BaseClient {
         return this.createWritePromise(
             createPExpireAt(key, unixMilliseconds, option),
         );
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * See https://valkey.io/commands/pexpiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * @example
+     * ```typescript
+     * const result1 = client.pexpiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = client.set(myKey, "value");
+     * console.log(result2); // Output: -1 - myKey has no associate expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result3); // Output: 718614954
+     * ```
+     * since - Redis version 7.0.0.
+     */
+    public pexpiretime(key: string): Promise<number> {
+        return this.createWritePromise(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
