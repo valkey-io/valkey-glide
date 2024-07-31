@@ -4440,6 +4440,52 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfmerget test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const stringKey = `{key}-4-${uuidv4()}`;
+                const nonExistingKey = `{key}-5-${uuidv4()}`;
+
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+
+                // merge into new HyperLogLog data set
+                expect(await client.pfmerge(key3, [key1, key2])).toEqual("OK");
+                expect(await client.pfcount([key3])).toEqual(4);
+
+                // merge into existing HyperLogLog data set
+                expect(await client.pfmerge(key1, [key2])).toEqual("OK");
+                expect(await client.pfcount([key1])).toEqual(4);
+
+                // non-existing source key
+                expect(
+                    await client.pfmerge(key2, [key1, nonExistingKey]),
+                ).toEqual("OK");
+                expect(await client.pfcount([key2])).toEqual(4);
+
+                // empty source key list
+                expect(await client.pfmerge(key1, [])).toEqual("OK");
+                expect(await client.pfcount([key1])).toEqual(4);
+
+                // source key exists, but it is not a HyperLogLog
+                await client.set(stringKey, "foo");
+                await expect(client.pfmerge(key3, [stringKey])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // destination key exists, but it is not a HyperLogLog
+                await expect(client.pfmerge(stringKey, [key3])).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
