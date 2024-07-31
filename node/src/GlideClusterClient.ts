@@ -989,9 +989,9 @@ export class GlideClusterClient extends BaseClient {
      * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
      * was made since then.
      *
-     * See https://redis.io/commands/lastsave/ for more details.
+     * See https://valkey.io/commands/lastsave/ for more details.
      *
-     * @param route - The command will be routed to a random node, unless `route` is provided, in which
+     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
      * @returns `UNIX TIME` of the last DB save executed with success.
      * @example
