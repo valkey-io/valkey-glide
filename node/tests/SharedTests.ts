@@ -47,7 +47,6 @@ import {
     GetAndSetRandomValue,
     compareMaps,
     getFirstResult,
-    intoString,
 } from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
@@ -283,12 +282,21 @@ export function runBaseTests<Context>(config: {
                 /// we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
                 /// after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
                 await client.set("foo", "bar");
-                const oldResult = await client.info([InfoOptions.Commandstats]);
-                const oldResultAsString = intoString(oldResult);
-                expect(oldResultAsString).toContain("cmdstat_set");
+                const oldResult =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
+                expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
-                const result = await client.info([InfoOptions.Commandstats]);
+                const result =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -337,14 +345,14 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.msetnx(keyValueMap1)).toEqual(true);
 
-                checkSimple(
-                    await client.mget([key1, key2, nonExistingKey]),
-                ).toEqual([value, value, null]);
+                expect(await client.mget([key1, key2, nonExistingKey])).toEqual(
+                    [value, value, null],
+                );
 
                 expect(await client.msetnx(keyValueMap2)).toEqual(false);
 
                 expect(await client.get(key3)).toEqual(null);
-                checkSimple(await client.get(key2)).toEqual(value);
+                expect(await client.get(key2)).toEqual(value);
 
                 // empty map and RequestError is thrown
                 const emptyMap = {};
@@ -1693,7 +1701,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
 
                 // Move from LEFT to LEFT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key1,
                         key2,
@@ -1704,7 +1712,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("1");
 
                 // Move from LEFT to RIGHT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key1,
                         key2,
@@ -1714,16 +1722,16 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                     "2",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+                expect(await client.lrange(key1, 0, -1)).toEqual([]);
 
                 // Move from RIGHT to LEFT non-existing destination with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key2,
                         key1,
@@ -1733,15 +1741,15 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual(["2"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2"]);
 
                 // Move from RIGHT to RIGHT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key2,
                         key1,
@@ -1751,14 +1759,8 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("4");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
-                    "1",
-                    "3",
-                ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
-                    "2",
-                    "4",
-                ]);
+                expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
                 // Non-existing source key with blocking
                 expect(
@@ -1773,7 +1775,7 @@ export function runBaseTests<Context>(config: {
 
                 // Non-list source key with blocking
                 const key3 = "{key}-3" + uuidv4();
-                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                expect(await client.set(key3, "value")).toEqual("OK");
                 await expect(
                     client.blmove(
                         key3,
@@ -6005,6 +6007,143 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zrandmemberWithCount(key2, 1),
                 ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lcs %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+                const key1 = "{lcs}" + uuidv4();
+                const key2 = "{lcs}" + uuidv4();
+                const key3 = "{lcs}" + uuidv4();
+                const key4 = "{lcs}" + uuidv4();
+
+                // keys does not exist or is empty
+                expect(await client.lcs(key1, key2)).toEqual("");
+                expect(await client.lcsLen(key1, key2)).toEqual(0);
+                expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [],
+                    len: 0,
+                });
+
+                // LCS with some strings
+                expect(
+                    await client.mset({
+                        [key1]: "abcdefghijk",
+                        [key2]: "defjkjuighijk",
+                        [key3]: "123",
+                    }),
+                ).toEqual("OK");
+                expect(await client.lcs(key1, key2)).toEqual("defghijk");
+                expect(await client.lcsLen(key1, key2)).toEqual(8);
+
+                // LCS with only IDX
+                expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+                expect(await client.lcsIdx(key1, key2, {})).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+                expect(
+                    await client.lcsIdx(key1, key2, { withMatchLen: false }),
+                ).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+
+                // LCS with IDX and WITHMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, { withMatchLen: true }),
+                ).toEqual({
+                    matches: [
+                        [[6, 10], [8, 12], 5],
+                        [[3, 5], [0, 2], 3],
+                    ],
+                    len: 8,
+                });
+
+                // LCS with IDX and MINMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, { minMatchLen: 4 }),
+                ).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                    ],
+                    len: 8,
+                });
+                // LCS with IDX and a negative MINMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, { minMatchLen: -1 }),
+                ).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+
+                // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, {
+                        minMatchLen: 4,
+                        withMatchLen: true,
+                    }),
+                ).toEqual({ matches: [[[6, 10], [8, 12], 5]], len: 8 });
+
+                // non-string keys are used
+                expect(await client.sadd(key4, ["_"])).toEqual(1);
+                await expect(client.lcs(key1, key4)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(client.lcsLen(key1, key4)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(client.lcsIdx(key1, key4)).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
