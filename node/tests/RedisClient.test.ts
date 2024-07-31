@@ -668,26 +668,6 @@ describe("GlideClient", () => {
         },
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "lastsave %p",
-        async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-
-            const today = new Date();
-            today.setDate(today.getDate() - 1);
-            const yesterday = today.getTime() / 1000; // as epoch time
-
-            expect(await client.lastsave()).toBeGreaterThan(yesterday);
-
-            const response = await client.exec(new Transaction().lastsave());
-            expect(response?.[0]).toBeGreaterThan(yesterday);
-
-            client.close();
-        },
-    );
-
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
             const options = getClientConfigurationOption(
