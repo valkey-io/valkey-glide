@@ -5605,9 +5605,9 @@ export function runBaseTests<Context>(config: {
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
                 expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN))
-                    .toBeNull;
+                    .toBeNull();
                 expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1))
-                    .toBeNull;
+                    .toBeNull();
 
                 // key exists, but it is not a sorted set
                 expect(await client.set(stringKey, "value")).toEqual("OK");
@@ -5705,7 +5705,7 @@ export function runBaseTests<Context>(config: {
                 // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
                 expect(
                     await client.bzmpop([nonExistingKey], ScoreFilter.MAX, 0.5),
-                ).toBeNull;
+                ).toBeNull();
                 expect(
                     await client.bzmpop(
                         [nonExistingKey],
@@ -5713,7 +5713,7 @@ export function runBaseTests<Context>(config: {
                         0.55,
                         1,
                     ),
-                ).toBeNull;
+                ).toBeNull();
 
                 // key exists, but it is not a sorted set
                 expect(await client.set(stringKey, "value")).toEqual("OK");

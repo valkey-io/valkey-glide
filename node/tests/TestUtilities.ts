@@ -411,7 +411,7 @@ export function validateTransactionResponse(
 
         try {
             expect(response?.[i]).toEqual(expectedResponse);
-        } catch (e) {
+        } catch {
             const expected =
                 expectedResponse instanceof Map
                     ? JSON.stringify(Array.from(expectedResponse.entries()))
