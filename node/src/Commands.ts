@@ -2781,3 +2781,27 @@ export function createZRandMember(
 export function createLastSave(): command_request.Command {
     return createCommand(RequestType.LastSave, []);
 }
+
+/** @internal */
+export function createLCS(
+    key1: string,
+    key2: string,
+    options?: {
+        len?: boolean;
+        idx?: { withMatchLen?: boolean; minMatchLen?: number };
+    },
+): command_request.Command {
+    const args = [key1, key2];
+
+    if (options) {
+        if (options.len) args.push("LEN");
+        else if (options.idx) {
+            args.push("IDX");
+            if (options.idx.withMatchLen) args.push("WITHMATCHLEN");
+            if (options.idx.minMatchLen !== undefined)
+                args.push("MINMATCHLEN", options.idx.minMatchLen.toString());
+        }
+    }
+
+    return createCommand(RequestType.LCS, args);
+}
