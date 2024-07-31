@@ -31,7 +31,6 @@ import {
     InsertPosition,
     ListDirection,
     ProtocolVersion,
-    ReturnType,
     RequestError,
     ScoreFilter,
     Script,
@@ -46,11 +45,8 @@ import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     Client,
     GetAndSetRandomValue,
-    checkSimple,
     compareMaps,
     getFirstResult,
-    intoArray,
-    intoString,
 } from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
@@ -101,8 +97,8 @@ export function runBaseTests<Context>(config: {
                 }
 
                 const result = await client.customCommand(["CLIENT", "INFO"]);
-                expect(intoString(result)).toContain("lib-name=GlideJS");
-                expect(intoString(result)).toContain("lib-ver=unknown");
+                expect(result).toContain("lib-name=GlideJS");
+                expect(result).toContain("lib-ver=unknown");
             }, protocol);
         },
         config.timeout,
@@ -157,9 +153,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient) => {
-                    expect(intoString(await client.clientGetName())).toBe(
-                        "TEST_CLIENT",
-                    );
+                    expect(await client.clientGetName()).toBe("TEST_CLIENT");
                 },
                 protocol,
                 "TEST_CLIENT",
@@ -180,9 +174,9 @@ export function runBaseTests<Context>(config: {
                     key,
                     value,
                 ]);
-                checkSimple(setResult).toEqual("OK");
+                expect(setResult).toEqual("OK");
                 const result = await client.customCommand(["GET", key]);
-                checkSimple(result).toEqual(value);
+                expect(result).toEqual(value);
             }, protocol);
         },
         config.timeout,
@@ -203,20 +197,20 @@ export function runBaseTests<Context>(config: {
                     key1,
                     value1,
                 ]);
-                checkSimple(setResult1).toEqual("OK");
+                expect(setResult1).toEqual("OK");
                 const setResult2 = await client.customCommand([
                     "SET",
                     key2,
                     value2,
                 ]);
-                checkSimple(setResult2).toEqual("OK");
+                expect(setResult2).toEqual("OK");
                 const mget_result = await client.customCommand([
                     "MGET",
                     key1,
                     key2,
                     key3,
                 ]);
-                checkSimple(mget_result).toEqual([value1, value2, null]);
+                expect(mget_result).toEqual([value1, value2, null]);
             }, protocol);
         },
         config.timeout,
@@ -259,15 +253,13 @@ export function runBaseTests<Context>(config: {
         `test config rewrite_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const serverInfo = intoString(
-                    await client.info([InfoOptions.Server]),
-                );
+                const serverInfo = await client.info([InfoOptions.Server]);
                 const conf_file = parseInfoResponse(
                     getFirstResult(serverInfo).toString(),
                 )["config_file"];
 
                 if (conf_file.length > 0) {
-                    checkSimple(await client.configRewrite()).toEqual("OK");
+                    expect(await client.configRewrite()).toEqual("OK");
                 } else {
                     try {
                         /// We expect Redis to return an error since the test cluster doesn't use redis.conf file
@@ -290,14 +282,21 @@ export function runBaseTests<Context>(config: {
                 /// we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
                 /// after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
                 await client.set("foo", "bar");
-                const oldResult = await client.info([InfoOptions.Commandstats]);
-                const oldResultAsString = intoString(oldResult);
-                expect(oldResultAsString).toContain("cmdstat_set");
-                checkSimple(await client.configResetStat()).toEqual("OK");
+                const oldResult =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
+                expect(oldResult).toContain("cmdstat_set");
+                expect(await client.configResetStat()).toEqual("OK");
 
-                const result = intoArray(
-                    await client.info([InfoOptions.Commandstats]),
-                );
+                const result =
+                    client instanceof GlideClient
+                        ? await client.info([InfoOptions.Commandstats])
+                        : Object.values(
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -317,10 +316,49 @@ export function runBaseTests<Context>(config: {
                     [key2]: value,
                     [key3]: value,
                 };
-                checkSimple(await client.mset(keyValueList)).toEqual("OK");
-                checkSimple(
+                expect(await client.mset(keyValueList)).toEqual("OK");
+                expect(
                     await client.mget([key1, key2, "nonExistingKey", key3]),
                 ).toEqual([value, value, null, value]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `msetnx test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const key3 = "{key}-3" + uuidv4();
+                const nonExistingKey = uuidv4();
+                const value = uuidv4();
+                const keyValueMap1 = {
+                    [key1]: value,
+                    [key2]: value,
+                };
+                const keyValueMap2 = {
+                    [key2]: value,
+                    [key3]: value,
+                };
+
+                expect(await client.msetnx(keyValueMap1)).toEqual(true);
+
+                expect(await client.mget([key1, key2, nonExistingKey])).toEqual(
+                    [value, value, null],
+                );
+
+                expect(await client.msetnx(keyValueMap2)).toEqual(false);
+
+                expect(await client.get(key3)).toEqual(null);
+                expect(await client.get(key2)).toEqual(value);
+
+                // empty map and RequestError is thrown
+                const emptyMap = {};
+                await expect(client.msetnx(emptyMap)).rejects.toThrow(
+                    RequestError,
+                );
             }, protocol);
         },
         config.timeout,
@@ -331,13 +369,13 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "10")).toEqual("OK");
+                expect(await client.set(key, "10")).toEqual("OK");
                 expect(await client.incr(key)).toEqual(11);
-                checkSimple(await client.get(key)).toEqual("11");
-                checkSimple(await client.incrBy(key, 4)).toEqual(15);
-                checkSimple(await client.get(key)).toEqual("15");
-                checkSimple(await client.incrByFloat(key, 1.5)).toEqual(16.5);
-                checkSimple(await client.get(key)).toEqual("16.5");
+                expect(await client.get(key)).toEqual("11");
+                expect(await client.incrBy(key, 4)).toEqual(15);
+                expect(await client.get(key)).toEqual("15");
+                expect(await client.incrByFloat(key, 1.5)).toEqual(16.5);
+                expect(await client.get(key)).toEqual("16.5");
             }, protocol);
         },
         config.timeout,
@@ -352,11 +390,11 @@ export function runBaseTests<Context>(config: {
                 const key3 = uuidv4();
                 /// key1 and key2 does not exist, so it set to 0 before performing the operation.
                 expect(await client.incr(key1)).toEqual(1);
-                checkSimple(await client.get(key1)).toEqual("1");
+                expect(await client.get(key1)).toEqual("1");
                 expect(await client.incrBy(key2, 2)).toEqual(2);
-                checkSimple(await client.get(key2)).toEqual("2");
+                expect(await client.get(key2)).toEqual("2");
                 expect(await client.incrByFloat(key3, -0.5)).toEqual(-0.5);
-                checkSimple(await client.get(key3)).toEqual("-0.5");
+                expect(await client.get(key3)).toEqual("-0.5");
             }, protocol);
         },
         config.timeout,
@@ -367,7 +405,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
 
                 try {
                     expect(await client.incr(key)).toThrow();
@@ -401,8 +439,8 @@ export function runBaseTests<Context>(config: {
         `ping test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                checkSimple(await client.ping()).toEqual("PONG");
-                checkSimple(await client.ping("Hello")).toEqual("Hello");
+                expect(await client.ping()).toEqual("PONG");
+                expect(await client.ping("Hello")).toEqual("Hello");
             }, protocol);
         },
         config.timeout,
@@ -425,11 +463,11 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "10")).toEqual("OK");
+                expect(await client.set(key, "10")).toEqual("OK");
                 expect(await client.decr(key)).toEqual(9);
-                checkSimple(await client.get(key)).toEqual("9");
+                expect(await client.get(key)).toEqual("9");
                 expect(await client.decrBy(key, 4)).toEqual(5);
-                checkSimple(await client.get(key)).toEqual("5");
+                expect(await client.get(key)).toEqual("5");
             }, protocol);
         },
         config.timeout,
@@ -444,10 +482,10 @@ export function runBaseTests<Context>(config: {
                 /// key1 and key2 does not exist, so it set to 0 before performing the operation.
                 expect(await client.get(key1)).toBeNull();
                 expect(await client.decr(key1)).toEqual(-1);
-                checkSimple(await client.get(key1)).toEqual("-1");
+                expect(await client.get(key1)).toEqual("-1");
                 expect(await client.get(key2)).toBeNull();
                 expect(await client.decrBy(key2, 3)).toEqual(-3);
-                checkSimple(await client.get(key2)).toEqual("-3");
+                expect(await client.get(key2)).toEqual("-3");
             }, protocol);
         },
         config.timeout,
@@ -486,6 +524,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = `{key}-${uuidv4()}`;
                 const key2 = `{key}-${uuidv4()}`;
+                const key3 = `{key}-${uuidv4()}`;
                 const keys = [key1, key2];
                 const destination = `{key}-${uuidv4()}`;
                 const nonExistingKey1 = `{key}-${uuidv4()}`;
@@ -500,24 +539,24 @@ export function runBaseTests<Context>(config: {
                 const value1 = "foobar";
                 const value2 = "abcdef";
 
-                checkSimple(await client.set(key1, value1)).toEqual("OK");
-                checkSimple(await client.set(key2, value2)).toEqual("OK");
+                expect(await client.set(key1, value1)).toEqual("OK");
+                expect(await client.set(key2, value2)).toEqual("OK");
                 expect(
                     await client.bitop(BitwiseOperation.AND, destination, keys),
                 ).toEqual(6);
-                checkSimple(await client.get(destination)).toEqual("`bc`ab");
+                expect(await client.get(destination)).toEqual("`bc`ab");
                 expect(
                     await client.bitop(BitwiseOperation.OR, destination, keys),
                 ).toEqual(6);
-                checkSimple(await client.get(destination)).toEqual("goofev");
+                expect(await client.get(destination)).toEqual("goofev");
 
                 // reset values for simplicity of results in XOR
-                checkSimple(await client.set(key1, "a")).toEqual("OK");
-                checkSimple(await client.set(key2, "b")).toEqual("OK");
+                expect(await client.set(key1, "a")).toEqual("OK");
+                expect(await client.set(key2, "b")).toEqual("OK");
                 expect(
                     await client.bitop(BitwiseOperation.XOR, destination, keys),
                 ).toEqual(1);
-                checkSimple(await client.get(destination)).toEqual("\u0003");
+                expect(await client.get(destination)).toEqual("\u0003");
 
                 // test single source key
                 expect(
@@ -525,25 +564,30 @@ export function runBaseTests<Context>(config: {
                         key1,
                     ]),
                 ).toEqual(1);
-                checkSimple(await client.get(destination)).toEqual("a");
+                expect(await client.get(destination)).toEqual("a");
                 expect(
                     await client.bitop(BitwiseOperation.OR, destination, [
                         key1,
                     ]),
                 ).toEqual(1);
-                checkSimple(await client.get(destination)).toEqual("a");
+                expect(await client.get(destination)).toEqual("a");
                 expect(
                     await client.bitop(BitwiseOperation.XOR, destination, [
                         key1,
                     ]),
                 ).toEqual(1);
-                checkSimple(await client.get(destination)).toEqual("a");
+                expect(await client.get(destination)).toEqual("a");
+
+                // Sets to a string (not a space character) with value 11000010 10011110.
+                expect(await client.set(key3, "")).toEqual("OK");
+                expect(await client.getbit(key3, 0)).toEqual(1);
                 expect(
                     await client.bitop(BitwiseOperation.NOT, destination, [
-                        key1,
+                        key3,
                     ]),
-                ).toEqual(1);
-                checkSimple(await client.get(destination)).toEqual("�");
+                ).toEqual(2);
+                // Value becomes 00111101 01100001.
+                expect(await client.get(destination)).toEqual("=a");
 
                 expect(await client.setbit(key1, 0, 1)).toEqual(0);
                 expect(
@@ -551,7 +595,7 @@ export function runBaseTests<Context>(config: {
                         key1,
                     ]),
                 ).toEqual(1);
-                checkSimple(await client.get(destination)).toEqual("\u001e");
+                expect(await client.get(destination)).toEqual("\u001e");
 
                 // stores null when all keys hold empty strings
                 expect(
@@ -675,7 +719,7 @@ export function runBaseTests<Context>(config: {
                 const setKey = `{key}-${uuidv4()}`;
                 const value = "?f0obar"; // 00111111 01100110 00110000 01101111 01100010 01100001 01110010
 
-                checkSimple(await client.set(key, value)).toEqual("OK");
+                expect(await client.set(key, value)).toEqual("OK");
                 expect(await client.bitpos(key, 0)).toEqual(0);
                 expect(await client.bitpos(key, 1)).toEqual(2);
                 expect(await client.bitpos(key, 1, 1)).toEqual(9);
@@ -812,7 +856,7 @@ export function runBaseTests<Context>(config: {
                 const overflowGet = new BitFieldGet(u2, offset1);
 
                 // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
-                checkSimple(await client.set(key1, foobar)).toEqual("OK");
+                expect(await client.set(key1, foobar)).toEqual("OK");
 
                 // SET tests
                 expect(
@@ -969,7 +1013,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
-                checkSimple(await client.set(key, foobar)).toEqual("OK");
+                expect(await client.set(key, foobar)).toEqual("OK");
                 expect(
                     await client.bitfieldReadOnly(key, [
                         // Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
@@ -1076,15 +1120,15 @@ export function runBaseTests<Context>(config: {
                 const prevTimeout = (await client.configGet([
                     "timeout",
                 ])) as Record<string, string>;
-                checkSimple(
-                    await client.configSet({ timeout: "1000" }),
-                ).toEqual("OK");
+                expect(await client.configSet({ timeout: "1000" })).toEqual(
+                    "OK",
+                );
                 const currTimeout = (await client.configGet([
                     "timeout",
                 ])) as Record<string, string>;
-                checkSimple(currTimeout).toEqual({ timeout: "1000" });
+                expect(currTimeout).toEqual({ timeout: "1000" });
                 /// Revert to the pervious configuration
-                checkSimple(
+                expect(
                     await client.configSet({
                         timeout: prevTimeout["timeout"],
                     }),
@@ -1103,7 +1147,7 @@ export function runBaseTests<Context>(config: {
                 const key2 = uuidv4();
 
                 expect(await client.set(key1, value1)).toEqual("OK");
-                checkSimple(await client.getdel(key1)).toEqual(value1);
+                expect(await client.getdel(key1)).toEqual(value1);
                 expect(await client.getdel(key1)).toEqual(null);
 
                 // key isn't a string
@@ -1127,8 +1171,8 @@ export function runBaseTests<Context>(config: {
                     [field2]: value,
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                checkSimple(await client.hget(key, field1)).toEqual(value);
-                checkSimple(await client.hget(key, field2)).toEqual(value);
+                expect(await client.hget(key, field1)).toEqual(value);
+                expect(await client.hget(key, field2)).toEqual(value);
                 expect(await client.hget(key, "nonExistingField")).toEqual(
                     null,
                 );
@@ -1176,7 +1220,7 @@ export function runBaseTests<Context>(config: {
                     [field2]: value,
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                checkSimple(
+                expect(
                     await client.hmget(key, [
                         field1,
                         "nonExistingField",
@@ -1229,12 +1273,10 @@ export function runBaseTests<Context>(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
 
-                expect(intoString(await client.hgetall(key))).toEqual(
-                    intoString({
-                        [field1]: value,
-                        [field2]: value,
-                    }),
-                );
+                expect(await client.hgetall(key)).toEqual({
+                    [field1]: value,
+                    [field2]: value,
+                });
 
                 expect(await client.hgetall("nonExistingKey")).toEqual({});
             }, protocol);
@@ -1356,12 +1398,9 @@ export function runBaseTests<Context>(config: {
                 };
 
                 expect(await client.hset(key1, fieldValueMap)).toEqual(2);
-                checkSimple(await client.hvals(key1)).toEqual([
-                    "value1",
-                    "value2",
-                ]);
+                expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
-                checkSimple(await client.hvals(key1)).toEqual(["value2"]);
+                expect(await client.hvals(key1)).toEqual(["value2"]);
                 expect(await client.hvals("nonExistingHash")).toEqual([]);
             }, protocol);
         },
@@ -1380,9 +1419,9 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hsetnx(key1, field, "newValue")).toEqual(
                     false,
                 );
-                checkSimple(await client.hget(key1, field)).toEqual("value");
+                expect(await client.hget(key1, field)).toEqual("value");
 
-                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                expect(await client.set(key2, "value")).toEqual("OK");
                 await expect(
                     client.hsetnx(key2, field, "value"),
                 ).rejects.toThrow();
@@ -1409,7 +1448,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.hstrlen(key2, "field")).toBe(0);
 
                 // key exists but holds non hash type value
-                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                expect(await client.set(key2, "value")).toEqual("OK");
                 await expect(client.hstrlen(key2, field)).rejects.toThrow(
                     RequestError,
                 );
@@ -1425,13 +1464,13 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 const valueList = ["value4", "value3", "value2", "value1"];
                 expect(await client.lpush(key, valueList)).toEqual(4);
-                checkSimple(await client.lpop(key)).toEqual("value1");
-                checkSimple(await client.lrange(key, 0, -1)).toEqual([
+                expect(await client.lpop(key)).toEqual("value1");
+                expect(await client.lrange(key, 0, -1)).toEqual([
                     "value2",
                     "value3",
                     "value4",
                 ]);
-                checkSimple(await client.lpopCount(key, 2)).toEqual([
+                expect(await client.lpopCount(key, 2)).toEqual([
                     "value2",
                     "value3",
                 ]);
@@ -1449,7 +1488,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
 
                 try {
                     expect(await client.lpush(key, ["bar"])).toThrow();
@@ -1489,7 +1528,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.lpush(key1, ["0"])).toEqual(1);
                 expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "3",
                     "2",
                     "1",
@@ -1497,10 +1536,10 @@ export function runBaseTests<Context>(config: {
                 ]);
 
                 expect(await client.lpushx(key2, ["1"])).toEqual(0);
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
+                expect(await client.lrange(key2, 0, -1)).toEqual([]);
 
                 // Key exists, but is not a list
-                checkSimple(await client.set(key3, "bar"));
+                expect(await client.set(key3, "bar"));
                 await expect(client.lpushx(key3, ["_"])).rejects.toThrow(
                     RequestError,
                 );
@@ -1526,7 +1565,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.llen("nonExistingKey")).toEqual(0);
 
-                checkSimple(await client.set(key2, "foo")).toEqual("OK");
+                expect(await client.set(key2, "foo")).toEqual("OK");
 
                 try {
                     expect(await client.llen(key2)).toThrow();
@@ -1558,7 +1597,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
 
                 // Move from LEFT to LEFT
-                checkSimple(
+                expect(
                     await client.lmove(
                         key1,
                         key2,
@@ -1568,7 +1607,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("1");
 
                 // Move from LEFT to RIGHT
-                checkSimple(
+                expect(
                     await client.lmove(
                         key1,
                         key2,
@@ -1577,16 +1616,16 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                     "2",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+                expect(await client.lrange(key1, 0, -1)).toEqual([]);
 
                 // Move from RIGHT to LEFT - non-existing destination key
-                checkSimple(
+                expect(
                     await client.lmove(
                         key2,
                         key1,
@@ -1596,7 +1635,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("2");
 
                 // Move from RIGHT to RIGHT
-                checkSimple(
+                expect(
                     await client.lmove(
                         key2,
                         key1,
@@ -1605,14 +1644,8 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("4");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
-                    "1",
-                    "3",
-                ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
-                    "2",
-                    "4",
-                ]);
+                expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
                 // Non-existing source key
                 expect(
@@ -1626,7 +1659,7 @@ export function runBaseTests<Context>(config: {
 
                 // Non-list source key
                 const key3 = "{key}-3" + uuidv4();
-                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                expect(await client.set(key3, "value")).toEqual("OK");
                 await expect(
                     client.lmove(
                         key3,
@@ -1668,7 +1701,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
 
                 // Move from LEFT to LEFT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key1,
                         key2,
@@ -1679,7 +1712,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("1");
 
                 // Move from LEFT to RIGHT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key1,
                         key2,
@@ -1689,16 +1722,16 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                     "2",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([]);
+                expect(await client.lrange(key1, 0, -1)).toEqual([]);
 
                 // Move from RIGHT to LEFT non-existing destination with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key2,
                         key1,
@@ -1708,15 +1741,15 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("2");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+                expect(await client.lrange(key2, 0, -1)).toEqual([
                     "1",
                     "3",
                     "4",
                 ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual(["2"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2"]);
 
                 // Move from RIGHT to RIGHT with blocking
-                checkSimple(
+                expect(
                     await client.blmove(
                         key2,
                         key1,
@@ -1726,14 +1759,8 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("4");
 
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([
-                    "1",
-                    "3",
-                ]);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
-                    "2",
-                    "4",
-                ]);
+                expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
                 // Non-existing source key with blocking
                 expect(
@@ -1748,7 +1775,7 @@ export function runBaseTests<Context>(config: {
 
                 // Non-list source key with blocking
                 const key3 = "{key}-3" + uuidv4();
-                checkSimple(await client.set(key3, "value")).toEqual("OK");
+                expect(await client.set(key3, "value")).toEqual("OK");
                 await expect(
                     client.blmove(
                         key3,
@@ -1804,18 +1831,16 @@ export function runBaseTests<Context>(config: {
                 ).rejects.toThrow(RequestError);
 
                 // assert lset result
-                checkSimple(await client.lset(key, index, element)).toEqual(
-                    "OK",
-                );
-                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                expect(await client.lset(key, index, element)).toEqual("OK");
+                expect(await client.lrange(key, 0, negativeIndex)).toEqual(
                     expectedList,
                 );
 
                 // assert lset with a negative index for the last element in the list
-                checkSimple(
-                    await client.lset(key, negativeIndex, element),
-                ).toEqual("OK");
-                checkSimple(await client.lrange(key, 0, negativeIndex)).toEqual(
+                expect(await client.lset(key, negativeIndex, element)).toEqual(
+                    "OK",
+                );
+                expect(await client.lrange(key, 0, negativeIndex)).toEqual(
                     expectedList2,
                 );
 
@@ -1838,17 +1863,17 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 const valueList = ["value4", "value3", "value2", "value1"];
                 expect(await client.lpush(key, valueList)).toEqual(4);
-                checkSimple(await client.ltrim(key, 0, 1)).toEqual("OK");
-                checkSimple(await client.lrange(key, 0, -1)).toEqual([
+                expect(await client.ltrim(key, 0, 1)).toEqual("OK");
+                expect(await client.lrange(key, 0, -1)).toEqual([
                     "value1",
                     "value2",
                 ]);
 
                 /// `start` is greater than `end` so the key will be removed.
-                checkSimple(await client.ltrim(key, 4, 2)).toEqual("OK");
+                expect(await client.ltrim(key, 4, 2)).toEqual("OK");
                 expect(await client.lrange(key, 0, -1)).toEqual([]);
 
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
 
                 try {
                     expect(await client.ltrim(key, 0, 1)).toThrow();
@@ -1876,20 +1901,18 @@ export function runBaseTests<Context>(config: {
                 ];
                 expect(await client.lpush(key, valueList)).toEqual(5);
                 expect(await client.lrem(key, 2, "value1")).toEqual(2);
-                checkSimple(await client.lrange(key, 0, -1)).toEqual([
+                expect(await client.lrange(key, 0, -1)).toEqual([
                     "value2",
                     "value2",
                     "value1",
                 ]);
                 expect(await client.lrem(key, -1, "value2")).toEqual(1);
-                checkSimple(await client.lrange(key, 0, -1)).toEqual([
+                expect(await client.lrange(key, 0, -1)).toEqual([
                     "value2",
                     "value1",
                 ]);
                 expect(await client.lrem(key, 0, "value2")).toEqual(1);
-                checkSimple(await client.lrange(key, 0, -1)).toEqual([
-                    "value1",
-                ]);
+                expect(await client.lrange(key, 0, -1)).toEqual(["value1"]);
                 expect(await client.lrem("nonExistingKey", 2, "value")).toEqual(
                     0,
                 );
@@ -1905,8 +1928,8 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 const valueList = ["value1", "value2", "value3", "value4"];
                 expect(await client.rpush(key, valueList)).toEqual(4);
-                checkSimple(await client.rpop(key)).toEqual("value4");
-                checkSimple(await client.rpopCount(key, 2)).toEqual([
+                expect(await client.rpop(key)).toEqual("value4");
+                expect(await client.rpopCount(key, 2)).toEqual([
                     "value3",
                     "value2",
                 ]);
@@ -1921,7 +1944,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
 
                 try {
                     expect(await client.rpush(key, ["bar"])).toThrow();
@@ -1953,7 +1976,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.rpush(key1, ["0"])).toEqual(1);
                 expect(await client.rpushx(key1, ["1", "2", "3"])).toEqual(4);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "0",
                     "1",
                     "2",
@@ -1961,10 +1984,10 @@ export function runBaseTests<Context>(config: {
                 ]);
 
                 expect(await client.rpushx(key2, ["1"])).toEqual(0);
-                checkSimple(await client.lrange(key2, 0, -1)).toEqual([]);
+                expect(await client.lrange(key2, 0, -1)).toEqual([]);
 
                 // Key exists, but is not a list
-                checkSimple(await client.set(key3, "bar"));
+                expect(await client.set(key3, "bar"));
                 await expect(client.rpushx(key3, ["_"])).rejects.toThrow(
                     RequestError,
                 );
@@ -1989,7 +2012,7 @@ export function runBaseTests<Context>(config: {
                     await client.srem(key, ["member3", "nonExistingMember"]),
                 ).toEqual(1);
                 /// compare the 2 sets.
-                checkSimple(await client.smembers(key)).toEqual(
+                expect(await client.smembers(key)).toEqual(
                     new Set(["member1", "member2", "member4"]),
                 );
                 expect(await client.srem(key, ["member1"])).toEqual(1);
@@ -2014,19 +2037,19 @@ export function runBaseTests<Context>(config: {
 
                 // move an element
                 expect(await client.smove(key1, key2, "1"));
-                checkSimple(await client.smembers(key1)).toEqual(
+                expect(await client.smembers(key1)).toEqual(
                     new Set(["2", "3"]),
                 );
-                checkSimple(await client.smembers(key2)).toEqual(
+                expect(await client.smembers(key2)).toEqual(
                     new Set(["1", "2", "3"]),
                 );
 
                 // moved element already exists in the destination set
                 expect(await client.smove(key2, key1, "2"));
-                checkSimple(await client.smembers(key1)).toEqual(
+                expect(await client.smembers(key1)).toEqual(
                     new Set(["2", "3"]),
                 );
-                checkSimple(await client.smembers(key2)).toEqual(
+                expect(await client.smembers(key2)).toEqual(
                     new Set(["1", "3"]),
                 );
 
@@ -2034,43 +2057,29 @@ export function runBaseTests<Context>(config: {
                 expect(await client.smove(non_existing_key, key1, "4")).toEqual(
                     false,
                 );
-                checkSimple(await client.smembers(key1)).toEqual(
+                expect(await client.smembers(key1)).toEqual(
                     new Set(["2", "3"]),
                 );
 
                 // move to a new set
                 expect(await client.smove(key1, key3, "2"));
-                checkSimple(await client.smembers(key1)).toEqual(
-                    new Set(["3"]),
-                );
-                checkSimple(await client.smembers(key3)).toEqual(
-                    new Set(["2"]),
-                );
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.smembers(key3)).toEqual(new Set(["2"]));
 
                 // attempt to move a missing element
                 expect(await client.smove(key1, key3, "42")).toEqual(false);
-                checkSimple(await client.smembers(key1)).toEqual(
-                    new Set(["3"]),
-                );
-                checkSimple(await client.smembers(key3)).toEqual(
-                    new Set(["2"]),
-                );
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.smembers(key3)).toEqual(new Set(["2"]));
 
                 // move missing element to missing key
                 expect(
                     await client.smove(key1, non_existing_key, "42"),
                 ).toEqual(false);
-                checkSimple(await client.smembers(key1)).toEqual(
-                    new Set(["3"]),
-                );
-                checkSimple(await client.type(non_existing_key)).toEqual(
-                    "none",
-                );
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.type(non_existing_key)).toEqual("none");
 
                 // key exists, but it is not a set
-                checkSimple(await client.set(string_key, "value")).toEqual(
-                    "OK",
-                );
+                expect(await client.set(string_key, "value")).toEqual("OK");
                 await expect(
                     client.smove(string_key, key1, "_"),
                 ).rejects.toThrow();
@@ -2100,7 +2109,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
 
                 try {
                     expect(await client.sadd(key, ["bar"])).toThrow();
@@ -2151,7 +2160,7 @@ export function runBaseTests<Context>(config: {
                 // positive test case
                 expect(await client.sadd(key1, member1_list)).toEqual(4);
                 expect(await client.sadd(key2, member2_list)).toEqual(3);
-                checkSimple(await client.sinter([key1, key2])).toEqual(
+                expect(await client.sinter([key1, key2])).toEqual(
                     new Set(["c", "d"]),
                 );
 
@@ -2170,7 +2179,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // non-set key
-                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                expect(await client.set(key2, "value")).toEqual("OK");
 
                 try {
                     expect(await client.sinter([key2])).toThrow();
@@ -2234,7 +2243,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // source key exists, but it is not a set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.sintercard([key1, stringKey]),
                 ).rejects.toThrow(RequestError);
@@ -2260,42 +2269,34 @@ export function runBaseTests<Context>(config: {
 
                 // store in a new key
                 expect(await client.sinterstore(key3, [key1, key2])).toEqual(1);
-                checkSimple(await client.smembers(key3)).toEqual(
-                    new Set(["c"]),
-                );
+                expect(await client.smembers(key3)).toEqual(new Set(["c"]));
 
                 // overwrite existing set, which is also a source set
                 expect(await client.sinterstore(key2, [key2, key3])).toEqual(1);
-                checkSimple(await client.smembers(key2)).toEqual(
-                    new Set(["c"]),
-                );
+                expect(await client.smembers(key2)).toEqual(new Set(["c"]));
 
                 // source set is the same as the existing set
                 expect(await client.sinterstore(key2, [key2])).toEqual(1);
-                checkSimple(await client.smembers(key2)).toEqual(
-                    new Set(["c"]),
-                );
+                expect(await client.smembers(key2)).toEqual(new Set(["c"]));
 
                 // intersection with non-existing key
                 expect(
                     await client.sinterstore(key1, [key2, nonExistingKey]),
                 ).toEqual(0);
-                checkSimple(await client.smembers(key1)).toEqual(new Set());
+                expect(await client.smembers(key1)).toEqual(new Set());
 
                 // invalid argument - key list must not be empty
                 await expect(client.sinterstore(key3, [])).rejects.toThrow();
 
                 // non-set key
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.sinterstore(key3, [stringKey]),
                 ).rejects.toThrow();
 
                 // overwrite non-set key
                 expect(await client.sinterstore(stringKey, [key2])).toEqual(1);
-                checkSimple(await client.smembers(stringKey)).toEqual(
-                    new Set("c"),
-                );
+                expect(await client.smembers(stringKey)).toEqual(new Set("c"));
             }, protocol);
         },
         config.timeout,
@@ -2315,17 +2316,17 @@ export function runBaseTests<Context>(config: {
                 expect(await client.sadd(key1, member1_list)).toEqual(3);
                 expect(await client.sadd(key2, member2_list)).toEqual(3);
 
-                checkSimple(await client.sdiff([key1, key2])).toEqual(
+                expect(await client.sdiff([key1, key2])).toEqual(
                     new Set(["a", "b"]),
                 );
-                checkSimple(await client.sdiff([key2, key1])).toEqual(
+                expect(await client.sdiff([key2, key1])).toEqual(
                     new Set(["d", "e"]),
                 );
 
-                checkSimple(await client.sdiff([key1, nonExistingKey])).toEqual(
+                expect(await client.sdiff([key1, nonExistingKey])).toEqual(
                     new Set(["a", "b", "c"]),
                 );
-                checkSimple(await client.sdiff([nonExistingKey, key1])).toEqual(
+                expect(await client.sdiff([nonExistingKey, key1])).toEqual(
                     new Set(),
                 );
 
@@ -2333,7 +2334,7 @@ export function runBaseTests<Context>(config: {
                 await expect(client.sdiff([])).rejects.toThrow();
 
                 // key exists, but it is not a set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(client.sdiff([stringKey])).rejects.toThrow();
             }, protocol);
         },
@@ -2357,27 +2358,25 @@ export function runBaseTests<Context>(config: {
 
                 // store diff in new key
                 expect(await client.sdiffstore(key3, [key1, key2])).toEqual(2);
-                checkSimple(await client.smembers(key3)).toEqual(
+                expect(await client.smembers(key3)).toEqual(
                     new Set(["a", "b"]),
                 );
 
                 // overwrite existing set
                 expect(await client.sdiffstore(key3, [key2, key1])).toEqual(2);
-                checkSimple(await client.smembers(key3)).toEqual(
+                expect(await client.smembers(key3)).toEqual(
                     new Set(["d", "e"]),
                 );
 
                 // overwrite one of the source sets
                 expect(await client.sdiffstore(key3, [key2, key3])).toEqual(1);
-                checkSimple(await client.smembers(key3)).toEqual(
-                    new Set(["c"]),
-                );
+                expect(await client.smembers(key3)).toEqual(new Set(["c"]));
 
                 // diff between non-empty set and empty set
                 expect(
                     await client.sdiffstore(key3, [key1, nonExistingKey]),
                 ).toEqual(3);
-                checkSimple(await client.smembers(key3)).toEqual(
+                expect(await client.smembers(key3)).toEqual(
                     new Set(["a", "b", "c"]),
                 );
 
@@ -2385,13 +2384,13 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.sdiffstore(key3, [nonExistingKey, key1]),
                 ).toEqual(0);
-                checkSimple(await client.smembers(key3)).toEqual(new Set());
+                expect(await client.smembers(key3)).toEqual(new Set());
 
                 // invalid argument - key list must not be empty
                 await expect(client.sdiffstore(key3, [])).rejects.toThrow();
 
                 // source key exists, but it is not a set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.sdiffstore(key3, [stringKey]),
                 ).rejects.toThrow();
@@ -2400,7 +2399,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.sdiffstore(stringKey, [key1, key2]),
                 ).toEqual(2);
-                checkSimple(await client.smembers(stringKey)).toEqual(
+                expect(await client.smembers(stringKey)).toEqual(
                     new Set(["a", "b"]),
                 );
             }, protocol);
@@ -2421,7 +2420,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.sadd(key1, memberList1)).toEqual(3);
                 expect(await client.sadd(key2, memberList2)).toEqual(4);
-                checkSimple(await client.sunion([key1, key2])).toEqual(
+                expect(await client.sunion([key1, key2])).toEqual(
                     new Set(["a", "b", "c", "d", "e"]),
                 );
 
@@ -2429,12 +2428,12 @@ export function runBaseTests<Context>(config: {
                 await expect(client.sunion([])).rejects.toThrow();
 
                 // non-existing key returns the set of existing keys
-                checkSimple(
-                    await client.sunion([key1, nonExistingKey]),
-                ).toEqual(new Set(memberList1));
+                expect(await client.sunion([key1, nonExistingKey])).toEqual(
+                    new Set(memberList1),
+                );
 
                 // key exists, but it is not a set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(client.sunion([stringKey])).rejects.toThrow();
             }, protocol);
         },
@@ -2458,19 +2457,19 @@ export function runBaseTests<Context>(config: {
 
                 // store union in new key
                 expect(await client.sunionstore(key4, [key1, key2])).toEqual(5);
-                checkSimple(await client.smembers(key4)).toEqual(
+                expect(await client.smembers(key4)).toEqual(
                     new Set(["a", "b", "c", "d", "e"]),
                 );
 
                 // overwrite existing set
                 expect(await client.sunionstore(key1, [key4, key2])).toEqual(5);
-                checkSimple(await client.smembers(key1)).toEqual(
+                expect(await client.smembers(key1)).toEqual(
                     new Set(["a", "b", "c", "d", "e"]),
                 );
 
                 // overwrite one of the source keys
                 expect(await client.sunionstore(key2, [key4, key2])).toEqual(5);
-                checkSimple(await client.smembers(key2)).toEqual(
+                expect(await client.smembers(key2)).toEqual(
                     new Set(["a", "b", "c", "d", "e"]),
                 );
 
@@ -2484,7 +2483,7 @@ export function runBaseTests<Context>(config: {
                 await expect(client.sunionstore(key4, [])).rejects.toThrow();
 
                 // key exists, but it is not a set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.sunionstore(key4, [stringKey, key1]),
                 ).rejects.toThrow();
@@ -2493,7 +2492,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.sunionstore(stringKey, [key1, key3]),
                 ).toEqual(7);
-                checkSimple(await client.smembers(stringKey)).toEqual(
+                expect(await client.smembers(stringKey)).toEqual(
                     new Set(["a", "b", "c", "d", "e", "f", "g"]),
                 );
             }, protocol);
@@ -2516,7 +2515,7 @@ export function runBaseTests<Context>(config: {
                     await client.sismember("nonExistingKey", "member1"),
                 ).toEqual(false);
 
-                checkSimple(await client.set(key2, "foo")).toEqual("OK");
+                expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
                     client.sismember(key2, "member1"),
                 ).rejects.toThrow();
@@ -2553,7 +2552,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // key exists, but it is not a set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.smismember(stringKey, ["a"]),
                 ).rejects.toThrow(RequestError);
@@ -2571,11 +2570,11 @@ export function runBaseTests<Context>(config: {
                 expect(await client.sadd(key, members)).toEqual(3);
 
                 const result1 = await client.spop(key);
-                expect(members).toContain(intoString(result1));
+                expect(members).toContain(result1);
 
                 members = members.filter((item) => item != result1);
                 const result2 = await client.spopCount(key, 2);
-                expect(intoString(result2)).toEqual(intoString(members));
+                expect(result2).toEqual(new Set(members));
                 expect(await client.spop("nonExistingKey")).toEqual(null);
                 expect(await client.spopCount("nonExistingKey", 1)).toEqual(
                     new Set(),
@@ -2592,9 +2591,9 @@ export function runBaseTests<Context>(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const value = uuidv4();
-                checkSimple(await client.set(key1, value)).toEqual("OK");
+                expect(await client.set(key1, value)).toEqual("OK");
                 expect(await client.exists([key1])).toEqual(1);
-                checkSimple(await client.set(key2, value)).toEqual("OK");
+                expect(await client.set(key2, value)).toEqual("OK");
                 expect(
                     await client.exists([key1, "nonExistingKey", key2]),
                 ).toEqual(2);
@@ -2612,9 +2611,9 @@ export function runBaseTests<Context>(config: {
                 const key2 = "{key}" + uuidv4();
                 const key3 = "{key}" + uuidv4();
                 const value = uuidv4();
-                checkSimple(await client.set(key1, value)).toEqual("OK");
-                checkSimple(await client.set(key2, value)).toEqual("OK");
-                checkSimple(await client.set(key3, value)).toEqual("OK");
+                expect(await client.set(key1, value)).toEqual("OK");
+                expect(await client.set(key2, value)).toEqual("OK");
+                expect(await client.set(key3, value)).toEqual("OK");
                 expect(
                     await client.unlink([key1, key2, "nonExistingKey", key3]),
                 ).toEqual(3);
@@ -2628,11 +2627,11 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.expire(key, 10)).toEqual(true);
                 expect(await client.ttl(key)).toBeLessThanOrEqual(10);
                 /// set command clears the timeout.
-                checkSimple(await client.set(key, "bar")).toEqual("OK");
+                expect(await client.set(key, "bar")).toEqual("OK");
                 const versionLessThan =
                     cluster.checkIfServerVersionLessThan("7.0.0");
 
@@ -2674,7 +2673,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
                     await client.expireAt(
                         key,
@@ -2705,7 +2704,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.ttl(key)).toBeLessThanOrEqual(50);
 
                 /// set command clears the timeout.
-                checkSimple(await client.set(key, "bar")).toEqual("OK");
+                expect(await client.set(key, "bar")).toEqual("OK");
 
                 if (!versionLessThan) {
                     expect(
@@ -2726,14 +2725,14 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.ttl(key)).toEqual(-1);
                 expect(await client.expire(key, -10)).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.pexpire(key, -10000)).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
                     await client.expireAt(
                         key,
@@ -2741,7 +2740,7 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(
                     await client.pexpireAt(
                         key,
@@ -2787,12 +2786,12 @@ export function runBaseTests<Context>(config: {
                 const key2 = Buffer.from(uuidv4());
 
                 let script = new Script(Buffer.from("return 'Hello'"));
-                checkSimple(await client.invokeScript(script)).toEqual("Hello");
+                expect(await client.invokeScript(script)).toEqual("Hello");
 
                 script = new Script(
                     Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
                 );
-                checkSimple(
+                expect(
                     await client.invokeScript(script, {
                         keys: [key1],
                         args: [Buffer.from("value1")],
@@ -2800,7 +2799,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("OK");
 
                 /// Reuse the same script with different parameters.
-                checkSimple(
+                expect(
                     await client.invokeScript(script, {
                         keys: [key2],
                         args: [Buffer.from("value2")],
@@ -2810,11 +2809,11 @@ export function runBaseTests<Context>(config: {
                 script = new Script(
                     Buffer.from("return redis.call('GET', KEYS[1])"),
                 );
-                checkSimple(
+                expect(
                     await client.invokeScript(script, { keys: [key1] }),
                 ).toEqual("value1");
 
-                checkSimple(
+                expect(
                     await client.invokeScript(script, { keys: [key2] }),
                 ).toEqual("value2");
             }, protocol);
@@ -2830,12 +2829,12 @@ export function runBaseTests<Context>(config: {
                 const key2 = uuidv4();
 
                 let script = new Script("return 'Hello'");
-                checkSimple(await client.invokeScript(script)).toEqual("Hello");
+                expect(await client.invokeScript(script)).toEqual("Hello");
 
                 script = new Script(
                     "return redis.call('SET', KEYS[1], ARGV[1])",
                 );
-                checkSimple(
+                expect(
                     await client.invokeScript(script, {
                         keys: [key1],
                         args: ["value1"],
@@ -2843,7 +2842,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("OK");
 
                 /// Reuse the same script with different parameters.
-                checkSimple(
+                expect(
                     await client.invokeScript(script, {
                         keys: [key2],
                         args: ["value2"],
@@ -2851,11 +2850,11 @@ export function runBaseTests<Context>(config: {
                 ).toEqual("OK");
 
                 script = new Script("return redis.call('GET', KEYS[1])");
-                checkSimple(
+                expect(
                     await client.invokeScript(script, { keys: [key1] }),
                 ).toEqual("value1");
 
-                checkSimple(
+                expect(
                     await client.invokeScript(script, { keys: [key2] }),
                 ).toEqual("value2");
             }, protocol);
@@ -3065,14 +3064,12 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zadd(key2, entries2)).toEqual(1);
                 expect(await client.zadd(key3, entries3)).toEqual(4);
 
-                checkSimple(await client.zdiff([key1, key2])).toEqual([
+                expect(await client.zdiff([key1, key2])).toEqual([
                     "one",
                     "three",
                 ]);
-                checkSimple(await client.zdiff([key1, key3])).toEqual([]);
-                checkSimple(await client.zdiff([nonExistingKey, key3])).toEqual(
-                    [],
-                );
+                expect(await client.zdiff([key1, key3])).toEqual([]);
+                expect(await client.zdiff([nonExistingKey, key3])).toEqual([]);
 
                 let result = await client.zdiffWithScores([key1, key2]);
                 const expected = {
@@ -3094,7 +3091,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // key exists, but it is not a sorted set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(client.zdiff([stringKey, key1])).rejects.toThrow();
                 await expect(
                     client.zdiffWithScores([stringKey, key1]),
@@ -3175,7 +3172,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // key exists, but it is not a sorted set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.zdiffstore(key4, [stringKey, key1]),
                 ).rejects.toThrow(RequestError);
@@ -3200,7 +3197,7 @@ export function runBaseTests<Context>(config: {
                     await client.zscore("nonExistingKey", "nonExistingMember"),
                 ).toEqual(null);
 
-                checkSimple(await client.set(key2, "foo")).toEqual("OK");
+                expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(client.zscore(key2, "foo")).rejects.toThrow();
             }, protocol);
         },
@@ -3247,7 +3244,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 // key exists, but it is not a sorted set
-                checkSimple(await client.set(stringKey, "foo")).toEqual("OK");
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.zmscore(stringKey, ["one"]),
                 ).rejects.toThrow(RequestError);
@@ -3303,7 +3300,7 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(0);
 
-                checkSimple(await client.set(key2, "foo")).toEqual("OK");
+                expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
                     client.zcount(key2, "negativeInfinity", "positiveInfinity"),
                 ).rejects.toThrow();
@@ -3320,9 +3317,9 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                checkSimple(
-                    await client.zrange(key, { start: 0, stop: 1 }),
-                ).toEqual(["one", "two"]);
+                expect(await client.zrange(key, { start: 0, stop: 1 })).toEqual(
+                    ["one", "two"],
+                );
                 const result = await client.zrangeWithScores(key, {
                     start: 0,
                     stop: -1,
@@ -3335,7 +3332,7 @@ export function runBaseTests<Context>(config: {
                         three: 3.0,
                     }),
                 ).toBe(true);
-                checkSimple(
+                expect(
                     await client.zrange(key, { start: 0, stop: 1 }, true),
                 ).toEqual(["three", "two"]);
                 expect(await client.zrange(key, { start: 3, stop: 1 })).toEqual(
@@ -3357,7 +3354,7 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                checkSimple(
+                expect(
                     await client.zrange(key, {
                         start: "negativeInfinity",
                         stop: { value: 3, isInclusive: false },
@@ -3377,7 +3374,7 @@ export function runBaseTests<Context>(config: {
                         three: 3.0,
                     }),
                 ).toBe(true);
-                checkSimple(
+                expect(
                     await client.zrange(
                         key,
                         {
@@ -3389,7 +3386,7 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(["two", "one"]);
 
-                checkSimple(
+                expect(
                     await client.zrange(key, {
                         start: "negativeInfinity",
                         stop: "positiveInfinity",
@@ -3450,7 +3447,7 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { a: 1, b: 2, c: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                checkSimple(
+                expect(
                     await client.zrange(key, {
                         start: "negativeInfinity",
                         stop: { value: "c", isInclusive: false },
@@ -3458,7 +3455,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toEqual(["a", "b"]);
 
-                checkSimple(
+                expect(
                     await client.zrange(key, {
                         start: "negativeInfinity",
                         stop: "positiveInfinity",
@@ -3467,7 +3464,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toEqual(["b", "c"]);
 
-                checkSimple(
+                expect(
                     await client.zrange(
                         key,
                         {
@@ -3676,27 +3673,25 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "value")).toEqual("OK");
-                checkSimple(await client.type(key)).toEqual("string");
-                checkSimple(await client.del([key])).toEqual(1);
+                expect(await client.set(key, "value")).toEqual("OK");
+                expect(await client.type(key)).toEqual("string");
+                expect(await client.del([key])).toEqual(1);
 
-                checkSimple(await client.lpush(key, ["value"])).toEqual(1);
-                checkSimple(await client.type(key)).toEqual("list");
-                checkSimple(await client.del([key])).toEqual(1);
+                expect(await client.lpush(key, ["value"])).toEqual(1);
+                expect(await client.type(key)).toEqual("list");
+                expect(await client.del([key])).toEqual(1);
 
-                checkSimple(await client.sadd(key, ["value"])).toEqual(1);
-                checkSimple(await client.type(key)).toEqual("set");
-                checkSimple(await client.del([key])).toEqual(1);
+                expect(await client.sadd(key, ["value"])).toEqual(1);
+                expect(await client.type(key)).toEqual("set");
+                expect(await client.del([key])).toEqual(1);
 
-                checkSimple(await client.zadd(key, { member: 1.0 })).toEqual(1);
-                checkSimple(await client.type(key)).toEqual("zset");
-                checkSimple(await client.del([key])).toEqual(1);
+                expect(await client.zadd(key, { member: 1.0 })).toEqual(1);
+                expect(await client.type(key)).toEqual("zset");
+                expect(await client.del([key])).toEqual(1);
 
-                checkSimple(await client.hset(key, { field: "value" })).toEqual(
-                    1,
-                );
-                checkSimple(await client.type(key)).toEqual("hash");
-                checkSimple(await client.del([key])).toEqual(1);
+                expect(await client.hset(key, { field: "value" })).toEqual(1);
+                expect(await client.type(key)).toEqual("hash");
+                expect(await client.del([key])).toEqual(1);
 
                 await client.customCommand([
                     "XADD",
@@ -3705,9 +3700,9 @@ export function runBaseTests<Context>(config: {
                     "field",
                     "value",
                 ]);
-                checkSimple(await client.type(key)).toEqual("stream");
-                checkSimple(await client.del([key])).toEqual(1);
-                checkSimple(await client.type(key)).toEqual("none");
+                expect(await client.type(key)).toEqual("stream");
+                expect(await client.del([key])).toEqual(1);
+                expect(await client.type(key)).toEqual("none");
             }, protocol);
         },
         config.timeout,
@@ -3718,7 +3713,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const message = uuidv4();
-                checkSimple(await client.echo(message)).toEqual(message);
+                expect(await client.echo(message)).toEqual(message);
             }, protocol);
         },
         config.timeout,
@@ -3731,8 +3726,8 @@ export function runBaseTests<Context>(config: {
                 const key1 = uuidv4();
                 const key1Value = uuidv4();
                 const key1ValueLength = key1Value.length;
-                checkSimple(await client.set(key1, key1Value)).toEqual("OK");
-                checkSimple(await client.strlen(key1)).toEqual(key1ValueLength);
+                expect(await client.set(key1, key1Value)).toEqual("OK");
+                expect(await client.strlen(key1)).toEqual(key1ValueLength);
 
                 expect(await client.strlen("nonExistKey")).toEqual(0);
 
@@ -3766,12 +3761,8 @@ export function runBaseTests<Context>(config: {
                         listKey2Value,
                     ]),
                 ).toEqual(2);
-                checkSimple(await client.lindex(listName, 0)).toEqual(
-                    listKey2Value,
-                );
-                checkSimple(await client.lindex(listName, 1)).toEqual(
-                    listKey1Value,
-                );
+                expect(await client.lindex(listName, 0)).toEqual(listKey2Value);
+                expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
             }, protocol);
@@ -3806,7 +3797,7 @@ export function runBaseTests<Context>(config: {
                         "3.5",
                     ),
                 ).toEqual(6);
-                checkSimple(await client.lrange(key1, 0, -1)).toEqual([
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "1",
                     "1.5",
                     "2",
@@ -3858,7 +3849,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toBe(true);
                 expect(await client.zpopmin(key)).toEqual({});
-                checkSimple(await client.set(key, "value")).toEqual("OK");
+                expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmin(key)).rejects.toThrow();
                 expect(await client.zpopmin("notExsitingKey")).toEqual({});
             }, protocol);
@@ -3882,7 +3873,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toBe(true);
                 expect(await client.zpopmax(key)).toEqual({});
-                checkSimple(await client.set(key, "value")).toEqual("OK");
+                expect(await client.set(key, "value")).toEqual("OK");
                 await expect(client.zpopmax(key)).rejects.toThrow();
                 expect(await client.zpopmax("notExsitingKey")).toEqual({});
             }, protocol);
@@ -3897,7 +3888,7 @@ export function runBaseTests<Context>(config: {
                 const key = uuidv4();
                 expect(await client.pttl(key)).toEqual(-2);
 
-                checkSimple(await client.set(key, "value")).toEqual("OK");
+                expect(await client.set(key, "value")).toEqual("OK");
                 expect(await client.pttl(key)).toEqual(-1);
 
                 expect(await client.expire(key, 10)).toEqual(true);
@@ -3973,7 +3964,7 @@ export function runBaseTests<Context>(config: {
                     null,
                 );
 
-                checkSimple(await client.set(key2, "value")).toEqual("OK");
+                expect(await client.set(key2, "value")).toEqual("OK");
                 await expect(client.zrank(key2, "member")).rejects.toThrow();
             }, protocol);
         },
@@ -4015,7 +4006,7 @@ export function runBaseTests<Context>(config: {
                 ).toBeNull();
 
                 // Key exists, but is not a sorted set
-                checkSimple(await client.set(nonSetKey, "value")).toEqual("OK");
+                expect(await client.set(nonSetKey, "value")).toEqual("OK");
                 await expect(
                     client.zrevrank(nonSetKey, "member"),
                 ).rejects.toThrow();
@@ -4031,7 +4022,7 @@ export function runBaseTests<Context>(config: {
                     await client.rpush("brpop-test", ["foo", "bar", "baz"]),
                 ).toEqual(3);
                 // Test basic usage
-                checkSimple(await client.brpop(["brpop-test"], 0.1)).toEqual([
+                expect(await client.brpop(["brpop-test"], 0.1)).toEqual([
                     "brpop-test",
                     "baz",
                 ]);
@@ -4068,7 +4059,7 @@ export function runBaseTests<Context>(config: {
                     await client.rpush("blpop-test", ["foo", "bar", "baz"]),
                 ).toEqual(3);
                 // Test basic usage
-                checkSimple(await client.blpop(["blpop-test"], 0.1)).toEqual([
+                expect(await client.blpop(["blpop-test"], 0.1)).toEqual([
                     "blpop-test",
                     "foo",
                 ]);
@@ -4102,7 +4093,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.persist(key)).toEqual(false);
 
                 expect(await client.expire(key, 10)).toEqual(true);
@@ -4142,7 +4133,7 @@ export function runBaseTests<Context>(config: {
                     ],
                     { id: "0-1" },
                 );
-                checkSimple(timestamp1).toEqual("0-1");
+                expect(timestamp1).toEqual("0-1");
                 expect(
                     await client.xadd(key, [
                         [field1, "foo2"],
@@ -4339,7 +4330,7 @@ export function runBaseTests<Context>(config: {
                         [timestamp_2_3 as string]: [["bar", "bar3"]],
                     },
                 };
-                checkSimple(result).toEqual(expected);
+                expect(result).toEqual(expected);
             }, ProtocolVersion.RESP2);
         },
         config.timeout,
@@ -4355,7 +4346,7 @@ export function runBaseTests<Context>(config: {
                 await client.set(key, "value");
                 await client.rename(key, newKey);
                 const result = await client.get(newKey);
-                checkSimple(result).toEqual("value");
+                expect(result).toEqual("value");
                 // If key doesn't exist it should throw, it also test that key has successfully been renamed
                 await expect(client.rename(key, newKey)).rejects.toThrow();
             }, protocol);
@@ -4382,13 +4373,13 @@ export function runBaseTests<Context>(config: {
                 await client.set(key1, "key1");
                 await client.set(key3, "key3");
                 // Test that renamenx can rename key1 to key2 (non-existing value)
-                checkSimple(await client.renamenx(key1, key2)).toEqual(true);
+                expect(await client.renamenx(key1, key2)).toEqual(true);
                 // sanity check
-                checkSimple(await client.get(key2)).toEqual("key1");
+                expect(await client.get(key2)).toEqual("key1");
                 // Test that renamenx doesn't rename key2 to key3 (with an existing value)
-                checkSimple(await client.renamenx(key2, key3)).toEqual(false);
+                expect(await client.renamenx(key2, key3)).toEqual(false);
                 // sanity check
-                checkSimple(await client.get(key3)).toEqual("key3");
+                expect(await client.get(key3)).toEqual("key3");
             }, protocol);
         },
         config.timeout,
@@ -4399,13 +4390,13 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                checkSimple(await client.pfadd(key, [])).toEqual(1);
-                checkSimple(await client.pfadd(key, ["one", "two"])).toEqual(1);
-                checkSimple(await client.pfadd(key, ["two"])).toEqual(0);
-                checkSimple(await client.pfadd(key, [])).toEqual(0);
+                expect(await client.pfadd(key, [])).toEqual(1);
+                expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
+                expect(await client.pfadd(key, ["two"])).toEqual(0);
+                expect(await client.pfadd(key, [])).toEqual(0);
 
                 // key exists, but it is not a HyperLogLog
-                checkSimple(await client.set("foo", "value")).toEqual("OK");
+                expect(await client.set("foo", "value")).toEqual("OK");
                 await expect(client.pfadd("foo", [])).rejects.toThrow();
             }, protocol);
         },
@@ -4463,9 +4454,9 @@ export function runBaseTests<Context>(config: {
                 count: 500,
             },
         });
-        checkSimple(setResWithExpirySetMilli).toEqual("OK");
+        expect(setResWithExpirySetMilli).toEqual("OK");
         const getWithExpirySetMilli = await client.get(key);
-        checkSimple(getWithExpirySetMilli).toEqual(value);
+        expect(getWithExpirySetMilli).toEqual(value);
 
         const setResWithExpirySec = await client.set(key, value, {
             expiry: {
@@ -4473,9 +4464,9 @@ export function runBaseTests<Context>(config: {
                 count: 1,
             },
         });
-        checkSimple(setResWithExpirySec).toEqual("OK");
+        expect(setResWithExpirySec).toEqual("OK");
         const getResWithExpirySec = await client.get(key);
-        checkSimple(getResWithExpirySec).toEqual(value);
+        expect(getResWithExpirySec).toEqual(value);
 
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
@@ -4483,59 +4474,59 @@ export function runBaseTests<Context>(config: {
                 count: Math.floor(Date.now() / 1000) + 1,
             },
         });
-        checkSimple(setWithUnixSec).toEqual("OK");
+        expect(setWithUnixSec).toEqual("OK");
         const getWithUnixSec = await client.get(key);
-        checkSimple(getWithUnixSec).toEqual(value);
+        expect(getWithUnixSec).toEqual(value);
 
         const setResWithExpiryKeep = await client.set(key, value, {
             expiry: "keepExisting",
         });
-        checkSimple(setResWithExpiryKeep).toEqual("OK");
+        expect(setResWithExpiryKeep).toEqual("OK");
         const getResWithExpiryKeep = await client.get(key);
-        checkSimple(getResWithExpiryKeep).toEqual(value);
+        expect(getResWithExpiryKeep).toEqual(value);
         // wait for the key to expire base on the previous set
         let sleep = new Promise((resolve) => setTimeout(resolve, 1000));
         await sleep;
         const getResExpire = await client.get(key);
         // key should have expired
-        checkSimple(getResExpire).toEqual(null);
+        expect(getResExpire).toEqual(null);
         const setResWithExpiryWithUmilli = await client.set(key, value, {
             expiry: {
                 type: "unixMilliseconds",
                 count: Date.now() + 1000,
             },
         });
-        checkSimple(setResWithExpiryWithUmilli).toEqual("OK");
+        expect(setResWithExpiryWithUmilli).toEqual("OK");
         // wait for the key to expire
         sleep = new Promise((resolve) => setTimeout(resolve, 1001));
         await sleep;
         const getResWithExpiryWithUmilli = await client.get(key);
         // key should have expired
-        checkSimple(getResWithExpiryWithUmilli).toEqual(null);
+        expect(getResWithExpiryWithUmilli).toEqual(null);
     }
 
     async function setWithOnlyIfExistOptions(client: BaseClient) {
         const key = uuidv4();
         const value = uuidv4();
         const setKey = await client.set(key, value);
-        checkSimple(setKey).toEqual("OK");
+        expect(setKey).toEqual("OK");
         const getRes = await client.get(key);
-        checkSimple(getRes).toEqual(value);
+        expect(getRes).toEqual(value);
         const setExistingKeyRes = await client.set(key, value, {
             conditionalSet: "onlyIfExists",
         });
-        checkSimple(setExistingKeyRes).toEqual("OK");
+        expect(setExistingKeyRes).toEqual("OK");
         const getExistingKeyRes = await client.get(key);
-        checkSimple(getExistingKeyRes).toEqual(value);
+        expect(getExistingKeyRes).toEqual(value);
 
         const notExistingKeyRes = await client.set(key + 1, value, {
             conditionalSet: "onlyIfExists",
         });
         // key does not exist, so it should not be set
-        checkSimple(notExistingKeyRes).toEqual(null);
+        expect(notExistingKeyRes).toEqual(null);
         const getNotExistingKey = await client.get(key + 1);
         // key should not have been set
-        checkSimple(getNotExistingKey).toEqual(null);
+        expect(getNotExistingKey).toEqual(null);
     }
 
     async function setWithOnlyIfNotExistOptions(client: BaseClient) {
@@ -4545,19 +4536,19 @@ export function runBaseTests<Context>(config: {
             conditionalSet: "onlyIfDoesNotExist",
         });
         // key does not exist, so it should be set
-        checkSimple(notExistingKeyRes).toEqual("OK");
+        expect(notExistingKeyRes).toEqual("OK");
         const getNotExistingKey = await client.get(key);
         // key should have been set
-        checkSimple(getNotExistingKey).toEqual(value);
+        expect(getNotExistingKey).toEqual(value);
 
         const existingKeyRes = await client.set(key, value, {
             conditionalSet: "onlyIfDoesNotExist",
         });
         // key exists, so it should not be set
-        checkSimple(existingKeyRes).toEqual(null);
+        expect(existingKeyRes).toEqual(null);
         const getExistingKey = await client.get(key);
         // key should not have been set
-        checkSimple(getExistingKey).toEqual(value);
+        expect(getExistingKey).toEqual(value);
     }
 
     async function setWithGetOldOptions(client: BaseClient) {
@@ -4568,19 +4559,19 @@ export function runBaseTests<Context>(config: {
             returnOldValue: true,
         });
         // key does not exist, so old value should be null
-        checkSimple(setResGetNotExistOld).toEqual(null);
+        expect(setResGetNotExistOld).toEqual(null);
         // key should have been set
         const getResGetNotExistOld = await client.get(key);
-        checkSimple(getResGetNotExistOld).toEqual(value);
+        expect(getResGetNotExistOld).toEqual(value);
 
         const setResGetExistOld = await client.set(key, value, {
             returnOldValue: true,
         });
         // key exists, so old value should be returned
-        checkSimple(setResGetExistOld).toEqual(value);
+        expect(setResGetExistOld).toEqual(value);
         // key should have been set
         const getResGetExistOld = await client.get(key);
-        checkSimple(getResGetExistOld).toEqual(value);
+        expect(getResGetExistOld).toEqual(value);
     }
 
     async function setWithAllOptions(client: BaseClient) {
@@ -4634,14 +4625,14 @@ export function runBaseTests<Context>(config: {
             });
 
             if (exist == false) {
-                checkSimple(setRes).toEqual("OK");
+                expect(setRes).toEqual("OK");
                 exist = true;
             } else {
-                checkSimple(setRes).toEqual(null);
+                expect(setRes).toEqual(null);
             }
 
             const getRes = await client.get(key);
-            checkSimple(getRes).toEqual(value);
+            expect(getRes).toEqual(value);
         }
 
         for (const expiryVal of expiryCombination) {
@@ -4704,37 +4695,31 @@ export function runBaseTests<Context>(config: {
                     null,
                 );
 
-                checkSimple(
+                expect(
                     await client.set(
                         string_key,
                         "a really loooooooooooooooooooooooooooooooooooooooong value",
                     ),
                 ).toEqual("OK");
 
-                checkSimple(await client.objectEncoding(string_key)).toEqual(
-                    "raw",
-                );
+                expect(await client.objectEncoding(string_key)).toEqual("raw");
 
-                checkSimple(await client.set(string_key, "2")).toEqual("OK");
-                checkSimple(await client.objectEncoding(string_key)).toEqual(
-                    "int",
-                );
+                expect(await client.set(string_key, "2")).toEqual("OK");
+                expect(await client.objectEncoding(string_key)).toEqual("int");
 
-                checkSimple(await client.set(string_key, "value")).toEqual(
-                    "OK",
-                );
-                checkSimple(await client.objectEncoding(string_key)).toEqual(
+                expect(await client.set(string_key, "value")).toEqual("OK");
+                expect(await client.objectEncoding(string_key)).toEqual(
                     "embstr",
                 );
 
                 expect(await client.lpush(list_key, ["1"])).toEqual(1);
 
                 if (versionLessThan72) {
-                    checkSimple(await client.objectEncoding(list_key)).toEqual(
+                    expect(await client.objectEncoding(list_key)).toEqual(
                         "quicklist",
                     );
                 } else {
-                    checkSimple(await client.objectEncoding(list_key)).toEqual(
+                    expect(await client.objectEncoding(list_key)).toEqual(
                         "listpack",
                     );
                 }
@@ -4746,23 +4731,23 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                checkSimple(await client.objectEncoding(hashtable_key)).toEqual(
+                expect(await client.objectEncoding(hashtable_key)).toEqual(
                     "hashtable",
                 );
 
                 expect(await client.sadd(intset_key, ["1"])).toEqual(1);
-                checkSimple(await client.objectEncoding(intset_key)).toEqual(
+                expect(await client.objectEncoding(intset_key)).toEqual(
                     "intset",
                 );
 
                 expect(await client.sadd(set_listpack_key, ["foo"])).toEqual(1);
 
                 if (versionLessThan72) {
-                    checkSimple(
+                    expect(
                         await client.objectEncoding(set_listpack_key),
                     ).toEqual("hashtable");
                 } else {
-                    checkSimple(
+                    expect(
                         await client.objectEncoding(set_listpack_key),
                     ).toEqual("listpack");
                 }
@@ -4776,20 +4761,20 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                checkSimple(
-                    await client.objectEncoding(hash_hashtable_key),
-                ).toEqual("hashtable");
+                expect(await client.objectEncoding(hash_hashtable_key)).toEqual(
+                    "hashtable",
+                );
 
                 expect(
                     await client.hset(hash_listpack_key, { "1": "2" }),
                 ).toEqual(1);
 
                 if (versionLessThan7) {
-                    checkSimple(
+                    expect(
                         await client.objectEncoding(hash_listpack_key),
                     ).toEqual("ziplist");
                 } else {
-                    checkSimple(
+                    expect(
                         await client.objectEncoding(hash_listpack_key),
                     ).toEqual("listpack");
                 }
@@ -4801,7 +4786,7 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                checkSimple(await client.objectEncoding(skiplist_key)).toEqual(
+                expect(await client.objectEncoding(skiplist_key)).toEqual(
                     "skiplist",
                 );
 
@@ -4810,11 +4795,11 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(1);
 
                 if (versionLessThan7) {
-                    checkSimple(
+                    expect(
                         await client.objectEncoding(zset_listpack_key),
                     ).toEqual("ziplist");
                 } else {
-                    checkSimple(
+                    expect(
                         await client.objectEncoding(zset_listpack_key),
                     ).toEqual("listpack");
                 }
@@ -4822,7 +4807,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.xadd(stream_key, [["field", "value"]]),
                 ).not.toBeNull();
-                checkSimple(await client.objectEncoding(stream_key)).toEqual(
+                expect(await client.objectEncoding(stream_key)).toEqual(
                     "stream",
                 );
             }, protocol);
@@ -5107,7 +5092,7 @@ export function runBaseTests<Context>(config: {
                 const key2 = uuidv4();
                 const value = "foobar";
 
-                checkSimple(await client.set(key1, value)).toEqual("OK");
+                expect(await client.set(key1, value)).toEqual("OK");
                 expect(await client.bitcount(key1)).toEqual(26);
                 expect(
                     await client.bitcount(key1, { start: 1, end: 1 }),
@@ -5346,19 +5331,35 @@ export function runBaseTests<Context>(config: {
                 const expectedResult = [
                     [
                         members[0],
-                        [56.4413, 3479447370796909, membersCoordinates[0]],
+                        [
+                            56.4413,
+                            3479447370796909,
+                            [15.087267458438873, 37.50266842333162],
+                        ],
                     ],
                     [
                         members[1],
-                        [190.4424, 3479099956230698, membersCoordinates[1]],
+                        [
+                            190.4424,
+                            3479099956230698,
+                            [13.361389338970184, 38.1155563954963],
+                        ],
                     ],
                     [
                         members[2],
-                        [279.7403, 3481342659049484, membersCoordinates[2]],
+                        [
+                            279.7403,
+                            3481342659049484,
+                            [17.241510450839996, 38.78813451624225],
+                        ],
                     ],
                     [
                         members[3],
-                        [279.7405, 3479273021651468, membersCoordinates[3]],
+                        [
+                            279.7405,
+                            3479273021651468,
+                            [12.75848776102066, 38.78813451624225],
+                        ],
                     ],
                 ];
 
@@ -5373,7 +5374,7 @@ export function runBaseTests<Context>(config: {
                     { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                 );
                 // using set to compare, because results are reordrered
-                checkSimple(new Set(searchResult)).toEqual(membersSet);
+                expect(new Set(searchResult)).toEqual(membersSet);
 
                 // order search result
                 searchResult = await client.geosearch(
@@ -5382,7 +5383,7 @@ export function runBaseTests<Context>(config: {
                     { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                     { sortOrder: SortOrder.ASC },
                 );
-                checkSimple(searchResult).toEqual(members);
+                expect(searchResult).toEqual(members);
 
                 // order and query all extra data
                 searchResult = await client.geosearch(
@@ -5396,7 +5397,7 @@ export function runBaseTests<Context>(config: {
                         withHash: true,
                     },
                 );
-                checkSimple(searchResult).toEqual(expectedResult);
+                expect(searchResult).toEqual(expectedResult);
 
                 // order, query and limit by 1
                 searchResult = await client.geosearch(
@@ -5411,7 +5412,7 @@ export function runBaseTests<Context>(config: {
                         count: 1,
                     },
                 );
-                checkSimple(searchResult).toEqual(expectedResult.slice(0, 1));
+                expect(searchResult).toEqual(expectedResult.slice(0, 1));
 
                 // test search by box, unit: meters, from member, with distance
                 const meters = 400 * 1000;
@@ -5425,7 +5426,7 @@ export function runBaseTests<Context>(config: {
                         sortOrder: SortOrder.DESC,
                     },
                 );
-                checkSimple(searchResult).toEqual([
+                expect(searchResult).toEqual([
                     ["edge2", [236529.1799]],
                     ["Palermo", [166274.1516]],
                     ["Catania", [0.0]],
@@ -5445,7 +5446,7 @@ export function runBaseTests<Context>(config: {
                         count: 2,
                     },
                 );
-                checkSimple(searchResult).toEqual([
+                expect(searchResult).toEqual([
                     ["Palermo", [3479099956230698]],
                     ["edge1", [3479273021651468]],
                 ]);
@@ -5458,9 +5459,7 @@ export function runBaseTests<Context>(config: {
                     { width: miles, height: miles, unit: GeoUnit.MILES },
                     { count: 1, isAny: true },
                 );
-                expect(members.map((m) => Buffer.from(m))).toContainEqual(
-                    searchResult[0],
-                );
+                expect(members).toContainEqual(searchResult[0]);
 
                 // test search by radius, units: feet, from member
                 const feetRadius = 200 * 3280.8399;
@@ -5470,7 +5469,7 @@ export function runBaseTests<Context>(config: {
                     { radius: feetRadius, unit: GeoUnit.FEET },
                     { sortOrder: SortOrder.ASC },
                 );
-                checkSimple(searchResult).toEqual(["Catania", "Palermo"]);
+                expect(searchResult).toEqual(["Catania", "Palermo"]);
 
                 // Test search by radius, unit: meters, from member
                 const metersRadius = 200 * 1000;
@@ -5480,7 +5479,7 @@ export function runBaseTests<Context>(config: {
                     { radius: metersRadius, unit: GeoUnit.METERS },
                     { sortOrder: SortOrder.DESC },
                 );
-                checkSimple(searchResult).toEqual(["Palermo", "Catania"]);
+                expect(searchResult).toEqual(["Palermo", "Catania"]);
 
                 searchResult = await client.geosearch(
                     key,
@@ -5491,7 +5490,7 @@ export function runBaseTests<Context>(config: {
                         withHash: true,
                     },
                 );
-                checkSimple(searchResult).toEqual([
+                expect(searchResult).toEqual([
                     ["Palermo", [3479099956230698]],
                     ["Catania", [3479447370796909]],
                 ]);
@@ -5503,7 +5502,7 @@ export function runBaseTests<Context>(config: {
                     { radius: 175, unit: GeoUnit.MILES },
                     { sortOrder: SortOrder.DESC },
                 );
-                checkSimple(searchResult).toEqual([
+                expect(searchResult).toEqual([
                     "edge1",
                     "edge2",
                     "Palermo",
@@ -5523,7 +5522,7 @@ export function runBaseTests<Context>(config: {
                         withDist: true,
                     },
                 );
-                checkSimple(searchResult).toEqual(expectedResult.slice(0, 2));
+                expect(searchResult).toEqual(expectedResult.slice(0, 2));
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
                 searchResult = await client.geosearch(
@@ -5539,9 +5538,7 @@ export function runBaseTests<Context>(config: {
                         withHash: true,
                     },
                 );
-                expect(members.map((m) => Buffer.from(m))).toContainEqual(
-                    searchResult[0][0],
-                );
+                expect(members).toContainEqual(searchResult[0][0]);
 
                 // no members within the area
                 searchResult = await client.geosearch(
@@ -5600,10 +5597,10 @@ export function runBaseTests<Context>(config: {
                     2,
                 );
 
-                checkSimple(
+                expect(
                     await client.zmpop([key1, key2], ScoreFilter.MAX),
                 ).toEqual([key1, { b1: 2 }]);
-                checkSimple(
+                expect(
                     await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
@@ -5698,10 +5695,10 @@ export function runBaseTests<Context>(config: {
                     2,
                 );
 
-                checkSimple(
+                expect(
                     await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
                 ).toEqual([key1, { b1: 2 }]);
-                checkSimple(
+                expect(
                     await client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10),
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
@@ -5877,7 +5874,7 @@ export function runBaseTests<Context>(config: {
                 const randmember = await client.zrandmember(key1);
 
                 if (randmember !== null) {
-                    checkSimple(randmember in elements).toEqual(true);
+                    expect(elements.includes(randmember)).toEqual(true);
                 }
 
                 // non existing key should return null
@@ -6007,154 +6004,117 @@ export function runBaseTests<Context>(config: {
                 const key4 = "{lcs}" + uuidv4();
 
                 // keys does not exist or is empty
-                checkSimple(await client.lcs(key1, key2)).toEqual("");
-                checkSimple(await client.lcsLen(key1, key2)).toEqual(0);
-                checkSimple(await client.lcsIdx(key1, key2)).toEqual(
-                    new Map<string, ReturnType>([
-                        ["matches", []],
-                        ["len", 0],
-                    ]),
-                );
+                expect(await client.lcs(key1, key2)).toEqual("");
+                expect(await client.lcsLen(key1, key2)).toEqual(0);
+                expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [],
+                    len: 0,
+                });
 
                 // LCS with some strings
-                checkSimple(
+                expect(
                     await client.mset({
                         [key1]: "abcdefghijk",
                         [key2]: "defjkjuighijk",
                         [key3]: "123",
                     }),
                 ).toEqual("OK");
-                checkSimple(await client.lcs(key1, key2)).toEqual("defghijk");
-                checkSimple(await client.lcsLen(key1, key2)).toEqual(8);
+                expect(await client.lcs(key1, key2)).toEqual("defghijk");
+                expect(await client.lcsLen(key1, key2)).toEqual(8);
 
                 // LCS with only IDX
-                checkSimple(await client.lcsIdx(key1, key2)).toEqual(
-                    new Map<string, ReturnType>([
+                expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [
                         [
-                            "matches",
-                            [
-                                [
-                                    [6, 10],
-                                    [8, 12],
-                                ],
-                                [
-                                    [3, 5],
-                                    [0, 2],
-                                ],
-                            ],
+                            [6, 10],
+                            [8, 12],
                         ],
-                        ["len", 8],
-                    ]),
-                );
-                checkSimple(await client.lcsIdx(key1, key2, {})).toEqual(
-                    new Map<string, ReturnType>([
                         [
-                            "matches",
-                            [
-                                [
-                                    [6, 10],
-                                    [8, 12],
-                                ],
-                                [
-                                    [3, 5],
-                                    [0, 2],
-                                ],
-                            ],
+                            [3, 5],
+                            [0, 2],
                         ],
-                        ["len", 8],
-                    ]),
-                );
-                checkSimple(
+                    ],
+                    len: 8,
+                });
+                expect(await client.lcsIdx(key1, key2, {})).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+                expect(
                     await client.lcsIdx(key1, key2, { withMatchLen: false }),
-                ).toEqual(
-                    new Map<string, ReturnType>([
+                ).toEqual({
+                    matches: [
                         [
-                            "matches",
-                            [
-                                [
-                                    [6, 10],
-                                    [8, 12],
-                                ],
-                                [
-                                    [3, 5],
-                                    [0, 2],
-                                ],
-                            ],
+                            [6, 10],
+                            [8, 12],
                         ],
-                        ["len", 8],
-                    ]),
-                );
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
 
                 // LCS with IDX and WITHMATCHLEN
-                checkSimple(
+                expect(
                     await client.lcsIdx(key1, key2, { withMatchLen: true }),
-                ).toEqual(
-                    new Map<string, ReturnType>([
-                        [
-                            "matches",
-                            [
-                                [[6, 10], [8, 12], 5],
-                                [[3, 5], [0, 2], 3],
-                            ],
-                        ],
-                        ["len", 8],
-                    ]),
-                );
+                ).toEqual({
+                    matches: [
+                        [[6, 10], [8, 12], 5],
+                        [[3, 5], [0, 2], 3],
+                    ],
+                    len: 8,
+                });
 
                 // LCS with IDX and MINMATCHLEN
-                checkSimple(
+                expect(
                     await client.lcsIdx(key1, key2, { minMatchLen: 4 }),
-                ).toEqual(
-                    new Map<string, ReturnType>([
+                ).toEqual({
+                    matches: [
                         [
-                            "matches",
-                            [
-                                [
-                                    [6, 10],
-                                    [8, 12],
-                                ],
-                            ],
+                            [6, 10],
+                            [8, 12],
                         ],
-                        ["len", 8],
-                    ]),
-                );
+                    ],
+                    len: 8,
+                });
                 // LCS with IDX and a negative MINMATCHLEN
-                checkSimple(
+                expect(
                     await client.lcsIdx(key1, key2, { minMatchLen: -1 }),
-                ).toEqual(
-                    new Map<string, ReturnType>([
+                ).toEqual({
+                    matches: [
                         [
-                            "matches",
-                            [
-                                [
-                                    [6, 10],
-                                    [8, 12],
-                                ],
-                                [
-                                    [3, 5],
-                                    [0, 2],
-                                ],
-                            ],
+                            [6, 10],
+                            [8, 12],
                         ],
-                        ["len", 8],
-                    ]),
-                );
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
 
                 // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
-                checkSimple(
+                expect(
                     await client.lcsIdx(key1, key2, {
                         minMatchLen: 4,
                         withMatchLen: true,
                     }),
-                ).toEqual(
-                    new Map<string, ReturnType>([
-                        ["matches", [[[6, 10], [8, 12], 5]]],
-                        ["len", 8],
-                    ]),
-                );
+                ).toEqual({ matches: [[[6, 10], [8, 12], 5]], len: 8 });
 
                 // non-string keys are used
-                checkSimple(await client.sadd(key4, ["_"])).toEqual(1);
+                expect(await client.sadd(key4, ["_"])).toEqual(1);
                 await expect(client.lcs(key1, key4)).rejects.toThrow(
                     RequestError,
                 );
@@ -6203,7 +6163,7 @@ export function runCommonTests<Context>(config: {
                 const value = "שלום hello 汉字";
                 await client.set(key, value);
                 const result = await client.get(key);
-                checkSimple(result).toEqual(value);
+                expect(result).toEqual(value);
             });
         },
         config.timeout,
@@ -6215,7 +6175,7 @@ export function runCommonTests<Context>(config: {
             await runTest(async (client: Client) => {
                 const result = await client.get(uuidv4());
 
-                checkSimple(result).toEqual(null);
+                expect(result).toEqual(null);
             });
         },
         config.timeout,
@@ -6229,7 +6189,7 @@ export function runCommonTests<Context>(config: {
                 await client.set(key, "");
                 const result = await client.get(key);
 
-                checkSimple(result).toEqual("");
+                expect(result).toEqual("");
             });
         },
         config.timeout,
@@ -6256,7 +6216,7 @@ export function runCommonTests<Context>(config: {
                 await client.set(key, value);
                 const result = await client.get(key);
 
-                checkSimple(result).toEqual(value);
+                expect(result).toEqual(value);
             });
         },
         config.timeout,
@@ -6271,7 +6231,7 @@ export function runCommonTests<Context>(config: {
                         await GetAndSetRandomValue(client);
                     } else {
                         const result = await client.get(uuidv4());
-                        checkSimple(result).toEqual(null);
+                        expect(result).toEqual(null);
                     }
                 };
 

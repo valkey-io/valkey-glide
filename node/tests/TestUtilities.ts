@@ -27,6 +27,7 @@ import {
     ListDirection,
     ProtocolVersion,
     ReturnType,
+    ReturnTypeMap,
     ScoreFilter,
     SignedEncoding,
     SortOrder,
@@ -374,21 +375,17 @@ export function checkFunctionListResponse(
                     string,
                     string | string[]
                 >;
-                const name = (
-                    functionInfo["name"] as unknown as Buffer
-                ).toString(); // not a string - suprise
-                const flags = (
-                    functionInfo["flags"] as unknown as Buffer[]
-                ).map((f) => f.toString());
-                checkSimple(functionInfo["description"]).toEqual(
+                const name = functionInfo["name"] as string;
+                const flags = functionInfo["flags"] as string[];
+                expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );
 
-                checkSimple(flags).toEqual(functionFlags.get(name));
+                expect(flags).toEqual(functionFlags.get(name));
             }
 
             if (libCode) {
-                checkSimple(lib["library_code"]).toEqual(libCode);
+                expect(lib["library_code"]).toEqual(libCode);
             }
 
             break;
@@ -412,9 +409,23 @@ export function validateTransactionResponse(
     for (let i = 0; i < expectedResponseData.length; i++) {
         const [testName, expectedResponse] = expectedResponseData[i];
 
-        if (intoString(response?.[i]) != intoString(expectedResponse)) {
+        try {
+            expect(response?.[i]).toEqual(expectedResponse);
+        } catch (e) {
+            const expected =
+                expectedResponse instanceof Map
+                    ? JSON.stringify(Array.from(expectedResponse.entries()))
+                    : JSON.stringify(expectedResponse);
+            const actual =
+                response?.[i] instanceof Map
+                    ? JSON.stringify(
+                          Array.from(
+                              (response?.[i] as ReturnTypeMap)?.entries(),
+                          ),
+                      )
+                    : JSON.stringify(response?.[i]);
             failedChecks.push(
-                `${testName} failed, expected <${JSON.stringify(expectedResponse)}>, actual <${JSON.stringify(response?.[i])}>`,
+                `${testName} failed, expected <${expected}>, actual <${actual}>`,
             );
         }
     }
@@ -491,6 +502,8 @@ export async function transactionTest(
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseTransaction.mset({ [key3]: value });
     responseData.push(["mset({ [key3]: value })", "OK"]);
+    baseTransaction.msetnx({ [key3]: value });
+    responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
@@ -632,7 +645,7 @@ export async function transactionTest(
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
-            [true, true, false],
+            [true, false, false],
         ]);
     }
 
@@ -902,11 +915,11 @@ export async function transactionTest(
     baseTransaction.zrandmember(key21);
     responseData.push(["zrandmember(key21)", "one"]);
     baseTransaction.zrandmemberWithCount(key21, 1);
-    responseData.push(["zrandmemberWithCountWithScores(key21, 1)", "one"]);
+    responseData.push(["zrandmemberWithCount(key21, 1)", ["one"]]);
     baseTransaction.zrandmemberWithCountWithScores(key21, 1);
     responseData.push([
         "zrandmemberWithCountWithScores(key21, 1)",
-        [Buffer.from("one"), 1.0],
+        [["one", 1.0]],
     ]);
 
     if (gte(version, "6.2.0")) {
@@ -1054,47 +1067,35 @@ export async function transactionTest(
             ["lcsLen(key1, key3)", 0],
             [
                 "lcsIdx(key1, key2)",
-                new Map<string, ReturnType>([
-                    [
-                        "matches",
+                {
+                    matches: [
                         [
-                            [
-                                [1, 3],
-                                [0, 2],
-                            ],
+                            [1, 3],
+                            [0, 2],
                         ],
                     ],
-                    ["len", 3],
-                ]),
+                    len: 3,
+                },
             ],
             [
                 "lcsIdx(key1, key2, {minMatchLen: 1})",
-                new Map<string, ReturnType>([
-                    [
-                        "matches",
+                {
+                    matches: [
                         [
-                            [
-                                [1, 3],
-                                [0, 2],
-                            ],
+                            [1, 3],
+                            [0, 2],
                         ],
                     ],
-                    ["len", 3],
-                ]),
+                    len: 3,
+                },
             ],
             [
                 "lcsIdx(key1, key2, {withMatchLen: true})",
-                new Map<string, ReturnType>([
-                    ["matches", [[[1, 3], [0, 2], 3]]],
-                    ["len", 3],
-                ]),
+                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
             ],
             [
                 "lcsIdx(key1, key2, {withMatchLen: true, minMatchLen: 1})",
-                new Map<string, ReturnType>([
-                    ["matches", [[[1, 3], [0, 2], 3]]],
-                    ["len", 3],
-                ]),
+                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
             ],
             ["del([key1, key2, key3])", 3],
         );

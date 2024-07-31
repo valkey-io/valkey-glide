@@ -100,6 +100,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -445,9 +446,11 @@ export class BaseClient {
             const pointer = message.respPointer;
 
             if (typeof pointer === "number") {
-                resolve(valueFromSplitPointer(0, pointer));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(0, pointer, true));
             } else {
-                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
@@ -711,11 +714,15 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             }
 
@@ -919,6 +926,29 @@ export class BaseClient {
      */
     public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @returns `true` if all keys were set. `false` if no key was set.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.msetnx({"key1": "value1", "key2": "value2"});
+     * console.log(result1); // Output: `true`
+     *
+     * const result2 = await client.msetnx({"key2": "value4", "key3": "value5"});
+     * console.log(result2); // Output: `false`
+     * ```
+     */
+    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
+        return this.createWritePromise(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -4222,7 +4252,7 @@ export class BaseClient {
      * @param key2 - The key that stores the second string.
      * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
      * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
-     * @returns A `Map` containing the indices of the longest common subsequences between the
+     * @returns A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
      *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
@@ -4258,7 +4288,7 @@ export class BaseClient {
         key1: string,
         key2: string,
         options?: { withMatchLen?: boolean; minMatchLen?: number },
-    ): Promise<Map<string, (number | [number, number])[][] | number>> {
+    ): Promise<Record<string, (number | [number, number])[][] | number>> {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
         );

@@ -2,14 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import {
-    afterAll,
-    afterEach,
-    beforeAll,
-    describe,
-    expect,
-    it,
-} from "@jest/globals";
+import { afterAll, afterEach, beforeAll, describe, it } from "@jest/globals";
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -29,7 +22,6 @@ import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkFunctionListResponse,
-    checkSimple,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -309,6 +301,7 @@ describe("GlideClusterClient", () => {
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
+                client.msetnx({ abc: "xyz", def: "abc", hij: "def" }),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
                 client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),
@@ -566,7 +559,7 @@ describe("GlideClusterClient", () => {
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
             expect(await client.copy(source, destination, false)).toEqual(true);
-            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.get(destination)).toEqual(value1);
 
             // new value for source key
             expect(await client.set(source, value2)).toEqual("OK");
@@ -576,11 +569,11 @@ describe("GlideClusterClient", () => {
             expect(await client.copy(source, destination, false)).toEqual(
                 false,
             );
-            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.get(destination)).toEqual(value1);
 
             // both exists, with REPLACE
             expect(await client.copy(source, destination, true)).toEqual(true);
-            checkSimple(await client.get(destination)).toEqual(value2);
+            expect(await client.get(destination)).toEqual(value2);
 
             //transaction tests
             const transaction = new ClusterTransaction();
@@ -589,7 +582,7 @@ describe("GlideClusterClient", () => {
             transaction.get(destination);
             const results = await client.exec(transaction);
 
-            checkSimple(results).toEqual(["OK", true, value1]);
+            expect(results).toEqual(["OK", true, value1]);
 
             client.close();
         },
@@ -603,20 +596,20 @@ describe("GlideClusterClient", () => {
             );
 
             expect(await client.dbsize()).toBeGreaterThanOrEqual(0);
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toBeGreaterThan(0);
 
-            checkSimple(await client.flushall()).toEqual("OK");
+            expect(await client.flushall()).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
             client.close();
@@ -667,9 +660,9 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                checkSimple(
-                                    await client.functionLoad(code),
-                                ).toEqual(libName);
+                                expect(await client.functionLoad(code)).toEqual(
+                                    libName,
+                                );
 
                                 functionList = await client.functionList(
                                     { libNamePattern: libName },
@@ -704,8 +697,7 @@ describe("GlideClusterClient", () => {
                                 checkClusterResponse(
                                     fcall as object,
                                     singleNodeRoute,
-                                    (value) =>
-                                        checkSimple(value).toEqual("one"),
+                                    (value) => expect(value).toEqual("one"),
                                 );
                                 fcall = await client.fcallReadonlyWithRoute(
                                     funcName,
@@ -715,8 +707,7 @@ describe("GlideClusterClient", () => {
                                 checkClusterResponse(
                                     fcall as object,
                                     singleNodeRoute,
-                                    (value) =>
-                                        checkSimple(value).toEqual("one"),
+                                    (value) => expect(value).toEqual("one"),
                                 );
 
                                 // re-load library without replace
@@ -727,7 +718,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // re-load library with replace
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(code, true),
                                 ).toEqual(libName);
 
@@ -742,7 +733,7 @@ describe("GlideClusterClient", () => {
                                     ]),
                                     true,
                                 );
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(newCode, true),
                                 ).toEqual(libName);
 
@@ -855,7 +846,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // load the library
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -886,7 +877,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -950,7 +941,7 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
