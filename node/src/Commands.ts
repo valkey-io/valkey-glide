@@ -2277,6 +2277,16 @@ export function createPfCount(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createPfMerge(
+    destination: string,
+    sourceKey: string[],
+): command_request.Command {
+    return createCommand(RequestType.PfMerge, [destination, ...sourceKey]);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): command_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
@@ -2813,4 +2823,16 @@ export function createLCS(
     }
 
     return createCommand(RequestType.LCS, args);
+}
+
+/**
+ * @internal
+ */
+export function createTouch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Touch, keys);
+}
+
+/** @internal */
+export function createRandomKey(): command_request.Command {
+    return createCommand(RequestType.RandomKey, []);
 }
