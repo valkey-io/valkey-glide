@@ -496,8 +496,14 @@ export async function transactionTest(
     responseData.push(["echo(value)", value]);
     baseTransaction.persist(key1);
     responseData.push(["persist(key1)", false]);
-    // baseTransaction.expireTime(key1);
-    // responseData.push(["expiretime(key1), "])
+
+    if (gte(version, "7.0.0")) {
+        baseTransaction.expireTime(key1);
+        responseData.push(["expiretime(key1)", -1]);
+
+        baseTransaction.pexpireTime(key1);
+        responseData.push(["pexpiretime(key1)", -1]);
+    }
 
     baseTransaction.set(key2, "baz", { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
