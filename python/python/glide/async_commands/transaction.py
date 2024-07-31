@@ -5248,7 +5248,7 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.PubSubSChannels, command_args)
 
     def pubsub_shardnumsub(
-        self, channels: List[TEncodable] = []
+        self, channels: Optional[List[TEncodable]] = None
     ) -> "ClusterTransaction":
         """
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
@@ -5264,6 +5264,8 @@ class ClusterTransaction(BaseTransaction):
         Command response:
             Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
         """
-        return self.append_command(RequestType.PubSubSNumSub, channels)
+        return self.append_command(
+            RequestType.PubSubSNumSub, channels if channels else []
+        )
 
     # TODO: add all CLUSTER commands

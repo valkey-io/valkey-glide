@@ -951,7 +951,7 @@ class ClusterCommands(CoreCommands):
         )
 
     async def pubsub_shardnumsub(
-        self, channels: List[TEncodable] = []
+        self, channels: Optional[List[TEncodable]] = None
     ) -> Mapping[bytes, int]:
         """
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
@@ -977,7 +977,9 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             Mapping[bytes, int],
-            await self._execute_command(RequestType.PubSubSNumSub, channels),
+            await self._execute_command(
+                RequestType.PubSubSNumSub, channels if channels else []
+            ),
         )
 
     async def flushall(
