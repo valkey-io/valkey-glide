@@ -75,6 +75,7 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
+        BaseScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -98,7 +99,6 @@ function initialize() {
         GeoSearchShape,
         GeoSearchResultOptions,
         SortOrder,
-        GeoUnit,
         GeospatialData,
         GlideClient,
         GlideClusterClient,
@@ -162,6 +162,7 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
+        BaseScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,

@@ -11,6 +11,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -168,7 +169,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    ZScanOptions,
     createZScan,
 } from "./Commands";
 import {
@@ -4286,7 +4286,7 @@ export class BaseClient {
     public async zscan(
         key: string,
         cursor: string,
-        options?: ZScanOptions,
+        options?: BaseScanOptions,
     ): Promise<[string, [string]]> {
         return this.createWritePromise(createZScan(key, cursor, options));
     }

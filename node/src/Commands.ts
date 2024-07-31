@@ -3023,17 +3023,12 @@ export type BaseScanOptions = {
 };
 
 /**
- * Optional arguments for {@link BaseClient.zscan|zscan}.
- */
-export type ZScanOptions = BaseScanOptions;
-
-/**
  * @internal
  */
 export function createZScan(
     key: string,
     cursor: string,
-    options?: ZScanOptions,
+    options?: BaseScanOptions,
 ): command_request.Command {
     let args: string[] = [key, cursor];
 
