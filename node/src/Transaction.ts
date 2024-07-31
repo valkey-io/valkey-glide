@@ -127,6 +127,7 @@ import {
     createPersist,
     createPfAdd,
     createPfCount,
+    createPfMerge,
     createPing,
     createRPop,
     createRPush,
@@ -2076,6 +2077,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfcount(keys: string[]): T {
         return this.addAndReturn(createPfCount(keys));
+    }
+
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
+     * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * See https://valkey.io/commands/pfmerge/ for more details.
+     *
+     * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+     * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
+     * Command Response - A simple "OK" response.
+     */
+    public pfmerge(destination: string, sourceKeys: string[]): T {
+        return this.addAndReturn(createPfMerge(destination, sourceKeys));
     }
 
     /** Returns the internal encoding for the Redis object stored at `key`.
