@@ -760,8 +760,8 @@ export async function transactionTest(
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
     baseTransaction.zremRangeByLex(
         key8,
-        "negativeInfinity",
-        "positiveInfinity",
+        InfScoreBoundary.NegativeInfinity,
+        InfScoreBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 

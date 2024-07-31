@@ -4254,7 +4254,7 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByLex(
                         key,
                         { value: "d" },
-                        "positiveInfinity",
+                        InfScoreBoundary.PositiveInfinity,
                     ),
                 ).toEqual(1);
 
@@ -4263,15 +4263,15 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByLex(
                         key,
                         { value: "a" },
-                        "negativeInfinity",
+                        InfScoreBoundary.NegativeInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(
                     await client.zremRangeByLex(
                         "nonExistingKey",
-                        "negativeInfinity",
-                        "positiveInfinity",
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -4280,8 +4280,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zremRangeByLex(
                         stringKey,
-                        "negativeInfinity",
-                        "positiveInfinity",
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
