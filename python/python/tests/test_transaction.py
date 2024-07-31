@@ -772,6 +772,13 @@ async def transaction_test(
         transaction.lcs_idx(key23, key24, with_match_len=True)
         args.append({b"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], b"len": 7})
 
+    transaction.pubsub_channels(pattern="*")
+    args.append([])
+    transaction.pubsub_numpat()
+    args.append(0)
+    transaction.pubsub_numsub()
+    args.append({})
+
     return args
 
 
@@ -882,6 +889,13 @@ class TestTransaction:
         else:
             transaction.publish("test_message", keyslot, True)
         expected = await transaction_test(transaction, keyslot, glide_client)
+
+        if not await check_if_server_version_lt(glide_client, "7.0.0"):
+            transaction.pubsub_shardchannels()
+            expected.append([])
+            transaction.pubsub_shardnumsub()
+            expected.append({})
+
         result = await glide_client.exec(transaction)
         assert isinstance(result, list)
         assert isinstance(result[0], bytes)

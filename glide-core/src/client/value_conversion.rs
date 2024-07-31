@@ -1265,6 +1265,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 })
             }
         }
+        b"PUBSUB NUMSUB" | b"PUBSUB SHARDNUMSUB" => Some(ExpectedReturnType::Map {
+            key_type: &None,
+            value_type: &None,
+        }),
         _ => None,
     }
 }

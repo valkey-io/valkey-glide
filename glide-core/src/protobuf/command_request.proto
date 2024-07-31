@@ -248,6 +248,11 @@ enum RequestType {
     Scan = 206;
     Wait = 208;
     XClaim = 209;
+    PubSubChannels = 210;
+    PubSubNumPat = 211;
+    PubSubNumSub = 212;
+    PubSubSChannels = 213;
+    PubSubSNumSub = 214;
 }
 
 message Command {
