@@ -1385,7 +1385,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
     public pexpireTime(key: string): T {
-        return this.addAndReturn(createExpireTime(key));
+        return this.addAndReturn(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
