@@ -925,6 +925,7 @@ class ClusterCommands(CoreCommands):
     ) -> List[bytes]:
         """
         Lists the currently active shard channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
 
         See https://valkey.io/commands/pubsub-shardchannels for more details.
 
@@ -956,6 +957,7 @@ class ClusterCommands(CoreCommands):
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
 
         Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
 
         See https://valkey.io/commands/pubsub-shardnumsub for more details.
 

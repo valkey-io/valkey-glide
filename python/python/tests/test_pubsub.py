@@ -2266,7 +2266,7 @@ class TestPubSub:
         This test verifies that the pubsub_channels command correctly returns
         the active channels matching a specified pattern.
         """
-        client1, client2 = None, None
+        client1, client2, client = None, None, None
         try:
             channel1 = "test_channel1"
             channel2 = "test_channel2"
@@ -2276,7 +2276,6 @@ class TestPubSub:
             client = await create_client(request, cluster_mode)
             # Assert no channels exists yet
             assert await client.pubsub_channels() == []
-            await client.close()
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
@@ -2319,6 +2318,7 @@ class TestPubSub:
         finally:
             await client_cleanup(client1, pub_sub if cluster_mode else None)
             await client_cleanup(client2, None)
+            await client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_numpat(self, request, cluster_mode: bool):
@@ -2328,7 +2328,7 @@ class TestPubSub:
         This test verifies that the pubsub_numpat command correctly returns
         the number of unique patterns that are subscribed to by clients.
         """
-        client1, client2 = None, None
+        client1, client2, client = None, None, None
         try:
             pattern1 = "test_*"
             pattern2 = "another_*"
@@ -2336,7 +2336,6 @@ class TestPubSub:
             # Create a client and check initial number of patterns
             client = await create_client(request, cluster_mode)
             assert await client.pubsub_numpat() == 0
-            await client.close()
 
             # Set up subscriptions with patterns
             pub_sub = create_pubsub_subscription(
@@ -2366,6 +2365,7 @@ class TestPubSub:
         finally:
             await client_cleanup(client1, pub_sub if cluster_mode else None)
             await client_cleanup(client2, None)
+            await client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_numsub(self, request, cluster_mode: bool):
@@ -2375,7 +2375,7 @@ class TestPubSub:
         This test verifies that the pubsub_numsub command correctly returns
         the number of subscribers for specified channels.
         """
-        client1, client2, client3, client4 = None, None, None, None
+        client1, client2, client3, client4, client = None, None, None, None, None
         try:
             channel1 = "test_channel1"
             channel2 = "test_channel2"
@@ -2433,7 +2433,6 @@ class TestPubSub:
                 channel2_bytes: 0,
                 channel3_bytes: 0,
             }
-            await client.close()
 
             client1, client2 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
@@ -2462,6 +2461,7 @@ class TestPubSub:
             await client_cleanup(client2, pub_sub2 if cluster_mode else None)
             await client_cleanup(client3, pub_sub3 if cluster_mode else None)
             await client_cleanup(client4, None)
+            await client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_shardchannels(self, request, cluster_mode: bool):
@@ -2471,7 +2471,7 @@ class TestPubSub:
         This test verifies that the pubsub_shardchannels command correctly returns
         the active sharded channels matching a specified pattern.
         """
-        client1, client2 = None, None
+        client1, client2, client = None, None, None
         try:
             channel1 = "test_shardchannel1"
             channel2 = "test_shardchannel2"
@@ -2482,7 +2482,6 @@ class TestPubSub:
             assert type(client) == GlideClusterClient
             # Assert no sharded channels exist yet
             assert await client.pubsub_shardchannels() == []
-            await client.close()
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
@@ -2524,6 +2523,7 @@ class TestPubSub:
         finally:
             await client_cleanup(client1, pub_sub if cluster_mode else None)
             await client_cleanup(client2, None)
+            await client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_shardnumsub(self, request, cluster_mode: bool):
@@ -2533,7 +2533,7 @@ class TestPubSub:
         This test verifies that the pubsub_shardnumsub command correctly returns
         the number of subscribers for specified sharded channels.
         """
-        client1, client2, client3, client4 = None, None, None, None
+        client1, client2, client3, client4, client = None, None, None, None, None
         try:
             channel1 = "test_shardchannel1"
             channel2 = "test_shardchannel2"
@@ -2585,7 +2585,6 @@ class TestPubSub:
                 channel2_bytes: 0,
                 channel3_bytes: 0,
             }
-            await client.close()
 
             client1, client2 = await create_two_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
@@ -2621,6 +2620,7 @@ class TestPubSub:
             await client_cleanup(client2, pub_sub2 if cluster_mode else None)
             await client_cleanup(client3, pub_sub3 if cluster_mode else None)
             await client_cleanup(client4, None)
+            await client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     async def test_pubsub_channels_and_shardchannels_separation(

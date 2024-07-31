@@ -6634,6 +6634,7 @@ class CoreCommands(Protocol):
     ) -> List[bytes]:
         """
         Lists the currently active channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
 
         See https://valkey.io/commands/pubsub-channels for more details.
 
@@ -6666,6 +6667,7 @@ class CoreCommands(Protocol):
 
         Note: This is the total number of unique patterns all the clients are subscribed to,
         not the count of clients subscribed to patterns.
+        The command is routed to all nodes, and aggregates the response the sum of all pattern subscriptions.
 
         See https://valkey.io/commands/pubsub-numpat for more details.
 
