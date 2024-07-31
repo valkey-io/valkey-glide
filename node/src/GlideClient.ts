@@ -32,6 +32,7 @@ import {
     createFunctionList,
     createFunctionLoad,
     createInfo,
+    createLastSave,
     createLolwut,
     createPing,
     createPublish,
@@ -608,5 +609,22 @@ export class GlideClient extends BaseClient {
      */
     public publish(message: string, channel: string): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://redis.io/commands/lastsave/ for more details.
+     *
+     * @returns `UNIX TIME` of the last DB save executed with success.
+     * @example
+     * ```typescript
+     * const timestamp = await client.lastsave();
+     * console.log("Last DB save was done at " + timestamp);
+     * ```
+     */
+    public async lastsave(): Promise<number> {
+        return this.createWritePromise(createLastSave());
     }
 }

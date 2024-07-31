@@ -182,6 +182,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    createLastSave,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2503,6 +2504,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public geohash(key: string, members: string[]): T {
         return this.addAndReturn(createGeoHash(key, members));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://redis.io/commands/lastsave/ for more details.
+     *
+     * Command Response - `UNIX TIME` of the last DB save executed with success.
+     */
+    public lastsave(): T {
+        return this.addAndReturn(createLastSave());
     }
 }
 

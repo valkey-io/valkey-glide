@@ -2776,3 +2776,8 @@ export function createZRandMember(
 
     return createCommand(RequestType.ZRandMember, args);
 }
+
+/** @internal */
+export function createLastSave(): command_request.Command {
+    return createCommand(RequestType.LastSave, []);
+}
