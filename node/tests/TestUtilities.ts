@@ -880,6 +880,8 @@ export async function transactionTest(
 
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
+    baseTransaction.pfmerge(key11, []);
+    responseData.push(["pfmerge(key11, [])", "OK"]);
     baseTransaction.pfcount([key11]);
     responseData.push(["pfcount([key11])", 3]);
     baseTransaction.geoadd(
