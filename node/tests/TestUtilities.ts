@@ -26,7 +26,6 @@ import {
     InfScoreBoundary,
     InsertPosition,
     ListDirection,
-    Logger,
     ProtocolVersion,
     ReturnType,
     ReturnTypeMap,
