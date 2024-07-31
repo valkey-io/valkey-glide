@@ -167,7 +167,7 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -3262,7 +3262,7 @@ export class BaseClient {
 
     /**
      * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
-     * 
+     *
      * See https://valkey.io/commands/zremrangebylex/ for more details.
      *
      * @param key - The key of the sorted set.
