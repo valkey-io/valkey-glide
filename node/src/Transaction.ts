@@ -50,6 +50,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    ZScanOptions,
     createBLMove,
     createBLPop,
     createBRPop,
@@ -197,6 +198,7 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScan,
     createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -2535,6 +2537,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zincrby(key: string, increment: number, member: string): T {
         return this.addAndReturn(createZIncrBy(key, increment, member));
+    }
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * See https://valkey.io/commands/zscan for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of
+     *      the search.
+     * @param options - (Optional) The zscan options.
+     *
+     * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+     *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+     *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     */
+    public zscan(key: string, cursor: string, options?: ZScanOptions): T {
+        return this.addAndReturn(createZScan(key, cursor, options));
     }
 
     /**

@@ -5931,41 +5931,42 @@ export function runBaseTests<Context>(config: {
 
                 // Empty set
                 let result = await client.zscan(key1, initialCursor);
-                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
-                checkSimple(result[resultCollectionIndex]).toEqual([]);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Negative cursor
                 result = await client.zscan(key1, "-1");
-                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
-                checkSimple(result[resultCollectionIndex]).toEqual([]);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Result contains the whole set
                 expect(await client.zadd(key1, charMap)).toEqual(
                     charMembers.length,
                 );
                 result = await client.zscan(key1, initialCursor);
-                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
                     expectedCharMapArray.length,
                 );
-                checkSimple(result[resultCollectionIndex]).toEqual(
+                expect(result[resultCollectionIndex]).toEqual(
                     expectedCharMapArray,
                 );
 
                 result = await client.zscan(key1, initialCursor, {
                     match: "a",
                 });
-                checkSimple(result[resultCursorIndex]).toEqual(initialCursor);
-                checkSimple(result[resultCollectionIndex]).toEqual(["a", "0"]);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual(["a", "0"]);
 
                 // Result contains a subset of the key
                 expect(await client.zadd(key1, numberMap)).toEqual(
                     Object.keys(numberMap).length,
                 );
+
                 result = await client.zscan(key1, initialCursor);
                 let resultCursor = result[resultCursorIndex];
                 let resultIterationCollection = result[resultCollectionIndex];
-                let fullResultMap: string[] = resultIterationCollection;
+                let fullResultMapArray: string[] = resultIterationCollection;
                 let nextResult;
                 let nextResultCursor;
 
@@ -5978,31 +5979,39 @@ export function runBaseTests<Context>(config: {
                     expect(nextResult[resultCollectionIndex]).not.toEqual(
                         resultIterationCollection,
                     );
-                    fullResultMap = fullResultMap.concat(
-                        result[resultCollectionIndex],
+                    fullResultMapArray = fullResultMapArray.concat(
+                        nextResult[resultCollectionIndex],
                     );
                     resultIterationCollection =
                         nextResult[resultCollectionIndex];
                     resultCursor = nextResultCursor;
                 }
 
-                // TODO: Check full map. Can not use checkSimple as it converts it to string where order matters
                 // Fetching by cursor is randomized.
+                const expectedCombinedMapArray =
+                    expectedNumberMapArray.concat(expectedCharMapArray);
+                expect(fullResultMapArray.length).toEqual(
+                    expectedCombinedMapArray.length,
+                );
+
+                for (let i = 0; i < fullResultMapArray.length; i += 2) {
+                    expect(fullResultMapArray).toContain(
+                        expectedCombinedMapArray[i],
+                    );
+                }
 
                 // Test match pattern
                 result = await client.zscan(key1, initialCursor, {
                     match: "*",
                 });
-                expect(intoString(result[resultCursorIndex])).not.toEqual(
-                    initialCursor,
-                );
+                expect(result[resultCursorIndex]).not.toEqual(initialCursor);
                 expect(
                     result[resultCollectionIndex].length,
                 ).toBeGreaterThanOrEqual(defaultCount);
 
                 // Test count
                 result = await client.zscan(key1, initialCursor, { count: 20 });
-                expect(intoString(result[resultCursorIndex])).not.toEqual("0");
+                expect(result[resultCursorIndex]).not.toEqual("0");
                 expect(
                     result[resultCollectionIndex].length,
                 ).toBeGreaterThanOrEqual(20);
@@ -6012,21 +6021,26 @@ export function runBaseTests<Context>(config: {
                     match: "1*",
                     count: 20,
                 });
-                expect(intoString(result[resultCursorIndex])).not.toEqual("0");
+                expect(result[resultCursorIndex]).not.toEqual("0");
                 expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
 
                 // Exceptions
                 // Non-set key
-                await checkSimple(client.set(key2, "test")).toEqual("OK");
+                expect(await client.set(key2, "test")).toEqual("OK");
+                await expect(client.zscan(key2, initialCursor)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(
+                    client.zscan(key2, initialCursor, {
+                        match: "test",
+                        count: 20,
+                    }),
+                ).rejects.toThrow(RequestError);
 
-                // with pytest.raises(RequestError):
-                //     await redis_client.zscan(key2, initial_cursor)
-                // with pytest.raises(RequestError):
-                //     await redis_client.zscan(key2, initial_cursor, match="test", count=20)
-
-                // # Negative count
-                // with pytest.raises(RequestError):
-                //     await redis_client.zscan(key2, initial_cursor, count=-1)
+                // Negative count
+                await expect(
+                    client.zscan(key2, initialCursor, { count: -1 }),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
