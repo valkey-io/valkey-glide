@@ -45,6 +45,7 @@ import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
 import {
     Client,
     GetAndSetRandomValue,
+    checkSimple,
     compareMaps,
     getFirstResult,
 } from "./TestUtilities";
