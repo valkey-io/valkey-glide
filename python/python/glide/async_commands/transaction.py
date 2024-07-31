@@ -4816,7 +4816,7 @@ class BaseTransaction:
         return self.append_command(RequestType.PubSubNumPat, [])
 
     def pubsub_numsub(
-        self: TTransaction, channels: List[TEncodable] = []
+        self: TTransaction, channels: Optional[List[TEncodable]] = None
     ) -> TTransaction:
         """
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
@@ -4832,7 +4832,9 @@ class BaseTransaction:
         Command response:
             Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
         """
-        return self.append_command(RequestType.PubSubNumSub, channels)
+        return self.append_command(
+            RequestType.PubSubNumSub, channels if channels else []
+        )
 
 
 class Transaction(BaseTransaction):

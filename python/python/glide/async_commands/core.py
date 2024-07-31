@@ -6681,7 +6681,7 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.PubSubNumPat, []))
 
     async def pubsub_numsub(
-        self, channels: List[TEncodable] = []
+        self, channels: Optional[List[TEncodable]] = None
     ) -> Mapping[bytes, int]:
         """
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
@@ -6707,5 +6707,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Mapping[bytes, int],
-            await self._execute_command(RequestType.PubSubNumSub, channels),
+            await self._execute_command(
+                RequestType.PubSubNumSub, channels if channels else []
+            ),
         )
