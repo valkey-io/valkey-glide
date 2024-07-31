@@ -2443,7 +2443,7 @@ export class BaseClient {
      * ```
      * since - Redis version 7.0.0.
      */
-    public expiretime(key: string): Promise<number> {
+    public async expiretime(key: string): Promise<number> {
         return this.createWritePromise(createExpireTime(key));
     }
 
@@ -2527,7 +2527,7 @@ export class BaseClient {
      * ```
      * since - Redis version 7.0.0.
      */
-    public pexpiretime(key: string): Promise<number> {
+    public async pexpiretime(key: string): Promise<number> {
         return this.createWritePromise(createPExpireTime(key));
     }
 

@@ -496,6 +496,9 @@ export async function transactionTest(
     responseData.push(["echo(value)", value]);
     baseTransaction.persist(key1);
     responseData.push(["persist(key1)", false]);
+    // baseTransaction.expireTime(key1);
+    // responseData.push(["expiretime(key1), "])
+
     baseTransaction.set(key2, "baz", { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);
