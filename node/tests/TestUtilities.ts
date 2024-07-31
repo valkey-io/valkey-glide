@@ -411,7 +411,7 @@ export function validateTransactionResponse(
 
         try {
             expect(response?.[i]).toEqual(expectedResponse);
-        } catch (e) {
+        } catch {
             const expected =
                 expectedResponse instanceof Map
                     ? JSON.stringify(Array.from(expectedResponse.entries()))
@@ -484,6 +484,8 @@ export async function transactionTest(
     responseData.push(["dbsize()", 0]);
     baseTransaction.set(key1, "bar");
     responseData.push(['set(key1, "bar")', "OK"]);
+    baseTransaction.randomKey();
+    responseData.push(["randomKey()", key1]);
     baseTransaction.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
     baseTransaction.set(key1, "bar");
@@ -814,6 +816,8 @@ export async function transactionTest(
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
     responseData.push(["exists([key10])", 1]);
+    baseTransaction.touch([key10]);
+    responseData.push(["touch([key10])", 1]);
     baseTransaction.renamenx(key10, key9);
     responseData.push(["renamenx(key10, key9)", true]);
     baseTransaction.exists([key9, key10]);
@@ -889,6 +893,8 @@ export async function transactionTest(
 
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
+    baseTransaction.pfmerge(key11, []);
+    responseData.push(["pfmerge(key11, [])", "OK"]);
     baseTransaction.pfcount([key11]);
     responseData.push(["pfcount([key11])", 3]);
     baseTransaction.geoadd(

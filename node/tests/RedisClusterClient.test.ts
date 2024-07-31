@@ -2,7 +2,14 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { afterAll, afterEach, beforeAll, describe, it } from "@jest/globals";
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    describe,
+    expect,
+    it,
+} from "@jest/globals";
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -312,6 +319,7 @@ describe("GlideClusterClient", () => {
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
+                client.pfmerge("abc", ["def", "ghi"]),
                 client.sdiff(["abc", "zxy", "lkn"]),
                 client.sdiffstore("abc", ["zxy", "lkn"]),
             ];
@@ -364,7 +372,7 @@ describe("GlideClusterClient", () => {
             await client.del(["abc", "zxy", "lkn"]);
             await client.mget(["abc", "zxy", "lkn"]);
             await client.mset({ abc: "1", zxy: "2", lkn: "3" });
-            // TODO touch
+            await client.touch(["abc", "zxy", "lkn"]);
             client.close();
         },
     );
@@ -980,5 +988,30 @@ describe("GlideClusterClient", () => {
                 },
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `randomKey test_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            // setup: delete all keys
+            expect(await client.flushall(FlushMode.SYNC)).toEqual("OK");
+
+            // no keys exist so randomKey returns null
+            expect(await client.randomKey()).toBeNull();
+
+            expect(await client.set(key, "foo")).toEqual("OK");
+            // `key` should be the only existing key, so randomKey should return `key`
+            expect(await client.randomKey()).toEqual(key);
+            expect(await client.randomKey("allPrimaries")).toEqual(key);
+
+            client.close();
+        },
+        TIMEOUT,
     );
 });

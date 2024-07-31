@@ -7,7 +7,7 @@ import { AsyncClient } from "glide-rs";
 import RedisServer from "redis-server";
 import { runCommonTests } from "./SharedTests";
 import { flushallOnPort } from "./TestUtilities";
-/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const FreePort = require("find-free-port");
 
 const PORT_NUMBER = 4000;

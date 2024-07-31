@@ -9,6 +9,7 @@ import { arch, platform } from "process";
 
 let globalObject = global as unknown;
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
     let nativeBinding = null;
     switch (platform) {

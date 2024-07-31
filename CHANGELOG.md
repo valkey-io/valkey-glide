@@ -13,11 +13,13 @@
 * Node: Added BITCOUNT command ([#1982](https://github.com/valkey-io/valkey-glide/pull/1982))
 * Node: Added BITPOS command ([#1998](https://github.com/valkey-io/valkey-glide/pull/1998))
 * Node: Added BITFIELD and BITFIELD_RO commands ([#2026](https://github.com/valkey-io/valkey-glide/pull/2026))
+* Node: Added TOUCH command ([#2055](https://github.com/valkey-io/valkey-glide/pull/2055))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
 * Node: Added BITOP command ([#2012](https://github.com/valkey-io/valkey-glide/pull/2012))
 * Node: Added GETBIT command ([#1989](https://github.com/valkey-io/valkey-glide/pull/1989))
 * Node: Added SETBIT command ([#1978](https://github.com/valkey-io/valkey-glide/pull/1978))
+* Node: Added RANDOMKEY command ([#2057](https://github.com/valkey-io/valkey-glide/pull/2057))
 * Node: Added LPUSHX and RPUSHX command([#1959](https://github.com/valkey-io/valkey-glide/pull/1959))
 * Node: Added LSET command ([#1952](https://github.com/valkey-io/valkey-glide/pull/1952))
 * Node: Added SDIFFSTORE command ([#1931](https://github.com/valkey-io/valkey-glide/pull/1931))
@@ -39,6 +41,7 @@
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
+* Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

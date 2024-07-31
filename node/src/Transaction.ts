@@ -44,6 +44,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
@@ -105,7 +106,6 @@ import {
     createLInsert,
     createLLen,
     createLMove,
-    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -129,10 +129,12 @@ import {
     createPersist,
     createPfAdd,
     createPfCount,
+    createPfMerge,
     createPing,
     createRPop,
     createRPush,
     createRPushX,
+    createRandomKey,
     createRename,
     createRenameNX,
     createSAdd,
@@ -156,6 +158,7 @@ import {
     createStrlen,
     createTTL,
     createTime,
+    createTouch,
     createType,
     createUnlink,
     createXAdd,
@@ -2106,6 +2109,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createPfCount(keys));
     }
 
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
+     * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * See https://valkey.io/commands/pfmerge/ for more details.
+     *
+     * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+     * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
+     * Command Response - A simple "OK" response.
+     */
+    public pfmerge(destination: string, sourceKeys: string[]): T {
+        return this.addAndReturn(createPfMerge(destination, sourceKeys));
+    }
+
     /** Returns the internal encoding for the Redis object stored at `key`.
      *
      * See https://valkey.io/commands/object-encoding for more details.
@@ -2593,6 +2610,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         options?: { withMatchLen?: boolean; minMatchLen?: number },
     ): T {
         return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
+    }
+
+    /**
+     * Updates the last access time of the specified keys.
+     *
+     * See https://valkey.io/commands/touch/ for more details.
+     *
+     * @param keys - The keys to update the last access time of.
+     *
+     * Command Response - The number of keys that were updated. A key is ignored if it doesn't exist.
+     */
+    public touch(keys: string[]): T {
+        return this.addAndReturn(createTouch(keys));
+    }
+
+    /**
+     * Returns a random existing key name from the currently selected database.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * Command Response - A random existing key name from the currently selected database.
+     */
+    public randomKey(): T {
+        return this.addAndReturn(createRandomKey());
     }
 }
 
