@@ -4256,25 +4256,19 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Assume "key" contains a sorted set with multiple members
-     * let resultCursor = "1";
      * let newCursor = "0";
      * let result = [];
      *
-     * while (resultCursor !== "0") {
-     *      result = await client.zscan("key", newCursor, {
+     * do {
+     *      result = await client.zscan(key1, newCursor, {
      *          match: "*",
      *          count: 5,
      *      });
      *      newCursor = result[0];
      *      console.log("Cursor: ", newCursor);
      *      console.log("Members: ", result[1]);
-     *
-     *      if (newCursor === "0") {
-     *          break;
-     *      }
-     *
-     *      resultCursor = newCursor;
-     * }
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
      * // Cursor:  123
      * // Members:  ['value 163', '163', 'value 114', '114', 'value 25', '25', 'value 82', '82', 'value 64', '64']
      * // Cursor:  47
