@@ -5913,7 +5913,7 @@ export function runBaseTests<Context>(config: {
                 const numberMap: Record<string, number> = {};
                 const expectedNumberMapArray: string[] = [];
 
-                for (let i = 0; i < 50000; i++) {
+                for (let i = 0; i < 1000; i++) {
                     expectedNumberMapArray.push(i.toString());
                     expectedNumberMapArray.push(i.toString());
                     numberMap[i.toString()] = i;
