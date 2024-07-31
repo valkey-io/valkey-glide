@@ -30,8 +30,6 @@ import {
     GeoSearchShape,
     GeoUnit,
     GeospatialData,
-    GeoUnit,
-    GeospatialData,
     InsertPosition,
     KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
@@ -169,7 +167,7 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
+    createZScore
 } from "./Commands";
 import {
     ClosingError,
