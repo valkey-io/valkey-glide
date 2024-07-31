@@ -372,7 +372,7 @@ describe("GlideClusterClient", () => {
             await client.del(["abc", "zxy", "lkn"]);
             await client.mget(["abc", "zxy", "lkn"]);
             await client.mset({ abc: "1", zxy: "2", lkn: "3" });
-            // TODO touch
+            await client.touch(["abc", "zxy", "lkn"]);
             client.close();
         },
     );

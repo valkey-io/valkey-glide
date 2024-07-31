@@ -2811,6 +2811,13 @@ export function createLCS(
     return createCommand(RequestType.LCS, args);
 }
 
+/**
+ * @internal
+ */
+export function createTouch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Touch, keys);
+}
+
 /** @internal */
 export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
