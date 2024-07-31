@@ -31,7 +31,7 @@ import {
     GeoUnit,
     GeospatialData,
     InsertPosition,
-    KeyWeight,
+    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -84,6 +84,7 @@ import {
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createLCS,
     createLIndex,
     createLInsert,
     createLLen,
@@ -3940,11 +3941,8 @@ export class BaseClient {
      *     where each sub-array represents a single item in the following order:
      *
      * - The member (location) name.
-     *
      * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
-     *
      * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
-     *
      * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
      *
      * @example
@@ -4173,7 +4171,7 @@ export class BaseClient {
      * See https://valkey.io/commands/geohash/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @param members - The array of members whose `GeoHash` strings are to be retrieved.
      * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      *
@@ -4188,6 +4186,111 @@ export class BaseClient {
             createGeoHash(key, members),
         ).then((hashes) =>
             hashes.map((hash) => (hash === null ? null : "" + hash)),
+        );
+    }
+
+    /**
+     * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @returns A `String` containing all the longest common subsequence combined between the 2 strings.
+     *     An empty `String` is returned if the keys do not exist or have no common subsequences.
+     *
+     * @example
+     * ```typescript
+     * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
+     * const result = await client.lcs("testKey1", "testKey2");
+     * console.log(result); // Output: 'cd'
+     * ```
+     */
+    public async lcs(key1: string, key2: string): Promise<string> {
+        return this.createWritePromise(createLCS(key1, key2));
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @returns The total length of all the longest common subsequences between the 2 strings.
+     *
+     * @example
+     * ```typescript
+     * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
+     * const result = await client.lcsLen("testKey1", "testKey2");
+     * console.log(result); // Output: 2
+     * ```
+     */
+    public async lcsLen(key1: string, key2: string): Promise<number> {
+        return this.createWritePromise(createLCS(key1, key2, { len: true }));
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings stored at
+     * `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
+     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @returns A `Record` containing the indices of the longest common subsequences between the
+     *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
+     *           stored as an integer. This value doesn't count towards the `minMatchLen` filter.
+     *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by `key1` and `key2`.
+     *
+     * @example
+     * ```typescript
+     * await client.mset({"key1": "ohmytext", "key2": "mynewtext"});
+     * const result = await client.lcsIdx("key1", "key2");
+     * console.log(result); // Output:
+     * {
+     *     "matches" :
+     *     [
+     *         [              // first substring match is "text"
+     *             [4, 7],    // in `key1` it is located between indices 4 and 7
+     *             [5, 8],    // and in `key2` - in between 5 and 8
+     *             4          // the match length, returned if `withMatchLen` set to `true`
+     *         ],
+     *         [              // second substring match is "my"
+     *             [2, 3],    // in `key1` it is located between indices 2 and 3
+     *             [0, 1],    // and in `key2` - in between 0 and 1
+     *             2          // the match length, returned if `withMatchLen` set to `true`
+     *         ]
+     *     ],
+     *     "len" : 6          // total length of the all matches found
+     * }
+     * ```
+     */
+    public async lcsIdx(
+        key1: string,
+        key2: string,
+        options?: { withMatchLen?: boolean; minMatchLen?: number },
+    ): Promise<Record<string, (number | [number, number])[][] | number>> {
+        return this.createWritePromise(
+            createLCS(key1, key2, { idx: options ?? {} }),
         );
     }
 

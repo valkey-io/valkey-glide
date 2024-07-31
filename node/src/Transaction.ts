@@ -99,6 +99,7 @@ import {
     createIncrBy,
     createIncrByFloat,
     createInfo,
+    createLCS,
     createLIndex,
     createLInsert,
     createLLen,
@@ -2364,11 +2365,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     where each sub-array represents a single item in the following order:
      *
      * - The member (location) name.
-     *
      * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`.
-     *
      * - The geohash of the location as a integer `number`.
-     *
      * - The coordinates as a two item `array` of floating point `number`s.
      */
     public geosearch(
@@ -2496,13 +2494,76 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/geohash/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @param members - The array of members whose `GeoHash` strings are to be retrieved.
      *
      * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      */
     public geohash(key: string, members: string[]): T {
         return this.addAndReturn(createGeoHash(key, members));
+    }
+
+    /**
+     * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     *
+     * Command Response - A `String` containing all the longest common subsequence combined between the 2 strings.
+     *     An empty `String` is returned if the keys do not exist or have no common subsequences.
+     */
+    public lcs(key1: string, key2: string): T {
+        return this.addAndReturn(createLCS(key1, key2));
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     *
+     * Command Response - The total length of all the longest common subsequences between the 2 strings.
+     */
+    public lcsLen(key1: string, key2: string): T {
+        return this.addAndReturn(createLCS(key1, key2, { len: true }));
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings stored at
+     * `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
+     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     *
+     * Command Response - A `Record` containing the indices of the longest common subsequences between the
+     *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
+     *           stored as an integer. This value doesn't count towards the `minMatchLen` filter.
+     *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by `key1` and `key2`.
+     */
+    public lcsIdx(
+        key1: string,
+        key2: string,
+        options?: { withMatchLen?: boolean; minMatchLen?: number },
+    ): T {
+        return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
     }
 }
 

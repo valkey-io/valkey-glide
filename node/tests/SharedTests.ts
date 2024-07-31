@@ -5991,6 +5991,143 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lcs %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+                const key1 = "{lcs}" + uuidv4();
+                const key2 = "{lcs}" + uuidv4();
+                const key3 = "{lcs}" + uuidv4();
+                const key4 = "{lcs}" + uuidv4();
+
+                // keys does not exist or is empty
+                expect(await client.lcs(key1, key2)).toEqual("");
+                expect(await client.lcsLen(key1, key2)).toEqual(0);
+                expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [],
+                    len: 0,
+                });
+
+                // LCS with some strings
+                expect(
+                    await client.mset({
+                        [key1]: "abcdefghijk",
+                        [key2]: "defjkjuighijk",
+                        [key3]: "123",
+                    }),
+                ).toEqual("OK");
+                expect(await client.lcs(key1, key2)).toEqual("defghijk");
+                expect(await client.lcsLen(key1, key2)).toEqual(8);
+
+                // LCS with only IDX
+                expect(await client.lcsIdx(key1, key2)).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+                expect(await client.lcsIdx(key1, key2, {})).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+                expect(
+                    await client.lcsIdx(key1, key2, { withMatchLen: false }),
+                ).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+
+                // LCS with IDX and WITHMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, { withMatchLen: true }),
+                ).toEqual({
+                    matches: [
+                        [[6, 10], [8, 12], 5],
+                        [[3, 5], [0, 2], 3],
+                    ],
+                    len: 8,
+                });
+
+                // LCS with IDX and MINMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, { minMatchLen: 4 }),
+                ).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                    ],
+                    len: 8,
+                });
+                // LCS with IDX and a negative MINMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, { minMatchLen: -1 }),
+                ).toEqual({
+                    matches: [
+                        [
+                            [6, 10],
+                            [8, 12],
+                        ],
+                        [
+                            [3, 5],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 8,
+                });
+
+                // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
+                expect(
+                    await client.lcsIdx(key1, key2, {
+                        minMatchLen: 4,
+                        withMatchLen: true,
+                    }),
+                ).toEqual({ matches: [[[6, 10], [8, 12], 5]], len: 8 });
+
+                // non-string keys are used
+                expect(await client.sadd(key4, ["_"])).toEqual(1);
+                await expect(client.lcs(key1, key4)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(client.lcsLen(key1, key4)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(client.lcsIdx(key1, key4)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
