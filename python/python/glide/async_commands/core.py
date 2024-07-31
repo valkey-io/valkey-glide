@@ -6635,7 +6635,7 @@ class CoreCommands(Protocol):
         """
         Lists the currently active channels.
 
-        See https://valkey.io/commands/pubsub-channels for details.
+        See https://valkey.io/commands/pubsub-channels for more details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
@@ -6667,7 +6667,7 @@ class CoreCommands(Protocol):
         Note: This is the total number of unique patterns all the clients are subscribed to,
         not the count of clients subscribed to patterns.
 
-        See https://valkey.io/commands/pubsub-numpat for details.
+        See https://valkey.io/commands/pubsub-numpat for more details.
 
         Returns:
             int: The number of unique patterns.
@@ -6685,18 +6685,19 @@ class CoreCommands(Protocol):
         Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
 
         Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
 
-        See https://valkey.io/commands/pubsub-numsub for details.
+        See https://valkey.io/commands/pubsub-numsub for more details.
 
         Args:
-            channels (Optional[List[str]]): The list of channels to query for the number of subscribers.
+            channels (Optional[List[TEncodable]]): The list of channels to query for the number of subscribers.
                                             If not provided, returns an empty map.
 
         Returns:
             Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
 
         Examples:
-            >>> subscribers = await client.pubsub_numsub(["channel1", "channel2"])
+            >>> await client.pubsub_numsub(["channel1", "channel2"])
                 {b'channel1': 3, b'channel2': 5}
 
             >>> await client.pubsub_numsub()

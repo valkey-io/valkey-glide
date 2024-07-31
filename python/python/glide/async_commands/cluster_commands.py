@@ -926,7 +926,7 @@ class ClusterCommands(CoreCommands):
         """
         Lists the currently active shard channels.
 
-        See https://valkey.io/commands/pubsub-shardchannels for details.
+        See https://valkey.io/commands/pubsub-shardchannels for more details.
 
         Args:
             pattern (Optional[TEncodable]): A glob-style pattern to match active shard channels.
@@ -957,17 +957,17 @@ class ClusterCommands(CoreCommands):
 
         Note that it is valid to call this command without channels. In this case, it will just return an empty map.
 
-        See https://valkey.io/commands/pubsub-shardnumsub for details.
+        See https://valkey.io/commands/pubsub-shardnumsub for more details.
 
         Args:
-            channels (Optional[List[str]]): The list of shard channels to query for the number of subscribers.
+            channels (Optional[List[TEncodable]]): The list of shard channels to query for the number of subscribers.
                                             If not provided, returns an empty map.
 
         Returns:
             Mapping[bytes, int]: A map where keys are the shard channel names and values are the number of subscribers.
 
         Examples:
-            >>> subscribers = await client.pubsub_shardnumsub(["channel1", "channel2"])
+            >>> await client.pubsub_shardnumsub(["channel1", "channel2"])
                 {b'channel1': 3, b'channel2': 5}
 
             >>> await client.pubsub_shardnumsub()
