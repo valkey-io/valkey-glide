@@ -185,10 +185,11 @@ import {
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
-export type ReturnTypeMap = { [key: string]: ReturnType };
+export type ReturnTypeRecord = { [key: string]: ReturnType };
+export type ReturnTypeMap = Map<string, ReturnType>;
 export type ReturnTypeAttribute = {
     value: ReturnType;
-    attributes: ReturnTypeMap;
+    attributes: ReturnTypeRecord;
 };
 export enum ProtocolVersion {
     /** Use RESP2 to communicate with the server nodes. */
@@ -205,6 +206,7 @@ export type ReturnType =
     | bigint
     | Buffer
     | Set<ReturnType>
+    | ReturnTypeRecord
     | ReturnTypeMap
     | ReturnTypeAttribute
     | ReturnType[];

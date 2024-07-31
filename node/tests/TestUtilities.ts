@@ -27,6 +27,7 @@ import {
     ListDirection,
     ProtocolVersion,
     ReturnType,
+    ReturnTypeMap,
     ScoreFilter,
     SignedEncoding,
     SortOrder,
@@ -374,12 +375,8 @@ export function checkFunctionListResponse(
                     string,
                     string | string[]
                 >;
-                const name = (
-                    functionInfo["name"] as unknown as Buffer
-                ).toString(); // not a string - suprise
-                const flags = (
-                    functionInfo["flags"] as unknown as Buffer[]
-                ).map((f) => f.toString());
+                const name = functionInfo["name"] as string;
+                const flags = functionInfo["flags"] as string[];
                 expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );
@@ -412,9 +409,23 @@ export function validateTransactionResponse(
     for (let i = 0; i < expectedResponseData.length; i++) {
         const [testName, expectedResponse] = expectedResponseData[i];
 
-        if (intoString(response?.[i]) != intoString(expectedResponse)) {
+        try {
+            expect(response?.[i]).toEqual(expectedResponse);
+        } catch (e) {
+            const expected =
+                expectedResponse instanceof Map
+                    ? JSON.stringify(Array.from(expectedResponse.entries()))
+                    : JSON.stringify(expectedResponse);
+            const actual =
+                response?.[i] instanceof Map
+                    ? JSON.stringify(
+                          Array.from(
+                              (response?.[i] as ReturnTypeMap)?.entries(),
+                          ),
+                      )
+                    : JSON.stringify(response?.[i]);
             failedChecks.push(
-                `${testName} failed, expected <${JSON.stringify(expectedResponse)}>, actual <${JSON.stringify(response?.[i])}>`,
+                `${testName} failed, expected <${expected}>, actual <${actual}>`,
             );
         }
     }
@@ -634,7 +645,7 @@ export async function transactionTest(
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
-            [true, true, false],
+            [true, false, false],
         ]);
     }
 
@@ -904,11 +915,11 @@ export async function transactionTest(
     baseTransaction.zrandmember(key21);
     responseData.push(["zrandmember(key21)", "one"]);
     baseTransaction.zrandmemberWithCount(key21, 1);
-    responseData.push(["zrandmemberWithCountWithScores(key21, 1)", "one"]);
+    responseData.push(["zrandmemberWithCount(key21, 1)", ["one"]]);
     baseTransaction.zrandmemberWithCountWithScores(key21, 1);
     responseData.push([
         "zrandmemberWithCountWithScores(key21, 1)",
-        [Buffer.from("one"), 1.0],
+        [["one", 1.0]],
     ]);
 
     if (gte(version, "6.2.0")) {

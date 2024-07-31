@@ -23,7 +23,11 @@ import {
     TimeoutError,
 } from "..";
 import RedisCluster from "../../utils/TestUtils";
-import { flushAndCloseClient } from "./TestUtilities";
+import {
+    flushAndCloseClient,
+    parseCommandLineArgs,
+    parseEndpoints,
+} from "./TestUtilities";
 
 export type TGlideClient = GlideClient | GlideClusterClient;
 
@@ -41,8 +45,20 @@ describe("PubSub", () => {
     let cmeCluster: RedisCluster;
     let cmdCluster: RedisCluster;
     beforeAll(async () => {
-        cmdCluster = await RedisCluster.createCluster(false, 1, 1);
-        cmeCluster = await RedisCluster.createCluster(true, 3, 1);
+        const standaloneAddresses =
+            parseCommandLineArgs()["standalone-endpoints"];
+        const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
+        // Connect to cluster or create a new one based on the parsed addresses
+        cmdCluster = standaloneAddresses
+            ? await RedisCluster.initFromExistingCluster(
+                  parseEndpoints(standaloneAddresses),
+              )
+            : await RedisCluster.createCluster(false, 1, 1);
+        cmeCluster = clusterAddresses
+            ? await RedisCluster.initFromExistingCluster(
+                  parseEndpoints(clusterAddresses),
+              )
+            : await RedisCluster.createCluster(true, 3, 1);
     }, 40000);
     afterEach(async () => {
         await flushAndCloseClient(false, cmdCluster.getAddresses());
