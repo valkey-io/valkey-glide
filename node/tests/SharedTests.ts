@@ -5905,6 +5905,26 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `touch test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+
+                expect(
+                    await client.mset({ [key1]: "value1", [key2]: "value2" }),
+                ).toEqual("OK");
+                expect(await client.touch([key1, key2])).toEqual(2);
+                expect(
+                    await client.touch([key2, nonExistingKey, key1]),
+                ).toEqual(2);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrandmember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

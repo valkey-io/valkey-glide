@@ -46,6 +46,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
@@ -89,7 +90,6 @@ import {
     createLInsert,
     createLLen,
     createLMove,
-    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -136,6 +136,7 @@ import {
     createSetBit,
     createStrlen,
     createTTL,
+    createTouch,
     createType,
     createUnlink,
     createXAdd,
@@ -4321,6 +4322,27 @@ export class BaseClient {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
         );
+    }
+
+    /**
+     * Updates the last access time of the specified keys.
+     *
+     * See https://valkey.io/commands/touch/ for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to update the last access time of.
+     * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "value1");
+     * await client.set("key2", "value2");
+     * const result = await client.touch(["key1", "key2", "nonExistingKey"]);
+     * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
+     * ```
+     */
+    public touch(keys: string[]): Promise<number> {
+        return this.createWritePromise(createTouch(keys));
     }
 
     /**

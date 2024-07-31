@@ -44,6 +44,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
@@ -104,7 +105,6 @@ import {
     createLInsert,
     createLLen,
     createLMove,
-    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -155,6 +155,7 @@ import {
     createStrlen,
     createTTL,
     createTime,
+    createTouch,
     createType,
     createUnlink,
     createXAdd,
@@ -2579,6 +2580,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         options?: { withMatchLen?: boolean; minMatchLen?: number },
     ): T {
         return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
+    }
+
+    /**
+     * Updates the last access time of the specified keys.
+     *
+     * See https://valkey.io/commands/touch/ for more details.
+     *
+     * @param keys - The keys to update the last access time of.
+     *
+     * Command Response - The number of keys that were updated. A key is ignored if it doesn't exist.
+     */
+    public touch(keys: string[]): T {
+        return this.addAndReturn(createTouch(keys));
     }
 }
 
