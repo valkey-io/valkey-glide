@@ -1796,9 +1796,6 @@ export function runBaseTests<Context>(config: {
                         0.1,
                     ),
                 ).rejects.toThrow(RequestError);
-
-                // TODO: add test case with 0 timeout (no timeout) should never time out,
-                // but we wrap the test with timeout to avoid test failing or stuck forever
             }, protocol);
         },
         config.timeout,
@@ -4505,6 +4502,52 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfmerget test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const stringKey = `{key}-4-${uuidv4()}`;
+                const nonExistingKey = `{key}-5-${uuidv4()}`;
+
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+
+                // merge into new HyperLogLog data set
+                expect(await client.pfmerge(key3, [key1, key2])).toEqual("OK");
+                expect(await client.pfcount([key3])).toEqual(4);
+
+                // merge into existing HyperLogLog data set
+                expect(await client.pfmerge(key1, [key2])).toEqual("OK");
+                expect(await client.pfcount([key1])).toEqual(4);
+
+                // non-existing source key
+                expect(
+                    await client.pfmerge(key2, [key1, nonExistingKey]),
+                ).toEqual("OK");
+                expect(await client.pfcount([key2])).toEqual(4);
+
+                // empty source key list
+                expect(await client.pfmerge(key1, [])).toEqual("OK");
+                expect(await client.pfcount([key1])).toEqual(4);
+
+                // source key exists, but it is not a HyperLogLog
+                await client.set(stringKey, "foo");
+                await expect(client.pfmerge(key3, [stringKey])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // destination key exists, but it is not a HyperLogLog
+                await expect(client.pfmerge(stringKey, [key3])).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
@@ -5666,10 +5709,12 @@ export function runBaseTests<Context>(config: {
                     await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
-                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN))
-                    .toBeNull;
-                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1))
-                    .toBeNull;
+                expect(
+                    await client.zmpop([nonExistingKey], ScoreFilter.MIN),
+                ).toBeNull();
+                expect(
+                    await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1),
+                ).toBeNull();
 
                 // key exists, but it is not a sorted set
                 expect(await client.set(stringKey, "value")).toEqual("OK");
@@ -5767,7 +5812,7 @@ export function runBaseTests<Context>(config: {
                 // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
                 expect(
                     await client.bzmpop([nonExistingKey], ScoreFilter.MAX, 0.5),
-                ).toBeNull;
+                ).toBeNull();
                 expect(
                     await client.bzmpop(
                         [nonExistingKey],
@@ -5775,7 +5820,7 @@ export function runBaseTests<Context>(config: {
                         0.55,
                         1,
                     ),
-                ).toBeNull;
+                ).toBeNull();
 
                 // key exists, but it is not a sorted set
                 expect(await client.set(stringKey, "value")).toEqual("OK");
@@ -5916,6 +5961,26 @@ export function runBaseTests<Context>(config: {
                 // key exists but holds non-ZSET value
                 expect(await client.set(key2, "geohash")).toBe("OK");
                 await expect(client.geohash(key2, members)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `touch test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-${uuidv4()}`;
+                const key2 = `{key}-${uuidv4()}`;
+                const nonExistingKey = `{key}-${uuidv4()}`;
+
+                expect(
+                    await client.mset({ [key1]: "value1", [key2]: "value2" }),
+                ).toEqual("OK");
+                expect(await client.touch([key1, key2])).toEqual(2);
+                expect(
+                    await client.touch([key2, nonExistingKey, key1]),
+                ).toEqual(2);
             }, protocol);
         },
         config.timeout,
