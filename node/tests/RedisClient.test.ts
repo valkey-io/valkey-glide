@@ -668,6 +668,38 @@ describe("GlideClient", () => {
         },
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "randomKey test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            // setup: delete all keys in DB 0 and DB 1
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+
+            // no keys exist so randomKey returns null
+            expect(await client.randomKey()).toBeNull();
+            // set `key` in DB 1
+            expect(await client.set(key, "foo")).toEqual("OK");
+            // `key` should be the only key in the database
+            expect(await client.randomKey()).toEqual(key);
+
+            // switch back to DB 0
+            expect(await client.select(0)).toEqual("OK");
+            // DB 0 should still have no keys, so randomKey should still return null
+            expect(await client.randomKey()).toBeNull();
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
             const options = getClientConfigurationOption(

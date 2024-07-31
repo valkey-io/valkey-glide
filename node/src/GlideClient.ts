@@ -36,6 +36,7 @@ import {
     createLolwut,
     createPing,
     createPublish,
+    createRandomKey,
     createSelect,
     createTime,
 } from "./Commands";
@@ -626,5 +627,22 @@ export class GlideClient extends BaseClient {
      */
     public async lastsave(): Promise<number> {
         return this.createWritePromise(createLastSave());
+    }
+
+    /**
+     * Returns a random existing key name from the currently selected database.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * @returns A random existing key name from the currently selected database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.randomKey();
+     * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
+     * ```
+     */
+    public randomKey(): Promise<string | null> {
+        return this.createWritePromise(createRandomKey());
     }
 }

@@ -46,6 +46,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
@@ -89,7 +90,6 @@ import {
     createLInsert,
     createLLen,
     createLMove,
-    createBLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -111,6 +111,7 @@ import {
     createPersist,
     createPfAdd,
     createPfCount,
+    createPfMerge,
     createRPop,
     createRPush,
     createRPushX,
@@ -135,6 +136,7 @@ import {
     createSetBit,
     createStrlen,
     createTTL,
+    createTouch,
     createType,
     createUnlink,
     createXAdd,
@@ -3698,6 +3700,34 @@ export class BaseClient {
         return this.createWritePromise(createPfCount(keys));
     }
 
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
+     * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * See https://valkey.io/commands/pfmerge/ for more details.
+     *
+     * @remarks When in Cluster mode, all keys in `sourceKeys` and `destination` must map to the same hash slot.
+     * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+     * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * await client.pfadd("hll1", ["a", "b"]);
+     * await client.pfadd("hll2", ["b", "c"]);
+     * const result = await client.pfmerge("new_hll", ["hll1", "hll2"]);
+     * console.log(result); // Output: OK  - The value of "hll1" merged with "hll2" was stored in "new_hll".
+     * const count = await client.pfcount(["new_hll"]);
+     * console.log(count); // Output: 3  - The approximated cardinality of "new_hll" is 3.
+     * ```
+     */
+    public async pfmerge(
+        destination: string,
+        sourceKeys: string[],
+    ): Promise<"OK"> {
+        return this.createWritePromise(createPfMerge(destination, sourceKeys));
+    }
+
     /** Returns the internal encoding for the Redis object stored at `key`.
      *
      * See https://valkey.io/commands/object-encoding for more details.
@@ -4292,6 +4322,27 @@ export class BaseClient {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
         );
+    }
+
+    /**
+     * Updates the last access time of the specified keys.
+     *
+     * See https://valkey.io/commands/touch/ for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to update the last access time of.
+     * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "value1");
+     * await client.set("key2", "value2");
+     * const result = await client.touch(["key1", "key2", "nonExistingKey"]);
+     * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
+     * ```
+     */
+    public touch(keys: string[]): Promise<number> {
+        return this.createWritePromise(createTouch(keys));
     }
 
     /**
