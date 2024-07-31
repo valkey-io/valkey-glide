@@ -5604,10 +5604,12 @@ export function runBaseTests<Context>(config: {
                     await client.zmpop([key2, key1], ScoreFilter.MAX, 10),
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
-                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN))
-                    .toBeNull();
-                expect(await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1))
-                    .toBeNull();
+                expect(
+                    await client.zmpop([nonExistingKey], ScoreFilter.MIN),
+                ).toBeNull();
+                expect(
+                    await client.zmpop([nonExistingKey], ScoreFilter.MIN, 1),
+                ).toBeNull();
 
                 // key exists, but it is not a sorted set
                 expect(await client.set(stringKey, "value")).toEqual("OK");
