@@ -3264,12 +3264,13 @@ export class BaseClient {
 
     /**
      * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     * 
      * See https://valkey.io/commands/zremrangebylex/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
-     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
-     * @returns the number of members removed.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @returns The number of members removed.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minLex` is greater than `maxLex`, 0 is returned.
      *
@@ -3277,7 +3278,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
      * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
-     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "mySortedSet".
+     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
      * ```
      *
      * @example

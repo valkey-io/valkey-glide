@@ -1776,12 +1776,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     * 
      * See https://valkey.io/commands/zremrangebylex/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or specific lex and inclusivity.
-     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or specific lex and inclusivity.
-     * @returns the number of members removed.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * 
+     * Command Response - The number of members removed.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
      * If `minLex` is greater than `maxLex`, 0 is returned.
      */
