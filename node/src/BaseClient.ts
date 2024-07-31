@@ -152,6 +152,7 @@ import {
     createZIncrBy,
     createZInterCard,
     createZInterstore,
+    createZLexCount,
     createZMPop,
     createZMScore,
     createZPopMax,
@@ -2855,7 +2856,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
@@ -2899,7 +2900,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: "negativeInfinity",
+     *              start: InfScoreBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -2941,7 +2942,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: "negativeInfinity",
+     *              start: InfScoreBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -3271,7 +3272,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
@@ -3290,6 +3291,38 @@ export class BaseClient {
         return this.createWritePromise(
             createZRemRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
+     *
+     * See https://valkey.io/commands/zlexcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @returns The number of members in the specified lex range.
+     * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
+     * If maxLex is less than minLex, '0' is returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfScoreBoundary.PositiveInfinity);
+     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
+     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
+     * ```
+     */
+    public async zlexcount(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): Promise<number> {
+        return this.createWritePromise(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.

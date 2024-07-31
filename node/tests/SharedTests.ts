@@ -27,6 +27,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    InfScoreBoundary,
     InfoOptions,
     InsertPosition,
     ListDirection,
@@ -3261,8 +3262,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         key1,
-                        "negativeInfinity",
-                        "positiveInfinity",
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
                     ),
                 ).toEqual(3);
                 expect(
@@ -3280,26 +3281,38 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zcount(key1, "negativeInfinity", {
-                        value: 3,
-                    }),
+                    await client.zcount(
+                        key1,
+                        InfScoreBoundary.NegativeInfinity,
+                        {
+                            value: 3,
+                        },
+                    ),
                 ).toEqual(3);
                 expect(
-                    await client.zcount(key1, "positiveInfinity", {
-                        value: 3,
-                    }),
+                    await client.zcount(
+                        key1,
+                        InfScoreBoundary.PositiveInfinity,
+                        {
+                            value: 3,
+                        },
+                    ),
                 ).toEqual(0);
                 expect(
                     await client.zcount(
                         "nonExistingKey",
-                        "negativeInfinity",
-                        "positiveInfinity",
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(await client.set(key2, "foo")).toEqual("OK");
                 await expect(
-                    client.zcount(key2, "negativeInfinity", "positiveInfinity"),
+                    client.zcount(
+                        key2,
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
+                    ),
                 ).rejects.toThrow();
             }, protocol);
         },
@@ -3353,14 +3366,14 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: "negativeInfinity",
+                        start: InfScoreBoundary.NegativeInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(["one", "two"]);
                 const result = await client.zrangeWithScores(key, {
-                    start: "negativeInfinity",
-                    stop: "positiveInfinity",
+                    start: InfScoreBoundary.NegativeInfinity,
+                    stop: InfScoreBoundary.PositiveInfinity,
                     type: "byScore",
                 });
 
@@ -3376,7 +3389,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: "negativeInfinity",
+                            stop: InfScoreBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -3385,8 +3398,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: "negativeInfinity",
-                        stop: "positiveInfinity",
+                        start: InfScoreBoundary.NegativeInfinity,
+                        stop: InfScoreBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -3396,7 +3409,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrange(
                         key,
                         {
-                            start: "negativeInfinity",
+                            start: InfScoreBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3406,7 +3419,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: "positiveInfinity",
+                        start: InfScoreBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3416,7 +3429,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrangeWithScores(
                         key,
                         {
-                            start: "negativeInfinity",
+                            start: InfScoreBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3426,7 +3439,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeWithScores(key, {
-                        start: "positiveInfinity",
+                        start: InfScoreBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3446,7 +3459,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: "negativeInfinity",
+                        start: InfScoreBoundary.NegativeInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -3454,8 +3467,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: "negativeInfinity",
-                        stop: "positiveInfinity",
+                        start: InfScoreBoundary.NegativeInfinity,
+                        stop: InfScoreBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -3466,7 +3479,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: "negativeInfinity",
+                            stop: InfScoreBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -3477,7 +3490,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrange(
                         key,
                         {
-                            start: "negativeInfinity",
+                            start: InfScoreBoundary.NegativeInfinity,
                             stop: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
@@ -3487,7 +3500,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: "positiveInfinity",
+                        start: InfScoreBoundary.PositiveInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -4240,17 +4253,91 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByScore(
                         key,
                         { value: 1 },
-                        "negativeInfinity",
+                        InfScoreBoundary.NegativeInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(
                     await client.zremRangeByScore(
                         "nonExistingKey",
-                        "negativeInfinity",
-                        "positiveInfinity",
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zlexcount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                // In range negative to positive infinity.
+                expect(
+                    await client.zlexcount(
+                        key,
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
+                    ),
+                ).toEqual(3);
+
+                // In range a (exclusive) to positive infinity
+                expect(
+                    await client.zlexcount(
+                        key,
+                        { value: "a", isInclusive: false },
+                        InfScoreBoundary.PositiveInfinity,
+                    ),
+                ).toEqual(2);
+
+                // In range negative infinity to c (inclusive)
+                expect(
+                    await client.zlexcount(
+                        key,
+                        InfScoreBoundary.NegativeInfinity,
+                        {
+                            value: "c",
+                            isInclusive: true,
+                        },
+                    ),
+                ).toEqual(3);
+
+                // Incorrect range start > end
+                expect(
+                    await client.zlexcount(
+                        key,
+                        InfScoreBoundary.PositiveInfinity,
+                        {
+                            value: "c",
+                            isInclusive: true,
+                        },
+                    ),
+                ).toEqual(0);
+
+                // Non-existing key
+                expect(
+                    await client.zlexcount(
+                        "non_existing_key",
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
+                    ),
+                ).toEqual(0);
+
+                // Key exists, but it is not a set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.zlexcount(
+                        stringKey,
+                        InfScoreBoundary.NegativeInfinity,
+                        InfScoreBoundary.PositiveInfinity,
+                    ),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
