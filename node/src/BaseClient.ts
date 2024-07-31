@@ -111,6 +111,7 @@ import {
     createPersist,
     createPfAdd,
     createPfCount,
+    createPfMerge,
     createRPop,
     createRPush,
     createRPushX,
@@ -3696,6 +3697,34 @@ export class BaseClient {
      */
     public pfcount(keys: string[]): Promise<number> {
         return this.createWritePromise(createPfCount(keys));
+    }
+
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
+     * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * See https://valkey.io/commands/pfmerge/ for more details.
+     *
+     * @remarks When in Cluster mode, all keys in `sourceKeys` and `destination` must map to the same hash slot.
+     * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+     * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * await client.pfadd("hll1", ["a", "b"]);
+     * await client.pfadd("hll2", ["b", "c"]);
+     * const result = await client.pfmerge("new_hll", ["hll1", "hll2"]);
+     * console.log(result); // Output: OK  - The value of "hll1" merged with "hll2" was stored in "new_hll".
+     * const count = await client.pfcount(["new_hll"]);
+     * console.log(count); // Output: 3  - The approximated cardinality of "new_hll" is 3.
+     * ```
+     */
+    public async pfmerge(
+        destination: string,
+        sourceKeys: string[],
+    ): Promise<"OK"> {
+        return this.createWritePromise(createPfMerge(destination, sourceKeys));
     }
 
     /** Returns the internal encoding for the Redis object stored at `key`.
