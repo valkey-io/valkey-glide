@@ -37,6 +37,7 @@ import {
     createLolwut,
     createPing,
     createPublish,
+    createRandomKey,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -981,6 +982,28 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
+        );
+    }
+
+    /**
+     * Returns a random existing key name.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
+     *      in which case the client will route the command to the nodes defined by `route`.
+     * @returns A random existing key name.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.randomKey();
+     * console.log(result); // Output: "key12" - "key12" is a random existing key name.
+     * ```
+     */
+    public randomKey(route?: Routes): Promise<string | null> {
+        return this.createWritePromise(
+            createRandomKey(),
+            toProtobufRoute(route),
         );
     }
 }

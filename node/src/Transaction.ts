@@ -132,6 +132,7 @@ import {
     createRPop,
     createRPush,
     createRPushX,
+    createRandomKey,
     createRename,
     createRenameNX,
     createSAdd,
@@ -2593,6 +2594,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public touch(keys: string[]): T {
         return this.addAndReturn(createTouch(keys));
+    }
+
+    /**
+     * Returns a random existing key name from the currently selected database.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * Command Response - A random existing key name from the currently selected database.
+     */
+    public randomKey(): T {
+        return this.addAndReturn(createRandomKey());
     }
 }
 
