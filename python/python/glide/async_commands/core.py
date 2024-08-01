@@ -3312,7 +3312,7 @@ class CoreCommands(Protocol):
             args.extend(options.to_args())
 
         return cast(
-            List[TEncodable],
+            List[bytes],
             await self._execute_command(RequestType.XClaim, args),
         )
 
