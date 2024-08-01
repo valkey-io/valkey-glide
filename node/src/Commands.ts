@@ -3066,3 +3066,45 @@ export function createSetRange(
 ): command_request.Command {
     return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
 }
+
+/**
+ * @internal
+ */
+export function createLMPop(
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString(), ...keys, direction];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.LMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBLMPop(
+    timeout: number,
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [
+        timeout.toString(),
+        keys.length.toString(),
+        ...keys,
+        direction,
+    ];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.BLMPop, args);
+}
