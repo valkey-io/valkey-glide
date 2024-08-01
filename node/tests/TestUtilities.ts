@@ -468,7 +468,9 @@ export async function transactionTest(
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
     const key20 = "{key}" + uuidv4(); // list
-    const key21 = "{key}" + uuidv4(); // zset random
+    const key21 = "{key}" + uuidv4(); // list for sort
+    const key22 = "{key}" + uuidv4(); // list for sort
+    const key23 = "{key}" + uuidv4(); // zset random
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -939,15 +941,15 @@ export async function transactionTest(
         'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
-    baseTransaction.zadd(key21, { one: 1.0 });
-    responseData.push(["zadd(key21, {one: 1.0}", 1]);
-    baseTransaction.zrandmember(key21);
-    responseData.push(["zrandmember(key21)", "one"]);
-    baseTransaction.zrandmemberWithCount(key21, 1);
-    responseData.push(["zrandmemberWithCount(key21, 1)", ["one"]]);
-    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
+    baseTransaction.zadd(key23, { one: 1.0 });
+    responseData.push(["zadd(key23, {one: 1.0}", 1]);
+    baseTransaction.zrandmember(key23);
+    responseData.push(["zrandmember(key23)", "one"]);
+    baseTransaction.zrandmemberWithCount(key23, 1);
+    responseData.push(["zrandmemberWithCount(key23, 1)", ["one"]]);
+    baseTransaction.zrandmemberWithCountWithScores(key23, 1);
     responseData.push([
-        "zrandmemberWithCountWithScores(key21, 1)",
+        "zrandmemberWithCountWithScores(key23, 1)",
         [["one", 1.0]],
     ]);
 
@@ -1128,6 +1130,23 @@ export async function transactionTest(
             ],
             ["del([key1, key2, key3])", 3],
         );
+    }
+
+    baseTransaction
+        .lpush(key21, ["3", "1", "2"])
+        .sort(key21)
+        .sortStore(key21, key22)
+        .lrange(key22, 0, -1);
+    responseData.push(
+        ['lpush(key21, ["3", "1", "2"])', 3],
+        ["sort(key21)", ["1", "2", "3"]],
+        ["sortStore(key21, key22)", 3],
+        ["lrange(key22, 0, -1)", ["1", "2", "3"]],
+    );
+
+    if (gte("7.0.0", version)) {
+        baseTransaction.sortReadOnly(key21);
+        responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
     return responseData;
