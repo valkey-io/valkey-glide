@@ -1097,7 +1097,6 @@ describe("GlideClusterClient", () => {
 
             const key1 = "{key}-1" + uuidv4();
             const key2 = "{key}-2" + uuidv4();
-
             const setFoobarTransaction = new ClusterTransaction();
 
             // UNWATCH returns OK when there no watched keys
