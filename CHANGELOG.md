@@ -1,5 +1,7 @@
 #### Changes
 * Node: Added EXPIRETIME and PEXPIRETIME commands ([#2063](https://github.com/valkey-io/valkey-glide/pull/2063))
+* Node: Added SORT commands ([#2028](https://github.com/valkey-io/valkey-glide/pull/2028))
+* Node: Added LASTSAVE command ([#2059](https://github.com/valkey-io/valkey-glide/pull/2059))
 * Node: Added LCS command ([#2049](https://github.com/valkey-io/valkey-glide/pull/2049))
 * Node: Added MSETNX command ([#2046](https://github.com/valkey-io/valkey-glide/pull/2046))
 * Node: Added BLMOVE command ([#2027](https://github.com/valkey-io/valkey-glide/pull/2027))
@@ -42,6 +44,9 @@
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
 * Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
+* Node: Added ZLEXCOUNT command ([#2022](https://github.com/valkey-io/valkey-glide/pull/2022))
+* Node: Added ZREMRANGEBYLEX command ([#2025]((https://github.com/valkey-io/valkey-glide/pull/2025))
+* Node: Added ZSCAN command ([#2061](https://github.com/valkey-io/valkey-glide/pull/2061))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
