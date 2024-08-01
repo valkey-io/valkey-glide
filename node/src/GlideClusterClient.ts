@@ -7,18 +7,23 @@ import {
     BaseClient,
     BaseClientConfiguration,
     PubSubMsg,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
+    SortClusterOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -28,11 +33,16 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createInfo,
+    createLastSave,
     createLolwut,
     createPing,
     createPublish,
+    createSort,
+    createSortReadOnly,
+    createRandomKey,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -636,6 +646,37 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2", true);
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: string,
+        destination: string,
+        replace?: boolean,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, { replace: replace }),
+        );
+    }
+
+    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -808,6 +849,47 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to a random route.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionListResponse>> {
+        return this.createWritePromise(
+            createFunctionList(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -858,7 +940,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/dbsize/ for more details.
 
-     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
      * @returns The number of keys in the database.
      *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
@@ -869,7 +951,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+    public dbsize(route?: Routes): Promise<number> {
         return this.createWritePromise(createDBSize(), toProtobufRoute(route));
     }
 
@@ -905,6 +987,139 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
+        );
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     * @returns An `Array` of sorted elements.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("mylist", ["3", "1", "2", "a"]);
+     * const result = await client.sort("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
+     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
+     * ```
+     */
+    public async sort(
+        key: string,
+        options?: SortClusterOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     * @returns An `Array` of sorted elements
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("mylist", ["3", "1", "2", "a"]);
+     * const result = await client.sortReadOnly("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
+     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
+     * ```
+     */
+    public async sortReadOnly(
+        key: string,
+        options?: SortClusterOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     * @returns The number of elements in the sorted key stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("mylist", ["3", "1", "2", "a"]);
+     * const sortedElements = await client.sortReadOnly("mylist", "sortedList", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
+     * console.log(sortedElements); // Output: 3 - number of elements sorted and stored
+     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically and stored in `sortedList`
+     * ```
+     */
+    public async sortStore(
+        key: string,
+        destination: string,
+        options?: SortClusterOptions,
+    ): Promise<number> {
+        return this.createWritePromise(createSort(key, options, destination));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `UNIX TIME` of the last DB save executed with success.
+     * @example
+     * ```typescript
+     * const timestamp = await client.lastsave();
+     * console.log("Last DB save was done at " + timestamp);
+     * ```
+     */
+    public async lastsave(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(
+            createLastSave(),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns a random existing key name.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
+     *      in which case the client will route the command to the nodes defined by `route`.
+     * @returns A random existing key name.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.randomKey();
+     * console.log(result); // Output: "key12" - "key12" is a random existing key name.
+     * ```
+     */
+    public randomKey(route?: Routes): Promise<string | null> {
+        return this.createWritePromise(
+            createRandomKey(),
+            toProtobufRoute(route),
         );
     }
 }

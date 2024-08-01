@@ -7,18 +7,23 @@ import {
     BaseClient,
     BaseClientConfiguration,
     PubSubMsg,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse,
     InfoOptions,
     LolwutOptions,
+    SortOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createEcho,
@@ -26,12 +31,17 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createInfo,
+    createLastSave,
     createLolwut,
     createPing,
     createPublish,
+    createRandomKey,
     createSelect,
+    createSort,
+    createSortReadOnly,
     createTime,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
@@ -372,6 +382,48 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     * @returns `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.copy("set1", "set2");
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { replace: true });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     * ```typescript
+     * const result = await client.copy("set1", "set2", { destinationDB: 1, replace: false });
+     * console.log(result); // Output: true - "set1" was copied to "set2".
+     * ```
+     */
+    public async copy(
+        source: string,
+        destination: string,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createCopy(source, destination, options),
+        );
+    }
+
+    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -458,6 +510,41 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     *
+     * @example
+     * ```typescript
+     * // Request info for specific library including the source code
+     * const result1 = await client.functionList({ libNamePattern: "myLib*", withCode: true });
+     * // Request info for all libraries
+     * const result2 = await client.functionList();
+     * console.log(result2); // Output:
+     * // [{
+     * //     "library_name": "myLib5_backup",
+     * //     "engine": "LUA",
+     * //     "functions": [{
+     * //         "name": "myfunc",
+     * //         "description": null,
+     * //         "flags": [ "no-writes" ],
+     * //     }],
+     * //     "library_code": "#!lua name=myLib5_backup \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+     * // }]
+     * ```
+     */
+    public async functionList(
+        options?: FunctionListOptions,
+    ): Promise<FunctionListResponse> {
+        return this.createWritePromise(createFunctionList(options));
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -527,5 +614,134 @@ export class GlideClient extends BaseClient {
      */
     public publish(message: string, channel: string): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - The {@link SortOptions}.
+     * @returns An `Array` of sorted elements.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
+     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
+     * await client.lpush("user_ids", ["2", "1"]);
+     * const result = await client.sort("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
+     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
+     * ```
+     */
+    public async sort(
+        key: string,
+        options?: SortOptions,
+    ): Promise<(string | null)[]> {
+        return this.createWritePromise(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - The {@link SortOptions}.
+     * @returns An `Array` of sorted elements
+     *
+     * @example
+     * ```typescript
+     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
+     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
+     * await client.lpush("user_ids", ["2", "1"]);
+     * const result = await client.sortReadOnly("user_ids", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
+     * console.log(result); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age
+     * ```
+     */
+    public async sortReadOnly(
+        key: string,
+        options?: SortOptions,
+    ): Promise<(string | null)[]> {
+        return this.createWritePromise(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - The {@link SortOptions}.
+     * @returns The number of elements in the sorted key stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("user:1", new Map([["name", "Alice"], ["age", "30"]]));
+     * await client.hset("user:2", new Map([["name", "Bob"], ["age", "25"]]));
+     * await client.lpush("user_ids", ["2", "1"]);
+     * const sortedElements = await client.sortStore("user_ids", "sortedList", { byPattern: "user:*->age", getPattern: ["user:*->name"] });
+     * console.log(sortedElements); // Output: 2 - number of elements sorted and stored
+     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'Bob', 'Alice' ] - Returns a list of the names sorted by age stored in `sortedList`
+     * ```
+     */
+    public async sortStore(
+        key: string,
+        destination: string,
+        options?: SortOptions,
+    ): Promise<number> {
+        return this.createWritePromise(createSort(key, options, destination));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * @returns `UNIX TIME` of the last DB save executed with success.
+     * @example
+     * ```typescript
+     * const timestamp = await client.lastsave();
+     * console.log("Last DB save was done at " + timestamp);
+     * ```
+     */
+    public async lastsave(): Promise<number> {
+        return this.createWritePromise(createLastSave());
+    }
+
+    /**
+     * Returns a random existing key name from the currently selected database.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * @returns A random existing key name from the currently selected database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.randomKey();
+     * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
+     * ```
+     */
+    public randomKey(): Promise<string | null> {
+        return this.createWritePromise(createRandomKey());
     }
 }

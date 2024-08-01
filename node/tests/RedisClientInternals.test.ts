@@ -22,6 +22,7 @@ import {
     BaseClientConfiguration,
     ClosingError,
     ClusterClientConfiguration,
+    ClusterTransaction,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
@@ -30,7 +31,6 @@ import {
     RequestError,
     ReturnType,
     SlotKeyTypes,
-    Transaction,
 } from "..";
 import {
     command_request,
@@ -376,7 +376,7 @@ describe("SocketConnectionInternals", () => {
 
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
-            const transaction = new Transaction();
+            const transaction = new ClusterTransaction();
             transaction.set("key", "value");
             const slotKey: SlotKeyTypes = {
                 type: "primarySlotKey",
@@ -408,7 +408,7 @@ describe("SocketConnectionInternals", () => {
                     value: "# Server",
                 });
             });
-            const transaction = new Transaction();
+            const transaction = new ClusterTransaction();
             transaction.info([InfoOptions.Server]);
             const result = await connection.exec(transaction, "randomNode");
             expect(intoString(result)).toEqual(

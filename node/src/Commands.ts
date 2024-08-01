@@ -346,6 +346,18 @@ export function createMSet(
 /**
  * @internal
  */
+export function createMSetNX(
+    keyValueMap: Record<string, string>,
+): command_request.Command {
+    return createCommand(
+        RequestType.MSetNX,
+        Object.entries(keyValueMap).flat(),
+    );
+}
+
+/**
+ * @internal
+ */
 export function createIncr(key: string): command_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
@@ -495,6 +507,300 @@ export function createSetBit(
 }
 
 /**
+ * Represents a signed or unsigned argument encoding for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ */
+export interface BitEncoding {
+    /**
+     * Returns the encoding as a string argument to be used in the {@link BaseClient.bitfield|bitfield} or
+     * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+     *
+     * @returns The encoding as a string argument.
+     */
+    toArg(): string;
+}
+
+/**
+ * Represents a signed argument encoding.
+ */
+export class SignedEncoding implements BitEncoding {
+    private static readonly SIGNED_ENCODING_PREFIX = "i";
+    private readonly encoding: string;
+
+    /**
+     * Creates an instance of SignedEncoding.
+     *
+     * @param encodingLength - The bit size of the encoding. Must be less than 65 bits long.
+     */
+    constructor(encodingLength: number) {
+        this.encoding = `${SignedEncoding.SIGNED_ENCODING_PREFIX}${encodingLength.toString()}`;
+    }
+
+    public toArg(): string {
+        return this.encoding;
+    }
+}
+
+/**
+ * Represents an unsigned argument encoding.
+ */
+export class UnsignedEncoding implements BitEncoding {
+    private static readonly UNSIGNED_ENCODING_PREFIX = "u";
+    private readonly encoding: string;
+
+    /**
+     * Creates an instance of UnsignedEncoding.
+     *
+     * @param encodingLength - The bit size of the encoding. Must be less than 64 bits long.
+     */
+    constructor(encodingLength: number) {
+        this.encoding = `${UnsignedEncoding.UNSIGNED_ENCODING_PREFIX}${encodingLength.toString()}`;
+    }
+
+    public toArg(): string {
+        return this.encoding;
+    }
+}
+
+/**
+ * Represents an offset for an array of bits for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ */
+export interface BitFieldOffset {
+    /**
+     * Returns the offset as a string argument to be used in the {@link BaseClient.bitfield|bitfield} or
+     * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+     *
+     * @returns The offset as a string argument.
+     */
+    toArg(): string;
+}
+
+/**
+ * Represents an offset in an array of bits for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ *
+ * For example, if we have the binary `01101001` with offset of 1 for an unsigned encoding of size 4, then the value
+ * is 13 from `0(1101)001`.
+ */
+export class BitOffset implements BitFieldOffset {
+    private readonly offset: string;
+
+    /**
+     * Creates an instance of BitOffset.
+     *
+     * @param offset - The bit index offset in the array of bits. Must be greater than or equal to 0.
+     */
+    constructor(offset: number) {
+        this.offset = offset.toString();
+    }
+
+    public toArg(): string {
+        return this.offset;
+    }
+}
+
+/**
+ * Represents an offset in an array of bits for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands. The bit offset index is calculated as the numerical
+ * value of the offset multiplied by the encoding value.
+ *
+ * For example, if we have the binary 01101001 with offset multiplier of 1 for an unsigned encoding of size 4, then the
+ * value is 9 from `0110(1001)`.
+ */
+export class BitOffsetMultiplier implements BitFieldOffset {
+    private static readonly OFFSET_MULTIPLIER_PREFIX = "#";
+    private readonly offset: string;
+
+    /**
+     * Creates an instance of BitOffsetMultiplier.
+     *
+     * @param offset - The offset in the array of bits, which will be multiplied by the encoding value to get the final
+     *      bit index offset.
+     */
+    constructor(offset: number) {
+        this.offset = `${BitOffsetMultiplier.OFFSET_MULTIPLIER_PREFIX}${offset.toString()}`;
+    }
+
+    public toArg(): string {
+        return this.offset;
+    }
+}
+
+/**
+ * Represents subcommands for the {@link BaseClient.bitfield|bitfield} or
+ * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+ */
+export interface BitFieldSubCommands {
+    /**
+     * Returns the subcommand as a list of string arguments to be used in the {@link BaseClient.bitfield|bitfield} or
+     * {@link BaseClient.bitfieldReadOnly|bitfieldReadOnly} commands.
+     *
+     * @returns The subcommand as a list of string arguments.
+     */
+    toArgs(): string[];
+}
+
+/**
+ * Represents the "GET" subcommand for getting a value in the binary representation of the string stored in `key`.
+ */
+export class BitFieldGet implements BitFieldSubCommands {
+    private static readonly GET_COMMAND_STRING = "GET";
+    private readonly encoding: BitEncoding;
+    private readonly offset: BitFieldOffset;
+
+    /**
+     * Creates an instance of BitFieldGet.
+     *
+     * @param encoding - The bit encoding for the subcommand.
+     * @param offset - The offset in the array of bits from which to get the value.
+     */
+    constructor(encoding: BitEncoding, offset: BitFieldOffset) {
+        this.encoding = encoding;
+        this.offset = offset;
+    }
+
+    toArgs(): string[] {
+        return [
+            BitFieldGet.GET_COMMAND_STRING,
+            this.encoding.toArg(),
+            this.offset.toArg(),
+        ];
+    }
+}
+
+/**
+ * Represents the "SET" subcommand for setting bits in the binary representation of the string stored in `key`.
+ */
+export class BitFieldSet implements BitFieldSubCommands {
+    private static readonly SET_COMMAND_STRING = "SET";
+    private readonly encoding: BitEncoding;
+    private readonly offset: BitFieldOffset;
+    private readonly value: number;
+
+    /**
+     * Creates an instance of BitFieldSet
+     *
+     * @param encoding - The bit encoding for the subcommand.
+     * @param offset - The offset in the array of bits where the value will be set.
+     * @param value - The value to set the bits in the binary value to.
+     */
+    constructor(encoding: BitEncoding, offset: BitFieldOffset, value: number) {
+        this.encoding = encoding;
+        this.offset = offset;
+        this.value = value;
+    }
+
+    toArgs(): string[] {
+        return [
+            BitFieldSet.SET_COMMAND_STRING,
+            this.encoding.toArg(),
+            this.offset.toArg(),
+            this.value.toString(),
+        ];
+    }
+}
+
+/**
+ * Represents the "INCRBY" subcommand for increasing or decreasing bits in the binary representation of the string
+ * stored in `key`.
+ */
+export class BitFieldIncrBy implements BitFieldSubCommands {
+    private static readonly INCRBY_COMMAND_STRING = "INCRBY";
+    private readonly encoding: BitEncoding;
+    private readonly offset: BitFieldOffset;
+    private readonly increment: number;
+
+    /**
+     * Creates an instance of BitFieldIncrBy
+     *
+     * @param encoding - The bit encoding for the subcommand.
+     * @param offset - The offset in the array of bits where the value will be incremented.
+     * @param increment - The value to increment the bits in the binary value by.
+     */
+    constructor(
+        encoding: BitEncoding,
+        offset: BitFieldOffset,
+        increment: number,
+    ) {
+        this.encoding = encoding;
+        this.offset = offset;
+        this.increment = increment;
+    }
+
+    toArgs(): string[] {
+        return [
+            BitFieldIncrBy.INCRBY_COMMAND_STRING,
+            this.encoding.toArg(),
+            this.offset.toArg(),
+            this.increment.toString(),
+        ];
+    }
+}
+
+/**
+ * Enumeration specifying bit overflow controls for the {@link BaseClient.bitfield|bitfield} command.
+ */
+export enum BitOverflowControl {
+    /**
+     * Performs modulo when overflows occur with unsigned encoding. When overflows occur with signed encoding, the value
+     * restarts at the most negative value. When underflows occur with signed encoding, the value restarts at the most
+     * positive value.
+     */
+    WRAP = "WRAP",
+    /**
+     * Underflows remain set to the minimum value, and overflows remain set to the maximum value.
+     */
+    SAT = "SAT",
+    /**
+     * Returns `None` when overflows occur.
+     */
+    FAIL = "FAIL",
+}
+
+/**
+ * Represents the "OVERFLOW" subcommand that determines the result of the "SET" or "INCRBY"
+ * {@link BaseClient.bitfield|bitfield} subcommands when an underflow or overflow occurs.
+ */
+export class BitFieldOverflow implements BitFieldSubCommands {
+    private static readonly OVERFLOW_COMMAND_STRING = "OVERFLOW";
+    private readonly overflowControl: BitOverflowControl;
+
+    /**
+     * Creates an instance of BitFieldOverflow.
+     *
+     * @param overflowControl - The desired overflow behavior.
+     */
+    constructor(overflowControl: BitOverflowControl) {
+        this.overflowControl = overflowControl;
+    }
+
+    toArgs(): string[] {
+        return [BitFieldOverflow.OVERFLOW_COMMAND_STRING, this.overflowControl];
+    }
+}
+
+/**
+ * @internal
+ */
+export function createBitField(
+    key: string,
+    subcommands: BitFieldSubCommands[],
+    readOnly: boolean = false,
+): command_request.Command {
+    const requestType = readOnly
+        ? RequestType.BitFieldReadOnly
+        : RequestType.BitField;
+    let args: string[] = [key];
+
+    for (const subcommand of subcommands) {
+        args = args.concat(subcommand.toArgs());
+    }
+
+    return createCommand(requestType, args);
+}
+
+/**
  * @internal
  */
 export function createHDel(
@@ -612,6 +918,25 @@ export function createLMove(
         destination,
         whereFrom,
         whereTo,
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createBLMove(
+    source: string,
+    destination: string,
+    whereFrom: ListDirection,
+    whereTo: ListDirection,
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.BLMove, [
+        source,
+        destination,
+        whereFrom,
+        whereTo,
+        timeout.toString(),
     ]);
 }
 
@@ -1178,15 +1503,25 @@ export function createZMScore(
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
-export type ScoreBoundary<T> =
+export enum InfScoreBoundary {
     /**
      * Positive infinity bound for sorted set.
      */
-    | `positiveInfinity`
+    PositiveInfinity = "+",
     /**
      * Negative infinity bound for sorted set.
      */
-    | `negativeInfinity`
+    NegativeInfinity = "-",
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export type ScoreBoundary<T> =
+    /**
+     *  Represents an lower/upper boundary in a sorted set.
+     */
+    | InfScoreBoundary
     /**
      *  Represents a specific numeric score boundary in a sorted set.
      */
@@ -1266,10 +1601,16 @@ function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
     isLex: boolean = false,
 ): string {
-    if (score == "positiveInfinity") {
-        return isLex ? "+" : "+inf";
-    } else if (score == "negativeInfinity") {
-        return isLex ? "-" : "-inf";
+    if (score == InfScoreBoundary.PositiveInfinity) {
+        return (
+            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
+        );
+    }
+
+    if (score == InfScoreBoundary.NegativeInfinity) {
+        return (
+            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
+        );
     }
 
     if (score.isInclusive == false) {
@@ -1460,6 +1801,22 @@ export function createZRemRangeByRank(
 /**
  * @internal
  */
+export function createZRemRangeByLex(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZRemRangeByLex, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRemRangeByScore(
     key: string,
     minScore: ScoreBoundary<number>,
@@ -1473,6 +1830,22 @@ export function createZRemRangeByScore(
 
 export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createZLexCount(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZLexCount, args);
 }
 
 export function createZRank(
@@ -1754,6 +2127,41 @@ export function createFunctionLoad(
     return createCommand(RequestType.FunctionLoad, args);
 }
 
+/** Optional arguments for `FUNCTION LIST` command. */
+export type FunctionListOptions = {
+    /** A wildcard pattern for matching library names. */
+    libNamePattern?: string;
+    /** Specifies whether to request the library code from the server or not. */
+    withCode?: boolean;
+};
+
+/** Type of the response of `FUNCTION LIST` command. */
+export type FunctionListResponse = Record<
+    string,
+    string | Record<string, string | string[]>[]
+>[];
+
+/**
+ * @internal
+ */
+export function createFunctionList(
+    options?: FunctionListOptions,
+): command_request.Command {
+    const args: string[] = [];
+
+    if (options) {
+        if (options.libNamePattern) {
+            args.push("LIBRARYNAME", options.libNamePattern);
+        }
+
+        if (options.withCode) {
+            args.push("WITHCODE");
+        }
+    }
+
+    return createCommand(RequestType.FunctionList, args);
+}
+
 /**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
@@ -1958,6 +2366,16 @@ export function createPfCount(keys: string[]): command_request.Command {
 /**
  * @internal
  */
+export function createPfMerge(
+    destination: string,
+    sourceKey: string[],
+): command_request.Command {
+    return createCommand(RequestType.PfMerge, [destination, ...sourceKey]);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): command_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
@@ -2035,6 +2453,30 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
     } else {
         return createCommand(RequestType.FlushDB, []);
     }
+}
+
+/**
+ *
+ * @internal
+ */
+export function createCopy(
+    source: string,
+    destination: string,
+    options?: { destinationDB?: number; replace?: boolean },
+): command_request.Command {
+    let args: string[] = [source, destination];
+
+    if (options) {
+        if (options.destinationDB !== undefined) {
+            args = args.concat("DB", options.destinationDB.toString());
+        }
+
+        if (options.replace) {
+            args.push("REPLACE");
+        }
+    }
+
+    return createCommand(RequestType.Copy, args);
 }
 
 /**
@@ -2151,28 +2593,23 @@ export function createGeoAdd(
     }
 
     membersToGeospatialData.forEach((coord, member) => {
-        args = args.concat([
+        args = args.concat(
             coord.longitude.toString(),
             coord.latitude.toString(),
-        ]);
-        args.push(member);
+            member,
+        );
     });
     return createCommand(RequestType.GeoAdd, args);
 }
 
-/**
- * Enumeration representing distance units options for the {@link geodist} command.
- */
+/** Enumeration representing distance units options. */
 export enum GeoUnit {
     /** Represents distance in meters. */
     METERS = "m",
-
     /** Represents distance in kilometers. */
     KILOMETERS = "km",
-
     /** Represents distance in miles. */
     MILES = "mi",
-
     /** Represents distance in feet. */
     FEET = "ft",
 }
@@ -2214,6 +2651,123 @@ export function createGeoHash(
 ): command_request.Command {
     const args: string[] = [key].concat(members);
     return createCommand(RequestType.GeoHash, args);
+}
+
+/**
+ * Optional parameters for {@link BaseClient.geosearch|geosearch} command which defines what should be included in the
+ * search results and how results should be ordered and limited.
+ */
+export type GeoSearchResultOptions = {
+    /** Include the coordinate of the returned items. */
+    withCoord?: boolean;
+    /**
+     * Include the distance of the returned items from the specified center point.
+     * The distance is returned in the same unit as specified for the `searchBy` argument.
+     */
+    withDist?: boolean;
+    /** Include the geohash of the returned items. */
+    withHash?: boolean;
+    /** Indicates the order the result should be sorted in. */
+    sortOrder?: SortOrder;
+    /** Indicates the number of matches the result should be limited to. */
+    count?: number;
+    /** Whether to allow returning as enough matches are found. This requires `count` parameter to be set. */
+    isAny?: boolean;
+};
+
+/** Defines the sort order for nested results. */
+export enum SortOrder {
+    /** Sort by ascending order. */
+    ASC = "ASC",
+    /** Sort by descending order. */
+    DESC = "DESC",
+}
+
+export type GeoSearchShape = GeoCircleShape | GeoBoxShape;
+
+/** Circle search shape defined by the radius value and measurement unit. */
+export type GeoCircleShape = {
+    /** The radius to search by. */
+    radius: number;
+    /** The measurement unit of the radius. */
+    unit: GeoUnit;
+};
+
+/** Rectangle search shape defined by the width and height and measurement unit. */
+export type GeoBoxShape = {
+    /** The width of the rectangle to search by. */
+    width: number;
+    /** The height of the rectangle to search by. */
+    height: number;
+    /** The measurement unit of the width and height. */
+    unit: GeoUnit;
+};
+
+export type SearchOrigin = CoordOrigin | MemberOrigin;
+
+/** The search origin represented by a {@link GeospatialData} position. */
+export type CoordOrigin = {
+    /** The pivot location to search from. */
+    position: GeospatialData;
+};
+
+/** The search origin represented by an existing member. */
+export type MemberOrigin = {
+    /** Member (location) name stored in the sorted set to use as a search pivot. */
+    member: string;
+};
+
+/**
+ * @internal
+ */
+export function createGeoSearch(
+    key: string,
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchResultOptions,
+): command_request.Command {
+    let args: string[] = [key];
+
+    if ("position" in searchFrom) {
+        args = args.concat(
+            "FROMLONLAT",
+            searchFrom.position.longitude.toString(),
+            searchFrom.position.latitude.toString(),
+        );
+    } else {
+        args = args.concat("FROMMEMBER", searchFrom.member);
+    }
+
+    if ("radius" in searchBy) {
+        args = args.concat(
+            "BYRADIUS",
+            searchBy.radius.toString(),
+            searchBy.unit,
+        );
+    } else {
+        args = args.concat(
+            "BYBOX",
+            searchBy.width.toString(),
+            searchBy.height.toString(),
+            searchBy.unit,
+        );
+    }
+
+    if (resultOptions) {
+        if (resultOptions.withCoord) args.push("WITHCOORD");
+        if (resultOptions.withDist) args.push("WITHDIST");
+        if (resultOptions.withHash) args.push("WITHHASH");
+
+        if (resultOptions.count) {
+            args.push("COUNT", resultOptions.count?.toString());
+
+            if (resultOptions.isAny) args.push("ANY");
+        }
+
+        if (resultOptions.sortOrder) args.push(resultOptions.sortOrder);
+    }
+
+    return createCommand(RequestType.GeoSearch, args);
 }
 
 /**
@@ -2303,4 +2857,200 @@ export function createZIncrBy(
         increment.toString(),
         member,
     ]);
+}
+
+/**
+ * Optional arguments to {@link GlideClient.sort|sort}, {@link GlideClient.sortStore|sortStore} and {@link GlideClient.sortReadOnly|sortReadOnly} commands.
+ *
+ * See https://valkey.io/commands/sort/ for more details.
+ */
+export type SortOptions = SortBaseOptions & {
+    /**
+     * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
+     * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+     * from the key replaces the asterisk to create the key name. For example, if `key`
+     * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
+     * attribute of the objects, like their weights or timestamps.
+     */
+    byPattern?: string;
+
+    /**
+     * A pattern used to retrieve external keys' values, instead of the elements at `key`.
+     * The pattern should contain an asterisk (`*`) as a placeholder for the element values, where the
+     * value from `key` replaces the asterisk to create the `key` name. This
+     * allows the sorted elements to be transformed based on the related keys values. For example, if
+     * `key` contains IDs of users, `getPatterns` can be used to retrieve
+     * specific attributes of these users, such as their names or email addresses. E.g., if
+     * `getPatterns` is `name_*`, the command will return the values of the keys
+     * `name_<element>` for each sorted element. Multiple `getPatterns`
+     * arguments can be provided to retrieve multiple attributes. The special value `#` can
+     * be used to include the actual element from `key` being sorted. If not provided, only
+     * the sorted elements themselves are returned.
+     */
+    getPatterns?: string[];
+};
+
+type SortBaseOptions = {
+    /**
+     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
+     * more information.
+     */
+    limit?: Limit;
+
+    /** Options for sorting order of elements. */
+    orderBy?: SortOrder;
+
+    /**
+     * When `true`, sorts elements lexicographically. When `false` (default),
+     * sorts elements numerically. Use this when the list, set, or sorted set contains string values
+     * that cannot be converted into double precision floating point numbers.
+     */
+    isAlpha?: boolean;
+};
+
+/**
+ * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
+ *
+ * See https://valkey.io/commands/sort/ for more details.
+ */
+export type SortClusterOptions = SortBaseOptions;
+
+/**
+ * The `LIMIT` argument is commonly used to specify a subset of results from the
+ * matching elements, similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
+ */
+export type Limit = {
+    /** The starting position of the range, zero based. */
+    offset: number;
+    /** The maximum number of elements to include in the range. A negative count returns all elements from the offset. */
+    count: number;
+};
+
+/** @internal */
+export function createSort(
+    key: string,
+    options?: SortOptions,
+    destination?: string,
+): command_request.Command {
+    return createSortImpl(RequestType.Sort, key, options, destination);
+}
+
+/** @internal */
+export function createSortReadOnly(
+    key: string,
+    options?: SortOptions,
+): command_request.Command {
+    return createSortImpl(RequestType.SortReadOnly, key, options);
+}
+
+/** @internal */
+function createSortImpl(
+    cmd: RequestType,
+    key: string,
+    options?: SortOptions,
+    destination?: string,
+): command_request.Command {
+    const args: string[] = [key];
+
+    if (options) {
+        if (options.limit) {
+            args.push(
+                "LIMIT",
+                options.limit.offset.toString(),
+                options.limit.count.toString(),
+            );
+        }
+
+        if (options.orderBy) {
+            args.push(options.orderBy);
+        }
+
+        if (options.isAlpha) {
+            args.push("ALPHA");
+        }
+
+        if (options.byPattern) {
+            args.push("BY", options.byPattern);
+        }
+
+        if (options.getPatterns) {
+            options.getPatterns.forEach((p) => args.push("GET", p));
+        }
+    }
+
+    if (destination) args.push("STORE", destination);
+
+    return createCommand(cmd, args);
+}
+
+/**
+ * @internal
+ */
+export function createHStrlen(
+    key: string,
+    field: string,
+): command_request.Command {
+    return createCommand(RequestType.HStrlen, [key, field]);
+}
+
+/**
+ * @internal
+ */
+export function createZRandMember(
+    key: string,
+    count?: number,
+    withscores?: boolean,
+): command_request.Command {
+    const args = [key];
+
+    if (count !== undefined) {
+        args.push(count.toString());
+    }
+
+    if (withscores) {
+        args.push("WITHSCORES");
+    }
+
+    return createCommand(RequestType.ZRandMember, args);
+}
+
+/** @internal */
+export function createLastSave(): command_request.Command {
+    return createCommand(RequestType.LastSave, []);
+}
+
+/** @internal */
+export function createLCS(
+    key1: string,
+    key2: string,
+    options?: {
+        len?: boolean;
+        idx?: { withMatchLen?: boolean; minMatchLen?: number };
+    },
+): command_request.Command {
+    const args = [key1, key2];
+
+    if (options) {
+        if (options.len) args.push("LEN");
+        else if (options.idx) {
+            args.push("IDX");
+            if (options.idx.withMatchLen) args.push("WITHMATCHLEN");
+            if (options.idx.minMatchLen !== undefined)
+                args.push("MINMATCHLEN", options.idx.minMatchLen.toString());
+        }
+    }
+
+    return createCommand(RequestType.LCS, args);
+}
+
+/**
+ * @internal
+ */
+export function createTouch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Touch, keys);
+}
+
+/** @internal */
+export function createRandomKey(): command_request.Command {
+    return createCommand(RequestType.RandomKey, []);
 }

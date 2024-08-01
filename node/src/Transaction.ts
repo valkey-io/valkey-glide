@@ -3,36 +3,58 @@
  */
 
 import {
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./BaseClient";
+
+import {
     AggregationType,
+    BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSubCommands,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     FlushMode,
+    FunctionListOptions,
+    FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
-    GeospatialData,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
     GeoUnit,
+    GeospatialData,
     InfoOptions,
     InsertPosition,
     KeyWeight,
     LPosOptions,
     ListDirection,
     LolwutOptions,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamRangeBound,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
     createBitCount,
+    createBitField,
     createBitOp,
     createBitPos,
     createClientGetName,
@@ -41,6 +63,7 @@ import {
     createConfigResetStat,
     createConfigRewrite,
     createConfigSet,
+    createCopy,
     createCustomCommand,
     createDBSize,
     createDecr,
@@ -56,11 +79,13 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionList,
     createFunctionLoad,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -74,11 +99,13 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
+    createHStrlen,
     createHVals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
     createInfo,
+    createLCS,
     createLIndex,
     createLInsert,
     createLLen,
@@ -94,6 +121,7 @@ import {
     createLolwut,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -104,10 +132,12 @@ import {
     createPersist,
     createPfAdd,
     createPfCount,
+    createPfMerge,
     createPing,
     createRPop,
     createRPush,
     createRPushX,
+    createRandomKey,
     createRename,
     createRenameNX,
     createSAdd,
@@ -131,6 +161,7 @@ import {
     createStrlen,
     createTTL,
     createTime,
+    createTouch,
     createType,
     createUnlink,
     createXAdd,
@@ -144,22 +175,30 @@ import {
     createZDiff,
     createZDiffStore,
     createZDiffWithScores,
+    createZIncrBy,
     createZInterCard,
     createZInterstore,
+    createZLexCount,
     createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
     createZRem,
+    createZRemRangeByLex,
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    createZIncrBy,
+    createSort,
+    SortOptions,
+    createSortReadOnly,
+    SortClusterOptions,
+    createLastSave,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -335,6 +374,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public mset(keyValueMap: Record<string, string>): T {
         return this.addAndReturn(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * Command Response - `true` if all keys were set. `false` if no key was set.
+     */
+    public msetnx(keyValueMap: Record<string, string>): T {
+        return this.addAndReturn(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -514,6 +566,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBitPos(key, bit, start, end, indexType));
     }
 
+    /**
+     * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+     * `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
+     *      any of the following:
+     *
+     * - {@link BitFieldGet}
+     * - {@link BitFieldSet}
+     * - {@link BitFieldIncrBy}
+     * - {@link BitFieldOverflow}
+     *
+     * Command Response - An array of results from the executed subcommands:
+     *
+     * - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
+     *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
+     *   does not contribute a value to the array response.
+     */
+    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+        return this.addAndReturn(createBitField(key, subcommands));
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
+     *
+     * Command Response - An array of results from the {@link BitFieldGet} subcommands.
+     *
+     * since Valkey version 6.0.0.
+     */
+    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+        return this.addAndReturn(createBitField(key, subcommands, true));
+    }
+
     /** Reads the configuration parameters of a running Redis server.
      * See https://valkey.io/commands/config-get/ for details.
      *
@@ -682,6 +778,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createHVals(key));
     }
 
+    /**
+     * Returns the string length of the value associated with `field` in the hash stored at `key`.
+     *
+     * See https://valkey.io/commands/hstrlen/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash.
+     *
+     * Command Response - The string length or `0` if `field` or `key` does not exist.
+     */
+    public hstrlen(key: string, field: string): T {
+        return this.addAndReturn(createHStrlen(key, field));
+    }
+
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
@@ -792,6 +902,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     *
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     *
+     * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): T {
+        return this.addAndReturn(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 
@@ -1499,6 +1644,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         );
     }
 
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * Command Response - A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     */
+    public zrandmember(key: string): T {
+        return this.addAndReturn(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCount(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * Command Response - A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     */
+    public zrandmemberWithCountWithScores(key: string, count: number): T {
+        return this.addAndReturn(createZRandMember(key, count, true));
+    }
+
     /** Returns the string representation of the type of the value stored at `key`.
      * See https://valkey.io/commands/type/ for more details.
      *
@@ -1594,6 +1785,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRemRangeByRank(key, start, end));
     }
 
+    /**
+     * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     *
+     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     *
+     * Command Response - The number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minLex` is greater than `maxLex`, 0 is returned.
+     */
+    public zremRangeByLex(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): T {
+        return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
+    }
+
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
@@ -1613,6 +1825,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZRemRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
+     *
+     * See https://valkey.io/commands/zlexcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     *
+     * Command Response - The number of members in the specified lex range.
+     * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
+     * If maxLex is less than minLex, '0' is returned.
+     */
+    public zlexcount(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): T {
+        return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
@@ -1929,6 +2162,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createPfCount(keys));
     }
 
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
+     * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * See https://valkey.io/commands/pfmerge/ for more details.
+     *
+     * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+     * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
+     * Command Response - A simple "OK" response.
+     */
+    public pfmerge(destination: string, sourceKeys: string[]): T {
+        return this.addAndReturn(createPfMerge(destination, sourceKeys));
+    }
+
     /** Returns the internal encoding for the Redis object stored at `key`.
      *
      * See https://valkey.io/commands/object-encoding for more details.
@@ -2076,6 +2323,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns information about the functions and libraries.
+     *
+     * See https://valkey.io/commands/function-list/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param options - Parameters to filter and request additional info.
+     *
+     * Command Response - Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
+     */
+    public functionList(options?: FunctionListOptions): T {
+        return this.addAndReturn(createFunctionList(options));
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -2171,6 +2433,49 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createGeoAdd(key, membersToGeospatialData, options),
+        );
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     *
+     * Command Response - By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`.
+     * - The geohash of the location as a integer `number`.
+     * - The coordinates as a two item `array` of floating point `number`s.
+     */
+    public geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
         );
     }
 
@@ -2288,13 +2593,112 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/geohash/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @param members - The array of members whose `GeoHash` strings are to be retrieved.
      *
      * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      */
     public geohash(key: string, members: string[]): T {
         return this.addAndReturn(createGeoHash(key, members));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * Command Response - `UNIX TIME` of the last DB save executed with success.
+     */
+    public lastsave(): T {
+        return this.addAndReturn(createLastSave());
+    }
+
+    /**
+     * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     *
+     * Command Response - A `String` containing all the longest common subsequence combined between the 2 strings.
+     *     An empty `String` is returned if the keys do not exist or have no common subsequences.
+     */
+    public lcs(key1: string, key2: string): T {
+        return this.addAndReturn(createLCS(key1, key2));
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     *
+     * Command Response - The total length of all the longest common subsequences between the 2 strings.
+     */
+    public lcsLen(key1: string, key2: string): T {
+        return this.addAndReturn(createLCS(key1, key2, { len: true }));
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings stored at
+     * `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
+     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     *
+     * Command Response - A `Record` containing the indices of the longest common subsequences between the
+     *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
+     *           stored as an integer. This value doesn't count towards the `minMatchLen` filter.
+     *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by `key1` and `key2`.
+     */
+    public lcsIdx(
+        key1: string,
+        key2: string,
+        options?: { withMatchLen?: boolean; minMatchLen?: number },
+    ): T {
+        return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
+    }
+
+    /**
+     * Updates the last access time of the specified keys.
+     *
+     * See https://valkey.io/commands/touch/ for more details.
+     *
+     * @param keys - The keys to update the last access time of.
+     *
+     * Command Response - The number of keys that were updated. A key is ignored if it doesn't exist.
+     */
+    public touch(keys: string[]): T {
+        return this.addAndReturn(createTouch(keys));
+    }
+
+    /**
+     * Returns a random existing key name from the currently selected database.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * Command Response - A random existing key name from the currently selected database.
+     */
+    public randomKey(): T {
+        return this.addAndReturn(createRandomKey());
     }
 }
 
@@ -2331,6 +2735,97 @@ export class Transaction extends BaseTransaction<Transaction> {
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
     }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: string, options?: SortOptions): Transaction {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(key: string, options?: SortOptions): Transaction {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: string,
+        destination: string,
+        options?: SortOptions,
+    ): Transaction {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
+     * the value will be copied to the database specified, otherwise the current database will be used.
+     * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
+     * no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param destinationDB - (Optional) The alternative logical database index for the destination key.
+     *     If not provided, the current database will be used.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        options?: { destinationDB?: number; replace?: boolean },
+    ): Transaction {
+        return this.addAndReturn(createCopy(source, destination, options));
+    }
 }
 
 /**
@@ -2346,4 +2841,96 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: string, options?: SortClusterOptions): ClusterTransaction {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(
+        key: string,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: string,
+        destination: string,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
+
+    /**
+     * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
+     * removes the `destination` key first if it already exists, otherwise performs no action.
+     *
+     * See https://valkey.io/commands/copy/ for more details.
+     *
+     * @param source - The key to the source value.
+     * @param destination - The key where the value should be copied to.
+     * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
+     *     value to it. If not provided, no action will be performed if the key already exists.
+     *
+     * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
+     *
+     * since Valkey version 6.2.0.
+     */
+    public copy(
+        source: string,
+        destination: string,
+        replace?: boolean,
+    ): ClusterTransaction {
+        return this.addAndReturn(
+            createCopy(source, destination, { replace: replace }),
+        );
+    }
 }

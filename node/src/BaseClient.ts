@@ -1,7 +1,6 @@
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
-
 import {
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     Script,
@@ -12,33 +11,49 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
-    BitmapIndexType,
+    BitFieldGet,
+    BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitFieldSubCommands,
+    BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
+    BitmapIndexType,
     BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
-    GeospatialData,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoSearchResultOptions,
+    GeoSearchShape,
     GeoUnit,
+    GeospatialData,
     InsertPosition,
-    KeyWeight,
+    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
     ListDirection,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamRangeBound,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMove,
     createBLPop,
     createBRPop,
-    createBitCount,
-    createBitOp,
     createBZMPop,
+    createBitCount,
+    createBitField,
+    createBitOp,
     createBitPos,
     createDecr,
     createDecrBy,
@@ -52,6 +67,7 @@ import {
     createGeoDist,
     createGeoHash,
     createGeoPos,
+    createGeoSearch,
     createGet,
     createGetBit,
     createGetDel,
@@ -65,10 +81,12 @@ import {
     createHMGet,
     createHSet,
     createHSetNX,
+    createHStrlen,
     createHVals,
     createIncr,
     createIncrBy,
     createIncrByFloat,
+    createLCS,
     createLIndex,
     createLInsert,
     createLLen,
@@ -83,6 +101,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createMSetNX,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -93,6 +112,7 @@ import {
     createPersist,
     createPfAdd,
     createPfCount,
+    createPfMerge,
     createRPop,
     createRPush,
     createRPushX,
@@ -117,6 +137,7 @@ import {
     createSetBit,
     createStrlen,
     createTTL,
+    createTouch,
     createType,
     createUnlink,
     createXAdd,
@@ -133,14 +154,17 @@ import {
     createZIncrBy,
     createZInterCard,
     createZInterstore,
+    createZLexCount,
     createZMPop,
     createZMScore,
     createZPopMax,
     createZPopMin,
+    createZRandMember,
     createZRange,
     createZRangeWithScores,
     createZRank,
     createZRem,
+    createZRemRangeByLex,
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZRevRank,
@@ -168,10 +192,11 @@ import {
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
 type ErrorFunction = (error: RedisError) => void;
-export type ReturnTypeMap = { [key: string]: ReturnType };
+export type ReturnTypeRecord = { [key: string]: ReturnType };
+export type ReturnTypeMap = Map<string, ReturnType>;
 export type ReturnTypeAttribute = {
     value: ReturnType;
-    attributes: ReturnTypeMap;
+    attributes: ReturnTypeRecord;
 };
 export enum ProtocolVersion {
     /** Use RESP2 to communicate with the server nodes. */
@@ -186,12 +211,15 @@ export type ReturnType =
     | null
     | boolean
     | bigint
+    | Buffer
     | Set<ReturnType>
+    | ReturnTypeRecord
     | ReturnTypeMap
     | ReturnTypeAttribute
     | ReturnType[];
 
-type RedisCredentials = {
+/** Represents the credentials for connecting to a server. */
+export type RedisCredentials = {
     /**
      * The username that will be used for authenticating connections to the Redis servers.
      * If not supplied, "default" will be used.
@@ -203,13 +231,17 @@ type RedisCredentials = {
     password: string;
 };
 
-type ReadFrom =
+/** Represents the client's read from strategy. */
+export type ReadFrom =
     /** Always get from primary, in order to get the freshest data.*/
     | "primary"
     /** Spread the requests between all replicas in a round robin manner.
         If no replica is available, route the requests to the primary.*/
     | "preferReplica";
 
+/**
+ * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
+ */
 export type BaseClientConfiguration = {
     /**
      * DNS Addresses and ports of known nodes in the cluster.
@@ -420,9 +452,11 @@ export class BaseClient {
             const pointer = message.respPointer;
 
             if (typeof pointer === "number") {
-                resolve(valueFromSplitPointer(0, pointer));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(0, pointer, true));
             } else {
-                resolve(valueFromSplitPointer(pointer.high, pointer.low));
+                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
             }
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
@@ -686,11 +720,15 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
+                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
+                    true,
                 ) as Record<string, unknown>;
             }
 
@@ -894,6 +932,29 @@ export class BaseClient {
      */
     public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
+    }
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * See https://valkey.io/commands/msetnx/ for more details.
+     *
+     * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
+     * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
+     * @returns `true` if all keys were set. `false` if no key was set.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.msetnx({"key1": "value1", "key2": "value2"});
+     * console.log(result1); // Output: `true`
+     *
+     * const result2 = await client.msetnx({"key2": "value4", "key3": "value5"});
+     * console.log(result2); // Output: `false`
+     * ```
+     */
+    public async msetnx(keyValueMap: Record<string, string>): Promise<boolean> {
+        return this.createWritePromise(createMSetNX(keyValueMap));
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1143,6 +1204,69 @@ export class BaseClient {
         return this.createWritePromise(
             createBitPos(key, bit, start, end, indexType),
         );
+    }
+
+    /**
+     * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+     * `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
+     *      any of the following:
+     *
+     * - {@link BitFieldGet}
+     * - {@link BitFieldSet}
+     * - {@link BitFieldIncrBy}
+     * - {@link BitFieldOverflow}
+     *
+     * @returns An array of results from the executed subcommands:
+     *
+     * - {@link BitFieldGet} returns the value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldSet} returns the old value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldIncrBy} returns the new value in {@link BitOffset} or {@link BitOffsetMultiplier}.
+     * - {@link BitFieldOverflow} determines the behavior of the {@link BitFieldSet} and {@link BitFieldIncrBy}
+     *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
+     *   does not contribute a value to the array response.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "A");  // "A" has binary value 01000001
+     * const result = await client.bitfield("key", [new BitFieldSet(new UnsignedEncoding(2), new BitOffset(1), 3), new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
+     * console.log(result); // Output: [2, 3] - The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
+     * ```
+     */
+    public async bitfield(
+        key: string,
+        subcommands: BitFieldSubCommands[],
+    ): Promise<(number | null)[]> {
+        return this.createWritePromise(createBitField(key, subcommands));
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+     *
+     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
+     * @returns An array of results from the {@link BitFieldGet} subcommands.
+     *
+     * since Valkey version 6.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key", "A");  // "A" has binary value 01000001
+     * const result = await client.bitfieldReadOnly("key", [new BitFieldGet(new UnsignedEncoding(2), new BitOffset(1))]);
+     * console.log(result); // Output: [2] - The value at offset 1 with an unsigned encoding of 2 is 2.
+     * ```
+     */
+    public async bitfieldReadOnly(
+        key: string,
+        subcommands: BitFieldGet[],
+    ): Promise<number[]> {
+        return this.createWritePromise(createBitField(key, subcommands, true));
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
@@ -1395,6 +1519,26 @@ export class BaseClient {
         return this.createWritePromise(createHVals(key));
     }
 
+    /**
+     * Returns the string length of the value associated with `field` in the hash stored at `key`.
+     *
+     * See https://valkey.io/commands/hstrlen/ for details.
+     *
+     * @param key - The key of the hash.
+     * @param field - The field in the hash.
+     * @returns The string length or `0` if `field` or `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * await client.hset("my_hash", {"field": "value"});
+     * const result = await client.hstrlen("my_hash", "field");
+     * console.log(result); // Output: 5
+     * ```
+     */
+    public hstrlen(key: string, field: string): Promise<number> {
+        return this.createWritePromise(createHStrlen(key, field));
+    }
+
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
@@ -1588,6 +1732,53 @@ export class BaseClient {
     ): Promise<string | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
+        );
+    }
+
+    /**
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at `source` depending on `whereFrom`, and pushes the element at the first/last element
+     * of the list stored at `destination` depending on `whereTo`.
+     * `BLMOVE` is the blocking variant of {@link lmove}.
+     *
+     * @remarks
+     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * @param source - The key to the source list.
+     * @param destination - The key to the destination list.
+     * @param whereFrom - The {@link ListDirection} to remove the element from.
+     * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey1", ["two", "one"]);
+     * await client.lpush("testKey2", ["four", "three"]);
+     * const result = await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
+     * console.log(result); // Output: "one"
+     *
+     * const result2 = await client.lrange("testKey1", 0, -1);
+     * console.log(result2);   // Output: "two"
+     *
+     * const updated_array2 = await client.lrange("testKey2", 0, -1);
+     * console.log(updated_array2); // Output: ["one", "three", "four"]
+     * ```
+     */
+    public async blmove(
+        source: string,
+        destination: string,
+        whereFrom: ListDirection,
+        whereTo: ListDirection,
+        timeout: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(
+            createBLMove(source, destination, whereFrom, whereTo, timeout),
         );
     }
 
@@ -2706,14 +2897,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
      * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
      * ```
      */
@@ -2750,7 +2941,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: "negativeInfinity",
+     *              start: InfScoreBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -2792,7 +2983,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: "negativeInfinity",
+     *              start: InfScoreBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -2844,6 +3035,94 @@ export class BaseClient {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Returns a random member from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @returns A string representing a random member from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be `null`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmember("mySortedSet");
+     * console.log(payload1); // Output: "Glide" (a random member from the set)
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmember("nonExistingSortedSet");
+     * console.log(payload2); // Output: null since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createZRandMember(key));
+    }
+
+    /**
+     * Returns random members from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns An `array` of members from the sorted set.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCount("mySortedSet", -3);
+     * console.log(payload1); // Output: ["Glide", "GLIDE", "node"]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCount("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createZRandMember(key, count));
+    }
+
+    /**
+     * Returns random members with scores from the sorted set stored at `key`.
+     *
+     * See https://valkey.io/commands/zrandmember/ for more details.
+     *
+     * @param keys - The key of the sorted set.
+     * @param count - The number of members to return.
+     *     If `count` is positive, returns unique members.
+     *     If negative, allows for duplicates.
+     * @returns A 2D `array` of `[member, score]` `arrays`, where
+     *     member is a `string` and score is a `number`.
+     *     If the sorted set does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const payload1 = await client.zrandmemberWithCountWithScore("mySortedSet", -3);
+     * console.log(payload1); // Output: [["Glide", 1.0], ["GLIDE", 1.0], ["node", 2.0]]
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const payload2 = await client.zrandmemberWithCountWithScore("nonExistingKey", 3);
+     * console.log(payload1); // Output: [] since the sorted set does not exist.
+     * ```
+     */
+    public async zrandmemberWithCountWithScores(
+        key: string,
+        count: number,
+    ): Promise<[string, number][]> {
+        return this.createWritePromise(createZRandMember(key, count, true));
     }
 
     /** Returns the length of the string value stored at `key`.
@@ -3021,6 +3300,42 @@ export class BaseClient {
         return this.createWritePromise(createZRemRangeByRank(key, start, end));
     }
 
+    /**
+     * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     *
+     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @returns The number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minLex` is greater than `maxLex`, 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
+     * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
+     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByLex method when the sorted set does not exist
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfScoreBoundary.NegativeInfinity, { value: "e" });
+     * console.log(result); // Output: 0 - Indicates that no elements were removed.
+     * ```
+     */
+    public zremRangeByLex(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZRemRangeByLex(key, minLex, maxLex),
+        );
+    }
+
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
@@ -3034,14 +3349,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
-     * const result = await client.zremRangeByScore("non_existing_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * const result = await client.zremRangeByScore("non_existing_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
@@ -3053,6 +3368,38 @@ export class BaseClient {
         return this.createWritePromise(
             createZRemRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
+     *
+     * See https://valkey.io/commands/zlexcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @returns The number of members in the specified lex range.
+     * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
+     * If maxLex is less than minLex, '0' is returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfScoreBoundary.PositiveInfinity);
+     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
+     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
+     * ```
+     */
+    public async zlexcount(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): Promise<number> {
+        return this.createWritePromise(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
@@ -3463,6 +3810,34 @@ export class BaseClient {
         return this.createWritePromise(createPfCount(keys));
     }
 
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
+     * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * See https://valkey.io/commands/pfmerge/ for more details.
+     *
+     * @remarks When in Cluster mode, all keys in `sourceKeys` and `destination` must map to the same hash slot.
+     * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
+     * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * await client.pfadd("hll1", ["a", "b"]);
+     * await client.pfadd("hll2", ["b", "c"]);
+     * const result = await client.pfmerge("new_hll", ["hll1", "hll2"]);
+     * console.log(result); // Output: OK  - The value of "hll1" merged with "hll2" was stored in "new_hll".
+     * const count = await client.pfcount(["new_hll"]);
+     * console.log(count); // Output: 3  - The approximated cardinality of "new_hll" is 3.
+     * ```
+     */
+    public async pfmerge(
+        destination: string,
+        sourceKeys: string[],
+    ): Promise<"OK"> {
+        return this.createWritePromise(createPfMerge(destination, sourceKeys));
+    }
+
     /** Returns the internal encoding for the Redis object stored at `key`.
      *
      * See https://valkey.io/commands/object-encoding for more details.
@@ -3680,6 +4055,91 @@ export class BaseClient {
     }
 
     /**
+     * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
+     * which are within the borders of the area specified by a given shape.
+     *
+     * See https://valkey.io/commands/geosearch/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param key - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     *
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     *
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     *
+     * @param searchBy - The query's shape options, could be one of:
+     *
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     *
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     *
+     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @returns By default, returns an `Array` of members (locations) names.
+     *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
+     *     where each sub-array represents a single item in the following order:
+     *
+     * - The member (location) name.
+     * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
+     * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
+     * - The coordinates as a two item `array` of floating point `number`s, if `withCoord` is set to `true`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo'
+     * const result1 = await client.geosearch("mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
+     * console.log(result1); // Output: ['Palermo', 'Catania']
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting additional info,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * const result2 = await client.geosearch(
+     *     "mySortedSet",
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         withCoord: true,
+     *         withDist: true,
+     *         withHash: true,
+     *     },
+     * );
+     * console.log(result2); // Output:
+     * // [
+     * //     [
+     * //         'Catania',                                       // location name
+     * //         [
+     * //             56.4413,                                     // distance
+     * //             3479447370796909,                            // geohash of the location
+     * //             [15.087267458438873, 37.50266842333162],     // coordinates of the location
+     * //         ],
+     * //     ],
+     * //     [
+     * //         'Palermo',
+     * //         [
+     * //             190.4424,
+     * //             3479099956230698,
+     * //             [13.361389338970184, 38.1155563954963],
+     * //         ],
+     * //     ],
+     * // ]
+     * ```
+     */
+    public async geosearch(
+        key: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchResultOptions,
+    ): Promise<(Buffer | (number | number[])[])[]> {
+        return this.createWritePromise(
+            createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
      * Returns the positions (longitude, latitude) of all the specified `members` of the
      * geospatial index represented by the sorted set at `key`.
      *
@@ -3851,7 +4311,7 @@ export class BaseClient {
      * See https://valkey.io/commands/geohash/ for more details.
      *
      * @param key - The key of the sorted set.
-     * @param members - The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @param members - The array of members whose `GeoHash` strings are to be retrieved.
      * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      *
@@ -3870,6 +4330,132 @@ export class BaseClient {
     }
 
     /**
+     * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @returns A `String` containing all the longest common subsequence combined between the 2 strings.
+     *     An empty `String` is returned if the keys do not exist or have no common subsequences.
+     *
+     * @example
+     * ```typescript
+     * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
+     * const result = await client.lcs("testKey1", "testKey2");
+     * console.log(result); // Output: 'cd'
+     * ```
+     */
+    public async lcs(key1: string, key2: string): Promise<string> {
+        return this.createWritePromise(createLCS(key1, key2));
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @returns The total length of all the longest common subsequences between the 2 strings.
+     *
+     * @example
+     * ```typescript
+     * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
+     * const result = await client.lcsLen("testKey1", "testKey2");
+     * console.log(result); // Output: 2
+     * ```
+     */
+    public async lcsLen(key1: string, key2: string): Promise<number> {
+        return this.createWritePromise(createLCS(key1, key2, { len: true }));
+    }
+
+    /**
+     * Returns the indices and lengths of the longest common subsequences between strings stored at
+     * `key1` and `key2`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * @param key1 - The key that stores the first string.
+     * @param key2 - The key that stores the second string.
+     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
+     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @returns A `Record` containing the indices of the longest common subsequences between the
+     *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
+     *     keys, "matches" and "len":
+     *     - `"len"` is mapped to the total length of the all longest common subsequences between the 2 strings
+     *           stored as an integer. This value doesn't count towards the `minMatchLen` filter.
+     *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by `key1` and `key2`.
+     *
+     * @example
+     * ```typescript
+     * await client.mset({"key1": "ohmytext", "key2": "mynewtext"});
+     * const result = await client.lcsIdx("key1", "key2");
+     * console.log(result); // Output:
+     * {
+     *     "matches" :
+     *     [
+     *         [              // first substring match is "text"
+     *             [4, 7],    // in `key1` it is located between indices 4 and 7
+     *             [5, 8],    // and in `key2` - in between 5 and 8
+     *             4          // the match length, returned if `withMatchLen` set to `true`
+     *         ],
+     *         [              // second substring match is "my"
+     *             [2, 3],    // in `key1` it is located between indices 2 and 3
+     *             [0, 1],    // and in `key2` - in between 0 and 1
+     *             2          // the match length, returned if `withMatchLen` set to `true`
+     *         ]
+     *     ],
+     *     "len" : 6          // total length of the all matches found
+     * }
+     * ```
+     */
+    public async lcsIdx(
+        key1: string,
+        key2: string,
+        options?: { withMatchLen?: boolean; minMatchLen?: number },
+    ): Promise<Record<string, (number | [number, number])[][] | number>> {
+        return this.createWritePromise(
+            createLCS(key1, key2, { idx: options ?? {} }),
+        );
+    }
+
+    /**
+     * Updates the last access time of the specified keys.
+     *
+     * See https://valkey.io/commands/touch/ for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to update the last access time of.
+     * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
+     *
+     * @example
+     * ```typescript
+     * await client.set("key1", "value1");
+     * await client.set("key2", "value2");
+     * const result = await client.touch(["key1", "key2", "nonExistingKey"]);
+     * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
+     * ```
+     */
+    public touch(keys: string[]): Promise<number> {
+        return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
      * @internal
      */
     protected createClientRequest(
@@ -3877,7 +4463,7 @@ export class BaseClient {
     ): connection_request.IConnectionRequest {
         const readFrom = options.readFrom
             ? this.MAP_READ_FROM_STRATEGY[options.readFrom]
-            : undefined;
+            : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
             "password" in options.credentials

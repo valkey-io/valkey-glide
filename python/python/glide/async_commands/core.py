@@ -3861,7 +3861,7 @@ class CoreCommands(Protocol):
                 from the sorted set or as a geospatial data (see `GeospatialData`).
             search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
                 For circular area search, see `GeoSearchByRadius`.
-                For rectengal area search, see `GeoSearchByBox`.
+                For rectangular area search, see `GeoSearchByBox`.
             order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
                     - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
                     - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
@@ -5743,16 +5743,16 @@ class CoreCommands(Protocol):
 
         Returns:
             List[Optional[int]]: An array of results from the executed subcommands:
-                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
-                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
-                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldGet` returns the value in `BitOffset` or `BitOffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `BitOffset` or `BitOffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `BitOffset` or `BitOffsetMultiplier`.
                 - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
                   underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
                   response.
 
         Examples:
             >>> await client.set("my_key", "A")  # "A" has binary value 01000001
-            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), Offset(1), 3), BitFieldGet(UnsignedEncoding(2), Offset(1))])
+            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), BitOffset(1), 3), BitFieldGet(UnsignedEncoding(2), BitOffset(1))])
                 [2, 3]  # The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
         """
         args = [key] + _create_bitfield_args(subcommands)
@@ -5779,7 +5779,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.set("my_key", "A")  # "A" has binary value 01000001
             >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
-                [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
+                [2]  # The value at offset 1 with an unsigned encoding of 2 is 2.
 
         Since: Valkey version 6.0.0.
         """
@@ -6627,4 +6627,87 @@ class CoreCommands(Protocol):
         return cast(
             Union[int, List[int], None],
             await self._execute_command(RequestType.LPos, args),
+        )
+
+    async def pubsub_channels(
+        self, pattern: Optional[TEncodable] = None
+    ) -> List[bytes]:
+        """
+        Lists the currently active channels.
+        The command is routed to all nodes, and aggregates the response to a single array.
+
+        See https://valkey.io/commands/pubsub-channels for more details.
+
+        Args:
+            pattern (Optional[TEncodable]): A glob-style pattern to match active channels.
+                                If not provided, all active channels are returned.
+
+        Returns:
+            List[bytes]: A list of currently active channels matching the given pattern.
+                    If no pattern is specified, all active channels are returned.
+
+        Examples:
+            >>> await client.pubsub_channels()
+                [b"channel1", b"channel2"]
+
+            >>> await client.pubsub_channels("news.*")
+                [b"news.sports", "news.weather"]
+        """
+
+        return cast(
+            List[bytes],
+            await self._execute_command(
+                RequestType.PubSubChannels, [pattern] if pattern else []
+            ),
+        )
+
+    async def pubsub_numpat(self) -> int:
+        """
+        Returns the number of unique patterns that are subscribed to by clients.
+
+        Note: This is the total number of unique patterns all the clients are subscribed to,
+        not the count of clients subscribed to patterns.
+        The command is routed to all nodes, and aggregates the response the sum of all pattern subscriptions.
+
+        See https://valkey.io/commands/pubsub-numpat for more details.
+
+        Returns:
+            int: The number of unique patterns.
+
+        Examples:
+            >>> await client.pubsub_numpat()
+                3
+        """
+        return cast(int, await self._execute_command(RequestType.PubSubNumPat, []))
+
+    async def pubsub_numsub(
+        self, channels: Optional[List[TEncodable]] = None
+    ) -> Mapping[bytes, int]:
+        """
+        Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+
+        Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+        The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+
+        See https://valkey.io/commands/pubsub-numsub for more details.
+
+        Args:
+            channels (Optional[List[TEncodable]]): The list of channels to query for the number of subscribers.
+                                            If not provided, returns an empty map.
+
+        Returns:
+            Mapping[bytes, int]: A map where keys are the channel names and values are the number of subscribers.
+
+        Examples:
+            >>> await client.pubsub_numsub(["channel1", "channel2"])
+                {b'channel1': 3, b'channel2': 5}
+
+            >>> await client.pubsub_numsub()
+                {}
+        """
+        return cast(
+            Mapping[bytes, int],
+            await self._execute_command(
+                RequestType.PubSubNumSub, channels if channels else []
+            ),
         )

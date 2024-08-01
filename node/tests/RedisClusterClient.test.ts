@@ -15,18 +15,21 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    FunctionListResponse,
     GlideClusterClient,
     InfoOptions,
+    ListDirection,
     ProtocolVersion,
+    RequestError,
     Routes,
     ScoreFilter,
 } from "..";
-import { FlushMode } from "../build-ts/src/Commands";
+import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
-    checkSimple,
+    checkFunctionListResponse,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -52,7 +55,7 @@ describe("GlideClusterClient", () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? RedisCluster.initFromExistingCluster(
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
@@ -306,6 +309,7 @@ describe("GlideClusterClient", () => {
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
+                client.msetnx({ abc: "xyz", def: "abc", hij: "def" }),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
                 client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),
@@ -316,15 +320,26 @@ describe("GlideClusterClient", () => {
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
+                client.pfmerge("abc", ["def", "ghi"]),
                 client.sdiff(["abc", "zxy", "lkn"]),
                 client.sdiffstore("abc", ["zxy", "lkn"]),
+                client.sortStore("abc", "zyx"),
+                client.sortStore("abc", "zyx", { isAlpha: true }),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {
                 promises.push(
+                    client.blmove(
+                        "abc",
+                        "def",
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.2,
+                    ),
                     client.zdiff(["abc", "zxy", "lkn"]),
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
+                    client.copy("abc", "zxy", true),
                 );
             }
 
@@ -334,17 +349,14 @@ describe("GlideClusterClient", () => {
                     client.zintercard(["abc", "zxy", "lkn"]),
                     client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                     client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
+                    client.lcs("abc", "xyz"),
+                    client.lcsLen("abc", "xyz"),
+                    client.lcsIdx("abc", "xyz"),
                 );
             }
 
             for (const promise of promises) {
-                try {
-                    await promise;
-                } catch (e) {
-                    expect((e as Error).message.toLowerCase()).toContain(
-                        "crossslot",
-                    );
-                }
+                await expect(promise).rejects.toThrowError(/crossslot/i);
             }
 
             client.close();
@@ -363,7 +375,7 @@ describe("GlideClusterClient", () => {
             await client.del(["abc", "zxy", "lkn"]);
             await client.mget(["abc", "zxy", "lkn"]);
             await client.mset({ abc: "1", zxy: "2", lkn: "3" });
-            // TODO touch
+            await client.touch(["abc", "zxy", "lkn"]);
             client.close();
         },
     );
@@ -538,6 +550,56 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "copy test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+            const source = `{key}-${uuidv4()}`;
+            const destination = `{key}-${uuidv4()}`;
+            const value1 = uuidv4();
+            const value2 = uuidv4();
+
+            // neither key exists
+            expect(await client.copy(source, destination, true)).toEqual(false);
+            expect(await client.copy(source, destination)).toEqual(false);
+
+            // source exists, destination does not
+            expect(await client.set(source, value1)).toEqual("OK");
+            expect(await client.copy(source, destination, false)).toEqual(true);
+            expect(await client.get(destination)).toEqual(value1);
+
+            // new value for source key
+            expect(await client.set(source, value2)).toEqual("OK");
+
+            // both exists, no REPLACE
+            expect(await client.copy(source, destination)).toEqual(false);
+            expect(await client.copy(source, destination, false)).toEqual(
+                false,
+            );
+            expect(await client.get(destination)).toEqual(value1);
+
+            // both exists, with REPLACE
+            expect(await client.copy(source, destination, true)).toEqual(true);
+            expect(await client.get(destination)).toEqual(value2);
+
+            //transaction tests
+            const transaction = new ClusterTransaction();
+            transaction.set(source, value1);
+            transaction.copy(source, destination, true);
+            transaction.get(destination);
+            const results = await client.exec(transaction);
+
+            expect(results).toEqual(["OK", true, value1]);
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "flushdb flushall dbsize test_%p",
         async (protocol) => {
             const client = await GlideClusterClient.createClient(
@@ -545,21 +607,105 @@ describe("GlideClusterClient", () => {
             );
 
             expect(await client.dbsize()).toBeGreaterThanOrEqual(0);
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toBeGreaterThan(0);
 
-            checkSimple(await client.flushall()).toEqual("OK");
+            expect(await client.flushall()).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const key1 = "{sort}" + uuidv4();
+            const key2 = "{sort}" + uuidv4();
+            const key3 = "{sort}" + uuidv4();
+            const key4 = "{sort}" + uuidv4();
+            const key5 = "{sort}" + uuidv4();
+
+            expect(await client.sort(key3)).toEqual([]);
+            expect(await client.lpush(key1, ["2", "1", "4", "3"])).toEqual(4);
+            expect(await client.sort(key1)).toEqual(["1", "2", "3", "4"]);
+
+            // sort RO
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                expect(await client.sortReadOnly(key3)).toEqual([]);
+                expect(await client.sortReadOnly(key1)).toEqual([
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                ]);
+            }
+
+            // sort with store
+            expect(await client.sortStore(key1, key2)).toEqual(4);
+            expect(await client.lrange(key2, 0, -1)).toEqual([
+                "1",
+                "2",
+                "3",
+                "4",
+            ]);
+
+            // SORT with strings require ALPHA
+            expect(
+                await client.rpush(key3, ["2", "1", "a", "x", "c", "4", "3"]),
+            ).toEqual(7);
+            await expect(client.sort(key3)).rejects.toThrow(RequestError);
+            expect(await client.sort(key3, { isAlpha: true })).toEqual([
+                "1",
+                "2",
+                "3",
+                "4",
+                "a",
+                "c",
+                "x",
+            ]);
+
+            // check transaction and options
+            const transaction = new ClusterTransaction()
+                .lpush(key4, ["3", "1", "2"])
+                .sort(key4, {
+                    orderBy: SortOrder.DESC,
+                    limit: { count: 2, offset: 0 },
+                })
+                .sortStore(key4, key5, {
+                    orderBy: SortOrder.ASC,
+                    limit: { count: 100, offset: 1 },
+                })
+                .lrange(key5, 0, -1);
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                transaction.sortReadOnly(key4, {
+                    orderBy: SortOrder.DESC,
+                    limit: { count: 2, offset: 0 },
+                });
+            }
+
+            const result = await client.exec(transaction);
+            const expectedResult = [3, ["3", "2"], 2, ["2", "3"]];
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                expectedResult.push(["3", "2"]);
+            }
+
+            expect(result).toEqual(expectedResult);
 
             client.close();
         },
@@ -572,7 +718,7 @@ describe("GlideClusterClient", () => {
                 "Single node route = %s",
                 (singleNodeRoute) => {
                     it(
-                        "function load",
+                        "function load and function list",
                         async () => {
                             if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
@@ -598,15 +744,10 @@ describe("GlideClusterClient", () => {
                                 const route: Routes = singleNodeRoute
                                     ? { type: "primarySlotKey", key: "1" }
                                     : "allPrimaries";
-                                // TODO use commands instead of customCommand once implemented
-                                // verify function does not yet exist
-                                const functionList = await client.customCommand(
-                                    [
-                                        "FUNCTION",
-                                        "LIST",
-                                        "LIBRARYNAME",
-                                        libName,
-                                    ],
+
+                                let functionList = await client.functionList(
+                                    { libNamePattern: libName },
+                                    route,
                                 );
                                 checkClusterResponse(
                                     functionList as object,
@@ -614,9 +755,34 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                checkSimple(
-                                    await client.functionLoad(code),
-                                ).toEqual(libName);
+                                expect(await client.functionLoad(code)).toEqual(
+                                    libName,
+                                );
+
+                                functionList = await client.functionList(
+                                    { libNamePattern: libName },
+                                    route,
+                                );
+                                let expectedDescription = new Map<
+                                    string,
+                                    string | null
+                                >([[funcName, null]]);
+                                let expectedFlags = new Map<string, string[]>([
+                                    [funcName, ["no-writes"]],
+                                ]);
+
+                                checkClusterResponse(
+                                    functionList,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionListResponse(
+                                            value as FunctionListResponse,
+                                            libName,
+                                            expectedDescription,
+                                            expectedFlags,
+                                        ),
+                                );
+
                                 // call functions from that library to confirm that it works
                                 let fcall = await client.fcallWithRoute(
                                     funcName,
@@ -626,8 +792,7 @@ describe("GlideClusterClient", () => {
                                 checkClusterResponse(
                                     fcall as object,
                                     singleNodeRoute,
-                                    (value) =>
-                                        checkSimple(value).toEqual("one"),
+                                    (value) => expect(value).toEqual("one"),
                                 );
                                 fcall = await client.fcallReadonlyWithRoute(
                                     funcName,
@@ -637,8 +802,7 @@ describe("GlideClusterClient", () => {
                                 checkClusterResponse(
                                     fcall as object,
                                     singleNodeRoute,
-                                    (value) =>
-                                        checkSimple(value).toEqual("one"),
+                                    (value) => expect(value).toEqual("one"),
                                 );
 
                                 // re-load library without replace
@@ -649,7 +813,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // re-load library with replace
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(code, true),
                                 ).toEqual(libName);
 
@@ -664,9 +828,38 @@ describe("GlideClusterClient", () => {
                                     ]),
                                     true,
                                 );
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(newCode, true),
                                 ).toEqual(libName);
+
+                                functionList = await client.functionList(
+                                    { libNamePattern: libName, withCode: true },
+                                    route,
+                                );
+                                expectedDescription = new Map<
+                                    string,
+                                    string | null
+                                >([
+                                    [funcName, null],
+                                    [func2Name, null],
+                                ]);
+                                expectedFlags = new Map<string, string[]>([
+                                    [funcName, ["no-writes"]],
+                                    [func2Name, ["no-writes"]],
+                                ]);
+
+                                checkClusterResponse(
+                                    functionList,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionListResponse(
+                                            value as FunctionListResponse,
+                                            libName,
+                                            expectedDescription,
+                                            expectedFlags,
+                                            newCode,
+                                        ),
+                                );
 
                                 fcall = await client.fcallWithRoute(
                                     func2Name,
@@ -737,15 +930,10 @@ describe("GlideClusterClient", () => {
                                     ? { type: "primarySlotKey", key: "1" }
                                     : "allPrimaries";
 
-                                // TODO use commands instead of customCommand once implemented
-                                // verify function does not yet exist
-                                const functionList1 =
-                                    await client.customCommand([
-                                        "FUNCTION",
-                                        "LIST",
-                                        "LIBRARYNAME",
-                                        libName,
-                                    ]);
+                                const functionList1 = await client.functionList(
+                                    {},
+                                    route,
+                                );
                                 checkClusterResponse(
                                     functionList1 as object,
                                     singleNodeRoute,
@@ -753,7 +941,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // load the library
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -775,15 +963,8 @@ describe("GlideClusterClient", () => {
                                     ),
                                 ).toEqual("OK");
 
-                                // TODO use commands instead of customCommand once implemented
-                                // verify function does not exist
                                 const functionList2 =
-                                    await client.customCommand([
-                                        "FUNCTION",
-                                        "LIST",
-                                        "LIBRARYNAME",
-                                        libName,
-                                    ]);
+                                    await client.functionList();
                                 checkClusterResponse(
                                     functionList2 as object,
                                     singleNodeRoute,
@@ -791,7 +972,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -845,21 +1026,17 @@ describe("GlideClusterClient", () => {
                                 const route: Routes = singleNodeRoute
                                     ? { type: "primarySlotKey", key: "1" }
                                     : "allPrimaries";
-                                // TODO use commands instead of customCommand once implemented
-                                // verify function does not yet exist
-                                let functionList = await client.customCommand([
-                                    "FUNCTION",
-                                    "LIST",
-                                    "LIBRARYNAME",
-                                    libName,
-                                ]);
+                                let functionList = await client.functionList(
+                                    {},
+                                    route,
+                                );
                                 checkClusterResponse(
                                     functionList as object,
                                     singleNodeRoute,
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -872,14 +1049,10 @@ describe("GlideClusterClient", () => {
                                     await client.functionDelete(libName, route),
                                 ).toEqual("OK");
 
-                                // TODO use commands instead of customCommand once implemented
-                                // verify function does not exist
-                                functionList = await client.customCommand([
-                                    "FUNCTION",
-                                    "LIST",
-                                    "LIBRARYNAME",
-                                    libName,
-                                ]);
+                                functionList = await client.functionList(
+                                    { libNamePattern: libName, withCode: true },
+                                    route,
+                                );
                                 checkClusterResponse(
                                     functionList as object,
                                     singleNodeRoute,
@@ -902,5 +1075,30 @@ describe("GlideClusterClient", () => {
                 },
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `randomKey test_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            // setup: delete all keys
+            expect(await client.flushall(FlushMode.SYNC)).toEqual("OK");
+
+            // no keys exist so randomKey returns null
+            expect(await client.randomKey()).toBeNull();
+
+            expect(await client.set(key, "foo")).toEqual("OK");
+            // `key` should be the only existing key, so randomKey should return `key`
+            expect(await client.randomKey()).toEqual(key);
+            expect(await client.randomKey("allPrimaries")).toEqual(key);
+
+            client.close();
+        },
+        TIMEOUT,
     );
 });
