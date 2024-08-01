@@ -2999,3 +2999,48 @@ export function createTouch(keys: string[]): command_request.Command {
 export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
 }
+
+/**
+ * This base class represents the common set of optional arguments for the SCAN family of commands.
+ * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
+ * and ZSCAN).
+ */
+export type BaseScanOptions = {
+    /**
+     * The match filter is applied to the result of the command and will only include
+     * strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+     * only a subset of the sorted set then there could be a case where the result is empty although there are
+     * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+     * that it will only fetch and match `10` items from the list.
+     */
+    readonly match?: string;
+    /**
+     * `COUNT` is a just a hint for the command for how many elements to fetch from the
+     * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
+     * represent the results as compact single-allocation packed encoding.
+     */
+    readonly count?: number;
+};
+
+/**
+ * @internal
+ */
+export function createZScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        if (options.match) {
+            args = args.concat("MATCH", options.match);
+        }
+
+        if (options.count !== undefined) {
+            args = args.concat("COUNT", options.count.toString());
+        }
+    }
+
+    return createCommand(RequestType.ZScan, args);
+}
