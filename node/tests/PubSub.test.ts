@@ -13,11 +13,11 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
-    ClusterClientConfiguration,
     ConfigurationError,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
+    GlideClusterClientConfiguration,
     ProtocolVersion,
     PubSubMsg,
     TimeoutError,
@@ -71,14 +71,14 @@ describe("PubSub", () => {
 
     async function createClients(
         clusterMode: boolean,
-        options: ClusterClientConfiguration | GlideClientConfiguration,
-        options2: ClusterClientConfiguration | GlideClientConfiguration,
+        options: GlideClusterClientConfiguration | GlideClientConfiguration,
+        options2: GlideClusterClientConfiguration | GlideClientConfiguration,
         pubsubSubscriptions:
             | GlideClientConfiguration.PubSubSubscriptions
-            | ClusterClientConfiguration.PubSubSubscriptions,
+            | GlideClusterClientConfiguration.PubSubSubscriptions,
         pubsubSubscriptions2?:
             | GlideClientConfiguration.PubSubSubscriptions
-            | ClusterClientConfiguration.PubSubSubscriptions,
+            | GlideClusterClientConfiguration.PubSubSubscriptions,
     ): Promise<[TGlideClient, TGlideClient]> {
         let client: TGlideClient | undefined;
 
@@ -220,7 +220,10 @@ describe("PubSub", () => {
     function createPubSubSubscription(
         clusterMode: boolean,
         clusterChannelsAndPatterns: Partial<
-            Record<ClusterClientConfiguration.PubSubChannelModes, Set<string>>
+            Record<
+                GlideClusterClientConfiguration.PubSubChannelModes,
+                Set<string>
+            >
         >,
         standaloneChannelsAndPatterns: Partial<
             Record<GlideClientConfiguration.PubSubChannelModes, Set<string>>
@@ -229,7 +232,7 @@ describe("PubSub", () => {
         context: PubSubMsg[] | null = null,
     ) {
         if (clusterMode) {
-            const mySubscriptions: ClusterClientConfiguration.PubSubSubscriptions =
+            const mySubscriptions: GlideClusterClientConfiguration.PubSubSubscriptions =
                 {
                     channelsAndPatterns: clusterChannelsAndPatterns,
                     callback: callback,
@@ -248,7 +251,7 @@ describe("PubSub", () => {
 
     async function clientCleanup(
         client: TGlideClient,
-        clusterModeSubs?: ClusterClientConfiguration.PubSubSubscriptions,
+        clusterModeSubs?: GlideClusterClientConfiguration.PubSubSubscriptions,
     ) {
         if (client === null) {
             return;
@@ -262,12 +265,12 @@ describe("PubSub", () => {
 
                 if (
                     channelType ===
-                    ClusterClientConfiguration.PubSubChannelModes.Exact.toString()
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact.toString()
                 ) {
                     cmd = "UNSUBSCRIBE";
                 } else if (
                     channelType ===
-                    ClusterClientConfiguration.PubSubChannelModes.Pattern.toString()
+                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern.toString()
                 ) {
                     cmd = "PUNSUBSCRIBE";
                 } else if (!cmeCluster.checkIfServerVersionLessThan("7.0.0")) {
@@ -318,7 +321,7 @@ describe("PubSub", () => {
         `pubsub exact happy path test_%p%p`,
         async (clusterMode, method) => {
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient;
@@ -339,8 +342,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([channel]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -400,7 +403,7 @@ describe("PubSub", () => {
         "pubsub exact happy path coexistence test_%p",
         async (clusterMode) => {
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -414,8 +417,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([channel]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -486,7 +489,7 @@ describe("PubSub", () => {
         "pubsub exact happy path many channels test_%p_%p",
         async (clusterMode, method) => {
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -516,8 +519,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(channelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set(Object.keys(channelsAndMessages)),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -611,7 +614,7 @@ describe("PubSub", () => {
         "pubsub exact happy path many channels coexistence test_%p",
         async (clusterMode) => {
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -633,8 +636,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(channelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set(Object.keys(channelsAndMessages)),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -733,7 +736,7 @@ describe("PubSub", () => {
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -755,8 +758,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set([channel]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set([channel]),
                     },
                     {},
                     callback,
@@ -829,7 +832,7 @@ describe("PubSub", () => {
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -843,8 +846,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     true,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set([channel]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set([channel]),
                     },
                     {},
                 );
@@ -928,7 +931,7 @@ describe("PubSub", () => {
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -959,8 +962,10 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set(Object.keys(channelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set(
+                            Object.keys(channelsAndMessages),
+                        ),
                     },
                     {},
                     callback,
@@ -1053,7 +1058,7 @@ describe("PubSub", () => {
             };
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -1072,8 +1077,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Pattern]:
@@ -1163,7 +1168,7 @@ describe("PubSub", () => {
             };
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -1174,8 +1179,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Pattern]:
@@ -1272,7 +1277,7 @@ describe("PubSub", () => {
             }
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -1290,8 +1295,8 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Pattern]:
@@ -1402,7 +1407,7 @@ describe("PubSub", () => {
             };
 
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -1420,10 +1425,12 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(exactChannelsAndMessages)),
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set(
+                            Object.keys(exactChannelsAndMessages),
+                        ),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -1546,11 +1553,11 @@ describe("PubSub", () => {
             };
 
             let pubSubExact:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubPattern:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClientExact: TGlideClient | null = null;
@@ -1572,8 +1579,10 @@ describe("PubSub", () => {
                 pubSubExact = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(exactChannelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set(
+                            Object.keys(exactChannelsAndMessages),
+                        ),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -1594,8 +1603,8 @@ describe("PubSub", () => {
                 pubSubPattern = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Pattern]:
@@ -1762,7 +1771,7 @@ describe("PubSub", () => {
 
             const publishResponse = 1;
             let pubSub:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let listeningClient: TGlideClient | null = null;
@@ -1780,12 +1789,16 @@ describe("PubSub", () => {
                 pubSub = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(exactChannelsAndMessages)),
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set(Object.keys(shardedChannelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set(
+                            Object.keys(exactChannelsAndMessages),
+                        ),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set(
+                            Object.keys(shardedChannelsAndMessages),
+                        ),
                     },
                     {},
                     callback,
@@ -1929,15 +1942,15 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient | null = null;
 
             let pubSubExact:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubPattern:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubSharded:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
 
@@ -1958,8 +1971,10 @@ describe("PubSub", () => {
                 pubSubExact = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(Object.keys(exactChannelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set(
+                            Object.keys(exactChannelsAndMessages),
+                        ),
                     },
                     {},
                     callback,
@@ -1981,8 +1996,8 @@ describe("PubSub", () => {
                 pubSubPattern = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([PATTERN]),
                     },
                     {},
                     callback,
@@ -1996,8 +2011,10 @@ describe("PubSub", () => {
                 pubSubSharded = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set(Object.keys(shardedChannelsAndMessages)),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set(
+                            Object.keys(shardedChannelsAndMessages),
+                        ),
                     },
                     {},
                     callback,
@@ -2192,15 +2209,15 @@ describe("PubSub", () => {
             let publishingClient: TGlideClient | null = null;
 
             let pubSubExact:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubPattern:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubSharded:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
 
@@ -2221,8 +2238,8 @@ describe("PubSub", () => {
                 pubSubExact = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([CHANNEL_NAME]),
                     },
                     {},
                     callback,
@@ -2244,8 +2261,8 @@ describe("PubSub", () => {
                 pubSubPattern = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([CHANNEL_NAME]),
                     },
                     {},
                     callback,
@@ -2259,8 +2276,8 @@ describe("PubSub", () => {
                 pubSubSharded = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set([CHANNEL_NAME]),
                     },
                     {},
                     callback,
@@ -2419,11 +2436,11 @@ describe("PubSub", () => {
             let clientPattern: TGlideClient | null = null;
 
             let pubSubExact:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubPattern:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
 
@@ -2445,8 +2462,8 @@ describe("PubSub", () => {
                 pubSubExact = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([CHANNEL_NAME]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Exact]:
@@ -2460,8 +2477,8 @@ describe("PubSub", () => {
                 pubSubPattern = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([CHANNEL_NAME]),
                     },
                     {
                         [GlideClientConfiguration.PubSubChannelModes.Pattern]:
@@ -2595,15 +2612,15 @@ describe("PubSub", () => {
             let clientDontCare: TGlideClient | null = null;
 
             let pubSubExact:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubPattern:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
             let pubSubSharded:
-                | ClusterClientConfiguration.PubSubSubscriptions
+                | GlideClusterClientConfiguration.PubSubSubscriptions
                 | GlideClientConfiguration.PubSubSubscriptions
                 | null = null;
 
@@ -2628,8 +2645,8 @@ describe("PubSub", () => {
                 pubSubExact = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([CHANNEL_NAME]),
                     },
                     {},
                     callback,
@@ -2640,8 +2657,8 @@ describe("PubSub", () => {
                 pubSubPattern = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([CHANNEL_NAME]),
                     },
                     {},
                     callback,
@@ -2652,8 +2669,8 @@ describe("PubSub", () => {
                 pubSubSharded = createPubSubSubscription(
                     clusterMode,
                     {
-                        [ClusterClientConfiguration.PubSubChannelModes.Sharded]:
-                            new Set([CHANNEL_NAME]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Sharded]: new Set([CHANNEL_NAME]),
                     },
                     {},
                     callback,
@@ -2818,7 +2835,7 @@ describe("PubSub", () => {
             "test pubsub exact max size message_%p",
             async (clusterMode) => {
                 let pubSub:
-                    | ClusterClientConfiguration.PubSubSubscriptions
+                    | GlideClusterClientConfiguration.PubSubSubscriptions
                     | GlideClientConfiguration.PubSubSubscriptions
                     | null = null;
 
@@ -2834,7 +2851,7 @@ describe("PubSub", () => {
                     pubSub = createPubSubSubscription(
                         clusterMode,
                         {
-                            [ClusterClientConfiguration.PubSubChannelModes
+                            [GlideClusterClientConfiguration.PubSubChannelModes
                                 .Exact]: new Set([channel]),
                         },
                         {
@@ -2923,7 +2940,7 @@ describe("PubSub", () => {
                 if (cmeCluster.checkIfServerVersionLessThan("7.0.0")) return;
 
                 let pubSub:
-                    | ClusterClientConfiguration.PubSubSubscriptions
+                    | GlideClusterClientConfiguration.PubSubSubscriptions
                     | GlideClientConfiguration.PubSubSubscriptions
                     | null = null;
 
@@ -2938,7 +2955,7 @@ describe("PubSub", () => {
                     pubSub = createPubSubSubscription(
                         clusterMode,
                         {
-                            [ClusterClientConfiguration.PubSubChannelModes
+                            [GlideClusterClientConfiguration.PubSubChannelModes
                                 .Sharded]: new Set([channel]),
                         },
                         {},
@@ -3023,7 +3040,7 @@ describe("PubSub", () => {
             "test pubsub exact max size message callback_%p",
             async (clusterMode) => {
                 let pubSub:
-                    | ClusterClientConfiguration.PubSubSubscriptions
+                    | GlideClusterClientConfiguration.PubSubSubscriptions
                     | GlideClientConfiguration.PubSubSubscriptions
                     | null = null;
 
@@ -3040,7 +3057,7 @@ describe("PubSub", () => {
                     pubSub = createPubSubSubscription(
                         clusterMode,
                         {
-                            [ClusterClientConfiguration.PubSubChannelModes
+                            [GlideClusterClientConfiguration.PubSubChannelModes
                                 .Exact]: new Set([channel]),
                         },
                         {
@@ -3116,7 +3133,7 @@ describe("PubSub", () => {
             async (clusterMode) => {
                 if (cmeCluster.checkIfServerVersionLessThan("7.0.0")) return;
                 let pubSub:
-                    | ClusterClientConfiguration.PubSubSubscriptions
+                    | GlideClusterClientConfiguration.PubSubSubscriptions
                     | GlideClientConfiguration.PubSubSubscriptions
                     | null = null;
 
@@ -3133,7 +3150,7 @@ describe("PubSub", () => {
                     pubSub = createPubSubSubscription(
                         clusterMode,
                         {
-                            [ClusterClientConfiguration.PubSubChannelModes
+                            [GlideClusterClientConfiguration.PubSubChannelModes
                                 .Sharded]: new Set([channel]),
                         },
                         {},
@@ -3203,7 +3220,7 @@ describe("PubSub", () => {
             const pubSubExact = createPubSubSubscription(
                 clusterMode,
                 {
-                    [ClusterClientConfiguration.PubSubChannelModes.Exact]:
+                    [GlideClusterClientConfiguration.PubSubChannelModes.Exact]:
                         new Set([channel]),
                 },
                 {
@@ -3240,7 +3257,7 @@ describe("PubSub", () => {
             const pubSubExact = createPubSubSubscription(
                 clusterMode,
                 {
-                    [ClusterClientConfiguration.PubSubChannelModes.Exact]:
+                    [GlideClusterClientConfiguration.PubSubChannelModes.Exact]:
                         new Set([channel]),
                 },
                 {

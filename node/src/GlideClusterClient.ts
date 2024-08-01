@@ -77,7 +77,7 @@ export type PeriodicChecks =
     | PeriodicChecksManualInterval;
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
-export namespace ClusterClientConfiguration {
+export namespace GlideClusterClientConfiguration {
     /**
      * Enum representing pubsub subscription modes.
      * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
@@ -118,7 +118,7 @@ export namespace ClusterClientConfiguration {
         context?: any;
     };
 }
-export type ClusterClientConfiguration = BaseClientConfiguration & {
+export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     /**
      * Configure the periodic topology checks.
      * These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -131,7 +131,7 @@ export type ClusterClientConfiguration = BaseClientConfiguration & {
      * PubSub subscriptions to be used for the client.
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
-    pubsubSubscriptions?: ClusterClientConfiguration.PubSubSubscriptions;
+    pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
 };
 
 /**
@@ -285,7 +285,7 @@ export class GlideClusterClient extends BaseClient {
      * @internal
      */
     protected createClientRequest(
-        options: ClusterClientConfiguration,
+        options: GlideClusterClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
@@ -311,11 +311,11 @@ export class GlideClusterClient extends BaseClient {
     }
 
     public static async createClient(
-        options: ClusterClientConfiguration,
+        options: GlideClusterClientConfiguration,
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (socket: net.Socket, options?: ClusterClientConfiguration) =>
+            (socket: net.Socket, options?: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(socket, options),
         );
     }
