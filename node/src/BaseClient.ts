@@ -139,6 +139,7 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWatch,
     createXAdd,
     createXLen,
     createXRead,
@@ -4343,6 +4344,38 @@ export class BaseClient {
      */
     public touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction.
+     *
+     * See https://valkey.io/commands/watch/ for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to watch.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.watch("sampleKey");
+     * console.log(response); // Output: "OK"
+     * transaction.set("SampleKey", "foobar");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * ```
+     * ```typescript
+     * const response = await client.watch("sampleKey");
+     * console.log(response); // Output: "OK"
+     * transaction.set("SampleKey", "foobar");
+     * await client.set("sampleKey", "hello world");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: None - None is returned when the watched key is modified before transaction execution.
+     * ```
+     */
+    public watch(keys: string[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys));
     }
 
     /**

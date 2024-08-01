@@ -2822,3 +2822,13 @@ export function createTouch(keys: string[]): command_request.Command {
 export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
 }
+
+/** @internal */
+export function createWatch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Watch, keys);
+}
+
+/** @internal */
+export function createUnWatch(): command_request.Command {
+    return createCommand(RequestType.UnWatch, []);
+}
