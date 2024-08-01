@@ -179,6 +179,7 @@ import {
     TimeoutError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
+import { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
