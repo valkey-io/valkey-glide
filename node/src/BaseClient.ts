@@ -181,7 +181,7 @@ import {
     TimeoutError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
-import { ClusterClientConfiguration } from "./GlideClusterClient";
+import { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
@@ -355,7 +355,7 @@ export class BaseClient {
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
-        options: ClusterClientConfiguration | GlideClientConfiguration,
+        options: GlideClusterClientConfiguration | GlideClientConfiguration,
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
@@ -635,13 +635,13 @@ export class BaseClient {
     }
 
     isPubsubConfigured(
-        config: GlideClientConfiguration | ClusterClientConfiguration,
+        config: GlideClientConfiguration | GlideClusterClientConfiguration,
     ): boolean {
         return !!config.pubsubSubscriptions;
     }
 
     getPubsubCallbackAndContext(
-        config: GlideClientConfiguration | ClusterClientConfiguration,
+        config: GlideClientConfiguration | GlideClusterClientConfiguration,
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     ): [((msg: PubSubMsg, context: any) => void) | null | undefined, any] {
         if (config.pubsubSubscriptions) {

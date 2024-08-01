@@ -21,11 +21,11 @@ import { Reader } from "protobufjs";
 import {
     BaseClientConfiguration,
     ClosingError,
-    ClusterClientConfiguration,
     ClusterTransaction,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
+    GlideClusterClientConfiguration,
     InfoOptions,
     Logger,
     RequestError,
@@ -124,7 +124,9 @@ function sendResponse(
 
 function getConnectionAndSocket(
     checkRequest?: (request: connection_request.ConnectionRequest) => boolean,
-    connectionOptions?: ClusterClientConfiguration | GlideClientConfiguration,
+    connectionOptions?:
+        | GlideClusterClientConfiguration
+        | GlideClientConfiguration,
     isCluster?: boolean,
 ): Promise<{
     socket: net.Socket;
