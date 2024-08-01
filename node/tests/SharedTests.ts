@@ -3710,21 +3710,44 @@ export function runBaseTests<Context>(config: {
                 const membersScores = { one: 1, two: 2, three: 3 };
                 expect(await client.zadd(key, membersScores)).toEqual(3);
 
-                expect(await client.zrangeStore(destkey, key, { start: 0, stop: 1 })).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                })).toEqual(["one", "two"]);
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: 0,
+                        stop: 1,
+                    }),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["one", "two"]);
 
                 expect(
-                    await client.zrangeStore(destkey, key, { start: 0, stop: 1 }, true),
+                    await client.zrangeStore(
+                        destkey,
+                        key,
+                        { start: 0, stop: 1 },
+                        true,
+                    ),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                }, true)).toEqual(["three", "two"]);
+                expect(
+                    await client.zrange(
+                        destkey,
+                        {
+                            start: 0,
+                            stop: -1,
+                        },
+                        true,
+                    ),
+                ).toEqual(["three", "two"]);
 
-                expect(await client.zrangeStore(destkey, key, { start: 3, stop: 1 })).toEqual(0);
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: 3,
+                        stop: 1,
+                    }),
+                ).toEqual(0);
             }, protocol);
         },
         config.timeout,
@@ -3746,10 +3769,12 @@ export function runBaseTests<Context>(config: {
                         type: "byScore",
                     }),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                })).toEqual(["one", "two"]);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["one", "two"]);
 
                 expect(
                     await client.zrangeStore(
@@ -3763,10 +3788,16 @@ export function runBaseTests<Context>(config: {
                         true,
                     ),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                }, true)).toEqual(["two", "one"]);
+                expect(
+                    await client.zrange(
+                        destkey,
+                        {
+                            start: 0,
+                            stop: -1,
+                        },
+                        true,
+                    ),
+                ).toEqual(["two", "one"]);
 
                 expect(
                     await client.zrangeStore(destkey, key, {
@@ -3776,10 +3807,12 @@ export function runBaseTests<Context>(config: {
                         type: "byScore",
                     }),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                })).toEqual(["two", "three"]);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["two", "three"]);
 
                 expect(
                     await client.zrangeStore(
@@ -3822,10 +3855,12 @@ export function runBaseTests<Context>(config: {
                         type: "byLex",
                     }),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                })).toEqual(["a", "b"]);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["a", "b"]);
 
                 expect(
                     await client.zrangeStore(destkey, key, {
@@ -3835,14 +3870,16 @@ export function runBaseTests<Context>(config: {
                         type: "byLex",
                     }),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                })).toEqual(["b", "c"]);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["b", "c"]);
 
                 expect(
                     await client.zrangeStore(
-                        destkey, 
+                        destkey,
                         key,
                         {
                             start: { value: "c", isInclusive: false },
@@ -3852,14 +3889,20 @@ export function runBaseTests<Context>(config: {
                         true,
                     ),
                 ).toEqual(2);
-                expect(await client.zrange(destkey, {
-                    start: 0, 
-                    stop: -1
-                }, true)).toEqual(["b", "a"]);
+                expect(
+                    await client.zrange(
+                        destkey,
+                        {
+                            start: 0,
+                            stop: -1,
+                        },
+                        true,
+                    ),
+                ).toEqual(["b", "a"]);
 
                 expect(
                     await client.zrangeStore(
-                        destkey, 
+                        destkey,
                         key,
                         {
                             start: InfScoreBoundary.NegativeInfinity,
