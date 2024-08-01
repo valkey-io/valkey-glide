@@ -3044,3 +3044,12 @@ export function createZScan(
 
     return createCommand(RequestType.ZScan, args);
 }
+
+/** @internal */
+export function createSetRange(
+    key: string,
+    offset: number,
+    value: string,
+): command_request.Command {
+    return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
+}
