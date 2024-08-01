@@ -343,6 +343,7 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
+                client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
                 client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
                 client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
                 client.bzpopmax(["abc", "def"], 0.5),
