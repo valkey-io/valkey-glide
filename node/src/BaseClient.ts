@@ -2424,26 +2424,28 @@ export class BaseClient {
 
     /**
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
-     * To get the expiration with millisecond precision, use `pexpiretime`.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
      *
      * See https://valkey.io/commands/expiretime/ for details.
      *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      *
+     * since - Redis version 7.0.0.
+     *
      * @example
      * ```typescript
-     * const result1 = client.expiretime("myKey");
+     * const result1 = await client.expiretime("myKey");
      * console.log(result1); // Output: -2 - myKey doesn't exist.
      *
-     * const result2 = client.set(myKey, "value");
-     * console.log(result2); // Output: -1 - myKey has no associate expiration.
+     * const result2 = await client.set(myKey, "value");
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
      *
      * client.expire(myKey, 60);
-     * const result3 = client.expireTime(myKey);
-     * console.log(result3); // Output: 718614954
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
      * ```
-     * since - Redis version 7.0.0.
      */
     public async expiretime(key: string): Promise<number> {
         return this.createWritePromise(createExpireTime(key));
@@ -2515,19 +2517,21 @@ export class BaseClient {
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      *
+     * since - Redis version 7.0.0.
+     *
      * @example
      * ```typescript
      * const result1 = client.pexpiretime("myKey");
      * console.log(result1); // Output: -2 - myKey doesn't exist.
      *
      * const result2 = client.set(myKey, "value");
-     * console.log(result2); // Output: -1 - myKey has no associate expiration.
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
      *
      * client.expire(myKey, 60);
      * const result3 = client.pexpireTime(myKey);
-     * console.log(result3); // Output: 718614954
+     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
      * ```
-     * since - Redis version 7.0.0.
      */
     public async pexpiretime(key: string): Promise<number> {
         return this.createWritePromise(createPExpireTime(key));

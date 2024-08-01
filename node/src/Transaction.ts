@@ -1319,7 +1319,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
-     * To get the expiration with millisecond precision, use `pexpiretime`.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
      *
      * See https://valkey.io/commands/expiretime/ for details.
      *
