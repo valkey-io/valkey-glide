@@ -215,6 +215,7 @@ import {
     createZPopMin,
     createZRandMember,
     createZRange,
+    createZRangeStore,
     createZRangeWithScores,
     createZRank,
     createZRem,
@@ -1775,6 +1776,35 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Stores a specified range of elements from the sorted set at `source`, into a new
+     * sorted set at `destination`. If `destination` doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.
+     *
+     * When in cluster mode, `destination` and `source` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zrangestore/ for more details.
+     *
+     * @param destination - The key for the destination sorted set.
+     * @param source - The key of the source sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * For range queries by index (rank), use RangeByIndex.
+     * For range queries by lexicographical order, use RangeByLex.
+     * For range queries by score, use RangeByScore.
+     * @param reverse - If true, reverses the sorted set, with index `0` as the element with the highest score.
+     * Command Response - The number of elements in the resulting sorted set.
+     */
+    public zrangeStore(
+        destination: string,
+        source: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): T {
+        return this.addAndReturn(
+            createZRangeStore(destination, source, rangeQuery, reverse),
         );
     }
 
