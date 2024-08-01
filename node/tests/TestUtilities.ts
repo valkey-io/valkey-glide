@@ -23,6 +23,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    InfScoreBoundary,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
@@ -467,11 +468,17 @@ export async function transactionTest(
     const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const key19 = "{key}" + uuidv4(); // bitmap
     const key20 = "{key}" + uuidv4(); // list
-    const key21 = "{key}" + uuidv4(); // zset random
+    const key21 = "{key}" + uuidv4(); // list for sort
+    const key22 = "{key}" + uuidv4(); // list for sort
+    const key23 = "{key}" + uuidv4(); // zset random
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, ReturnType][] = [];
+
+    baseTransaction.publish("test_message", key1);
+    responseData.push(['publish("test_message", key1)', 0]);
+
     baseTransaction.flushall();
     responseData.push(["flushall()", "OK"]);
     baseTransaction.flushall(FlushMode.SYNC);
@@ -510,6 +517,8 @@ export async function transactionTest(
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
     responseData.push(["strlen(key1)", 3]);
+    baseTransaction.setrange(key1, 0, "GLIDE");
+    responseData.push(["setrange(key1, 0, 'GLIDE'", 5]);
     baseTransaction.del([key1]);
     responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
@@ -708,6 +717,13 @@ export async function transactionTest(
     ]);
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
+    baseTransaction.zscan(key12, "0");
+    responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
+    baseTransaction.zscan(key12, "0", { match: "*", count: 20 });
+    responseData.push([
+        'zscan(key12, "0", {match: "*", count: 20})',
+        ["0", ["one", "1", "two", "2"]],
+    ]);
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
@@ -727,8 +743,24 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
-    responseData.push(['zcount(key8, { value: 2 }, "positiveInfinity")', 4]);
+    baseTransaction.zcount(
+        key8,
+        { value: 2 },
+        InfScoreBoundary.PositiveInfinity,
+    );
+    responseData.push([
+        "zcount(key8, { value: 2 }, InfScoreBoundary.PositiveInfinity)",
+        4,
+    ]);
+    baseTransaction.zlexcount(
+        key8,
+        { value: "a" },
+        InfScoreBoundary.PositiveInfinity,
+    );
+    responseData.push([
+        'zlexcount(key8, { value: "a" }, InfScoreBoundary.PositiveInfinity)',
+        4,
+    ]);
     baseTransaction.zpopmin(key8);
     responseData.push(["zpopmin(key8)", { member2: 3.0 }]);
     baseTransaction.zpopmax(key8);
@@ -737,10 +769,16 @@ export async function transactionTest(
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
-        "negativeInfinity",
-        "positiveInfinity",
+        InfScoreBoundary.NegativeInfinity,
+        InfScoreBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
+    baseTransaction.zremRangeByLex(
+        key8,
+        InfScoreBoundary.NegativeInfinity,
+        InfScoreBoundary.PositiveInfinity,
+    );
+    responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
     if (gte(version, "7.0.0")) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
@@ -803,6 +841,8 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+    baseTransaction.xdel(key9, ["0-3", "0-5"]);
+    responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
@@ -916,15 +956,15 @@ export async function transactionTest(
         'geohash(key18, ["Palermo", "Catania", "NonExisting"])',
         ["sqc8b49rny0", "sqdtr74hyu0", null],
     ]);
-    baseTransaction.zadd(key21, { one: 1.0 });
-    responseData.push(["zadd(key21, {one: 1.0}", 1]);
-    baseTransaction.zrandmember(key21);
-    responseData.push(["zrandmember(key21)", "one"]);
-    baseTransaction.zrandmemberWithCount(key21, 1);
-    responseData.push(["zrandmemberWithCount(key21, 1)", ["one"]]);
-    baseTransaction.zrandmemberWithCountWithScores(key21, 1);
+    baseTransaction.zadd(key23, { one: 1.0 });
+    responseData.push(["zadd(key23, {one: 1.0}", 1]);
+    baseTransaction.zrandmember(key23);
+    responseData.push(["zrandmember(key23)", "one"]);
+    baseTransaction.zrandmemberWithCount(key23, 1);
+    responseData.push(["zrandmemberWithCount(key23, 1)", ["one"]]);
+    baseTransaction.zrandmemberWithCountWithScores(key23, 1);
     responseData.push([
-        "zrandmemberWithCountWithScores(key21, 1)",
+        "zrandmemberWithCountWithScores(key23, 1)",
         [["one", 1.0]],
     ]);
 
@@ -1105,6 +1145,23 @@ export async function transactionTest(
             ],
             ["del([key1, key2, key3])", 3],
         );
+    }
+
+    baseTransaction
+        .lpush(key21, ["3", "1", "2"])
+        .sort(key21)
+        .sortStore(key21, key22)
+        .lrange(key22, 0, -1);
+    responseData.push(
+        ['lpush(key21, ["3", "1", "2"])', 3],
+        ["sort(key21)", ["1", "2", "3"]],
+        ["sortStore(key21, key22)", 3],
+        ["lrange(key22, 0, -1)", ["1", "2", "3"]],
+    );
+
+    if (gte(version, "7.0.0")) {
+        baseTransaction.sortReadOnly(key21);
+        responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
     return responseData;

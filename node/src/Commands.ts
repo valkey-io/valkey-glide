@@ -1503,15 +1503,25 @@ export function createZMScore(
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
-export type ScoreBoundary<T> =
+export enum InfScoreBoundary {
     /**
      * Positive infinity bound for sorted set.
      */
-    | `positiveInfinity`
+    PositiveInfinity = "+",
     /**
      * Negative infinity bound for sorted set.
      */
-    | `negativeInfinity`
+    NegativeInfinity = "-",
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export type ScoreBoundary<T> =
+    /**
+     *  Represents an lower/upper boundary in a sorted set.
+     */
+    | InfScoreBoundary
     /**
      *  Represents a specific numeric score boundary in a sorted set.
      */
@@ -1591,10 +1601,16 @@ function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
     isLex: boolean = false,
 ): string {
-    if (score == "positiveInfinity") {
-        return isLex ? "+" : "+inf";
-    } else if (score == "negativeInfinity") {
-        return isLex ? "-" : "-inf";
+    if (score == InfScoreBoundary.PositiveInfinity) {
+        return (
+            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
+        );
+    }
+
+    if (score == InfScoreBoundary.NegativeInfinity) {
+        return (
+            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
+        );
     }
 
     if (score.isInclusive == false) {
@@ -1785,6 +1801,22 @@ export function createZRemRangeByRank(
 /**
  * @internal
  */
+export function createZRemRangeByLex(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZRemRangeByLex, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRemRangeByScore(
     key: string,
     minScore: ScoreBoundary<number>,
@@ -1798,6 +1830,22 @@ export function createZRemRangeByScore(
 
 export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createZLexCount(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZLexCount, args);
 }
 
 export function createZRank(
@@ -1885,6 +1933,9 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
     }
 }
 
+/**
+ * @internal
+ */
 export function createXAdd(
     key: string,
     values: [string, string][],
@@ -1912,6 +1963,16 @@ export function createXAdd(
     });
 
     return createCommand(RequestType.XAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createXDel(
+    key: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XDel, [key, ...ids]);
 }
 
 /**
@@ -2757,6 +2818,130 @@ export function createZIncrBy(
 }
 
 /**
+ * Optional arguments to {@link GlideClient.sort|sort}, {@link GlideClient.sortStore|sortStore} and {@link GlideClient.sortReadOnly|sortReadOnly} commands.
+ *
+ * See https://valkey.io/commands/sort/ for more details.
+ */
+export type SortOptions = SortBaseOptions & {
+    /**
+     * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
+     * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+     * from the key replaces the asterisk to create the key name. For example, if `key`
+     * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
+     * attribute of the objects, like their weights or timestamps.
+     */
+    byPattern?: string;
+
+    /**
+     * A pattern used to retrieve external keys' values, instead of the elements at `key`.
+     * The pattern should contain an asterisk (`*`) as a placeholder for the element values, where the
+     * value from `key` replaces the asterisk to create the `key` name. This
+     * allows the sorted elements to be transformed based on the related keys values. For example, if
+     * `key` contains IDs of users, `getPatterns` can be used to retrieve
+     * specific attributes of these users, such as their names or email addresses. E.g., if
+     * `getPatterns` is `name_*`, the command will return the values of the keys
+     * `name_<element>` for each sorted element. Multiple `getPatterns`
+     * arguments can be provided to retrieve multiple attributes. The special value `#` can
+     * be used to include the actual element from `key` being sorted. If not provided, only
+     * the sorted elements themselves are returned.
+     */
+    getPatterns?: string[];
+};
+
+type SortBaseOptions = {
+    /**
+     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
+     * more information.
+     */
+    limit?: Limit;
+
+    /** Options for sorting order of elements. */
+    orderBy?: SortOrder;
+
+    /**
+     * When `true`, sorts elements lexicographically. When `false` (default),
+     * sorts elements numerically. Use this when the list, set, or sorted set contains string values
+     * that cannot be converted into double precision floating point numbers.
+     */
+    isAlpha?: boolean;
+};
+
+/**
+ * Optional arguments to {@link GlideClusterClient.sort|sort}, {@link GlideClusterClient.sortStore|sortStore} and {@link GlideClusterClient.sortReadOnly|sortReadOnly} commands.
+ *
+ * See https://valkey.io/commands/sort/ for more details.
+ */
+export type SortClusterOptions = SortBaseOptions;
+
+/**
+ * The `LIMIT` argument is commonly used to specify a subset of results from the
+ * matching elements, similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
+ */
+export type Limit = {
+    /** The starting position of the range, zero based. */
+    offset: number;
+    /** The maximum number of elements to include in the range. A negative count returns all elements from the offset. */
+    count: number;
+};
+
+/** @internal */
+export function createSort(
+    key: string,
+    options?: SortOptions,
+    destination?: string,
+): command_request.Command {
+    return createSortImpl(RequestType.Sort, key, options, destination);
+}
+
+/** @internal */
+export function createSortReadOnly(
+    key: string,
+    options?: SortOptions,
+): command_request.Command {
+    return createSortImpl(RequestType.SortReadOnly, key, options);
+}
+
+/** @internal */
+function createSortImpl(
+    cmd: RequestType,
+    key: string,
+    options?: SortOptions,
+    destination?: string,
+): command_request.Command {
+    const args: string[] = [key];
+
+    if (options) {
+        if (options.limit) {
+            args.push(
+                "LIMIT",
+                options.limit.offset.toString(),
+                options.limit.count.toString(),
+            );
+        }
+
+        if (options.orderBy) {
+            args.push(options.orderBy);
+        }
+
+        if (options.isAlpha) {
+            args.push("ALPHA");
+        }
+
+        if (options.byPattern) {
+            args.push("BY", options.byPattern);
+        }
+
+        if (options.getPatterns) {
+            options.getPatterns.forEach((p) => args.push("GET", p));
+        }
+    }
+
+    if (destination) args.push("STORE", destination);
+
+    return createCommand(cmd, args);
+}
+
+/**
  * @internal
  */
 export function createHStrlen(
@@ -2785,6 +2970,11 @@ export function createZRandMember(
     }
 
     return createCommand(RequestType.ZRandMember, args);
+}
+
+/** @internal */
+export function createLastSave(): command_request.Command {
+    return createCommand(RequestType.LastSave, []);
 }
 
 /** @internal */
@@ -2831,4 +3021,58 @@ export function createWatch(keys: string[]): command_request.Command {
 /** @internal */
 export function createUnWatch(): command_request.Command {
     return createCommand(RequestType.UnWatch, []);
+}
+
+/**
+ * This base class represents the common set of optional arguments for the SCAN family of commands.
+ * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
+ * and ZSCAN).
+ */
+export type BaseScanOptions = {
+    /**
+     * The match filter is applied to the result of the command and will only include
+     * strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+     * only a subset of the sorted set then there could be a case where the result is empty although there are
+     * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+     * that it will only fetch and match `10` items from the list.
+     */
+    readonly match?: string;
+    /**
+     * `COUNT` is a just a hint for the command for how many elements to fetch from the
+     * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
+     * represent the results as compact single-allocation packed encoding.
+     */
+    readonly count?: number;
+};
+
+/**
+ * @internal
+ */
+export function createZScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        if (options.match) {
+            args = args.concat("MATCH", options.match);
+        }
+
+        if (options.count !== undefined) {
+            args = args.concat("COUNT", options.count.toString());
+        }
+    }
+
+    return createCommand(RequestType.ZScan, args);
+}
+
+/** @internal */
+export function createSetRange(
+    key: string,
+    offset: number,
+    value: string,
+): command_request.Command {
+    return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
 }

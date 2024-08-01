@@ -11,6 +11,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -134,6 +135,7 @@ import {
     createSUnionStore,
     createSet,
     createSetBit,
+    createSetRange,
     createStrlen,
     createTTL,
     createTouch,
@@ -141,6 +143,7 @@ import {
     createUnlink,
     createWatch,
     createXAdd,
+    createXDel,
     createXLen,
     createXRead,
     createXTrim,
@@ -153,6 +156,7 @@ import {
     createZIncrBy,
     createZInterCard,
     createZInterstore,
+    createZLexCount,
     createZMPop,
     createZMScore,
     createZPopMax,
@@ -162,10 +166,12 @@ import {
     createZRangeWithScores,
     createZRank,
     createZRem,
+    createZRemRangeByLex,
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScan,
     createZScore,
 } from "./Commands";
 import {
@@ -178,7 +184,7 @@ import {
     TimeoutError,
 } from "./Errors";
 import { GlideClientConfiguration } from "./GlideClient";
-import { ClusterClientConfiguration } from "./GlideClusterClient";
+import { GlideClusterClientConfiguration } from "./GlideClusterClient";
 import { Logger } from "./Logger";
 import {
     command_request,
@@ -352,7 +358,7 @@ export class BaseClient {
     private config: BaseClientConfiguration | undefined;
 
     protected configurePubsub(
-        options: ClusterClientConfiguration | GlideClientConfiguration,
+        options: GlideClusterClientConfiguration | GlideClientConfiguration,
         configuration: connection_request.IConnectionRequest,
     ) {
         if (options.pubsubSubscriptions) {
@@ -632,13 +638,13 @@ export class BaseClient {
     }
 
     isPubsubConfigured(
-        config: GlideClientConfiguration | ClusterClientConfiguration,
+        config: GlideClientConfiguration | GlideClusterClientConfiguration,
     ): boolean {
         return !!config.pubsubSubscriptions;
     }
 
     getPubsubCallbackAndContext(
-        config: GlideClientConfiguration | ClusterClientConfiguration,
+        config: GlideClientConfiguration | GlideClusterClientConfiguration,
         /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     ): [((msg: PubSubMsg, context: any) => void) | null | undefined, any] {
         if (config.pubsubSubscriptions) {
@@ -2856,14 +2862,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
      * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
      * ```
      */
@@ -2900,7 +2906,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: "negativeInfinity",
+     *              start: InfScoreBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -2942,7 +2948,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: "negativeInfinity",
+     *              start: InfScoreBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -3259,6 +3265,42 @@ export class BaseClient {
         return this.createWritePromise(createZRemRangeByRank(key, start, end));
     }
 
+    /**
+     * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     *
+     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @returns The number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minLex` is greater than `maxLex`, 0 is returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByLex method to remove members from a sorted set based on lexicographical order range
+     * const result = await client.zremRangeByLex("my_sorted_set", { value: "a", isInclusive: false }, { value: "e" });
+     * console.log(result); // Output: 4 - Indicates that 4 members, with lexicographical values ranging from "a" (exclusive) to "e" (inclusive), have been removed from "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zremRangeByLex method when the sorted set does not exist
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfScoreBoundary.NegativeInfinity, { value: "e" });
+     * console.log(result); // Output: 0 - Indicates that no elements were removed.
+     * ```
+     */
+    public zremRangeByLex(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZRemRangeByLex(key, minLex, maxLex),
+        );
+    }
+
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
@@ -3272,14 +3314,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { bound: 5.0, isInclusive: true }, "positiveInfinity");
+     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method when the sorted set does not exist
-     * const result = await client.zremRangeByScore("non_existing_sorted_set", { bound: 5.0, isInclusive: true }, { bound: 10.0, isInclusive: false });
+     * const result = await client.zremRangeByScore("non_existing_sorted_set", { value: 5.0, isInclusive: true }, { value: 10.0, isInclusive: false });
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
@@ -3291,6 +3333,38 @@ export class BaseClient {
         return this.createWritePromise(
             createZRemRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
+     *
+     * See https://valkey.io/commands/zlexcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @returns The number of members in the specified lex range.
+     * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
+     * If maxLex is less than minLex, '0' is returned.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfScoreBoundary.PositiveInfinity);
+     * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, {value: "k", isInclusive: false});
+     * console.log(result); // Output: 1 - Indicates that there is one member with a lex score between "c" (inclusive) and "k" (exclusive) in the sorted set "my_sorted_set".
+     * ```
+     */
+    public async zlexcount(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): Promise<number> {
+        return this.createWritePromise(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
@@ -3415,6 +3489,26 @@ export class BaseClient {
         options?: StreamAddOptions,
     ): Promise<string | null> {
         return this.createWritePromise(createXAdd(key, values, options));
+    }
+
+    /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     * @returns The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
+     * // Output is 2 since the stream marked 2 entries as deleted.
+     * ```
+     */
+    public xdel(key: string, ids: string[]): Promise<number> {
+        return this.createWritePromise(createXDel(key, ids));
     }
 
     /**
@@ -4168,6 +4262,53 @@ export class BaseClient {
     }
 
     /**
+     * Iterates incrementally over a sorted set.
+     *
+     * See https://valkey.io/commands/zscan for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
+     *      the search.
+     * @param options - (Optional) The zscan options.
+     * @returns An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+     *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+     *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     *
+     * @example
+     * ```typescript
+     * // Assume "key" contains a sorted set with multiple members
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.zscan(key1, newCursor, {
+     *          match: "*",
+     *          count: 5,
+     *      });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
+     * // Cursor:  123
+     * // Members:  ['value 163', '163', 'value 114', '114', 'value 25', '25', 'value 82', '82', 'value 64', '64']
+     * // Cursor:  47
+     * // Members:  ['value 39', '39', 'value 127', '127', 'value 43', '43', 'value 139', '139', 'value 211', '211']
+     * // Cursor:  0
+     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * ```
+     */
+    public async zscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createZScan(key, cursor, options));
+    }
+
+    /**
      * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
      *
      * See https://valkey.io/commands/geodist/ for more details.
@@ -4374,8 +4515,36 @@ export class BaseClient {
      * console.log(result); // Output: None - None is returned when the watched key is modified before transaction execution.
      * ```
      */
-    public watch(keys: string[]): Promise<"OK"> {
+    public async watch(keys: string[]): Promise<"OK"> {
         return this.createWritePromise(createWatch(keys));
+    }
+
+    /**
+     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
+     * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
+     *
+     * See https://valkey.io/commands/setrange/ for more details.
+     *
+     * @param key - The key of the string to update.
+     * @param offset - The position in the string where `value` should be written.
+     * @param value - The string written with `offset`.
+     * @returns The length of the string stored at `key` after it was modified.
+     *
+     * @example
+     * ```typescript
+     * const len = await client.setrange("key", 6, "GLIDE");
+     * console.log(len); // Output: 11 - New key was created with length of 11 symbols
+     * const value = await client.get("key");
+     * console.log(result); // Output: "\0\0\0\0\0\0GLIDE" - The string was padded with zero bytes
+     * ```
+     */
+    public async setrange(
+        key: string,
+        offset: number,
+        value: string,
+    ): Promise<number> {
+        return this.createWritePromise(createSetRange(key, offset, value));
     }
 
     /**

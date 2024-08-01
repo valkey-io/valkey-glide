@@ -44,7 +44,7 @@ class OrtResults:
         """
         Args:
             name (str): the language name.
-            ort_results_folder (str): The relative path to the ort results folder from the root of the glide-for-redis directory.
+            ort_results_folder (str): The relative path to the ort results folder from the root of the valkey-glide directory.
         """
         folder_path = f"{SCRIPT_PATH}/../{ort_results_folder}"
         self.analyzer_result_file = f"{folder_path}/analyzer-result.json"

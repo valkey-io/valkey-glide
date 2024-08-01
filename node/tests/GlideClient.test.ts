@@ -12,15 +12,9 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import {
-    GlideClient,
-    ListDirection,
-    ProtocolVersion,
-    RequestError,
-    Transaction,
-} from "..";
+import { GlideClient, ListDirection, ProtocolVersion, Transaction } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode } from "../build-ts/src/Commands";
+import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -675,6 +669,232 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const setPrefix = "setKey" + uuidv4();
+            const hashPrefix = "hashKey" + uuidv4();
+            const list = uuidv4();
+            const store = uuidv4();
+            const names = ["Alice", "Bob", "Charlie", "Dave", "Eve"];
+            const ages = ["30", "25", "35", "20", "40"];
+
+            for (let i = 0; i < ages.length; i++) {
+                expect(
+                    await client.hset(setPrefix + (i + 1), {
+                        name: names[i],
+                        age: ages[i],
+                    }),
+                ).toEqual(2);
+            }
+
+            expect(await client.rpush(list, ["3", "1", "5", "4", "2"])).toEqual(
+                5,
+            );
+
+            expect(
+                await client.sort(list, {
+                    limit: { offset: 0, count: 2 },
+                    getPatterns: [setPrefix + "*->name"],
+                }),
+            ).toEqual(["Alice", "Bob"]);
+
+            expect(
+                await client.sort(list, {
+                    limit: { offset: 0, count: 2 },
+                    getPatterns: [setPrefix + "*->name"],
+                    orderBy: SortOrder.DESC,
+                }),
+            ).toEqual(["Eve", "Dave"]);
+
+            expect(
+                await client.sort(list, {
+                    limit: { offset: 0, count: 2 },
+                    byPattern: setPrefix + "*->age",
+                    getPatterns: [setPrefix + "*->name", setPrefix + "*->age"],
+                    orderBy: SortOrder.DESC,
+                }),
+            ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+            // Non-existent key in the BY pattern will result in skipping the sorting operation
+            expect(await client.sort(list, { byPattern: "noSort" })).toEqual([
+                "3",
+                "1",
+                "5",
+                "4",
+                "2",
+            ]);
+
+            // Non-existent key in the GET pattern results in nulls
+            expect(
+                await client.sort(list, {
+                    isAlpha: true,
+                    getPatterns: ["missing"],
+                }),
+            ).toEqual([null, null, null, null, null]);
+
+            // Missing key in the set
+            expect(await client.lpush(list, ["42"])).toEqual(6);
+            expect(
+                await client.sort(list, {
+                    byPattern: setPrefix + "*->age",
+                    getPatterns: [setPrefix + "*->name"],
+                }),
+            ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
+            expect(await client.lpop(list)).toEqual("42");
+
+            // sort RO
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                expect(
+                    await client.sortReadOnly(list, {
+                        limit: { offset: 0, count: 2 },
+                        getPatterns: [setPrefix + "*->name"],
+                    }),
+                ).toEqual(["Alice", "Bob"]);
+
+                expect(
+                    await client.sortReadOnly(list, {
+                        limit: { offset: 0, count: 2 },
+                        getPatterns: [setPrefix + "*->name"],
+                        orderBy: SortOrder.DESC,
+                    }),
+                ).toEqual(["Eve", "Dave"]);
+
+                expect(
+                    await client.sortReadOnly(list, {
+                        limit: { offset: 0, count: 2 },
+                        byPattern: setPrefix + "*->age",
+                        getPatterns: [
+                            setPrefix + "*->name",
+                            setPrefix + "*->age",
+                        ],
+                        orderBy: SortOrder.DESC,
+                    }),
+                ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+                // Non-existent key in the BY pattern will result in skipping the sorting operation
+                expect(
+                    await client.sortReadOnly(list, { byPattern: "noSort" }),
+                ).toEqual(["3", "1", "5", "4", "2"]);
+
+                // Non-existent key in the GET pattern results in nulls
+                expect(
+                    await client.sortReadOnly(list, {
+                        isAlpha: true,
+                        getPatterns: ["missing"],
+                    }),
+                ).toEqual([null, null, null, null, null]);
+
+                // Missing key in the set
+                expect(await client.lpush(list, ["42"])).toEqual(6);
+                expect(
+                    await client.sortReadOnly(list, {
+                        byPattern: setPrefix + "*->age",
+                        getPatterns: [setPrefix + "*->name"],
+                    }),
+                ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
+                expect(await client.lpop(list)).toEqual("42");
+            }
+
+            // SORT with STORE
+            expect(
+                await client.sortStore(list, store, {
+                    limit: { offset: 0, count: -1 },
+                    byPattern: setPrefix + "*->age",
+                    getPatterns: [setPrefix + "*->name"],
+                    orderBy: SortOrder.ASC,
+                }),
+            ).toEqual(5);
+            expect(await client.lrange(store, 0, -1)).toEqual([
+                "Dave",
+                "Bob",
+                "Alice",
+                "Charlie",
+                "Eve",
+            ]);
+            expect(
+                await client.sortStore(list, store, {
+                    byPattern: setPrefix + "*->age",
+                    getPatterns: [setPrefix + "*->name"],
+                }),
+            ).toEqual(5);
+            expect(await client.lrange(store, 0, -1)).toEqual([
+                "Dave",
+                "Bob",
+                "Alice",
+                "Charlie",
+                "Eve",
+            ]);
+
+            // transaction test
+            const transaction = new Transaction()
+                .hset(hashPrefix + 1, { name: "Alice", age: "30" })
+                .hset(hashPrefix + 2, { name: "Bob", age: "25" })
+                .del([list])
+                .lpush(list, ["2", "1"])
+                .sort(list, {
+                    byPattern: hashPrefix + "*->age",
+                    getPatterns: [hashPrefix + "*->name"],
+                })
+                .sort(list, {
+                    byPattern: hashPrefix + "*->age",
+                    getPatterns: [hashPrefix + "*->name"],
+                    orderBy: SortOrder.DESC,
+                })
+                .sortStore(list, store, {
+                    byPattern: hashPrefix + "*->age",
+                    getPatterns: [hashPrefix + "*->name"],
+                })
+                .lrange(store, 0, -1)
+                .sortStore(list, store, {
+                    byPattern: hashPrefix + "*->age",
+                    getPatterns: [hashPrefix + "*->name"],
+                    orderBy: SortOrder.DESC,
+                })
+                .lrange(store, 0, -1);
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                transaction
+                    .sortReadOnly(list, {
+                        byPattern: hashPrefix + "*->age",
+                        getPatterns: [hashPrefix + "*->name"],
+                    })
+                    .sortReadOnly(list, {
+                        byPattern: hashPrefix + "*->age",
+                        getPatterns: [hashPrefix + "*->name"],
+                        orderBy: SortOrder.DESC,
+                    });
+            }
+
+            const expectedResult = [
+                2,
+                2,
+                1,
+                2,
+                ["Bob", "Alice"],
+                ["Alice", "Bob"],
+                2,
+                ["Bob", "Alice"],
+                2,
+                ["Alice", "Bob"],
+            ];
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                expectedResult.push(["Bob", "Alice"], ["Alice", "Bob"]);
+            }
+
+            const result = await client.exec(transaction);
+            expect(result).toEqual(expectedResult);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "randomKey test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
@@ -700,108 +920,6 @@ describe("GlideClient", () => {
             expect(await client.select(0)).toEqual("OK");
             // DB 0 should still have no keys, so randomKey should still return null
             expect(await client.randomKey()).toBeNull();
-
-            client.close();
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "watch test_%p",
-        async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
-            const key3 = "{key}-3" + uuidv4();
-            const key4 = "{key}-4" + uuidv4();
-            const setFoobarTransaction = new Transaction();
-            const setHelloTransaction = new Transaction();
-
-            // Returns null when a watched key is modified before it is executed in a transaction command.
-            // Transaction commands are not performed.
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
-            expect(await client.set(key2, "hello")).toEqual("OK");
-            setFoobarTransaction
-                .set(key1, "foobar")
-                .set(key2, "foobar")
-                .set(key3, "foobar");
-            let results = await client.exec(setFoobarTransaction);
-            expect(results).toEqual(null);
-            // sanity check
-            expect(await client.get(key1)).toEqual(null);
-            expect(await client.get(key2)).toEqual("hello");
-            expect(await client.get(key3)).toEqual(null);
-
-            // Transaction executes command successfully with a read command on the watch key before
-            // transaction is executed.
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
-            expect(await client.get(key2)).toEqual("hello");
-            results = await client.exec(setFoobarTransaction);
-            expect(results).toEqual(["OK", "OK", "OK"]);
-            // sanity check
-            expect(await client.get(key1)).toEqual("foobar");
-            expect(await client.get(key2)).toEqual("foobar");
-            expect(await client.get(key3)).toEqual("foobar");
-
-            // Transaction executes command successfully with unmodified watched keys
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
-            results = await client.exec(setFoobarTransaction);
-            expect(results).toEqual(["OK", "OK", "OK"]);
-            // sanity check
-            expect(await client.get(key1)).toEqual("foobar");
-            expect(await client.get(key2)).toEqual("foobar");
-            expect(await client.get(key3)).toEqual("foobar");
-
-            // Transaction executes command successfully with a modified watched key but is not in the
-            // transaction.
-            expect(await client.watch([key4])).toEqual("OK");
-            setHelloTransaction
-                .set(key1, "hello")
-                .set(key2, "hello")
-                .set(key3, "hello");
-            results = await client.exec(setHelloTransaction);
-            expect(results).toEqual(["OK", "OK", "OK"]);
-            // sanity check
-            expect(await client.get(key1)).toEqual("hello");
-            expect(await client.get(key2)).toEqual("hello");
-            expect(await client.get(key3)).toEqual("hello");
-
-            // WATCH can not have an empty String array parameter
-            await expect(client.watch([])).rejects.toThrow(RequestError);
-
-            client.close();
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "unwatch test_%p",
-        async (protocol) => {
-            const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-
-            const key1 = "{key}-1" + uuidv4();
-            const key2 = "{key}-2" + uuidv4();
-
-            const setFoobarTransaction = new Transaction();
-
-            // UNWATCH returns OK when there no watched keys
-            expect(await client.unwatch()).toEqual("OK");
-
-            // Transaction executes successfully after modifying a watched key then calling UNWATCH
-            expect(await client.watch([key1, key2])).toEqual("OK");
-            expect(await client.set(key2, "hello")).toEqual("OK");
-            expect(await client.unwatch()).toEqual("OK");
-            setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
-            const results = await client.exec(setFoobarTransaction);
-            expect(results).toEqual(["OK", "OK"]);
-            // sanity check
-            expect(await client.get(key1)).toEqual("foobar");
-            expect(await client.get(key2)).toEqual("foobar");
 
             client.close();
         },
