@@ -4483,7 +4483,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public touch(keys: string[]): Promise<number> {
+    public async touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
     }
 
