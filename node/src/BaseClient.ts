@@ -21,7 +21,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
-    CoordOrigin,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
