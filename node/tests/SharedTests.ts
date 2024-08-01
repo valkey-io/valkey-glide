@@ -4303,7 +4303,7 @@ export function runBaseTests<Context>(config: {
                         { id: 5 },
                         1,
                     ),
-                ).toEqual({ streamId3: [["f3", "v3"]] });
+                ).toEqual({ [streamId3]: [["f3", "v3"]] });
 
                 // xrange against an emptied stream
                 expect(
