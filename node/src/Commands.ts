@@ -1601,6 +1601,61 @@ export function createXTrim(
     return createCommand(RequestType.XTrim, args);
 }
 
+export type StreamRangeBound = (
+    /**
+     * Stream ID boundary used to specify the minimum stream entry ID. Can be used in the `XRANGE` or `XREVRANGE` commands
+     * to get the first stream ID. 
+     */
+    | "-"
+    /**
+     * Stream ID boundary used to specify the maximum stream entry ID. Can be used in the `XRANGE` or `XREVRANGE` commands
+     * to get the last stream ID.
+     */
+    | "+"
+    /**
+     * Stream ID boundary used to specify a range of IDs to search. Stream ID bounds can be complete with
+     * a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
+     * be incomplete, with just a timestamp. Can be specified as inclusive or exclusive, where inclusive is the default.
+     */
+    | {
+        exclusive?: "(";
+        id: string | number;
+    }
+);
+
+function addRangeBound(rangeBound: StreamRangeBound, args: string[]) {
+    if (rangeBound === "-" || rangeBound === "+") {
+        args.push(rangeBound);
+        return;
+    }
+
+    if (rangeBound.exclusive) {
+        args.push(rangeBound.exclusive + rangeBound.id.toString());
+    } else {
+        args.push(rangeBound.id.toString());
+    }
+}
+
+/**
+ * @internal
+ */
+export function createXRange(
+    key: string,
+    start: StreamRangeBound,
+    end: StreamRangeBound,
+    count?: number
+): command_request.Command {
+    const args = [key];
+    addRangeBound(start, args);
+    addRangeBound(end, args);
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+    return createCommand(RequestType.XRange, args);
+}
+
+
 /**
  * @internal
  */
