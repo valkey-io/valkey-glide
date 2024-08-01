@@ -2545,7 +2545,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/zscan for more details.
      *
      * @param key - The key of the sorted set.
-     * @param cursor - The cursor that points to the next iteration of results. A value of "0" indicates the start of
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
      *      the search.
      * @param options - (Optional) The zscan options.
      *
