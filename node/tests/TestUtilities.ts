@@ -1144,7 +1144,7 @@ export async function transactionTest(
         ["lrange(key22, 0, -1)", ["1", "2", "3"]],
     );
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.sortReadOnly(key21);
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
