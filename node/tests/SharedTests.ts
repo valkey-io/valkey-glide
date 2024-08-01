@@ -6544,6 +6544,64 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xdel test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistentKey = uuidv4();
+                const streamId1 = "0-1";
+                const streamId2 = "0-2";
+                const streamId3 = "0-3";
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["f1", "foo1"],
+                            ["f2", "foo2"],
+                        ],
+                        { id: streamId1 },
+                    ),
+                ).toEqual(streamId1);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["f1", "foo1"],
+                            ["f2", "foo2"],
+                        ],
+                        { id: streamId2 },
+                    ),
+                ).toEqual(streamId2);
+
+                expect(await client.xlen(key)).toEqual(2);
+
+                // deletes one stream id, and ignores anything invalid
+                expect(await client.xdel(key, [streamId1, streamId3])).toEqual(
+                    1,
+                );
+                expect(await client.xdel(nonExistentKey, [streamId3])).toEqual(
+                    0,
+                );
+
+                // invalid argument - id list should not be empty
+                await expect(client.xdel(key, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xdel(stringKey, [streamId3]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {

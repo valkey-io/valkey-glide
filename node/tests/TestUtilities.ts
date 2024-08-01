@@ -841,6 +841,8 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+    baseTransaction.xdel(key9, ["0-3", "0-5"]);
+    responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
