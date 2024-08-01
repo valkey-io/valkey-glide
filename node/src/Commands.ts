@@ -2793,7 +2793,7 @@ export function createZIncrBy(
  *
  * See https://valkey.io/commands/sort/ for more details.
  */
-export type SortOptions = SortClusterOptions & {
+export type SortOptions = SortBaseOptions & {
     /**
      * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
      * pattern should contain an asterisk (*) as a placeholder for the element values, where the value
