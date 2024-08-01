@@ -5941,11 +5941,8 @@ export function runBaseTests<Context>(config: {
 
                 // Setup test data - use a large number of entries to force an iterative cursor.
                 const numberMap: Record<string, number> = {};
-                const expectedNumberMapArray: string[] = [];
 
-                for (let i = 0; i < 20000; i++) {
-                    expectedNumberMapArray.push(i.toString());
-                    expectedNumberMapArray.push(i.toString());
+                for (let i = 0; i < 50000; i++) {
                     numberMap[i.toString()] = i;
                 }
 
@@ -6018,15 +6015,18 @@ export function runBaseTests<Context>(config: {
                 }
 
                 // Fetching by cursor is randomized.
-                const expectedCombinedMapArray =
-                    expectedNumberMapArray.concat(expectedCharMapArray);
+                const expectedFullMap: Record<string, number> = {
+                    ...numberMap,
+                    ...charMap,
+                };
+
                 expect(fullResultMapArray.length).toEqual(
-                    expectedCombinedMapArray.length,
+                    Object.keys(expectedFullMap).length * 2,
                 );
 
                 for (let i = 0; i < fullResultMapArray.length; i += 2) {
-                    expect(fullResultMapArray).toContain(
-                        expectedCombinedMapArray[i],
+                    expect(fullResultMapArray[i] in expectedFullMap).toEqual(
+                        true,
                     );
                 }
 
