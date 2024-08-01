@@ -4284,8 +4284,8 @@ export function runBaseTests<Context>(config: {
 
                 // get everything from the stream
                 expect(await client.xrange(key, "-", "+")).toEqual({
-                    streamId1: [["f1", "v1"]],
-                    streamId2: [["f2", "v2"]],
+                    [streamId1]: [["f1", "v1"]],
+                    [streamId2]: [["f2", "v2"]],
                 });
 
                 // returns empty mapping if + before -
