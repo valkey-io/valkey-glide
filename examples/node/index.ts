@@ -12,7 +12,7 @@ async function sendPingToNode() {
             port: 6379,
         },
     ];
-    // Check `GlideClientConfiguration/ClusterClientConfiguration` for additional options.
+    // Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
     const client = await GlideClient.createClient({
         addresses: addresses,
         // if the server uses TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
@@ -41,7 +41,7 @@ async function sendPingToRandomNodeInCluster() {
             port: 6380,
         },
     ];
-    // Check `GlideClientConfiguration/ClusterClientConfiguration` for additional options.
+    // Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
     const client = await GlideClusterClient.createClient({
         addresses: addresses,
         // if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
