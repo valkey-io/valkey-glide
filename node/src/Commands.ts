@@ -1801,6 +1801,22 @@ export function createZRemRangeByRank(
 /**
  * @internal
  */
+export function createZRemRangeByLex(
+    key: string,
+    minLex: ScoreBoundary<string>,
+    maxLex: ScoreBoundary<string>,
+): command_request.Command {
+    const args = [
+        key,
+        getScoreBoundaryArg(minLex, true),
+        getScoreBoundaryArg(maxLex, true),
+    ];
+    return createCommand(RequestType.ZRemRangeByLex, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRemRangeByScore(
     key: string,
     minScore: ScoreBoundary<number>,
