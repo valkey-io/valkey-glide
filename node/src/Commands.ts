@@ -2820,6 +2820,11 @@ export function createZRandMember(
 }
 
 /** @internal */
+export function createLastSave(): command_request.Command {
+    return createCommand(RequestType.LastSave, []);
+}
+
+/** @internal */
 export function createLCS(
     key1: string,
     key2: string,

@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added LASTSAVE command ([#2059](https://github.com/valkey-io/valkey-glide/pull/2059))
 * Node: Added LCS command ([#2049](https://github.com/valkey-io/valkey-glide/pull/2049))
 * Node: Added MSETNX command ([#2046](https://github.com/valkey-io/valkey-glide/pull/2046))
 * Node: Added BLMOVE command ([#2027](https://github.com/valkey-io/valkey-glide/pull/2027))

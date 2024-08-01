@@ -12,7 +12,7 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import { GlideClient, ProtocolVersion, Transaction, ListDirection } from "..";
+import { GlideClient, ListDirection, ProtocolVersion, Transaction } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";

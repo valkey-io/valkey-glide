@@ -20,6 +20,7 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     ClosingError,
+    ClusterTransaction,
     ConditionalChange,
     ExpireOptions,
     FlushMode,
@@ -37,6 +38,7 @@ import {
     Script,
     SignedEncoding,
     SortOrder,
+    Transaction,
     UnsignedEncoding,
     UpdateByScore,
     parseInfoResponse,
@@ -299,6 +301,34 @@ export function runBaseTests<Context>(config: {
                               await client.info([InfoOptions.Commandstats]),
                           ).join();
                 expect(result).not.toContain("cmdstat_set");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "lastsave %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const today = new Date();
+                today.setDate(today.getDate() - 1);
+                const yesterday = today.getTime() / 1000; // as epoch time
+
+                expect(await client.lastsave()).toBeGreaterThan(yesterday);
+
+                if (client instanceof GlideClusterClient) {
+                    Object.values(await client.lastsave("allNodes")).forEach(
+                        (v) => expect(v).toBeGreaterThan(yesterday),
+                    );
+                }
+
+                const response =
+                    client instanceof GlideClient
+                        ? await client.exec(new Transaction().lastsave())
+                        : await client.exec(
+                              new ClusterTransaction().lastsave(),
+                          );
+                expect(response?.[0]).toBeGreaterThan(yesterday);
             }, protocol);
         },
         config.timeout,
