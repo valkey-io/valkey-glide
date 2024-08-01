@@ -3506,7 +3506,7 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public xdel(key: string, ids: string[]): Promise<string> {
+    public xdel(key: string, ids: string[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 

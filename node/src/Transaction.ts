@@ -1985,6 +1985,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
+     * @param options - (Optional) Stream add options.
      *
      * Command Response - The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
