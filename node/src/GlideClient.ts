@@ -598,6 +598,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Publish a message on pubsub channel.
+     *
      * See https://valkey.io/commands/publish for more details.
      *
      * @param message - Message to publish.
