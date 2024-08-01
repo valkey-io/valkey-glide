@@ -106,10 +106,6 @@ object ClusterExample {
                         Logger.log(Logger.Level.ERROR, "glide", "Connection error encountered: ${e.message}")
                         throw e
                     }
-                    is ExecAbortException -> {
-                        Logger.log(Logger.Level.ERROR, "glide", "ExecAbort error encountered: ${e.message}")
-                        throw e
-                    }
                     else -> {
                         Logger.log(Logger.Level.ERROR, "glide", "Execution error encountered: ${e.cause}")
                         throw e

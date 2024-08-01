@@ -110,9 +110,6 @@ object ClusterExample {
                         // The client wasn't able to reestablish the connection within the given retries
                         Logger.log(Logger.Level.ERROR, "glide", s"Connection error encountered: ${e.getMessage}")
                         Future.failed(e)
-                    case e: ExecAbortException =>
-                        Logger.log(Logger.Level.ERROR, "glide", s"ExecAbort error encountered: ${e.getMessage}")
-                        Future.failed(e)
                     case _ =>
                         Logger.log(Logger.Level.ERROR, "glide", s"Execution error encountered: ${e.getCause}")
                         Future.failed(e)
