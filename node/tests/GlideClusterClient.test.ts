@@ -332,6 +332,8 @@ describe("GlideClusterClient", () => {
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
                 client.sortStore("abc", "zyx", { isAlpha: true }),
+                client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
+                client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {
