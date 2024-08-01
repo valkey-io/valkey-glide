@@ -721,6 +721,13 @@ export async function transactionTest(
     ]);
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
+    baseTransaction.zscan(key12, "0");
+    responseData.push(['zscan(key12, "0")', ["0", ["one", "1", "two", "2"]]]);
+    baseTransaction.zscan(key12, "0", { match: "*", count: 20 });
+    responseData.push([
+        'zscan(key12, "0", {match: "*", count: 20})',
+        ["0", ["one", "1", "two", "2"]],
+    ]);
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
