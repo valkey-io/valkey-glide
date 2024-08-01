@@ -3,7 +3,12 @@
  */
 
 import {
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+} from "./BaseClient";
+
+import {
     AggregationType,
+    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -40,6 +45,8 @@ import {
     ScoreFilter,
     SearchOrigin,
     SetOptions,
+    SortClusterOptions,
+    SortOptions,
     StreamAddOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -114,6 +121,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLastSave,
     createLolwut,
     createMGet,
     createMSet,
@@ -131,6 +139,7 @@ import {
     createPfCount,
     createPfMerge,
     createPing,
+    createPublish,
     createRPop,
     createRPush,
     createRPushX,
@@ -155,6 +164,8 @@ import {
     createSelect,
     createSet,
     createSetBit,
+    createSort,
+    createSortReadOnly,
     createStrlen,
     createTTL,
     createTime,
@@ -174,6 +185,7 @@ import {
     createZIncrBy,
     createZInterCard,
     createZInterstore,
+    createZLexCount,
     createZMPop,
     createZMScore,
     createZPopMax,
@@ -183,10 +195,12 @@ import {
     createZRangeWithScores,
     createZRank,
     createZRem,
+    createZRemRangeByLex,
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScan,
     createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -1801,6 +1815,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRemRangeByRank(key, start, end));
     }
 
+    /**
+     * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
+     *
+     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     *
+     * Command Response - The number of members removed.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
+     * If `minLex` is greater than `maxLex`, 0 is returned.
+     */
+    public zremRangeByLex(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): T {
+        return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
+    }
+
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
      * See https://valkey.io/commands/zremrangebyscore/ for more details.
      *
@@ -1820,6 +1855,27 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZRemRangeByScore(key, minScore, maxScore),
         );
+    }
+
+    /**
+     * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
+     *
+     * See https://valkey.io/commands/zlexcount/ for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
+     * @param maxLex - The maximum lex to count up to. Can be positive/negative infinity, or a specific lex and inclusivity.
+     *
+     * Command Response - The number of members in the specified lex range.
+     * If 'key' does not exist, it is treated as an empty sorted set, and the command returns '0'.
+     * If maxLex is less than minLex, '0' is returned.
+     */
+    public zlexcount(
+        key: string,
+        minLex: ScoreBoundary<string>,
+        maxLex: ScoreBoundary<string>,
+    ): T {
+        return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
@@ -2513,6 +2569,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Iterates incrementally over a sorted set.
+     *
+     * See https://valkey.io/commands/zscan for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
+     *      the search.
+     * @param options - (Optional) The zscan options.
+     *
+     * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+     *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+     *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     */
+    public zscan(key: string, cursor: string, options?: BaseScanOptions): T {
+        return this.addAndReturn(createZScan(key, cursor, options));
+    }
+
+    /**
      * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
      *
      * See https://valkey.io/commands/geodist/ for more details.
@@ -2547,6 +2623,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public geohash(key: string, members: string[]): T {
         return this.addAndReturn(createGeoHash(key, members));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * Command Response - `UNIX TIME` of the last DB save executed with success.
+     */
+    public lastsave(): T {
+        return this.addAndReturn(createLastSave());
     }
 
     /**
@@ -2672,6 +2760,70 @@ export class Transaction extends BaseTransaction<Transaction> {
     }
 
     /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: string, options?: SortOptions): Transaction {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(key: string, options?: SortOptions): Transaction {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: string,
+        destination: string,
+        options?: SortOptions,
+    ): Transaction {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
+
+    /**
      * Copies the value stored at the `source` to the `destination` key. If `destinationDB` is specified,
      * the value will be copied to the database specified, otherwise the current database will be used.
      * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
@@ -2697,6 +2849,20 @@ export class Transaction extends BaseTransaction<Transaction> {
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
     }
+
+    /** Publish a message on pubsub channel.
+     *
+     * See https://valkey.io/commands/publish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     *
+     * Command Response -  Number of subscriptions in primary node that received the message.
+     * Note that this value does not include subscriptions that configured on replicas.
+     */
+    public publish(message: string, channel: string): Transaction {
+        return this.addAndReturn(createPublish(message, channel));
+    }
 }
 
 /**
@@ -2712,6 +2878,73 @@ export class Transaction extends BaseTransaction<Transaction> {
  */
 export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     /// TODO: add all CLUSTER commands
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     *
+     * Command Response - An `Array` of sorted elements.
+     */
+    public sort(key: string, options?: SortClusterOptions): ClusterTransaction {
+        return this.addAndReturn(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     *
+     * Command Response - An `Array` of sorted elements
+     */
+    public sortReadOnly(
+        key: string,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
+        return this.addAndReturn(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     *
+     * Command Response - The number of elements in the sorted key stored at `destination`.
+     */
+    public sortStore(
+        key: string,
+        destination: string,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
+        return this.addAndReturn(createSort(key, options, destination));
+    }
 
     /**
      * Copies the value stored at the `source` to the `destination` key. When `replace` is true,
@@ -2736,5 +2969,26 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         return this.addAndReturn(
             createCopy(source, destination, { replace: replace }),
         );
+    }
+
+    /** Publish a message on pubsub channel.
+     * This command aggregates PUBLISH and SPUBLISH commands functionalities.
+     * The mode is selected using the 'sharded' parameter.
+     * For both sharded and non-sharded mode, request is routed using hashed channel as key.
+     *
+     * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey version 7.0.
+     *
+     * Command Response -  Number of subscriptions in primary node that received the message.
+     */
+    public publish(
+        message: string,
+        channel: string,
+        sharded: boolean = false,
+    ): ClusterTransaction {
+        return this.addAndReturn(createPublish(message, channel, sharded));
     }
 }

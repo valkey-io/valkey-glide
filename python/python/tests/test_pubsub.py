@@ -2479,6 +2479,9 @@ class TestPubSub:
             pattern = "test_*"
 
             client = await create_client(request, cluster_mode)
+            min_version = "7.0.0"
+            if await check_if_server_version_lt(client, min_version):
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
             assert type(client) == GlideClusterClient
             # Assert no sharded channels exist yet
             assert await client.pubsub_shardchannels() == []
@@ -2579,6 +2582,9 @@ class TestPubSub:
 
             # Create a client and check initial subscribers
             client = await create_client(request, cluster_mode)
+            min_version = "7.0.0"
+            if await check_if_server_version_lt(client, min_version):
+                pytest.skip(reason=f"Valkey version required >= {min_version}")
             assert type(client) == GlideClusterClient
             assert await client.pubsub_shardnumsub([channel1, channel2, channel3]) == {
                 channel1_bytes: 0,

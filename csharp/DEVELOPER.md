@@ -80,12 +80,10 @@ source "$HOME/.cargo/env"
 Before starting this step, make sure you've installed all software requirments.
 
 1. Clone the repository
-
-```bash
-VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
-git clone --branch ${VERSION} https://github.com/valkey-io/valkey-glide.git
-cd valkey-glide
-```
+    ```bash
+    git clone https://github.com/valkey-io/valkey-glide.git
+    cd valkey-glide
+    ```
 
 2. Initialize git submodule
 

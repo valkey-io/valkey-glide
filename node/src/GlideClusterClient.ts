@@ -7,6 +7,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     PubSubMsg,
+    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
@@ -15,6 +16,7 @@ import {
     FunctionListResponse,
     InfoOptions,
     LolwutOptions,
+    SortClusterOptions,
     createClientGetName,
     createClientId,
     createConfigGet,
@@ -34,10 +36,13 @@ import {
     createFunctionList,
     createFunctionLoad,
     createInfo,
+    createLastSave,
     createLolwut,
     createPing,
     createPublish,
     createRandomKey,
+    createSort,
+    createSortReadOnly,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -72,7 +77,7 @@ export type PeriodicChecks =
     | PeriodicChecksManualInterval;
 
 /* eslint-disable-next-line @typescript-eslint/no-namespace */
-export namespace ClusterClientConfiguration {
+export namespace GlideClusterClientConfiguration {
     /**
      * Enum representing pubsub subscription modes.
      * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
@@ -113,7 +118,7 @@ export namespace ClusterClientConfiguration {
         context?: any;
     };
 }
-export type ClusterClientConfiguration = BaseClientConfiguration & {
+export type GlideClusterClientConfiguration = BaseClientConfiguration & {
     /**
      * Configure the periodic topology checks.
      * These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
@@ -126,7 +131,7 @@ export type ClusterClientConfiguration = BaseClientConfiguration & {
      * PubSub subscriptions to be used for the client.
      * Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
      */
-    pubsubSubscriptions?: ClusterClientConfiguration.PubSubSubscriptions;
+    pubsubSubscriptions?: GlideClusterClientConfiguration.PubSubSubscriptions;
 };
 
 /**
@@ -280,7 +285,7 @@ export class GlideClusterClient extends BaseClient {
      * @internal
      */
     protected createClientRequest(
-        options: ClusterClientConfiguration,
+        options: GlideClusterClientConfiguration,
     ): connection_request.IConnectionRequest {
         const configuration = super.createClientRequest(options);
         configuration.clusterModeEnabled = true;
@@ -306,11 +311,11 @@ export class GlideClusterClient extends BaseClient {
     }
 
     public static async createClient(
-        options: ClusterClientConfiguration,
+        options: GlideClusterClientConfiguration,
     ): Promise<GlideClusterClient> {
         return await super.createClientInternal(
             options,
-            (socket: net.Socket, options?: ClusterClientConfiguration) =>
+            (socket: net.Socket, options?: GlideClusterClientConfiguration) =>
                 new GlideClusterClient(socket, options),
         );
     }
@@ -935,7 +940,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/dbsize/ for more details.
 
-     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
      * @returns The number of keys in the database.
      *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
@@ -946,7 +951,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+    public dbsize(route?: Routes): Promise<number> {
         return this.createWritePromise(createDBSize(), toProtobufRoute(route));
     }
 
@@ -954,6 +959,7 @@ export class GlideClusterClient extends BaseClient {
      * This command aggregates PUBLISH and SPUBLISH commands functionalities.
      * The mode is selected using the 'sharded' parameter.
      * For both sharded and non-sharded mode, request is routed using hashed channel as key.
+     *
      * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
      *
      * @param message - Message to publish.
@@ -982,6 +988,117 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
+        );
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * To store the result into a new key, see {@link sortStore}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     * @returns An `Array` of sorted elements.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("mylist", ["3", "1", "2", "a"]);
+     * const result = await client.sort("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
+     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
+     * ```
+     */
+    public async sort(
+        key: string,
+        options?: SortClusterOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(createSort(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+     *
+     * The `sortReadOnly` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.
+     *
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     * @returns An `Array` of sorted elements
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("mylist", ["3", "1", "2", "a"]);
+     * const result = await client.sortReadOnly("mylist", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
+     * console.log(result); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically
+     * ```
+     */
+    public async sortReadOnly(
+        key: string,
+        options?: SortClusterOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(createSortReadOnly(key, options));
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at `key` and stores the result in
+     * `destination`.
+     *
+     * The `sort` command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements, and store the result in a new key.
+     *
+     * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
+     *
+     * See https://valkey.io/commands/sort for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     * @param key - The key of the list, set, or sorted set to be sorted.
+     * @param destination - The key where the sorted result will be stored.
+     * @param options - (Optional) {@link SortClusterOptions}.
+     * @returns The number of elements in the sorted key stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("mylist", ["3", "1", "2", "a"]);
+     * const sortedElements = await client.sortReadOnly("mylist", "sortedList", { alpha: true, orderBy: SortOrder.DESC, limit: { offset: 0, count: 3 } });
+     * console.log(sortedElements); // Output: 3 - number of elements sorted and stored
+     * console.log(await client.lrange("sortedList", 0, -1)); // Output: [ 'a', '3', '2' ] - List is sorted in descending order lexicographically and stored in `sortedList`
+     * ```
+     */
+    public async sortStore(
+        key: string,
+        destination: string,
+        options?: SortClusterOptions,
+    ): Promise<number> {
+        return this.createWritePromise(createSort(key, options, destination));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `UNIX TIME` of the last DB save executed with success.
+     * @example
+     * ```typescript
+     * const timestamp = await client.lastsave();
+     * console.log("Last DB save was done at " + timestamp);
+     * ```
+     */
+    public async lastsave(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(
+            createLastSave(),
+            toProtobufRoute(route),
         );
     }
 

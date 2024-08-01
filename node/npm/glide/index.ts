@@ -75,6 +75,7 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
+        BaseScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -121,7 +122,8 @@ function initialize() {
         InsertPosition,
         SetOptions,
         ZaddOptions,
-        ScoreBoundry,
+        InfScoreBoundary,
+        ScoreBoundary,
         UpdateOptions,
         ProtocolVersion,
         RangeByIndex,
@@ -129,6 +131,8 @@ function initialize() {
         RangeByLex,
         ReadFrom,
         RedisCredentials,
+        SortClusterOptions,
+        SortOptions,
         SortedSetRange,
         StreamTrimOptions,
         StreamAddOptions,
@@ -158,6 +162,7 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
+        BaseScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -204,7 +209,8 @@ function initialize() {
         InsertPosition,
         SetOptions,
         ZaddOptions,
-        ScoreBoundry,
+        InfScoreBoundary,
+        ScoreBoundary,
         UpdateOptions,
         ProtocolVersion,
         RangeByIndex,
@@ -212,6 +218,8 @@ function initialize() {
         RangeByLex,
         ReadFrom,
         RedisCredentials,
+        SortClusterOptions,
+        SortOptions,
         SortedSetRange,
         StreamTrimOptions,
         StreamAddOptions,
