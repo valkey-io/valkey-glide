@@ -164,6 +164,7 @@ import {
     createSelect,
     createSet,
     createSetBit,
+    createSetRange,
     createSort,
     createSortReadOnly,
     createStrlen,
@@ -2722,6 +2723,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public randomKey(): T {
         return this.addAndReturn(createRandomKey());
+    }
+
+    /**
+     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
+     * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
+     *
+     * See https://valkey.io/commands/setrange/ for more details.
+     *
+     * @param key - The key of the string to update.
+     * @param offset - The position in the string where `value` should be written.
+     * @param value - The string written with `offset`.
+     *
+     * Command Response - The length of the string stored at `key` after it was modified.
+     */
+    public setrange(key: string, offset: number, value: string): T {
+        return this.addAndReturn(createSetRange(key, offset, value));
     }
 }
 

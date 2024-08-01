@@ -526,6 +526,8 @@ export async function transactionTest(
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
     responseData.push(["strlen(key1)", 3]);
+    baseTransaction.setrange(key1, 0, "GLIDE");
+    responseData.push(["setrange(key1, 0, 'GLIDE'", 5]);
     baseTransaction.del([key1]);
     responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
