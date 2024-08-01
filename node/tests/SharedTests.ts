@@ -2621,27 +2621,27 @@ export function runBaseTests<Context>(config: {
                 expect(await client.sadd(key, members)).toEqual(3);
 
                 const result2 = await client.srandmember(key);
-                expect(members).toContain(intoString(result2));
+                expect(members).toContain(result2);
                 expect(await client.srandmember("nonExistingKey")).toEqual(
                     null,
                 );
 
                 // unique values are expected as count is positive
                 let result = await client.srandmemberCount(key, 4);
-                checkSimple(result.length).toEqual(3);
-                checkSimple(new Set(result)).toEqual(new Set(members));
+                expect(result.length).toEqual(3);
+                expect(new Set(result)).toEqual(new Set(members));
 
                 // duplicate values are expected as count is negative
                 result = await client.srandmemberCount(key, -4);
-                checkSimple(result.length).toEqual(4);
+                expect(result.length).toEqual(4);
                 result.forEach((member) => {
-                    expect(members).toContain(intoString(member));
+                    expect(members).toContain(member);
                 });
 
                 // empty return values for non-existing or empty keys
                 result = await client.srandmemberCount(key, 0);
-                checkSimple(result.length).toEqual(0);
-                checkSimple(result).toEqual([]);
+                expect(result.length).toEqual(0);
+                expect(result).toEqual([]);
                 expect(
                     await client.srandmemberCount("nonExistingKey", 0),
                 ).toEqual([]);
