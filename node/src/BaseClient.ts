@@ -2564,7 +2564,7 @@ export class BaseClient {
 
     /**
      * Returns stream entries matching a given range of IDs.
-     * 
+     *
      * See https://valkey.io/commands/xrange for more details.
      *
      * @param key - The key of the stream.
@@ -2578,7 +2578,7 @@ export class BaseClient {
      *     If `count` is not provided, all stream entries in the range will be returned.
      * @returns A mapping of stream IDs to stream entry data, where entry data is a
      *     list of pairings with format `[[field, entry], [field, entry], ...]`.
-     * 
+     *
      * @example
      * ```typescript
      * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
@@ -2595,7 +2595,7 @@ export class BaseClient {
         key: string,
         start: StreamRangeBound,
         end: StreamRangeBound,
-        count?: number
+        count?: number,
     ): Promise<Record<string, string[][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
     }

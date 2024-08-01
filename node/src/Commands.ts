@@ -1974,10 +1974,10 @@ export function createXTrim(
     return createCommand(RequestType.XTrim, args);
 }
 
-export type StreamRangeBound = (
+export type StreamRangeBound =
     /**
      * Stream ID boundary used to specify the minimum stream entry ID. Can be used in the `XRANGE` or `XREVRANGE` commands
-     * to get the first stream ID. 
+     * to get the first stream ID.
      */
     | "-"
     /**
@@ -1991,10 +1991,9 @@ export type StreamRangeBound = (
      * be incomplete, with just a timestamp. Can be specified as inclusive or exclusive, where inclusive is the default.
      */
     | {
-        exclusive?: "(";
-        id: string | number;
-    }
-);
+          exclusive?: "(";
+          id: string | number;
+      };
 
 function addRangeBound(rangeBound: StreamRangeBound, args: string[]) {
     if (rangeBound === "-" || rangeBound === "+") {
@@ -2016,7 +2015,7 @@ export function createXRange(
     key: string,
     start: StreamRangeBound,
     end: StreamRangeBound,
-    count?: number
+    count?: number,
 ): command_request.Command {
     const args = [key];
     addRangeBound(start, args);
@@ -2027,7 +2026,6 @@ export function createXRange(
     }
     return createCommand(RequestType.XRange, args);
 }
-
 
 /**
  * @internal

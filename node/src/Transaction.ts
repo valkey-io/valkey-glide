@@ -2017,7 +2017,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns stream entries matching a given range of IDs.
-     * 
+     *
      * See https://valkey.io/commands/xrange for more details.
      *
      * @param key - The key of the stream.
@@ -2029,7 +2029,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     - Use `+` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * 
+     *
      * Command Response - A mapping of stream IDs to stream entry data, where entry data is a
      *     list of pairings with format `[[field, entry], [field, entry], ...]`.
      */
@@ -2037,7 +2037,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         key: string,
         start: StreamRangeBound,
         end: StreamRangeBound,
-        count?: number
+        count?: number,
     ): T {
         return this.addAndReturn(createXRange(key, start, end, count));
     }
