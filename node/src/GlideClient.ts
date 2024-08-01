@@ -743,7 +743,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
      * ```
      */
-    public randomKey(): Promise<string | null> {
+    public async randomKey(): Promise<string | null> {
         return this.createWritePromise(createRandomKey());
     }
 
@@ -763,7 +763,7 @@ export class GlideClient extends BaseClient {
      * console.log(response); // Output: "OK"
      * ```
      */
-    public unwatch(): Promise<"OK"> {
+    public async unwatch(): Promise<"OK"> {
         return this.createWritePromise(createUnWatch());
     }
 }

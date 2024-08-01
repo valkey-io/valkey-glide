@@ -1118,7 +1118,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name.
      * ```
      */
-    public randomKey(route?: Routes): Promise<string | null> {
+    public async randomKey(route?: Routes): Promise<string | null> {
         return this.createWritePromise(
             createRandomKey(),
             toProtobufRoute(route),
@@ -1143,7 +1143,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: "OK"
      * ```
      */
-    public unwatch(route?: Routes): Promise<"OK"> {
+    public async unwatch(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), toProtobufRoute(route));
     }
 }
