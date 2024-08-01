@@ -137,6 +137,7 @@ import {
     createSUnionStore,
     createSet,
     createSetBit,
+    createSetRange,
     createStrlen,
     createTTL,
     createTouch,
@@ -4521,6 +4522,34 @@ export class BaseClient {
      */
     public touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
+     * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
+     *
+     * See https://valkey.io/commands/setrange/ for more details.
+     *
+     * @param key - The key of the string to update.
+     * @param offset - The position in the string where `value` should be written.
+     * @param value - The string written with `offset`.
+     * @returns The length of the string stored at `key` after it was modified.
+     *
+     * @example
+     * ```typescript
+     * const len = await client.setrange("key", 6, "GLIDE");
+     * console.log(len); // Output: 11 - New key was created with length of 11 symbols
+     * const value = await client.get("key");
+     * console.log(result); // Output: "\0\0\0\0\0\0GLIDE" - The string was padded with zero bytes
+     * ```
+     */
+    public async setrange(
+        key: string,
+        offset: number,
+        value: string,
+    ): Promise<number> {
+        return this.createWritePromise(createSetRange(key, offset, value));
     }
 
     /**
