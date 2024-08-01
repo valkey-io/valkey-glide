@@ -11,6 +11,7 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -168,6 +169,7 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
+    createZScan,
 } from "./Commands";
 import {
     ClosingError,
@@ -4234,6 +4236,53 @@ export class BaseClient {
         member: string,
     ): Promise<number> {
         return this.createWritePromise(createZIncrBy(key, increment, member));
+    }
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * See https://valkey.io/commands/zscan for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
+     *      the search.
+     * @param options - (Optional) The zscan options.
+     * @returns An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+     *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+     *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     *
+     * @example
+     * ```typescript
+     * // Assume "key" contains a sorted set with multiple members
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.zscan(key1, newCursor, {
+     *          match: "*",
+     *          count: 5,
+     *      });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
+     * // Cursor:  123
+     * // Members:  ['value 163', '163', 'value 114', '114', 'value 25', '25', 'value 82', '82', 'value 64', '64']
+     * // Cursor:  47
+     * // Members:  ['value 39', '39', 'value 127', '127', 'value 43', '43', 'value 139', '139', 'value 211', '211']
+     * // Cursor:  0
+     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * ```
+     */
+    public async zscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createZScan(key, cursor, options));
     }
 
     /**
