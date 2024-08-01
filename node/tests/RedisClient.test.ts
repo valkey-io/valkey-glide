@@ -12,14 +12,13 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import { GlideClient, ProtocolVersion, Transaction } from "..";
+import { GlideClient, ListDirection, ProtocolVersion, Transaction } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     checkFunctionListResponse,
-    checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -48,7 +47,7 @@ describe("GlideClient", () => {
             parseCommandLineArgs()["standalone-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = standaloneAddresses
-            ? RedisCluster.initFromExistingCluster(
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(standaloneAddresses),
               )
             : await RedisCluster.createCluster(false, 1, 1);
@@ -127,28 +126,60 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands returns never timeout_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                    300,
+                ),
+            );
+
+            const blmovePromise = client.blmove(
+                "source",
+                "destination",
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+                0.1,
+            );
+            const timeoutPromise = new Promise((resolve) => {
+                setTimeout(resolve, 500);
+            });
+
+            try {
+                await Promise.race([blmovePromise, timeoutPromise]);
+            } finally {
+                Promise.resolve(blmovePromise);
+                client.close();
+            }
+        },
+        5000,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            checkSimple(await client.select(0)).toEqual("OK");
+            expect(await client.select(0)).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
-            checkSimple(result).toEqual("OK");
+            expect(result).toEqual("OK");
 
-            checkSimple(await client.select(1)).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
-            checkSimple(await client.flushdb()).toEqual("OK");
+            expect(await client.flushdb()).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.select(0)).toEqual("OK");
-            checkSimple(await client.get(key)).toEqual(value);
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.get(key)).toEqual(value);
 
             expect(await client.dbsize()).toBeGreaterThan(0);
-            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
         },
     );
@@ -400,7 +431,7 @@ describe("GlideClient", () => {
                 }),
             ).toEqual(true);
             expect(await client.select(index1)).toEqual("OK");
-            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.get(destination)).toEqual(value1);
 
             // new value for source key
             expect(await client.select(index0)).toEqual("OK");
@@ -422,9 +453,9 @@ describe("GlideClient", () => {
 
             // new value only gets copied to DB 2
             expect(await client.select(index1)).toEqual("OK");
-            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.get(destination)).toEqual(value1);
             expect(await client.select(index2)).toEqual("OK");
-            checkSimple(await client.get(destination)).toEqual(value2);
+            expect(await client.get(destination)).toEqual(value2);
 
             // both exists, with REPLACE, when value isn't the same, source always get copied to
             // destination
@@ -436,7 +467,7 @@ describe("GlideClient", () => {
                 }),
             ).toEqual(true);
             expect(await client.select(index1)).toEqual("OK");
-            checkSimple(await client.get(destination)).toEqual(value2);
+            expect(await client.get(destination)).toEqual(value2);
 
             //transaction tests
             const transaction = new Transaction();
@@ -449,7 +480,7 @@ describe("GlideClient", () => {
             transaction.get(destination);
             const results = await client.exec(transaction);
 
-            checkSimple(results).toEqual(["OK", "OK", true, value1]);
+            expect(results).toEqual(["OK", "OK", true, value1]);
 
             client.close();
         },
@@ -475,12 +506,12 @@ describe("GlideClient", () => {
                 );
                 expect(await client.functionList()).toEqual([]);
 
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
 
-                checkSimple(
+                expect(
                     await client.fcall(funcName, [], ["one", "two"]),
                 ).toEqual("one");
-                checkSimple(
+                expect(
                     await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
 
@@ -508,9 +539,7 @@ describe("GlideClient", () => {
                 );
 
                 // re-load library with replace
-                checkSimple(await client.functionLoad(code, true)).toEqual(
-                    libName,
-                );
+                expect(await client.functionLoad(code, true)).toEqual(libName);
 
                 // overwrite lib with new code
                 const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
@@ -522,7 +551,7 @@ describe("GlideClient", () => {
                     ]),
                     true,
                 );
-                checkSimple(await client.functionLoad(newCode, true)).toEqual(
+                expect(await client.functionLoad(newCode, true)).toEqual(
                     libName,
                 );
 
@@ -544,10 +573,10 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
-                checkSimple(
+                expect(
                     await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
-                checkSimple(
+                expect(
                     await client.fcallReadonly(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
             } finally {
@@ -578,7 +607,7 @@ describe("GlideClient", () => {
                 // verify function does not yet exist
                 expect(await client.functionList()).toEqual([]);
 
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
 
                 // Flush functions
                 expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
@@ -592,7 +621,7 @@ describe("GlideClient", () => {
                 expect(await client.functionList()).toEqual([]);
 
                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 client.close();
@@ -620,7 +649,7 @@ describe("GlideClient", () => {
                 // verify function does not yet exist
                 expect(await client.functionList()).toEqual([]);
 
-                checkSimple(await client.functionLoad(code)).toEqual(libName);
+                expect(await client.functionLoad(code)).toEqual(libName);
 
                 // Delete the function
                 expect(await client.functionDelete(libName)).toEqual("OK");
@@ -666,14 +695,14 @@ describe("GlideClient", () => {
                 5,
             );
 
-            checkSimple(
+            expect(
                 await client.sort(list, {
                     limit: { offset: 0, count: 2 },
                     getPatterns: [setPrefix + "*->name"],
                 }),
             ).toEqual(["Alice", "Bob"]);
 
-            checkSimple(
+            expect(
                 await client.sort(list, {
                     limit: { offset: 0, count: 2 },
                     getPatterns: [setPrefix + "*->name"],
@@ -681,7 +710,7 @@ describe("GlideClient", () => {
                 }),
             ).toEqual(["Eve", "Dave"]);
 
-            checkSimple(
+            expect(
                 await client.sort(list, {
                     limit: { offset: 0, count: 2 },
                     byPattern: setPrefix + "*->age",
@@ -691,12 +720,16 @@ describe("GlideClient", () => {
             ).toEqual(["Eve", "40", "Charlie", "35"]);
 
             // Non-existent key in the BY pattern will result in skipping the sorting operation
-            checkSimple(
-                await client.sort(list, { byPattern: "noSort" }),
-            ).toEqual(["3", "1", "5", "4", "2"]);
+            expect(await client.sort(list, { byPattern: "noSort" })).toEqual([
+                "3",
+                "1",
+                "5",
+                "4",
+                "2",
+            ]);
 
             // Non-existent key in the GET pattern results in nulls
-            checkSimple(
+            expect(
                 await client.sort(list, {
                     isAlpha: true,
                     getPatterns: ["missing"],
@@ -705,24 +738,24 @@ describe("GlideClient", () => {
 
             // Missing key in the set
             expect(await client.lpush(list, ["42"])).toEqual(6);
-            checkSimple(
+            expect(
                 await client.sort(list, {
                     byPattern: setPrefix + "*->age",
                     getPatterns: [setPrefix + "*->name"],
                 }),
             ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
-            checkSimple(await client.lpop(list)).toEqual("42");
+            expect(await client.lpop(list)).toEqual("42");
 
             // sort RO
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                checkSimple(
+                expect(
                     await client.sortReadOnly(list, {
                         limit: { offset: 0, count: 2 },
                         getPatterns: [setPrefix + "*->name"],
                     }),
                 ).toEqual(["Alice", "Bob"]);
 
-                checkSimple(
+                expect(
                     await client.sortReadOnly(list, {
                         limit: { offset: 0, count: 2 },
                         getPatterns: [setPrefix + "*->name"],
@@ -730,7 +763,7 @@ describe("GlideClient", () => {
                     }),
                 ).toEqual(["Eve", "Dave"]);
 
-                checkSimple(
+                expect(
                     await client.sortReadOnly(list, {
                         limit: { offset: 0, count: 2 },
                         byPattern: setPrefix + "*->age",
@@ -743,12 +776,12 @@ describe("GlideClient", () => {
                 ).toEqual(["Eve", "40", "Charlie", "35"]);
 
                 // Non-existent key in the BY pattern will result in skipping the sorting operation
-                checkSimple(
+                expect(
                     await client.sortReadOnly(list, { byPattern: "noSort" }),
                 ).toEqual(["3", "1", "5", "4", "2"]);
 
                 // Non-existent key in the GET pattern results in nulls
-                checkSimple(
+                expect(
                     await client.sortReadOnly(list, {
                         isAlpha: true,
                         getPatterns: ["missing"],
@@ -757,13 +790,13 @@ describe("GlideClient", () => {
 
                 // Missing key in the set
                 expect(await client.lpush(list, ["42"])).toEqual(6);
-                checkSimple(
+                expect(
                     await client.sortReadOnly(list, {
                         byPattern: setPrefix + "*->age",
                         getPatterns: [setPrefix + "*->name"],
                     }),
                 ).toEqual([null, "Dave", "Bob", "Alice", "Charlie", "Eve"]);
-                checkSimple(await client.lpop(list)).toEqual("42");
+                expect(await client.lpop(list)).toEqual("42");
             }
 
             // SORT with STORE
@@ -775,7 +808,7 @@ describe("GlideClient", () => {
                     orderBy: SortOrder.ASC,
                 }),
             ).toEqual(5);
-            checkSimple(await client.lrange(store, 0, -1)).toEqual([
+            expect(await client.lrange(store, 0, -1)).toEqual([
                 "Dave",
                 "Bob",
                 "Alice",
@@ -788,7 +821,7 @@ describe("GlideClient", () => {
                     getPatterns: [setPrefix + "*->name"],
                 }),
             ).toEqual(5);
-            checkSimple(await client.lrange(store, 0, -1)).toEqual([
+            expect(await client.lrange(store, 0, -1)).toEqual([
                 "Dave",
                 "Bob",
                 "Alice",
@@ -854,10 +887,43 @@ describe("GlideClient", () => {
             }
 
             const result = await client.exec(transaction);
-            checkSimple(result).toEqual(expectedResult);
+            expect(result).toEqual(expectedResult);
 
             client.close();
         },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "randomKey test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            // setup: delete all keys in DB 0 and DB 1
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+
+            // no keys exist so randomKey returns null
+            expect(await client.randomKey()).toBeNull();
+            // set `key` in DB 1
+            expect(await client.set(key, "foo")).toEqual("OK");
+            // `key` should be the only key in the database
+            expect(await client.randomKey()).toEqual(key);
+
+            // switch back to DB 0
+            expect(await client.select(0)).toEqual("OK");
+            // DB 0 should still have no keys, so randomKey should still return null
+            expect(await client.randomKey()).toBeNull();
+
+            client.close();
+        },
+        TIMEOUT,
     );
 
     runBaseTests<Context>({

@@ -10,6 +10,10 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
     BaseClientConfiguration,
+    BitFieldGet,
+    BitFieldSet,
+    BitOffset,
+    BitOffsetMultiplier,
     BitmapIndexType,
     BitwiseOperation,
     ClusterTransaction,
@@ -19,13 +23,17 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    InfScoreBoundary,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
     ReturnType,
+    ReturnTypeMap,
     ScoreFilter,
+    SignedEncoding,
     SortOrder,
     Transaction,
+    UnsignedEncoding,
 } from "..";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -368,21 +376,17 @@ export function checkFunctionListResponse(
                     string,
                     string | string[]
                 >;
-                const name = (
-                    functionInfo["name"] as unknown as Buffer
-                ).toString(); // not a string - suprise
-                const flags = (
-                    functionInfo["flags"] as unknown as Buffer[]
-                ).map((f) => f.toString());
-                checkSimple(functionInfo["description"]).toEqual(
+                const name = functionInfo["name"] as string;
+                const flags = functionInfo["flags"] as string[];
+                expect(functionInfo["description"]).toEqual(
                     functionDescriptions.get(name),
                 );
 
-                checkSimple(flags).toEqual(functionFlags.get(name));
+                expect(flags).toEqual(functionFlags.get(name));
             }
 
             if (libCode) {
-                checkSimple(lib["library_code"]).toEqual(libCode);
+                expect(lib["library_code"]).toEqual(libCode);
             }
 
             break;
@@ -406,9 +410,23 @@ export function validateTransactionResponse(
     for (let i = 0; i < expectedResponseData.length; i++) {
         const [testName, expectedResponse] = expectedResponseData[i];
 
-        if (intoString(response?.[i]) != intoString(expectedResponse)) {
+        try {
+            expect(response?.[i]).toEqual(expectedResponse);
+        } catch {
+            const expected =
+                expectedResponse instanceof Map
+                    ? JSON.stringify(Array.from(expectedResponse.entries()))
+                    : JSON.stringify(expectedResponse);
+            const actual =
+                response?.[i] instanceof Map
+                    ? JSON.stringify(
+                          Array.from(
+                              (response?.[i] as ReturnTypeMap)?.entries(),
+                          ),
+                      )
+                    : JSON.stringify(response?.[i]);
             failedChecks.push(
-                `${testName} failed, expected <${JSON.stringify(expectedResponse)}>, actual <${JSON.stringify(response?.[i])}>`,
+                `${testName} failed, expected <${expected}>, actual <${actual}>`,
             );
         }
     }
@@ -430,9 +448,9 @@ export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
     version: string,
 ): Promise<[string, ReturnType][]> {
-    const key1 = "{key}" + uuidv4();
-    const key2 = "{key}" + uuidv4();
-    const key3 = "{key}" + uuidv4();
+    const key1 = "{key}" + uuidv4(); // string
+    const key2 = "{key}" + uuidv4(); // string
+    const key3 = "{key}" + uuidv4(); // string
     const key4 = "{key}" + uuidv4();
     const key5 = "{key}" + uuidv4();
     const key6 = "{key}" + uuidv4();
@@ -469,6 +487,8 @@ export async function transactionTest(
     responseData.push(["dbsize()", 0]);
     baseTransaction.set(key1, "bar");
     responseData.push(['set(key1, "bar")', "OK"]);
+    baseTransaction.randomKey();
+    responseData.push(["randomKey()", key1]);
     baseTransaction.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
     baseTransaction.set(key1, "bar");
@@ -487,6 +507,8 @@ export async function transactionTest(
     responseData.push(['customCommand(["MGET", key1, key2])', ["bar", "baz"]]);
     baseTransaction.mset({ [key3]: value });
     responseData.push(["mset({ [key3]: value })", "OK"]);
+    baseTransaction.msetnx({ [key3]: value });
+    responseData.push(["msetnx({ [key3]: value })", false]);
     baseTransaction.mget([key1, key2]);
     responseData.push(["mget([key1, key2])", ["bar", "baz"]]);
     baseTransaction.strlen(key1);
@@ -533,7 +555,7 @@ export async function transactionTest(
     baseTransaction.lrange(key5, 0, -1);
     responseData.push(["lrange(key5, 0, -1)", [field + "3", field + "2"]]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.lmove(
             key5,
             key20,
@@ -545,12 +567,21 @@ export async function transactionTest(
             field + "3",
         ]);
 
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "2"]]);
-    } else {
-        baseTransaction.lpopCount(key5, 2);
-        responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
+        baseTransaction.blmove(
+            key20,
+            key5,
+            ListDirection.LEFT,
+            ListDirection.LEFT,
+            3,
+        );
+        responseData.push([
+            "blmove(key20, key5, ListDirection.LEFT, ListDirection.LEFT, 3)",
+            field + "3",
+        ]);
     }
+
+    baseTransaction.lpopCount(key5, 2);
+    responseData.push(["lpopCount(key5, 2)", [field + "3", field + "2"]]);
 
     baseTransaction.linsert(
         key5,
@@ -615,11 +646,11 @@ export async function transactionTest(
     baseTransaction.sismember(key7, "bar");
     responseData.push(['sismember(key7, "bar")', true]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.smismember(key7, ["bar", "foo", "baz"]);
         responseData.push([
             'smismember(key7, ["bar", "foo", "baz"])',
-            [true, true, false],
+            [true, false, false],
         ]);
     }
 
@@ -644,7 +675,7 @@ export async function transactionTest(
     baseTransaction.zrank(key8, "member1");
     responseData.push(['zrank(key8, "member1")', 0]);
 
-    if (gte("7.2.0", version)) {
+    if (gte(version, "7.2.0")) {
         baseTransaction.zrankWithScore(key8, "member1");
         responseData.push(['zrankWithScore(key8, "member1")', [0, 1]]);
     }
@@ -652,7 +683,7 @@ export async function transactionTest(
     baseTransaction.zrevrank(key8, "member5");
     responseData.push(['zrevrank(key8, "member5")', 0]);
 
-    if (gte("7.2.0", version)) {
+    if (gte(version, "7.2.0")) {
         baseTransaction.zrevrankWithScore(key8, "member5");
         responseData.push(['zrevrankWithScore(key8, "member5")', [0, 5]]);
     }
@@ -683,7 +714,7 @@ export async function transactionTest(
     baseTransaction.zadd(key13, { one: 1, two: 2, three: 3.5 });
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -699,8 +730,24 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
-    responseData.push(['zcount(key8, { value: 2 }, "positiveInfinity")', 4]);
+    baseTransaction.zcount(
+        key8,
+        { value: 2 },
+        InfScoreBoundary.PositiveInfinity,
+    );
+    responseData.push([
+        "zcount(key8, { value: 2 }, InfScoreBoundary.PositiveInfinity)",
+        4,
+    ]);
+    baseTransaction.zlexcount(
+        key8,
+        { value: "a" },
+        InfScoreBoundary.PositiveInfinity,
+    );
+    responseData.push([
+        'zlexcount(key8, { value: "a" }, InfScoreBoundary.PositiveInfinity)',
+        4,
+    ]);
     baseTransaction.zpopmin(key8);
     responseData.push(["zpopmin(key8)", { member2: 3.0 }]);
     baseTransaction.zpopmax(key8);
@@ -709,12 +756,12 @@ export async function transactionTest(
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
-        "negativeInfinity",
-        "positiveInfinity",
+        InfScoreBoundary.NegativeInfinity,
+        InfScoreBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
         responseData.push(["zadd(key14, { one: 1.0, two: 2.0 })", 2]);
         baseTransaction.zintercard([key8, key14]);
@@ -779,6 +826,8 @@ export async function transactionTest(
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);
     responseData.push(["exists([key10])", 1]);
+    baseTransaction.touch([key10]);
+    responseData.push(["touch([key10])", 1]);
     baseTransaction.renamenx(key10, key9);
     responseData.push(["renamenx(key10, key9)", true]);
     baseTransaction.exists([key9, key10]);
@@ -806,6 +855,16 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
+    if (gte("6.0.0", version)) {
+        baseTransaction.bitfieldReadOnly(key17, [
+            new BitFieldGet(new SignedEncoding(5), new BitOffset(3)),
+        ]);
+        responseData.push([
+            "bitfieldReadOnly(key17, [new BitFieldGet(...)])",
+            [6],
+        ]);
+    }
+
     baseTransaction.set(key19, "abcdef");
     responseData.push(['set(key19, "abcdef")', "OK"]);
     baseTransaction.bitop(BitwiseOperation.AND, key19, [key19, key17]);
@@ -816,7 +875,7 @@ export async function transactionTest(
     baseTransaction.get(key19);
     responseData.push(["get(key19)", "`bc`ab"]);
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.bitcount(key17, {
             start: 5,
             end: 30,
@@ -833,8 +892,19 @@ export async function transactionTest(
         ]);
     }
 
+    baseTransaction.bitfield(key17, [
+        new BitFieldSet(
+            new UnsignedEncoding(10),
+            new BitOffsetMultiplier(3),
+            4,
+        ),
+    ]);
+    responseData.push(["bitfield(key17, [new BitFieldSet(...)])", [609]]);
+
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     responseData.push(['pfadd(key11, ["a", "b", "c"])', 1]);
+    baseTransaction.pfmerge(key11, []);
+    responseData.push(["pfmerge(key11, [])", "OK"]);
     baseTransaction.pfcount([key11]);
     responseData.push(["pfcount([key11])", 3]);
     baseTransaction.geoadd(
@@ -870,14 +940,14 @@ export async function transactionTest(
     baseTransaction.zrandmember(key23);
     responseData.push(["zrandmember(key23)", "one"]);
     baseTransaction.zrandmemberWithCount(key23, 1);
-    responseData.push(["zrandmemberWithCountWithScores(key23, 1)", "one"]);
+    responseData.push(["zrandmemberWithCount(key23, 1)", ["one"]]);
     baseTransaction.zrandmemberWithCountWithScores(key23, 1);
     responseData.push([
         "zrandmemberWithCountWithScores(key23, 1)",
-        [Buffer.from("one"), 1.0],
+        [["one", 1.0]],
     ]);
 
-    if (gte("6.2.0", version)) {
+    if (gte(version, "6.2.0")) {
         baseTransaction
             .geosearch(
                 key18,
@@ -974,7 +1044,7 @@ export async function transactionTest(
         true,
     );
 
-    if (gte("7.0.0", version)) {
+    if (gte(version, "7.0.0")) {
         baseTransaction.functionLoad(code);
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
@@ -1001,6 +1071,59 @@ export async function transactionTest(
             withCode: true,
         });
         responseData.push(["functionList({ libName, true})", []]);
+
+        baseTransaction
+            .mset({ [key1]: "abcd", [key2]: "bcde", [key3]: "wxyz" })
+            .lcs(key1, key2)
+            .lcs(key1, key3)
+            .lcsLen(key1, key2)
+            .lcsLen(key1, key3)
+            .lcsIdx(key1, key2)
+            .lcsIdx(key1, key2, { minMatchLen: 1 })
+            .lcsIdx(key1, key2, { withMatchLen: true })
+            .lcsIdx(key1, key2, { withMatchLen: true, minMatchLen: 1 })
+            .del([key1, key2, key3]);
+
+        responseData.push(
+            ['mset({[key1]: "abcd", [key2]: "bcde", [key3]: "wxyz"})', "OK"],
+            ["lcs(key1, key2)", "bcd"],
+            ["lcs(key1, key3)", ""],
+            ["lcsLen(key1, key2)", 3],
+            ["lcsLen(key1, key3)", 0],
+            [
+                "lcsIdx(key1, key2)",
+                {
+                    matches: [
+                        [
+                            [1, 3],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 3,
+                },
+            ],
+            [
+                "lcsIdx(key1, key2, {minMatchLen: 1})",
+                {
+                    matches: [
+                        [
+                            [1, 3],
+                            [0, 2],
+                        ],
+                    ],
+                    len: 3,
+                },
+            ],
+            [
+                "lcsIdx(key1, key2, {withMatchLen: true})",
+                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
+            ],
+            [
+                "lcsIdx(key1, key2, {withMatchLen: true, minMatchLen: 1})",
+                { matches: [[[1, 3], [0, 2], 3]], len: 3 },
+            ],
+            ["del([key1, key2, key3])", 3],
+        );
     }
 
     baseTransaction

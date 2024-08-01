@@ -36,11 +36,13 @@ import {
     createFunctionList,
     createFunctionLoad,
     createInfo,
+    createLastSave,
     createLolwut,
     createPing,
     createPublish,
     createSort,
     createSortReadOnly,
+    createRandomKey,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -938,7 +940,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/dbsize/ for more details.
 
-     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
      * @returns The number of keys in the database.
      *     In the case of routing the query to multiple nodes, returns the aggregated number of keys across the different nodes.
@@ -949,7 +951,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+    public dbsize(route?: Routes): Promise<number> {
         return this.createWritePromise(createDBSize(), toProtobufRoute(route));
     }
 
@@ -1075,5 +1077,49 @@ export class GlideClusterClient extends BaseClient {
         options?: SortClusterOptions,
     ): Promise<number> {
         return this.createWritePromise(createSort(key, options, destination));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns `UNIX TIME` of the last DB save executed with success.
+     * @example
+     * ```typescript
+     * const timestamp = await client.lastsave();
+     * console.log("Last DB save was done at " + timestamp);
+     * ```
+     */
+    public async lastsave(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(
+            createLastSave(),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns a random existing key name.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
+     *      in which case the client will route the command to the nodes defined by `route`.
+     * @returns A random existing key name.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.randomKey();
+     * console.log(result); // Output: "key12" - "key12" is a random existing key name.
+     * ```
+     */
+    public randomKey(route?: Routes): Promise<string | null> {
+        return this.createWritePromise(
+            createRandomKey(),
+            toProtobufRoute(route),
+        );
     }
 }

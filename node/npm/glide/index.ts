@@ -9,6 +9,7 @@ import { arch, platform } from "process";
 
 let globalObject = global as unknown;
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 function loadNativeBinding() {
     let nativeBinding = null;
     switch (platform) {
@@ -74,8 +75,18 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
-        BitmapIndexType,
+        BitEncoding,
+        BitFieldGet,
+        BitFieldIncrBy,
+        BitFieldOffset,
+        BitFieldOverflow,
+        BitFieldSet,
+        BitFieldSubCommands,
+        BitOffset,
+        BitOffsetMultiplier,
         BitOffsetOptions,
+        BitOverflowControl,
+        BitmapIndexType,
         BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
@@ -110,7 +121,8 @@ function initialize() {
         InsertPosition,
         SetOptions,
         ZaddOptions,
-        ScoreBoundry,
+        InfScoreBoundary,
+        ScoreBoundary,
         UpdateOptions,
         ProtocolVersion,
         RangeByIndex,
@@ -129,6 +141,7 @@ function initialize() {
         ConfigurationError,
         ExecAbortError,
         RedisError,
+        ReturnType,
         RequestError,
         TimeoutError,
         ConnectionError,
@@ -136,6 +149,8 @@ function initialize() {
         Transaction,
         PubSubMsg,
         ScoreFilter,
+        SignedEncoding,
+        UnsignedEncoding,
         createLeakedArray,
         createLeakedAttribute,
         createLeakedBigint,
@@ -146,8 +161,18 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
-        BitmapIndexType,
+        BitEncoding,
+        BitFieldGet,
+        BitFieldIncrBy,
+        BitFieldOffset,
+        BitFieldOverflow,
+        BitFieldSet,
+        BitFieldSubCommands,
+        BitOffset,
+        BitOffsetMultiplier,
         BitOffsetOptions,
+        BitOverflowControl,
+        BitmapIndexType,
         BitwiseOperation,
         ConditionalChange,
         GeoAddOptions,
@@ -182,7 +207,8 @@ function initialize() {
         InsertPosition,
         SetOptions,
         ZaddOptions,
-        ScoreBoundry,
+        InfScoreBoundary,
+        ScoreBoundary,
         UpdateOptions,
         ProtocolVersion,
         RangeByIndex,
@@ -201,6 +227,7 @@ function initialize() {
         ConfigurationError,
         ExecAbortError,
         RedisError,
+        ReturnType,
         RequestError,
         TimeoutError,
         ConnectionError,
@@ -208,6 +235,8 @@ function initialize() {
         Transaction,
         PubSubMsg,
         ScoreFilter,
+        SignedEncoding,
+        UnsignedEncoding,
         createLeakedArray,
         createLeakedAttribute,
         createLeakedBigint,

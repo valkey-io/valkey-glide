@@ -18,6 +18,7 @@ import {
     FunctionListResponse,
     GlideClusterClient,
     InfoOptions,
+    ListDirection,
     ProtocolVersion,
     RequestError,
     Routes,
@@ -29,7 +30,6 @@ import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkFunctionListResponse,
-    checkSimple,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -55,7 +55,7 @@ describe("GlideClusterClient", () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
-            ? RedisCluster.initFromExistingCluster(
+            ? await RedisCluster.initFromExistingCluster(
                   parseEndpoints(clusterAddresses),
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
@@ -309,6 +309,7 @@ describe("GlideClusterClient", () => {
             const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
+                client.msetnx({ abc: "xyz", def: "abc", hij: "def" }),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
                 client.bitop(BitwiseOperation.AND, "abc", ["zxy", "lkn"]),
                 client.smove("abc", "zxy", "value"),
@@ -319,6 +320,7 @@ describe("GlideClusterClient", () => {
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
+                client.pfmerge("abc", ["def", "ghi"]),
                 client.sdiff(["abc", "zxy", "lkn"]),
                 client.sdiffstore("abc", ["zxy", "lkn"]),
                 client.sortStore("abc", "zyx"),
@@ -327,6 +329,13 @@ describe("GlideClusterClient", () => {
 
             if (gte(cluster.getVersion(), "6.2.0")) {
                 promises.push(
+                    client.blmove(
+                        "abc",
+                        "def",
+                        ListDirection.LEFT,
+                        ListDirection.LEFT,
+                        0.2,
+                    ),
                     client.zdiff(["abc", "zxy", "lkn"]),
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
@@ -340,17 +349,14 @@ describe("GlideClusterClient", () => {
                     client.zintercard(["abc", "zxy", "lkn"]),
                     client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                     client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
+                    client.lcs("abc", "xyz"),
+                    client.lcsLen("abc", "xyz"),
+                    client.lcsIdx("abc", "xyz"),
                 );
             }
 
             for (const promise of promises) {
-                try {
-                    await promise;
-                } catch (e) {
-                    expect((e as Error).message.toLowerCase()).toContain(
-                        "crossslot",
-                    );
-                }
+                await expect(promise).rejects.toThrowError(/crossslot/i);
             }
 
             client.close();
@@ -369,7 +375,7 @@ describe("GlideClusterClient", () => {
             await client.del(["abc", "zxy", "lkn"]);
             await client.mget(["abc", "zxy", "lkn"]);
             await client.mset({ abc: "1", zxy: "2", lkn: "3" });
-            // TODO touch
+            await client.touch(["abc", "zxy", "lkn"]);
             client.close();
         },
     );
@@ -564,7 +570,7 @@ describe("GlideClusterClient", () => {
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
             expect(await client.copy(source, destination, false)).toEqual(true);
-            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.get(destination)).toEqual(value1);
 
             // new value for source key
             expect(await client.set(source, value2)).toEqual("OK");
@@ -574,11 +580,11 @@ describe("GlideClusterClient", () => {
             expect(await client.copy(source, destination, false)).toEqual(
                 false,
             );
-            checkSimple(await client.get(destination)).toEqual(value1);
+            expect(await client.get(destination)).toEqual(value1);
 
             // both exists, with REPLACE
             expect(await client.copy(source, destination, true)).toEqual(true);
-            checkSimple(await client.get(destination)).toEqual(value2);
+            expect(await client.get(destination)).toEqual(value2);
 
             //transaction tests
             const transaction = new ClusterTransaction();
@@ -587,7 +593,7 @@ describe("GlideClusterClient", () => {
             transaction.get(destination);
             const results = await client.exec(transaction);
 
-            checkSimple(results).toEqual(["OK", true, value1]);
+            expect(results).toEqual(["OK", true, value1]);
 
             client.close();
         },
@@ -601,20 +607,20 @@ describe("GlideClusterClient", () => {
             );
 
             expect(await client.dbsize()).toBeGreaterThanOrEqual(0);
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toBeGreaterThan(0);
 
-            checkSimple(await client.flushall()).toEqual("OK");
+            expect(await client.flushall()).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
-            checkSimple(await client.set(uuidv4(), uuidv4())).toEqual("OK");
+            expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            checkSimple(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
 
             client.close();
@@ -635,12 +641,12 @@ describe("GlideClusterClient", () => {
 
             expect(await client.sort(key3)).toEqual([]);
             expect(await client.lpush(key1, ["2", "1", "4", "3"])).toEqual(4);
-            checkSimple(await client.sort(key1)).toEqual(["1", "2", "3", "4"]);
+            expect(await client.sort(key1)).toEqual(["1", "2", "3", "4"]);
 
             // sort RO
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                 expect(await client.sortReadOnly(key3)).toEqual([]);
-                checkSimple(await client.sortReadOnly(key1)).toEqual([
+                expect(await client.sortReadOnly(key1)).toEqual([
                     "1",
                     "2",
                     "3",
@@ -650,7 +656,7 @@ describe("GlideClusterClient", () => {
 
             // sort with store
             expect(await client.sortStore(key1, key2)).toEqual(4);
-            checkSimple(await client.lrange(key2, 0, -1)).toEqual([
+            expect(await client.lrange(key2, 0, -1)).toEqual([
                 "1",
                 "2",
                 "3",
@@ -662,7 +668,7 @@ describe("GlideClusterClient", () => {
                 await client.rpush(key3, ["2", "1", "a", "x", "c", "4", "3"]),
             ).toEqual(7);
             await expect(client.sort(key3)).rejects.toThrow(RequestError);
-            checkSimple(await client.sort(key3, { isAlpha: true })).toEqual([
+            expect(await client.sort(key3, { isAlpha: true })).toEqual([
                 "1",
                 "2",
                 "3",
@@ -699,7 +705,7 @@ describe("GlideClusterClient", () => {
                 expectedResult.push(["3", "2"]);
             }
 
-            checkSimple(result).toEqual(expectedResult);
+            expect(result).toEqual(expectedResult);
 
             client.close();
         },
@@ -749,9 +755,9 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                checkSimple(
-                                    await client.functionLoad(code),
-                                ).toEqual(libName);
+                                expect(await client.functionLoad(code)).toEqual(
+                                    libName,
+                                );
 
                                 functionList = await client.functionList(
                                     { libNamePattern: libName },
@@ -786,8 +792,7 @@ describe("GlideClusterClient", () => {
                                 checkClusterResponse(
                                     fcall as object,
                                     singleNodeRoute,
-                                    (value) =>
-                                        checkSimple(value).toEqual("one"),
+                                    (value) => expect(value).toEqual("one"),
                                 );
                                 fcall = await client.fcallReadonlyWithRoute(
                                     funcName,
@@ -797,8 +802,7 @@ describe("GlideClusterClient", () => {
                                 checkClusterResponse(
                                     fcall as object,
                                     singleNodeRoute,
-                                    (value) =>
-                                        checkSimple(value).toEqual("one"),
+                                    (value) => expect(value).toEqual("one"),
                                 );
 
                                 // re-load library without replace
@@ -809,7 +813,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // re-load library with replace
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(code, true),
                                 ).toEqual(libName);
 
@@ -824,7 +828,7 @@ describe("GlideClusterClient", () => {
                                     ]),
                                     true,
                                 );
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(newCode, true),
                                 ).toEqual(libName);
 
@@ -937,7 +941,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // load the library
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -968,7 +972,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 // Attempt to re-load library without overwriting to ensure FLUSH was effective
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -1032,7 +1036,7 @@ describe("GlideClusterClient", () => {
                                     (value) => expect(value).toEqual([]),
                                 );
                                 // load the library
-                                checkSimple(
+                                expect(
                                     await client.functionLoad(
                                         code,
                                         undefined,
@@ -1071,5 +1075,30 @@ describe("GlideClusterClient", () => {
                 },
             );
         },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `randomKey test_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            // setup: delete all keys
+            expect(await client.flushall(FlushMode.SYNC)).toEqual("OK");
+
+            // no keys exist so randomKey returns null
+            expect(await client.randomKey()).toBeNull();
+
+            expect(await client.set(key, "foo")).toEqual("OK");
+            // `key` should be the only existing key, so randomKey should return `key`
+            expect(await client.randomKey()).toEqual(key);
+            expect(await client.randomKey("allPrimaries")).toEqual(key);
+
+            client.close();
+        },
+        TIMEOUT,
     );
 });

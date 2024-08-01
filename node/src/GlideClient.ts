@@ -34,9 +34,11 @@ import {
     createFunctionList,
     createFunctionLoad,
     createInfo,
+    createLastSave,
     createLolwut,
     createPing,
     createPublish,
+    createRandomKey,
     createSelect,
     createSort,
     createSortReadOnly,
@@ -707,5 +709,39 @@ export class GlideClient extends BaseClient {
         options?: SortOptions,
     ): Promise<number> {
         return this.createWritePromise(createSort(key, options, destination));
+    }
+
+    /**
+     * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
+     * was made since then.
+     *
+     * See https://valkey.io/commands/lastsave/ for more details.
+     *
+     * @returns `UNIX TIME` of the last DB save executed with success.
+     * @example
+     * ```typescript
+     * const timestamp = await client.lastsave();
+     * console.log("Last DB save was done at " + timestamp);
+     * ```
+     */
+    public async lastsave(): Promise<number> {
+        return this.createWritePromise(createLastSave());
+    }
+
+    /**
+     * Returns a random existing key name from the currently selected database.
+     *
+     * See https://valkey.io/commands/randomkey/ for more details.
+     *
+     * @returns A random existing key name from the currently selected database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.randomKey();
+     * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
+     * ```
+     */
+    public randomKey(): Promise<string | null> {
+        return this.createWritePromise(createRandomKey());
     }
 }
