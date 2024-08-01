@@ -29,7 +29,7 @@ function isLargeCommand(args: BulkString[]) {
     return false;
 }
 
-export type BulkString = string | Uint8Array;
+type BulkString = string | Uint8Array;
 
 /**
  * Convert a string array into Uint8Array[]
@@ -1157,11 +1157,10 @@ export function createSPop(
  * @internal
  */
 export function createSRandMember(
-    key: BulkString,
+    key: string,
     count?: number,
 ): command_request.Command {
-    const args: BulkString[] =
-        count == undefined ? [key] : [key, count.toString()];
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.SRandMember, args);
 }
 

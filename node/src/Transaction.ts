@@ -19,7 +19,6 @@ import {
     BitmapIndexType,
     BitwiseOperation,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    BulkString,
     ExpireOptions,
     FlushMode,
     FunctionListOptions,
@@ -45,6 +44,8 @@ import {
     ScoreFilter,
     SearchOrigin,
     SetOptions,
+    SortClusterOptions,
+    SortOptions,
     StreamAddOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -118,6 +119,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLastSave,
     createLolwut,
     createMGet,
     createMSet,
@@ -159,6 +161,8 @@ import {
     createSelect,
     createSet,
     createSetBit,
+    createSort,
+    createSortReadOnly,
     createStrlen,
     createTTL,
     createTime,
@@ -194,11 +198,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    createSort,
-    SortOptions,
-    createSortReadOnly,
-    SortClusterOptions,
-    createLastSave,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1269,9 +1268,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * See https://valkey.io/commands/srandmember for more details.
      *
      * @param key - The key from which to retrieve the set member.
-     * Command Response - a random element from the set, or null if `key` does not exist.
+     * Command Response - A random element from the set, or null if `key` does not exist.
      */
-    public srandmember(key: BulkString): T {
+    public srandmember(key: string): T {
         return this.addAndReturn(createSRandMember(key));
     }
 
@@ -1282,9 +1281,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - The number of members to return.
      *                If `count` is positive, returns unique members.
      *                If `count` is negative, allows for duplicates members.
-     * Command Response - a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
+     * Command Response - A list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      */
-    public srandmemberCount(key: BulkString, count: number): T {
+    public srandmemberCount(key: string, count: number): T {
         return this.addAndReturn(createSRandMember(key, count));
     }
 

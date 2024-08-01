@@ -21,8 +21,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
-    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    BulkString,
+    CoordOrigin,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -2328,7 +2327,7 @@ export class BaseClient {
      * See https://valkey.io/commands/srandmember for more details.
      *
      * @param key - The key from which to retrieve the set member.
-     * @returns a random element from the set, or null if `key` does not exist.
+     * @returns A random element from the set, or null if `key` does not exist.
      *
      * @example
      * ```typescript
@@ -2344,7 +2343,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public srandmember(key: BulkString): Promise<BulkString | null> {
+    public srandmember(key: string): Promise<string | null> {
         return this.createWritePromise(createSRandMember(key));
     }
 
@@ -2372,9 +2371,9 @@ export class BaseClient {
      * ```
      */
     public async srandmemberCount(
-        key: BulkString,
+        key: string,
         count: number,
-    ): Promise<BulkString[]> {
+    ): Promise<string[]> {
         return this.createWritePromise(createSRandMember(key, count));
     }
 
