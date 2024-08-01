@@ -4659,6 +4659,36 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "setrange test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonStringKey = uuidv4();
+
+                // new key
+                expect(await client.setrange(key, 0, "Hello World")).toBe(11);
+
+                // existing key
+                expect(await client.setrange(key, 6, "GLIDE")).toBe(11);
+                expect(await client.get(key)).toEqual("Hello GLIDE");
+
+                // offset > len
+                expect(await client.setrange(key, 15, "GLIDE")).toBe(20);
+                expect(await client.get(key)).toEqual(
+                    "Hello GLIDE\0\0\0\0GLIDE",
+                );
+
+                // non-string key
+                expect(await client.lpush(nonStringKey, ["_"])).toBe(1);
+                await expect(
+                    client.setrange(nonStringKey, 0, "_"),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
