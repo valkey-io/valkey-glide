@@ -143,14 +143,27 @@ describe("GlideClient", () => {
                 ListDirection.LEFT,
                 0.1,
             );
-            const timeoutPromise = new Promise((resolve) => {
-                setTimeout(resolve, 500);
-            });
+
+            const blmpopPromise = client.blmpop(
+                ["key1", "key2"],
+                ListDirection.LEFT,
+                0.1,
+            );
+
+            const promiseList = [blmovePromise, blmpopPromise];
 
             try {
-                await Promise.race([blmovePromise, timeoutPromise]);
+                for (const promise of promiseList) {
+                    const timeoutPromise = new Promise((resolve) => {
+                        setTimeout(resolve, 500);
+                    });
+                    await Promise.race([promise, timeoutPromise]);
+                }
             } finally {
-                Promise.resolve(blmovePromise);
+                for (const promise of promiseList) {
+                    await Promise.resolve([promise]);
+                }
+
                 client.close();
             }
         },

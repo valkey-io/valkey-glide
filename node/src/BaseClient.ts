@@ -55,6 +55,7 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
+    createBLMPop,
     createDecr,
     createDecrBy,
     createDel,
@@ -91,6 +92,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createLMPop,
     createLPop,
     createLPos,
     createLPush,
@@ -4512,6 +4514,70 @@ export class BaseClient {
         value: string,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     * @returns A `Record` of key-name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey", ["one", "two", "three"]);
+     * await client.lpush("testKey2", ["five", "six", "seven"]);
+     * const result = await client.lmpop(["testKey", "testKey2"], ListDirection.LEFT, 1L);
+     * console.log(result.get("testKey")); // Output: { "testKey": ["three"] }
+     * ```
+     */
+    public async lmpop(
+        keys: string[],
+        direction: ListDirection,
+        count?: number,
+    ): Promise<Record<string, string[]>> {
+        return this.createWritePromise(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     * @returns - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey", ["one", "two", "three"]);
+     * await client.lpush("testKey2", ["five", "six", "seven"]);
+     * const result = await client.blmpop(["testKey", "testKey2"], ListDirection.LEFT, 0.1, 1L);
+     * console.log(result.get("testKey")); // Output: { "testKey": ["three"] }
+     * ```
+     */
+    public async blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): Promise<Record<string, string[]>> {
+        return this.createWritePromise(
+            createBLMPop(timeout, keys, direction, count),
+        );
     }
 
     /**

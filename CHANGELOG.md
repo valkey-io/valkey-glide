@@ -48,6 +48,7 @@
 * Node: Added ZSCAN command ([#2061](https://github.com/valkey-io/valkey-glide/pull/2061))
 * Node: Added SETRANGE command ([#2066](https://github.com/valkey-io/valkey-glide/pull/2066))
 * Node: Added XDEL command ([#2064]((https://github.com/valkey-io/valkey-glide/pull/2064))
+* Node: Added LMPOP & BLMPOP command ([#2050](https://github.com/valkey-io/valkey-glide/pull/2050))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

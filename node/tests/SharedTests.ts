@@ -6602,6 +6602,118 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const nonListKey = uuidv4();
+                const singleKeyArray = [key1];
+                const multiKeyArray = [key2, key1];
+                const count = 1;
+                const lpushArgs = ["one", "two", "three", "four", "five"];
+                const expected = { [key1]: ["five"] };
+                const expected2 = { [key2]: ["one", "two"] };
+
+                // nothing to be popped
+                expect(
+                    await client.lmpop(
+                        singleKeyArray,
+                        ListDirection.LEFT,
+                        count,
+                    ),
+                ).toBeNull();
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key1, lpushArgs)).toEqual(5);
+                expect(await client.lpush(key2, lpushArgs)).toEqual(5);
+
+                // checking correct result from popping
+                expect(
+                    await client.lmpop(singleKeyArray, ListDirection.LEFT),
+                ).toEqual(expected);
+
+                // popping multiple elements from the right
+                expect(
+                    await client.lmpop(multiKeyArray, ListDirection.RIGHT, 2),
+                ).toEqual(expected2);
+
+                // Key exists, but is not a set
+                expect(await client.set(nonListKey, "lmpop")).toBe("OK");
+                await expect(
+                    client.lmpop([nonListKey], ListDirection.RIGHT),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `blmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const nonListKey = uuidv4();
+                const singleKeyArray = [key1];
+                const multiKeyArray = [key2, key1];
+                const count = 1;
+                const lpushArgs = ["one", "two", "three", "four", "five"];
+                const expected = { [key1]: ["five"] };
+                const expected2 = { [key2]: ["one", "two"] };
+
+                // nothing to be popped
+                expect(
+                    await client.blmpop(
+                        singleKeyArray,
+                        ListDirection.LEFT,
+                        0.1,
+                        count,
+                    ),
+                ).toBeNull();
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key1, lpushArgs)).toEqual(5);
+                expect(await client.lpush(key2, lpushArgs)).toEqual(5);
+
+                // checking correct result from popping
+                expect(
+                    await client.blmpop(
+                        singleKeyArray,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual(expected);
+
+                // popping multiple elements from the right
+                expect(
+                    await client.blmpop(
+                        multiKeyArray,
+                        ListDirection.RIGHT,
+                        0.1,
+                        2,
+                    ),
+                ).toEqual(expected2);
+
+                // Key exists, but is not a set
+                expect(await client.set(nonListKey, "blmpop")).toBe("OK");
+                await expect(
+                    client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {

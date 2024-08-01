@@ -53,6 +53,7 @@ import {
     ZAddOptions,
     createBLMove,
     createBLPop,
+    createBLMPop,
     createBRPop,
     createBZMPop,
     createBitCount,
@@ -112,6 +113,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createLMPop,
     createLPop,
     createLPos,
     createLPush,
@@ -2524,8 +2526,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param timeout - The number of seconds to wait for a blocking operation to complete.
-     *     A value of 0 will block indefinitely.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the element
@@ -2731,6 +2732,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public setrange(key: string, offset: number, value: string): T {
         return this.addAndReturn(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+        return this.addAndReturn(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
     }
 }
 
