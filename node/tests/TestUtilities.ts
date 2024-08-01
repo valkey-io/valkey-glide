@@ -475,6 +475,10 @@ export async function transactionTest(
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, ReturnType][] = [];
+
+    baseTransaction.publish("test_message", key1);
+    responseData.push(['publish("test_message", key1)', 0]);
+
     baseTransaction.flushall();
     responseData.push(["flushall()", "OK"]);
     baseTransaction.flushall(FlushMode.SYNC);

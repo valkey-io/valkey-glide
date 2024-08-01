@@ -24,8 +24,8 @@ import {
     Routes,
     ScoreFilter,
 } from "..";
-import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { RedisCluster } from "../../utils/TestUtils.js";
+import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
@@ -246,10 +246,17 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
+
             const expectedRes = await transactionTest(
                 transaction,
                 cluster.getVersion(),
             );
+
+            if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                transaction.publish("message", "key");
+                expectedRes.push(['publish("message", "key")', 0]);
+            }
+
             const result = await client.exec(transaction);
             validateTransactionResponse(result, expectedRes);
         },

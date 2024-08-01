@@ -44,6 +44,8 @@ import {
     ScoreFilter,
     SearchOrigin,
     SetOptions,
+    SortClusterOptions,
+    SortOptions,
     StreamAddOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -117,6 +119,7 @@ import {
     createLRem,
     createLSet,
     createLTrim,
+    createLastSave,
     createLolwut,
     createMGet,
     createMSet,
@@ -133,6 +136,7 @@ import {
     createPfCount,
     createPfMerge,
     createPing,
+    createPublish,
     createRPop,
     createRPush,
     createRPushX,
@@ -157,6 +161,8 @@ import {
     createSelect,
     createSet,
     createSetBit,
+    createSort,
+    createSortReadOnly,
     createStrlen,
     createTTL,
     createTime,
@@ -192,11 +198,6 @@ import {
     createZRevRank,
     createZRevRankWithScore,
     createZScore,
-    createSort,
-    SortOptions,
-    createSortReadOnly,
-    SortClusterOptions,
-    createLastSave,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2797,6 +2798,20 @@ export class Transaction extends BaseTransaction<Transaction> {
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
     }
+
+    /** Publish a message on pubsub channel.
+     *
+     * See https://valkey.io/commands/publish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     *
+     * Command Response -  Number of subscriptions in primary node that received the message.
+     * Note that this value does not include subscriptions that configured on replicas.
+     */
+    public publish(message: string, channel: string): Transaction {
+        return this.addAndReturn(createPublish(message, channel));
+    }
 }
 
 /**
@@ -2903,5 +2918,26 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         return this.addAndReturn(
             createCopy(source, destination, { replace: replace }),
         );
+    }
+
+    /** Publish a message on pubsub channel.
+     * This command aggregates PUBLISH and SPUBLISH commands functionalities.
+     * The mode is selected using the 'sharded' parameter.
+     * For both sharded and non-sharded mode, request is routed using hashed channel as key.
+     *
+     * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+     *
+     * @param message - Message to publish.
+     * @param channel - Channel to publish the message on.
+     * @param sharded - Use sharded pubsub mode. Available since Valkey version 7.0.
+     *
+     * Command Response -  Number of subscriptions in primary node that received the message.
+     */
+    public publish(
+        message: string,
+        channel: string,
+        sharded: boolean = false,
+    ): ClusterTransaction {
+        return this.addAndReturn(createPublish(message, channel, sharded));
     }
 }

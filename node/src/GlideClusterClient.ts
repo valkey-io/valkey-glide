@@ -40,9 +40,9 @@ import {
     createLolwut,
     createPing,
     createPublish,
+    createRandomKey,
     createSort,
     createSortReadOnly,
-    createRandomKey,
     createTime,
 } from "./Commands";
 import { RequestError } from "./Errors";
@@ -959,6 +959,7 @@ export class GlideClusterClient extends BaseClient {
      * This command aggregates PUBLISH and SPUBLISH commands functionalities.
      * The mode is selected using the 'sharded' parameter.
      * For both sharded and non-sharded mode, request is routed using hashed channel as key.
+     *
      * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
      *
      * @param message - Message to publish.
