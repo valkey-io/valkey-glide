@@ -3929,29 +3929,30 @@ export function runBaseTests<Context>(config: {
         `zrange and zrangeStore different types of keys test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const destkey = uuidv4();
+                const key = "{testKey}:1-" + uuidv4();
+                const nonExistingKey = "{testKey}:2-" + uuidv4();
+                const destkey = "{testKey}:3-" + uuidv4();
                 expect(
-                    await client.zrange("nonExistingKey", {
+                    await client.zrange(nonExistingKey, {
                         start: 0,
                         stop: 1,
                     }),
                 ).toEqual([]);
 
                 expect(
-                    await client.zrangeWithScores("nonExistingKey", {
+                    await client.zrangeWithScores(nonExistingKey, {
                         start: 0,
                         stop: 1,
                     }),
                 ).toEqual({});
 
                 expect(
-                    await client.zrangeStore(destkey, "nonExistingKey", {
+                    await client.zrangeStore(destkey, nonExistingKey, {
                         start: 0,
                         stop: 1,
                     }),
                 ).toEqual(0);
 
-                const key = uuidv4();
                 expect(await client.set(key, "value")).toEqual("OK");
 
                 await expect(
