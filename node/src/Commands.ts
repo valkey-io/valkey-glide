@@ -2020,10 +2020,12 @@ export function createXRange(
     const args = [key];
     addRangeBound(start, args);
     addRangeBound(end, args);
+
     if (count !== undefined) {
         args.push("COUNT");
         args.push(count.toString());
     }
+
     return createCommand(RequestType.XRange, args);
 }
 
