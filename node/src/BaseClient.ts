@@ -142,6 +142,7 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXDel,
     createXLen,
     createXRead,
     createXTrim,
@@ -3487,6 +3488,26 @@ export class BaseClient {
         options?: StreamAddOptions,
     ): Promise<string | null> {
         return this.createWritePromise(createXAdd(key, values, options));
+    }
+
+    /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     * @returns The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
+     * // Output is 2 since the stream marked 2 entries as deleted.
+     * ```
+     */
+    public xdel(key: string, ids: string[]): Promise<number> {
+        return this.createWritePromise(createXDel(key, ids));
     }
 
     /**
