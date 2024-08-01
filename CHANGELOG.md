@@ -47,6 +47,7 @@
 * Node: Added ZREMRANGEBYLEX command ([#2025]((https://github.com/valkey-io/valkey-glide/pull/2025))
 * Node: Added ZSCAN command ([#2061](https://github.com/valkey-io/valkey-glide/pull/2061))
 * Node: Added SETRANGE command ([#2066](https://github.com/valkey-io/valkey-glide/pull/2066))
+* Node: Added XDEL command ([#2064]((https://github.com/valkey-io/valkey-glide/pull/2064))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

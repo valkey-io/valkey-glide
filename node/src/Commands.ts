@@ -1933,6 +1933,9 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
     }
 }
 
+/**
+ * @internal
+ */
 export function createXAdd(
     key: string,
     values: [string, string][],
@@ -1960,6 +1963,16 @@ export function createXAdd(
     });
 
     return createCommand(RequestType.XAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createXDel(
+    key: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XDel, [key, ...ids]);
 }
 
 /**
