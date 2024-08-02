@@ -471,6 +471,7 @@ export async function transactionTest(
     const key21 = "{key}" + uuidv4(); // list for sort
     const key22 = "{key}" + uuidv4(); // list for sort
     const key23 = "{key}" + uuidv4(); // zset random
+    const key24 = "{key}" + uuidv4(); // list value
     const field = uuidv4();
     const value = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
@@ -557,6 +558,24 @@ export async function transactionTest(
         field + "4",
     ]);
     responseData.push(["lpush(key5, [1, 2, 3, 4])", 4]);
+
+    if (gte("7.0.0", version)) {
+        baseTransaction.lpush(key24, [field + "1", field + "2"]);
+        responseData.push(["lpush(key22, [1, 2])", 2]);
+        baseTransaction.lmpop([key24], ListDirection.LEFT);
+        responseData.push([
+            "lmpop([key22], ListDirection.LEFT)",
+            { [key24]: [field + "2"] },
+        ]);
+        baseTransaction.lpush(key24, [field + "2"]);
+        responseData.push(["lpush(key22, [2])", 2]);
+        baseTransaction.blmpop([key24], ListDirection.LEFT, 0.1, 1);
+        responseData.push([
+            "blmpop([key22], ListDirection.LEFT, 0.1, 1)",
+            { [key24]: [field + "2"] },
+        ]);
+    }
+
     baseTransaction.lpop(key5);
     responseData.push(["lpop(key5)", field + "4"]);
     baseTransaction.llen(key5);
@@ -850,6 +869,8 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+    baseTransaction.xdel(key9, ["0-3", "0-5"]);
+    responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);

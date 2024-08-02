@@ -53,6 +53,7 @@ import {
     ZAddOptions,
     createBLMove,
     createBLPop,
+    createBLMPop,
     createBRPop,
     createBZMPop,
     createBitCount,
@@ -113,6 +114,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createLMPop,
     createLPop,
     createLPos,
     createLPush,
@@ -174,6 +176,7 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXDel,
     createXLen,
     createXRead,
     createXTrim,
@@ -2017,7 +2020,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
-     * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
+     * @param options - (Optional) Stream add options.
+     *
+     * Command Response - The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
         key: string,
@@ -2028,12 +2033,28 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     */
+    public xdel(key: string, ids: string[]): T {
+        return this.addAndReturn(createXDel(key, ids));
+    }
+
+    /**
      * Trims the stream stored at `key` by evicting older entries.
      * See https://valkey.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+     *
+     * Command Response - The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXTrim(key, options));
@@ -2042,7 +2063,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Returns the server time.
      * See https://valkey.io/commands/time/ for details.
      *
-     * @returns - The current server time as a two items `array`:
+     * Command Response - The current server time as a two items `array`:
      * A Unix timestamp and the amount of microseconds already elapsed in the current second.
      * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
      */
@@ -2056,7 +2077,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
-     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     *
+     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
      */
     public xread(
         keys_and_ids: Record<string, string>,
@@ -2537,8 +2559,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param timeout - The number of seconds to wait for a blocking operation to complete.
-     *     A value of 0 will block indefinitely.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the element
@@ -2744,6 +2765,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public setrange(key: string, offset: number, value: string): T {
         return this.addAndReturn(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+        return this.addAndReturn(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
     }
 }
 
