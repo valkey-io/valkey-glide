@@ -4504,7 +4504,7 @@ export class BaseClient {
      * console.log(response); // Output: "OK"
      * transaction.set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
-     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * console.log(result); // Output: ["OK"] - Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch("sampleKey");
@@ -4512,7 +4512,7 @@ export class BaseClient {
      * transaction.set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
-     * console.log(result); // Output: None - None is returned when the watched key is modified before transaction execution.
+     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
      * ```
      */
     public async watch(keys: string[]): Promise<"OK"> {

@@ -220,7 +220,7 @@ describe("GlideClient", () => {
             );
             const transaction = new Transaction();
             transaction.get("key");
-            const result1 = await client1.customCommand(["WATCH", "key"]);
+            const result1 = await client1.watch(["key"]);
             expect(result1).toEqual("OK");
 
             const result2 = await client2.set("key", "foo");
