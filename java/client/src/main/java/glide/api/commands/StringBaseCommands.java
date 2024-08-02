@@ -672,7 +672,7 @@ public interface StringBaseCommands {
     CompletableFuture<Long> append(GlideString key, GlideString value);
 
     /**
-     * Returns all the longest common subsequences combined between strings stored at <code>key1</code> and <code>
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
      * key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -681,20 +681,20 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
-     * @return A <code>String</code> containing all the longest common subsequences combined between the 2 strings.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
      *     An empty <code>String</code> is returned if the keys do not exist or have no common
      *     subsequences.
      * @example
      *     <pre>{@code
      * // testKey1 = abcd, testKey2 = axcd
      * String result = client.lcs("testKey1", "testKey2").get();
-     * assert result.equals("cd");
+     * assert result.equals("acd");
      * }</pre>
      */
     CompletableFuture<String> lcs(String key1, String key2);
 
     /**
-     * Returns all the longest common subsequences combined between strings stored at <code>key1</code> and <code>
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
      * key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -703,20 +703,20 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
-     * @return A <code>String</code> containing all the longest common subsequences combined between the 2 strings.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
      *     An empty <code>String</code> is returned if the keys do not exist or have no common
      *     subsequences.
      * @example
      *     <pre>{@code
      * // testKey1 = abcd, testKey2 = axcd
      * GlideString result = client.lcs(gs("testKey1"), gs("testKey2")).get();
-     * assert result.equals(gs("cd"));
+     * assert result.equals(gs("acd"));
      * }</pre>
      */
     CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2);
 
     /**
-     * Returns the total length of all the longest common subsequences between strings stored at <code>key1
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -725,18 +725,18 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
-     * @return The total length of all the longest common subsequences between the 2 strings.
+     * @return The length of the longest common subsequence between the 2 strings.
      * @example
      *     <pre>{@code
      * // testKey1 = abcd, testKey2 = axcd
      * Long result = client.lcsLen("testKey1", "testKey2").get();
-     * assert result.equals(2L);
+     * assert result.equals(3L);
      * }</pre>
      */
     CompletableFuture<Long> lcsLen(String key1, String key2);
 
     /**
-     * Returns the total length of all the longest common subsequences between strings stored at <code>key1
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -745,18 +745,18 @@ public interface StringBaseCommands {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
-     * @return The total length of all the longest common subsequences between the 2 strings.
+     * @return The length of the longest common subsequence between the 2 strings.
      * @example
      *     <pre>{@code
      * // testKey1 = abcd, testKey2 = axcd
      * Long result = client.lcsLen(gs("testKey1"), gs("testKey2")).get();
-     * assert result.equals(2L);
+     * assert result.equals(3L);
      * }</pre>
      */
     CompletableFuture<Long> lcsLen(GlideString key1, GlideString key2);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -769,8 +769,8 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as <code>Long</code>. This value doesn't count <code>minMatchLen</code> filter.
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
@@ -799,7 +799,7 @@ public interface StringBaseCommands {
     CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -812,8 +812,8 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as <code>Long</code>. This value doesn't count <code>minMatchLen</code> filter.
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
@@ -842,7 +842,7 @@ public interface StringBaseCommands {
     CompletableFuture<Map<String, Object>> lcsIdx(GlideString key1, GlideString key2);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -856,8 +856,8 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as <code>Long</code>. This value doesn't count <code>minMatchLen</code> filter.
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
@@ -886,7 +886,7 @@ public interface StringBaseCommands {
     CompletableFuture<Map<String, Object>> lcsIdx(String key1, String key2, long minMatchLen);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -900,8 +900,8 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as <code>Long</code>. This value doesn't count <code>minMatchLen</code> filter.
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
@@ -931,7 +931,7 @@ public interface StringBaseCommands {
             GlideString key1, GlideString key2, long minMatchLen);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -944,7 +944,7 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
      *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
@@ -976,7 +976,7 @@ public interface StringBaseCommands {
     CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(String key1, String key2);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -989,7 +989,7 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
      *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
@@ -1022,7 +1022,7 @@ public interface StringBaseCommands {
     CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(GlideString key1, GlideString key2);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -1036,8 +1036,8 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as <code>Long</code>. This value doesn't count <code>minMatchLen</code> filter.
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
@@ -1069,7 +1069,7 @@ public interface StringBaseCommands {
             String key1, String key2, long minMatchLen);
 
     /**
-     * Returns the indices and lengths of the longest common subsequence between strings stored at
+     * Returns the indices and length of the longest common subsequence between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -1083,8 +1083,8 @@ public interface StringBaseCommands {
      *     2 strings and the length of the longest common subsequence. The resulting map contains two
      *     keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the total length of the all longest common subsequences between the 2 strings
-     *           stored as <code>Long</code>. This value doesn't count <code>minMatchLen</code> filter.
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
