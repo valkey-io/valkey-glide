@@ -44,6 +44,7 @@ import {
     createSort,
     createSortReadOnly,
     createTime,
+    createUnWatch,
 } from "./Commands";
 import { RequestError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
@@ -1117,10 +1118,32 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name.
      * ```
      */
-    public randomKey(route?: Routes): Promise<string | null> {
+    public async randomKey(route?: Routes): Promise<string | null> {
         return this.createWritePromise(
             createRandomKey(),
             toProtobufRoute(route),
         );
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction. Executing a transaction will
+     * automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
+     *      in which case the client will route the command to the nodes defined by `route`.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * let response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * response = await client.unwatch();
+     * console.log(response); // Output: "OK"
+     * ```
+     */
+    public async unwatch(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createUnWatch(), toProtobufRoute(route));
     }
 }
