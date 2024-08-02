@@ -117,7 +117,7 @@ test.dependsOn 'stopAllBeforeTests'
 test.dependsOn 'getServerVersion'
 stopAllBeforeTests.finalizedBy 'clearDirs'
 clearDirs.finalizedBy 'startStandalone'
-clearDirs.finalizedBy 'startCluster'
+clearDirs.finalizedBy //'startCluster'
 test.finalizedBy 'stopAllAfterTests'
 test.dependsOn ':client:buildRustRelease'
 
@@ -126,8 +126,8 @@ tasks.withType(Test) {
         println "Cluster ports = ${clusterPorts}"
         println "Standalone ports = ${standalonePorts}"
         println "Server version = ${serverVersion}"
-        systemProperty 'test.server.standalone.ports', standalonePorts.join(',')
-        systemProperty 'test.server.cluster.ports', clusterPorts.join(',')
+        systemProperty 'test.server.standalone.ports', 6379 //standalonePorts.join(',')
+        systemProperty 'test.server.cluster.ports', '7000' //clusterPorts.join(',')
         systemProperty 'test.server.version', serverVersion
     }
 
