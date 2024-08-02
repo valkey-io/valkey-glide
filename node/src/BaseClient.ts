@@ -143,6 +143,7 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWatch,
     createXAdd,
     createXDel,
     createXLen,
@@ -172,8 +173,8 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
     createZScan,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -4484,8 +4485,40 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public touch(keys: string[]): Promise<number> {
+    public async touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction. Executing a transaction will automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to watch.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * ```
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * await client.set("sampleKey", "hello world");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
+     * ```
+     */
+    public async watch(keys: string[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys));
     }
 
     /**
