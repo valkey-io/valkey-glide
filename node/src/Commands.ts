@@ -1268,6 +1268,13 @@ export function createExpireAt(
 /**
  * @internal
  */
+export function createExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.ExpireTime, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createPExpire(
     key: string,
     milliseconds: number,
@@ -1293,6 +1300,13 @@ export function createPExpireAt(
             ? [key, unixMilliseconds.toString()]
             : [key, unixMilliseconds.toString(), option];
     return createCommand(RequestType.PExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createPExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.PExpireTime, [key]);
 }
 
 /**

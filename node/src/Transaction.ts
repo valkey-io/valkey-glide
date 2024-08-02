@@ -76,6 +76,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createFlushAll,
@@ -133,6 +134,7 @@ import {
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
@@ -1333,6 +1335,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createExpireAt(key, unixSeconds, option));
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
+     *
+     * See https://valkey.io/commands/expiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     *
+     * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public expireTime(key: string): T {
+        return this.addAndReturn(createExpireTime(key));
+    }
+
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
@@ -1375,6 +1393,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createPExpireAt(key, unixMilliseconds, option),
         );
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * See https://valkey.io/commands/pexpiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     *
+     * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public pexpireTime(key: string): T {
+        return this.addAndReturn(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
