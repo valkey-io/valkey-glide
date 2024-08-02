@@ -2569,10 +2569,12 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param start - The starting stream ID bound for the range.
-     *     - Use `exclusive: "("` to specify an exclusive bounded stream ID.
+     *     - Use `id` to specify a stream ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
      *     - Use `-` to start with the minimum available ID.
      * @param end - The ending stream ID bound for the range.
-     *     - Use `exclusive: "("` to specify an exclusive bounded stream ID.
+     *     - Use `id` to specify a stream ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
      *     - Use `+` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
@@ -2583,7 +2585,7 @@ export class BaseClient {
      * ```typescript
      * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
      * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
-     * const result = await client.xrange("mystream", "-", "+");
+     * console.log(await client.xrange("mystream", "-", "+"));
      * // Output:
      * // {
      * //     "0-1": [["field1", "value1"]],

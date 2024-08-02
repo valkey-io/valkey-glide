@@ -1991,21 +1991,19 @@ export type StreamRangeBound =
      * be incomplete, with just a timestamp. Can be specified as inclusive or exclusive, where inclusive is the default.
      */
     | {
-          exclusive?: "(";
+          isInclusive?: boolean;
           id: string | number;
       };
 
-function addRangeBound(rangeBound: StreamRangeBound, args: string[]) {
+function addRangeBound(rangeBound: StreamRangeBound): string {
     if (rangeBound === "-" || rangeBound === "+") {
-        args.push(rangeBound);
-        return;
+        return rangeBound;
     }
 
-    if (rangeBound.exclusive) {
-        args.push(rangeBound.exclusive + rangeBound.id.toString());
-    } else {
-        args.push(rangeBound.id.toString());
+    if (rangeBound.isInclusive == false) {
+        return "(" + rangeBound.id.toString();
     }
+    return rangeBound.id.toString();
 }
 
 /**
@@ -2017,9 +2015,7 @@ export function createXRange(
     end: StreamRangeBound,
     count?: number,
 ): command_request.Command {
-    const args = [key];
-    addRangeBound(start, args);
-    addRangeBound(end, args);
+    const args = [key, addRangeBound(start), addRangeBound(end)];
 
     if (count !== undefined) {
         args.push("COUNT");
