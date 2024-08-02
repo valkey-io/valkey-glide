@@ -44,10 +44,13 @@
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
 * Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
+* Node: Added WATCH and UNWATCH commands ([#2076](https://github.com/valkey-io/valkey-glide/pull/2076))
 * Node: Added ZLEXCOUNT command ([#2022](https://github.com/valkey-io/valkey-glide/pull/2022))
 * Node: Added ZREMRANGEBYLEX command ([#2025]((https://github.com/valkey-io/valkey-glide/pull/2025))
 * Node: Added ZSCAN command ([#2061](https://github.com/valkey-io/valkey-glide/pull/2061))
 * Node: Added SETRANGE command ([#2066](https://github.com/valkey-io/valkey-glide/pull/2066))
+* Node: Added XDEL command ([#2064]((https://github.com/valkey-io/valkey-glide/pull/2064))
+* Node: Added LMPOP & BLMPOP command ([#2050](https://github.com/valkey-io/valkey-glide/pull/2050))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

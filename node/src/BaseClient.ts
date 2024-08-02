@@ -55,6 +55,7 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
+    createBLMPop,
     createDecr,
     createDecrBy,
     createDel,
@@ -92,6 +93,7 @@ import {
     createLInsert,
     createLLen,
     createLMove,
+    createLMPop,
     createLPop,
     createLPos,
     createLPush,
@@ -143,7 +145,9 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWatch,
     createXAdd,
+    createXDel,
     createXLen,
     createXRead,
     createXTrim,
@@ -171,8 +175,8 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
     createZScan,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -3549,6 +3553,26 @@ export class BaseClient {
     }
 
     /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     * @returns The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
+     * // Output is 2 since the stream marked 2 entries as deleted.
+     * ```
+     */
+    public xdel(key: string, ids: string[]): Promise<number> {
+        return this.createWritePromise(createXDel(key, ids));
+    }
+
+    /**
      * Trims the stream stored at `key` by evicting older entries.
      * See https://valkey.io/commands/xtrim/ for more details.
      *
@@ -4520,8 +4544,40 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public touch(keys: string[]): Promise<number> {
+    public async touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction. Executing a transaction will automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to watch.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * ```
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * await client.set("sampleKey", "hello world");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
+     * ```
+     */
+    public async watch(keys: string[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys));
     }
 
     /**
@@ -4550,6 +4606,70 @@ export class BaseClient {
         value: string,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     * @returns A `Record` of key-name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey", ["one", "two", "three"]);
+     * await client.lpush("testKey2", ["five", "six", "seven"]);
+     * const result = await client.lmpop(["testKey", "testKey2"], ListDirection.LEFT, 1L);
+     * console.log(result.get("testKey")); // Output: { "testKey": ["three"] }
+     * ```
+     */
+    public async lmpop(
+        keys: string[],
+        direction: ListDirection,
+        count?: number,
+    ): Promise<Record<string, string[]>> {
+        return this.createWritePromise(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     * @returns - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey", ["one", "two", "three"]);
+     * await client.lpush("testKey2", ["five", "six", "seven"]);
+     * const result = await client.blmpop(["testKey", "testKey2"], ListDirection.LEFT, 0.1, 1L);
+     * console.log(result.get("testKey")); // Output: { "testKey": ["three"] }
+     * ```
+     */
+    public async blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): Promise<Record<string, string[]>> {
+        return this.createWritePromise(
+            createBLMPop(timeout, keys, direction, count),
+        );
     }
 
     /**
