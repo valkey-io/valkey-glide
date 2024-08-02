@@ -1129,7 +1129,7 @@ export class GlideClusterClient extends BaseClient {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/ for more details.
+     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/#cas for more details.
      *
      * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
      *      in which case the client will route the command to the nodes defined by `route`.

@@ -4492,7 +4492,7 @@ export class BaseClient {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction. Executing a transaction will automatically flush all previously watched keys.
      *
-     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/ for more details.
+     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/#cas for more details.
      *
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      * @param keys - The keys to watch.
