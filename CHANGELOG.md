@@ -17,6 +17,7 @@
 * Node: Added TOUCH command ([#2055](https://github.com/valkey-io/valkey-glide/pull/2055))
 * Node: Added FLUSHDB command ([#1986](https://github.com/valkey-io/valkey-glide/pull/1986))
 * Node: Added GETDEL command ([#1968](https://github.com/valkey-io/valkey-glide/pull/1968))
+* Node: Added GETRANGE command ([#2079](https://github.com/valkey-io/valkey-glide/pull/2079))
 * Node: Added BITOP command ([#2012](https://github.com/valkey-io/valkey-glide/pull/2012))
 * Node: Added GETBIT command ([#1989](https://github.com/valkey-io/valkey-glide/pull/1989))
 * Node: Added SETBIT command ([#1978](https://github.com/valkey-io/valkey-glide/pull/1978))
