@@ -339,6 +339,8 @@ describe("GlideClusterClient", () => {
                 client.sortStore("abc", "zyx", { isAlpha: true }),
                 client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
                 client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                client.bzpopmax(["abc", "def"], 0.5),
+                client.bzpopmin(["abc", "def"], 0.5),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {

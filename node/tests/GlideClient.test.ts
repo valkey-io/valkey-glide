@@ -142,38 +142,60 @@ describe("GlideClient", () => {
                 ),
             );
 
-            const blmovePromise = client.blmove(
-                "source",
-                "destination",
-                ListDirection.LEFT,
-                ListDirection.LEFT,
-                0.1,
-            );
+            const promiseList = [
+                client.blmove(
+                    "source",
+                    "destination",
+                    ListDirection.LEFT,
+                    ListDirection.LEFT,
+                    0.1,
+                ),
+                client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
+            ];
 
-            const blmpopPromise = client.blmpop(
-                ["key1", "key2"],
-                ListDirection.LEFT,
-                0.1,
-            );
-
-            const promiseList = [blmovePromise, blmpopPromise];
+            const promiseList2 = [
+                client.bzpopmax(
+                    ["key1", "key2"],
+                    cluster.checkIfServerVersionLessThan("6.0.0") ? 1.0 : 0.1,
+                ),
+                client.bzpopmin(
+                    ["key1", "key2"],
+                    cluster.checkIfServerVersionLessThan("6.0.0") ? 1.0 : 0.1,
+                ),
+            ];
 
             try {
+                if (cluster.checkIfServerVersionLessThan("6.0.0")) {
+                    for (const promise of promiseList2) {
+                        const timeoutPromise = new Promise((resolve) => {
+                            setTimeout(resolve, 1500);
+                        });
+                        await Promise.race([promise, timeoutPromise]);
+                    }
+                }
+
                 for (const promise of promiseList) {
                     const timeoutPromise = new Promise((resolve) => {
                         setTimeout(resolve, 500);
                     });
                     await Promise.race([promise, timeoutPromise]);
                 }
+                
             } finally {
                 for (const promise of promiseList) {
                     await Promise.resolve([promise]);
                 }
 
+                if (cluster.checkIfServerVersionLessThan("6.0.0")) {
+                    for (const promise of promiseList2) {
+                        await Promise.resolve([promise]);
+                    }
+                }
+
                 client.close();
             }
         },
-        5000,
+        30000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
