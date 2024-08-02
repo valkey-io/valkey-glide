@@ -2777,7 +2777,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.set(key, "foo")).toEqual("OK");
 
                 // no timeout set yet
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                     expect(await client.expiretime(key)).toEqual(-1);
                     expect(await client.pexpiretime(key)).toEqual(-1);
                 }
@@ -2815,7 +2815,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(false);
                 expect(await client.ttl(key)).toEqual(-2);
 
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                     expect(await client.expiretime(key)).toEqual(-2);
                     expect(await client.pexpiretime(key)).toEqual(-2);
                 }

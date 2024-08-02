@@ -1341,6 +1341,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The `key` to determine the expiration value of.
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
      */
     public expireTime(key: string): T {
         return this.addAndReturn(createExpireTime(key));
@@ -1398,6 +1400,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The `key` to determine the expiration value of.
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
      */
     public pexpireTime(key: string): T {
         return this.addAndReturn(createPExpireTime(key));
