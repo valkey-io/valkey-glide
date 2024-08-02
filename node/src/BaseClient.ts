@@ -4490,9 +4490,9 @@ export class BaseClient {
     /**
      * Marks the given keys to be watched for conditional execution of a transaction. Transactions
      * will only execute commands if the watched keys are not modified before execution of the
-     * transaction.
+     * transaction. Executing a transaction will automatically flush all previously watched keys.
      *
-     * See https://valkey.io/commands/watch/ for more details.
+     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/ for more details.
      *
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      * @param keys - The keys to watch.
@@ -4500,16 +4500,16 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const response = await client.watch("sampleKey");
+     * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * transaction.set("SampleKey", "foobar");
+     * const transaction = new transaction().set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: ["OK"] - Executes successfully and keys are unwatched.
      * ```
      * ```typescript
-     * const response = await client.watch("sampleKey");
+     * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * transaction.set("SampleKey", "foobar");
+     * const transaction = new transaction().set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.

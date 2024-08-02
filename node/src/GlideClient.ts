@@ -751,13 +751,13 @@ export class GlideClient extends BaseClient {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * See https://valkey.io/commands/unwatch/ for more details.
+     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/ for more details.
      *
      * @returns A simple "OK" response.
      *
      * @example
      * ```typescript
-     * let response = await client.watch("sampleKey");
+     * let response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
      * response = await client.unwatch();
      * console.log(response); // Output: "OK"
