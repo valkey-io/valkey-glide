@@ -3013,6 +3013,16 @@ export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
 }
 
+/** @internal */
+export function createWatch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Watch, keys);
+}
+
+/** @internal */
+export function createUnWatch(): command_request.Command {
+    return createCommand(RequestType.UnWatch, []);
+}
+
 /**
  * This base class represents the common set of optional arguments for the SCAN family of commands.
  * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
