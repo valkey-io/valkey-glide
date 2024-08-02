@@ -4502,14 +4502,14 @@ export class BaseClient {
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new transaction().set("SampleKey", "foobar");
+     * const transaction = new Transaction().set("SampleKey", "foobar");
      * const result = await client.exec(transaction);
-     * console.log(result); // Output: ["OK"] - Executes successfully and keys are unwatched.
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
      * ```
      * ```typescript
      * const response = await client.watch(["sampleKey"]);
      * console.log(response); // Output: "OK"
-     * const transaction = new transaction().set("SampleKey", "foobar");
+     * const transaction = new Transaction().set("SampleKey", "foobar");
      * await client.set("sampleKey", "hello world");
      * const result = await client.exec(transaction);
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
