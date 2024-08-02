@@ -91,6 +91,7 @@ import {
     createGet,
     createGetBit,
     createGetDel,
+    createGetRange,
     createHDel,
     createHExists,
     createHGet,
@@ -276,6 +277,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public getdel(key: string): T {
         return this.addAndReturn(createGetDel(key));
+    }
+
+    /**
+     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
+     * an offset starting from the end of the string. So `-1` means the last character, `-2` the
+     * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
+     * or `end` are out of range, returns the substring within the valid range of the string.
+     *
+     * See https://valkey.io/commands/getrange/ for details.
+     *
+     * @param key - The key of the string.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     *
+     * Command Response - substring extracted from the value stored at `key`.
+     */
+    public getrange(key: string, start: number, end: number): T {
+        return this.addAndReturn(createGetRange(key, start, end));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
