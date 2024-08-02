@@ -2598,7 +2598,7 @@ export class BaseClient {
         start: StreamRangeBound,
         end: StreamRangeBound,
         count?: number,
-    ): Promise<Record<string, string[][]> | null> {
+    ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
     }
 
