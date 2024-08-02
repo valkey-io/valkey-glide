@@ -25,11 +25,16 @@ import {
     ScoreFilter,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode, SortOrder } from "../build-ts/src/Commands";
+import {
+    FlushMode,
+    FunctionStatsResponse,
+    SortOrder,
+} from "../build-ts/src/Commands";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkFunctionListResponse,
+    checkFunctionStatsResponse,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -727,7 +732,7 @@ describe("GlideClusterClient", () => {
                 "Single node route = %s",
                 (singleNodeRoute) => {
                     it(
-                        "function load and function list",
+                        "function load function list function stats",
                         async () => {
                             if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
@@ -763,6 +768,21 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) => expect(value).toEqual([]),
                                 );
+
+                                let functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            0,
+                                            0,
+                                        ),
+                                );
+
                                 // load the library
                                 expect(await client.functionLoad(code)).toEqual(
                                     libName,
@@ -789,6 +809,19 @@ describe("GlideClusterClient", () => {
                                             libName,
                                             expectedDescription,
                                             expectedFlags,
+                                        ),
+                                );
+                                functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            1,
+                                            1,
                                         ),
                                 );
 
@@ -867,6 +900,19 @@ describe("GlideClusterClient", () => {
                                             expectedDescription,
                                             expectedFlags,
                                             newCode,
+                                        ),
+                                );
+                                functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            1,
+                                            2,
                                         ),
                                 );
 
