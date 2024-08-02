@@ -6776,6 +6776,93 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xgroupCreate and xgroupDestroy test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const nonExistentKey = uuidv4();
+                const stringKey = uuidv4();
+                const groupName1 = uuidv4();
+                const groupName2 = uuidv4();
+                const streamId = "0-1";
+
+                // trying to create a consumer group for a non-existing stream without the "MKSTREAM" arg results in error
+                await expect(
+                    client.xgroupCreate(nonExistentKey, groupName1, streamId),
+                ).rejects.toThrow(RequestError);
+
+                // calling with the "MKSTREAM" arg should create the new stream automatically
+                expect(
+                    await client.xgroupCreate(key, groupName1, streamId, {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+
+                // invalid arg - group names must be unique, but group_name1 already exists
+                await expect(
+                    client.xgroupCreate(key, groupName1, streamId),
+                ).rejects.toThrow(RequestError);
+
+                // Invalid stream ID format
+                await expect(
+                    client.xgroupCreate(
+                        key,
+                        groupName2,
+                        "invalid_stream_id_format",
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                expect(await client.xgroupDestroy(key, groupName1)).toEqual(
+                    true,
+                );
+                // calling xgroup_destroy again returns False because the group was already destroyed above
+                expect(await client.xgroupDestroy(key, groupName1)).toEqual(
+                    false,
+                );
+
+                // attempting to destroy a group for a non-existing key should raise an error
+                await expect(
+                    client.xgroupDestroy(nonExistentKey, groupName1),
+                ).rejects.toThrow(RequestError);
+
+                // "ENTRIESREAD" option was added in Valkey 7.0.0
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    await expect(
+                        client.xgroupCreate(key, groupName1, streamId, {
+                            entriesRead: "10",
+                        }),
+                    ).rejects.toThrow(RequestError);
+                } else {
+                    expect(
+                        await client.xgroupCreate(key, groupName1, streamId, {
+                            entriesRead: "10",
+                        }),
+                    ).toEqual("OK");
+
+                    // invalid entries_read_id - cannot be the zero ("0-0") ID
+                    await expect(
+                        client.xgroupCreate(key, groupName1, streamId, {
+                            entriesRead: "0-0",
+                        }),
+                    ).rejects.toThrow(RequestError);
+                }
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xgroupCreate(stringKey, groupName1, streamId, {
+                        mkStream: true,
+                    }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xgroupDestroy(stringKey, groupName1),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
