@@ -2436,7 +2436,7 @@ export class BaseClient {
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      *
-     * since - Redis version 7.0.0.
+     * since - Valkey version 7.0.0.
      *
      * @example
      * ```typescript
