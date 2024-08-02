@@ -2329,6 +2329,9 @@ export function createXRead(
     return createCommand(RequestType.XRead, args);
 }
 
+/**
+ * Represents an array of Stream Entires in the response
+ */
 export type StreamEntries = string | number | (string | number | string[])[][];
 
 /**
