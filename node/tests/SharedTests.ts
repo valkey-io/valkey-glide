@@ -2807,7 +2807,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `expiretime and pexpiretime test_%p`,
+        `expireTime, pexpireTime, expire, pexpire, expireAt and pexpireAt with timestamp in the past or negative timeout test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) {
