@@ -1947,6 +1947,9 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
     }
 }
 
+/**
+ * @internal
+ */
 export function createXAdd(
     key: string,
     values: [string, string][],
@@ -1974,6 +1977,16 @@ export function createXAdd(
     });
 
     return createCommand(RequestType.XAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createXDel(
+    key: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XDel, [key, ...ids]);
 }
 
 /**
@@ -3014,6 +3027,16 @@ export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
 }
 
+/** @internal */
+export function createWatch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Watch, keys);
+}
+
+/** @internal */
+export function createUnWatch(): command_request.Command {
+    return createCommand(RequestType.UnWatch, []);
+}
+
 /**
  * This base class represents the common set of optional arguments for the SCAN family of commands.
  * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
@@ -3066,4 +3089,46 @@ export function createSetRange(
     value: string,
 ): command_request.Command {
     return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
+}
+
+/**
+ * @internal
+ */
+export function createLMPop(
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString(), ...keys, direction];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.LMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBLMPop(
+    timeout: number,
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [
+        timeout.toString(),
+        keys.length.toString(),
+        ...keys,
+        direction,
+    ];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.BLMPop, args);
 }

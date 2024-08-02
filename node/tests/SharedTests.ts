@@ -5959,11 +5959,8 @@ export function runBaseTests<Context>(config: {
 
                 // Setup test data - use a large number of entries to force an iterative cursor.
                 const numberMap: Record<string, number> = {};
-                const expectedNumberMapArray: string[] = [];
 
-                for (let i = 0; i < 10000; i++) {
-                    expectedNumberMapArray.push(i.toString());
-                    expectedNumberMapArray.push(i.toString());
+                for (let i = 0; i < 50000; i++) {
                     numberMap[i.toString()] = i;
                 }
 
@@ -6036,15 +6033,18 @@ export function runBaseTests<Context>(config: {
                 }
 
                 // Fetching by cursor is randomized.
-                const expectedCombinedMapArray =
-                    expectedNumberMapArray.concat(expectedCharMapArray);
+                const expectedFullMap: Record<string, number> = {
+                    ...numberMap,
+                    ...charMap,
+                };
+
                 expect(fullResultMapArray.length).toEqual(
-                    expectedCombinedMapArray.length,
+                    Object.keys(expectedFullMap).length * 2,
                 );
 
                 for (let i = 0; i < fullResultMapArray.length; i += 2) {
-                    expect(fullResultMapArray).toContain(
-                        expectedCombinedMapArray[i],
+                    expect(fullResultMapArray[i] in expectedFullMap).toEqual(
+                        true,
                     );
                 }
 
@@ -6558,6 +6558,176 @@ export function runBaseTests<Context>(config: {
                 await expect(client.lcsIdx(key1, key4)).rejects.toThrow(
                     RequestError,
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xdel test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistentKey = uuidv4();
+                const streamId1 = "0-1";
+                const streamId2 = "0-2";
+                const streamId3 = "0-3";
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["f1", "foo1"],
+                            ["f2", "foo2"],
+                        ],
+                        { id: streamId1 },
+                    ),
+                ).toEqual(streamId1);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["f1", "foo1"],
+                            ["f2", "foo2"],
+                        ],
+                        { id: streamId2 },
+                    ),
+                ).toEqual(streamId2);
+
+                expect(await client.xlen(key)).toEqual(2);
+
+                // deletes one stream id, and ignores anything invalid
+                expect(await client.xdel(key, [streamId1, streamId3])).toEqual(
+                    1,
+                );
+                expect(await client.xdel(nonExistentKey, [streamId3])).toEqual(
+                    0,
+                );
+
+                // invalid argument - id list should not be empty
+                await expect(client.xdel(key, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xdel(stringKey, [streamId3]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `lmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const nonListKey = uuidv4();
+                const singleKeyArray = [key1];
+                const multiKeyArray = [key2, key1];
+                const count = 1;
+                const lpushArgs = ["one", "two", "three", "four", "five"];
+                const expected = { [key1]: ["five"] };
+                const expected2 = { [key2]: ["one", "two"] };
+
+                // nothing to be popped
+                expect(
+                    await client.lmpop(
+                        singleKeyArray,
+                        ListDirection.LEFT,
+                        count,
+                    ),
+                ).toBeNull();
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key1, lpushArgs)).toEqual(5);
+                expect(await client.lpush(key2, lpushArgs)).toEqual(5);
+
+                // checking correct result from popping
+                expect(
+                    await client.lmpop(singleKeyArray, ListDirection.LEFT),
+                ).toEqual(expected);
+
+                // popping multiple elements from the right
+                expect(
+                    await client.lmpop(multiKeyArray, ListDirection.RIGHT, 2),
+                ).toEqual(expected2);
+
+                // Key exists, but is not a set
+                expect(await client.set(nonListKey, "lmpop")).toBe("OK");
+                await expect(
+                    client.lmpop([nonListKey], ListDirection.RIGHT),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `blmpop test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const nonListKey = uuidv4();
+                const singleKeyArray = [key1];
+                const multiKeyArray = [key2, key1];
+                const count = 1;
+                const lpushArgs = ["one", "two", "three", "four", "five"];
+                const expected = { [key1]: ["five"] };
+                const expected2 = { [key2]: ["one", "two"] };
+
+                // nothing to be popped
+                expect(
+                    await client.blmpop(
+                        singleKeyArray,
+                        ListDirection.LEFT,
+                        0.1,
+                        count,
+                    ),
+                ).toBeNull();
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key1, lpushArgs)).toEqual(5);
+                expect(await client.lpush(key2, lpushArgs)).toEqual(5);
+
+                // checking correct result from popping
+                expect(
+                    await client.blmpop(
+                        singleKeyArray,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual(expected);
+
+                // popping multiple elements from the right
+                expect(
+                    await client.blmpop(
+                        multiKeyArray,
+                        ListDirection.RIGHT,
+                        0.1,
+                        2,
+                    ),
+                ).toEqual(expected2);
+
+                // Key exists, but is not a set
+                expect(await client.set(nonListKey, "blmpop")).toBe("OK");
+                await expect(
+                    client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, 1),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
