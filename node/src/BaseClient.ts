@@ -21,22 +21,18 @@ import {
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitmapIndexType,
-    BitwiseOperation,
-    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitwiseOperation, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
-    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
-    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InsertPosition,
-    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
+    KeyWeight,
     LPosOptions,
-    ListDirection,
-    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ListDirection, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -45,6 +41,7 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamEntries,
     StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -163,6 +160,7 @@ import {
     createXGroupCreate,
     createXGroupDestroy,
     createXInfoConsumers,
+    createXInfoStream,
     createXLen,
     createXRead,
     createXTrim,
@@ -4024,6 +4022,80 @@ export class BaseClient {
         groupName: string,
     ): Promise<boolean> {
         return this.createWritePromise(createXGroupDestroy(key, groupName));
+    }
+
+    /**
+     * Returns information about the stream stored at `key`.
+     *
+     * @param key - The key of the stream.
+     * @param fullOptions - If `true`, returns verbose information with a limit of the first 10 PEL entries.
+     * If `number` is specified, returns verbose information limiting the returned PEL entries.
+     * If `0` is specified, returns verbose information with no limit.
+     * @returns A map of detailed stream information for the given `key`. See
+     *     the example for a sample response.
+     * @example
+     * ```typescript
+     * const infoResult = await client.xinfoStream("my_stream");
+     * console.log(infoResult); // Output: {
+     *                          //   length: 2,
+     *                          //   'radix-tree-keys': 1,
+     *                          //   'radix-tree-nodes': 2,
+     *                          //   'last-generated-id': '1719877599564-1',
+     *                          //   'max-deleted-entry-id': '0-0',
+     *                          //   'entries-added': 2,
+     *                          //   'recorded-first-entry-id': '1719877599564-0',
+     *                          //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     *                          //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     *                          //   groups: 1,
+     *                          // }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const infoResult = await client.xinfoStream("my_stream", true); // default limit of 10 entries
+     * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
+     * console.log(infoResult); // Output: {
+     *                          //   length: 2,
+     *                          //   'radix-tree-keys': 1,
+     *                          //   'radix-tree-nodes': 2,
+     *                          //   'last-generated-id': '1719877599564-1',
+     *                          //   'max-deleted-entry-id': '0-0',
+     *                          //   'entries-added': 2,
+     *                          //   'recorded-first-entry-id': '1719877599564-0',
+     *                          //   entries: [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
+     *                          //   groups: [ {
+     *                          //     name: 'group',
+     *                          //     'last-delivered-id': '1719877599564-0',
+     *                          //     'entries-read': 1,
+     *                          //     lag: 1,
+     *                          //     'pel-count': 1,
+     *                          //     pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     *                          //     consumers: [ {
+     *                          //         name: 'consumer',
+     *                          //         'seen-time': 1722624726802,
+     *                          //         'active-time': 1722624726802,
+     *                          //         'pel-count': 1,
+     *                          //         pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     *                          //         }
+     *                          //       ]
+     *                          //     }
+     *                          //   ]
+     *                          // }
+     * ```
+     */
+    public xinfoStream(
+        key: string,
+        fullOptions?: boolean | number,
+    ): Promise<
+        Record<
+            string,
+            | StreamEntries
+            | Record<string, StreamEntries | Record<string, StreamEntries>[]>[]
+        >
+    > {
+        return this.createWritePromise(
+            createXInfoStream(key, fullOptions ?? false),
+        );
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
