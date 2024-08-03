@@ -2321,7 +2321,7 @@ export type StreamGroupOptions = {
     /**
      * If `true`and the stream doesn't exist, creates a new stream with a length of `0`.
      */
-    mkStream?: boolean;
+    readonly mkStream?: boolean;
     /**
      * An arbitrary ID (that isn't the first ID, last ID, or the zero `"0-0"`. Use it to
      * find out how many entries are between the arbitrary ID (excluding it) and the stream's last
@@ -2329,7 +2329,7 @@ export type StreamGroupOptions = {
      *
      * since Valkey version 7.0.0.
      */
-    entriesRead?: string;
+    readonly entriesRead?: string;
 };
 
 /**
