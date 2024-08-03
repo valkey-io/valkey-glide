@@ -2283,6 +2283,48 @@ export function createXLen(key: string): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
+/** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
+export type StreamPendingOptions = {
+    /** Filter pending entries by their idle time - in milliseconds */
+    minIdleTime?: number;
+    /** Starting stream ID bound for range. */
+    start: ScoreBoundary<string>;
+    /** Ending stream ID bound for range. */
+    end: ScoreBoundary<string>;
+    /** Limit the number of messages returned. */
+    count: number;
+    /** Filter pending entries by consumer. */
+    consumer?: string;
+};
+
+/** @internal */
+export function createXPending(
+    key: string,
+    group: string,
+    options?: StreamPendingOptions,
+): command_request.Command {
+    const args = [key, group];
+
+    if (options) {
+        if (options.minIdleTime !== undefined)
+            args.push("IDLE", options.minIdleTime.toString());
+        args.push(
+            // pass enum (string actually) as is, because XRANGE and ZRANGE are not
+            // aligned in how range boundaries are converted to args :facepalm:
+            typeof options.start === "string"
+                ? options.start
+                : getScoreBoundaryArg(options.start, false),
+            typeof options.end === "string"
+                ? options.end
+                : getScoreBoundaryArg(options.end, false),
+            options.count.toString(),
+        );
+        if (options.consumer) args.push(options.consumer);
+    }
+
+    return createCommand(RequestType.XPending, args);
+}
+
 /**
  * @internal
  */

@@ -44,9 +44,11 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
@@ -55,7 +57,6 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
-    createBLMPop,
     createDecr,
     createDecrBy,
     createDel,
@@ -91,8 +92,8 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
-    createLMove,
     createLMPop,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -146,6 +147,7 @@ import {
     createXAdd,
     createXDel,
     createXLen,
+    createXPending,
     createXRead,
     createXTrim,
     createZAdd,
@@ -172,8 +174,8 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
     createZScan,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -3568,6 +3570,77 @@ export class BaseClient {
      */
     public xlen(key: string): Promise<number> {
         return this.createWritePromise(createXLen(key));
+    }
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * See https://valkey.io/commands/xpending/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @returns An `array` that includes the summary of the pending messages. See example for more details.
+     * @example
+     * ```typescript
+     * console.log(await client.xpending("my_stream", "my_group")); // Output:
+     * // [
+     * //     42,                            // The total number of pending messages
+     * //     "1722643465939-0",             // The smallest ID among the pending messages
+     * //     "1722643484626-0",             // The greatest ID among the pending messages
+     * //     [                              // A 2D-`array` of every consumer in the group
+     * //         [ "consumer1", "10" ],     // with at least one pending message, and the
+     * //         [ "consumer2", "32" ],     // number of pending messages it has
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xpending(
+        key: string,
+        group: string,
+    ): Promise<[number, string, string, [string, number][]]> {
+        return this.createWritePromise(createXPending(key, group));
+    }
+
+    /**
+     * Returns an extended form of stream message information for pending messages matching a given range of IDs.
+     *
+     * See https://valkey.io/commands/xpending/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param options - Additional options to filter entries, see {@link StreamPendingOptions}.
+     * @returns A 2D-`array` of 4-tuples containing extended message information. See example for more details.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.xpending("my_stream", "my_group"), {
+     *     start: { value: "0-1", isInclusive: true },
+     *     end: InfScoreBoundary.PositiveInfinity,
+     *     count: 2,
+     *     consumer: "consumer1"
+     * }); // Output:
+     * // [
+     * //     [
+     * //         "1722643465939-0",  // The ID of the message
+     * //         "consumer1",        // The name of the consumer that fetched the message and has still to acknowledge it
+     * //         174431,             // The number of milliseconds that elapsed since the last time this message was delivered to this consumer
+     * //         1                   // The number of times this message was delivered
+     * //     ],
+     * //     [
+     * //         "1722643484626-0",
+     * //         "consumer1",
+     * //         202231,
+     * //         1
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xpendingWithOptions(
+        key: string,
+        group: string,
+        options: StreamPendingOptions,
+    ): Promise<[string, string, number, number][]> {
+        return this.createWritePromise(createXPending(key, group, options));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

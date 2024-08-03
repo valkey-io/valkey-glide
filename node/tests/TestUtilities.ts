@@ -862,6 +862,50 @@ export async function transactionTest(
     ]);
     baseTransaction.xdel(key9, ["0-3", "0-5"]);
     responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
+
+    // key9 has one entry here: {"0-2":[["field","value2"]]}
+
+    baseTransaction.customCommand(["xgroup", "create", key9, "group1", "0"]);
+    responseData.push(['xgroupCreate(key9, "group1", "0")', "OK"]);
+    baseTransaction.customCommand([
+        "xgroup",
+        "createconsumer",
+        key9,
+        "group1",
+        "consumer1",
+    ]);
+    responseData.push([
+        'xgroupCreateConsumer(key9, "group1", "consumer1")',
+        true,
+    ]);
+    baseTransaction.customCommand([
+        "xreadgroup",
+        "group",
+        "group1",
+        "consumer1",
+        "STREAMS",
+        key9,
+        ">",
+    ]);
+    responseData.push([
+        'xreadgroup("group1", "consumer1", key9, >)',
+        { [key9]: { "0-2": [["field", "value2"]] } },
+    ]);
+    baseTransaction.xpending(key9, "group1");
+    responseData.push([
+        'xpending(key9, "group1")',
+        [1, "0-2", "0-2", [["consumer1", "1"]]],
+    ]);
+    baseTransaction.xpending(key9, "group1", {
+        start: InfScoreBoundary.NegativeInfinity,
+        end: InfScoreBoundary.PositiveInfinity,
+        count: 10,
+    });
+    responseData.push([
+        'xpending(key9, "group1", -, +, 10)',
+        [["0-2", "consumer1", 0, 1]],
+    ]);
+
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);

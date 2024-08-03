@@ -4,6 +4,7 @@
 
 import {
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
 import {
@@ -204,6 +205,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createXPending,
+    StreamPendingOptions,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2065,6 +2068,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xlen(key: string): T {
         return this.addAndReturn(createXLen(key));
+    }
+
+    /**
+     * Returns stream message information for pending messages matching a given range of IDs.
+     *
+     * See https://valkey.io/commands/xpending/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param options - Additional options to filter entries, see {@link StreamPendingOptions}.
+     *
+     * Command Response - An `array` that includes the summary of the pending messages or extended message information if `options` are given.
+     * See examples of {@link BaseClient.xpending|xpending} and {@link BaseClient.xpendingWithOptions|xpending with options} for more details.
+     */
+    public xpending(
+        key: string,
+        group: string,
+        options?: StreamPendingOptions,
+    ): T {
+        return this.addAndReturn(createXPending(key, group, options));
     }
 
     /**
