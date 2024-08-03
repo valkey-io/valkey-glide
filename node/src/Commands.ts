@@ -1268,6 +1268,13 @@ export function createExpireAt(
 /**
  * @internal
  */
+export function createExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.ExpireTime, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createPExpire(
     key: string,
     milliseconds: number,
@@ -1293,6 +1300,13 @@ export function createPExpireAt(
             ? [key, unixMilliseconds.toString()]
             : [key, unixMilliseconds.toString(), option];
     return createCommand(RequestType.PExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createPExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.PExpireTime, [key]);
 }
 
 /**
@@ -3053,6 +3067,16 @@ export function createTouch(keys: string[]): command_request.Command {
 /** @internal */
 export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
+}
+
+/** @internal */
+export function createWatch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Watch, keys);
+}
+
+/** @internal */
+export function createUnWatch(): command_request.Command {
+    return createCommand(RequestType.UnWatch, []);
 }
 
 /**
