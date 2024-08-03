@@ -1974,17 +1974,21 @@ export function createXTrim(
     return createCommand(RequestType.XTrim, args);
 }
 
-export type StreamRangeBound =
-    /**
-     * Stream ID boundary used to specify the minimum stream entry ID. Can be used in the `XRANGE` or `XREVRANGE` commands
-     * to get the first stream ID.
-     */
-    | "-"
+export enum StreamIdBoundary {
     /**
      * Stream ID boundary used to specify the maximum stream entry ID. Can be used in the `XRANGE` or `XREVRANGE` commands
      * to get the last stream ID.
      */
-    | "+"
+    MaxId = "+",
+    /**
+     * Stream ID boundary used to specify the minimum stream entry ID. Can be used in the `XRANGE` or `XREVRANGE` commands
+     * to get the first stream ID.
+     */
+    MinId = "-",
+}
+
+export type StreamRangeBound =
+    | StreamIdBoundary 
     /**
      * Stream ID boundary used to specify a range of IDs to search. Stream ID bounds can be complete with
      * a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
@@ -1996,7 +2000,7 @@ export type StreamRangeBound =
       };
 
 function addRangeBound(rangeBound: StreamRangeBound): string {
-    if (rangeBound === "-" || rangeBound === "+") {
+    if (rangeBound === StreamIdBoundary.MinId || rangeBound === StreamIdBoundary.MaxId) {
         return rangeBound;
     }
 

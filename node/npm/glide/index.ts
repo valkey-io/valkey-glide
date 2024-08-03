@@ -222,6 +222,7 @@ function initialize() {
         SortedSetRange,
         StreamTrimOptions,
         StreamAddOptions,
+        StreamIdBoundary,
         StreamRangeBound,
         StreamReadOptions,
         ScriptOptions,
