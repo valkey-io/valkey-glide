@@ -3313,9 +3313,15 @@ describe("PubSub", () => {
                 const channel3 = "some_channel3";
                 const pattern = "test_*";
 
-                client = await GlideClient.createClient(
-                    getOptions(clusterMode),
-                );
+                if (clusterMode) {
+                    client = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    client = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
 
                 // Assert no channels exists yet
                 expect(await client.pubsubChannels()).toEqual([]);
@@ -3405,9 +3411,16 @@ describe("PubSub", () => {
                 const pattern2 = "another_*";
 
                 // Create a client and check initial number of patterns
-                client = await GlideClient.createClient(
-                    getOptions(clusterMode),
-                );
+                if (clusterMode) {
+                    client = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    client = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
                 expect(await client.pubsubNumPat()).toBe(0);
 
                 // Set up subscriptions with patterns
@@ -3529,9 +3542,16 @@ describe("PubSub", () => {
                 );
 
                 // Create a client and check initial subscribers
-                client = await GlideClient.createClient(
-                    getOptions(clusterMode),
-                );
+                if (clusterMode) {
+                    client = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    client = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
                 expect(
                     await client.pubsubNumSub([channel1, channel2, channel3]),
                 ).toEqual({
@@ -3623,6 +3643,12 @@ describe("PubSub", () => {
     it.each([true])(
         "test pubsub shardchannels_%p",
         async (clusterMode) => {
+            const minVersion = "7.0.0";
+
+            if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
+                return; // Skip test if server version is less than required
+            }
+
             let pubSub: GlideClusterClientConfiguration.PubSubSubscriptions | null =
                 null;
             let client1: TGlideClient | null = null;
@@ -3638,11 +3664,6 @@ describe("PubSub", () => {
                 client = await GlideClusterClient.createClient(
                     getOptions(clusterMode),
                 );
-                const minVersion = "7.0.0";
-
-                if (cmeCluster.checkIfServerVersionLessThan(minVersion)) {
-                    return; // Skip test if server version is less than required
-                }
 
                 // Assert no sharded channels exist yet
                 expect(await client.pubsubShardChannels()).toEqual([]);
@@ -3872,10 +3893,7 @@ describe("PubSub", () => {
                         [GlideClusterClientConfiguration.PubSubChannelModes
                             .Sharded]: new Set([shardChannel]),
                     },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([regularChannel]),
-                    },
+                    {},
                 );
 
                 [client1, client2] = await createClients(

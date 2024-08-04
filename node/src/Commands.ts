@@ -3164,7 +3164,7 @@ export function createPubSubNumSub(
 export function createPubsubShardChannels(
     pattern?: string,
 ): command_request.Command {
-    return createCommand(RequestType.PubSubChannels, pattern ? [pattern] : []);
+    return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
 }
 
 /**
@@ -3173,5 +3173,5 @@ export function createPubsubShardChannels(
 export function createPubSubShardNumSub(
     channels?: string[],
 ): command_request.Command {
-    return createCommand(RequestType.PubSubNumSub, channels ? channels : []);
+    return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
 }

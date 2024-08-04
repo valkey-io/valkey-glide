@@ -253,8 +253,13 @@ describe("GlideClusterClient", () => {
             );
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction.publish("message", "key");
-                expectedRes.push(['publish("message", "key")', 0]);
+                transaction.publish("message", "key", true);
+                expectedRes.push(['publish("message", "key", true)', 0]);
+
+                transaction.pubsubShardChannels();
+                expectedRes.push(["pubsubShardChannels()", []]);
+                transaction.pubsubShardNumSub();
+                expectedRes.push(["pubsubShardNumSub()", {}]);
             }
 
             const result = await client.exec(transaction);
