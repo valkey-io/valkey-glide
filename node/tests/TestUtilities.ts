@@ -515,6 +515,7 @@ export async function transactionTest(
     const value = uuidv4();
     const groupName1 = uuidv4();
     const groupName2 = uuidv4();
+    const consumer = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, ReturnType][] = [];
 
@@ -1011,6 +1012,13 @@ export async function transactionTest(
         'xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
         ["0-2"],
     ]);
+    baseTransaction.xgroupCreateConsumer(key9, groupName1, consumer);
+    responseData.push([
+        "xgroupCreateConsumer(key9, groupName1, consumer)",
+        true,
+    ]);
+    baseTransaction.xgroupDelConsumer(key9, groupName1, consumer);
+    responseData.push(["xgroupDelConsumer(key9, groupName1, consumer)", 0]);
     baseTransaction.xgroupDestroy(key9, groupName1);
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);

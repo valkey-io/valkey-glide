@@ -165,6 +165,8 @@ import {
     createXGroupDestroy,
     createXInfoConsumers,
     createXInfoStream,
+    createXGroupCreateConsumer,
+    createXGroupDelConsumer,
     createXLen,
     createXRead,
     createXTrim,
@@ -4146,6 +4148,58 @@ export class BaseClient {
         groupName: string,
     ): Promise<boolean> {
         return this.createWritePromise(createXGroupDestroy(key, groupName));
+    }
+
+    /**
+     * Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-createconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The newly created consumer.
+     * @returns `true` if the consumer is created. Otherwise, returns `false`.
+     *
+     * @example
+     * ```typescript
+     * // The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
+     * console.log(await client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")); // Output is true
+     * ```
+     */
+    public async xgroupCreateConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createXGroupCreateConsumer(key, groupName, consumerName),
+        );
+    }
+
+    /**
+     * Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-delconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The consumer to delete.
+     * @returns The number of pending messages the `consumer` had before it was deleted.
+     *
+     * * @example
+     * ```typescript
+     * // Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
+     * console.log(await client.xgroupDelConsumer("mystream", "mygroup", "myconsumer")); // Output is 5
+     * ```
+     */
+    public async xgroupDelConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createXGroupDelConsumer(key, groupName, consumerName),
+        );
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
