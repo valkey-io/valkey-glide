@@ -13,6 +13,7 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    Decoder,
     GlideClient,
     ListDirection,
     ProtocolVersion,
@@ -27,6 +28,7 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -209,6 +211,22 @@ describe("GlideClient", () => {
             );
             transaction.select(0);
             const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can get Bytes decoded transactions_%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const transaction = new Transaction();
+            const expectedRes = await encodedTransactionTest(transaction);
+            transaction.select(0);
+            const result = await client.exec(transaction, Decoder.Bytes);
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
