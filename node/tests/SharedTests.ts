@@ -7674,7 +7674,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xgroupCreateConsumer and xgroupDelConsumer test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+            await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const nonExistentKey = uuidv4();
                 const stringKey = uuidv4();
