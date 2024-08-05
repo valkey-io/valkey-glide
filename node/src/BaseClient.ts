@@ -255,7 +255,7 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
-export type GlideString = string | Uint8Array;
+export type GlideString = string | Buffer;
 
 /**
  * Enum representing the different types of decoders.
