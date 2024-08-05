@@ -1700,15 +1700,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * 
      * See https://valkey.io/commands/zinter/ for more details.
      * 
-     * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param keys - The keys of the sorted sets.
      * Command Response - The resulting array of intersecting elements.
      * 
-     * since 
+     * since Valkey version 6.2.0. 
      */
     public zinter(
-        keys: string[] | KeyWeight[],
+        keys: string[],
     ): T {
         return this.addAndReturn(
             createZInter(keys),
@@ -1730,7 +1728,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
      * Command Response - The resulting sorted set with scores.
      * 
-     * since 
+     * since Valkey version 6.2.0. 
      */
     public zinterWithScores(
         keys: string[] | KeyWeight[],
@@ -1751,15 +1749,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * 
      * See https://valkey.io/commands/zunion/ for more details.
      * 
-     * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param keys - The keys of the sorted sets.
      * Command Response - The resulting array of union elements.
      * 
-     * since
+     * since Valkey version 6.2.0.
      */
-    public zunioun(
-        keys: string[] | KeyWeight[],
+    public zunion(
+        keys: string[],
     ): T {
         return this.addAndReturn(
             createZUnion(keys),
@@ -1779,6 +1775,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *  KeyWeight[] - for weighted keys with score multipliers.
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
      * Commnd Response - The resulting sorted set with scores.
+     * 
+     * since Valkey version 6.2.0.
      */
     public zunionWithScores(
         keys: string[] | KeyWeight[],
