@@ -39,7 +39,9 @@ import {
     createLastSave,
     createLolwut,
     createPing,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRandomKey,
     createSort,
     createSortReadOnly,
@@ -990,6 +992,57 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
         );
+    }
+
+    /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-shardchannels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * @returns A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const allChannels = await client.pubsubShardchannels();
+     * console.log(allChannels); // Output: ["channel1", "channel2"]
+     *
+     * const filteredChannels = await client.pubsubShardchannels("channel*");
+     * console.log(filteredChannels); // Output: ["channel1", "channel2"]
+     * ```
+     */
+    public async pubsubShardChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-shardnumsub for more details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubShardnumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubShardnumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubShardNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubShardNumSub(channels));
     }
 
     /**

@@ -51,9 +51,9 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMPop,
     createBLMove,
     createBLPop,
-    createBLMPop,
     createBRPop,
     createBZMPop,
     createBitCount,
@@ -113,8 +113,8 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
-    createLMove,
     createLMPop,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -141,7 +141,12 @@ import {
     createPfCount,
     createPfMerge,
     createPing,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRPop,
     createRPush,
     createRPushX,
@@ -2810,6 +2815,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
     }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-channels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * Command Response - A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     */
+    public pubsubChannels(pattern?: string): T {
+        return this.addAndReturn(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numpat for more details.
+     *
+     * Command Response - The number of unique patterns.
+     */
+    public pubsubNumPat(): T {
+        return this.addAndReturn(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numsub for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * Command Response - A map where keys are the channel names and values are the number of subscribers.
+     */
+    public pubsubNumSub(channels?: string[]): T {
+        return this.addAndReturn(createPubSubNumSub(channels));
+    }
 }
 
 /**
@@ -3077,5 +3128,36 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         sharded: boolean = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
+    }
+
+    /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-shardchannels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * Command Response - A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     */
+    public pubsubShardChannels(pattern?: string): ClusterTransaction {
+        return this.addAndReturn(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-shardnumsub for more details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     */
+    public pubsubShardNumSub(channels?: string[]): ClusterTransaction {
+        return this.addAndReturn(createPubSubShardNumSub(channels));
     }
 }

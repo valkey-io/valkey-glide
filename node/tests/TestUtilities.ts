@@ -479,6 +479,12 @@ export async function transactionTest(
 
     baseTransaction.publish("test_message", key1);
     responseData.push(['publish("test_message", key1)', 0]);
+    baseTransaction.pubsubChannels();
+    responseData.push(["pubsubChannels()", []]);
+    baseTransaction.pubsubNumPat();
+    responseData.push(["pubsubNumPat()", 0]);
+    baseTransaction.pubsubNumSub();
+    responseData.push(["pubsubNumSub()", {}]);
 
     baseTransaction.flushall();
     responseData.push(["flushall()", "OK"]);
