@@ -181,7 +181,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    createZUnion
+    createZUnion,
 } from "./Commands";
 import {
     ClosingError,
@@ -3074,16 +3074,16 @@ export class BaseClient {
      * To store the result in a key as a sorted set, see `zinterStore`.
      *
      * When in cluster mode, all keys in `keys` must map to the same hash slot.
-     * 
+     *
      * since - Valkey version 6.2.0.
-     * 
+     *
      * See https://valkey.io/commands/zinter/ for more details.
-     * 
+     *
      * @param keys - The keys of the sorted sets.
      * @returns The resulting array of intersecting elements.
-     * 
+     *
      * since Valkey version 6.2.0.
-     * 
+     *
      * @example
      * ```typescript
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
@@ -3092,12 +3092,8 @@ export class BaseClient {
      * console.log(result); // Output: ['member1']
      * ```
      */
-    public zinter(
-        keys: string[],
-    ): Promise<string[]> {
-        return this.createWritePromise(
-            createZInter(keys),
-        );
+    public zinter(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZInter(keys));
     }
 
     /**
@@ -3106,17 +3102,17 @@ export class BaseClient {
      * To store the result in a key as a sorted set, see `zinterStore`.
      *
      * When in cluster mode, all keys in `keys` must map to the same hash slot.
-     * 
+     *
      * See https://valkey.io/commands/zinter/ for more details.
-     * 
+     *
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
      * @returns The resulting sorted set with scores.
-     * 
+     *
      * since Valkey version 6.2.0.
-     * 
+     *
      * @example
      * ```typescript
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
@@ -3139,20 +3135,20 @@ export class BaseClient {
     /**
      * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
      * To get the scores as well, see `zunionWithScores`.
-     * 
+     *
      * To store the result in a key as a sorted set, see `zunionStore`.
-     * 
+     *
      * When in cluster mode, all keys in `keys` must map to the same hash slot.
-     * 
+     *
      * since - Valkey version 6.2.0.
-     * 
+     *
      * See https://valkey.io/commands/zunion/ for more details.
-     * 
+     *
      * @param keys - The keys of the sorted sets.
      * @returns The resulting array of union elements.
-     * 
+     *
      * since Valkey version 6.2.0.
-     * 
+     *
      * @example
      * ```typescript
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
@@ -3161,12 +3157,8 @@ export class BaseClient {
      * console.log(result); // Output: ['member1', 'member2']
      * ```
      */
-    public zunion(
-        keys: string[],
-    ): Promise<string[]> {
-        return this.createWritePromise(
-            createZUnion(keys),
-        );
+    public zunion(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZUnion(keys));
     }
 
     /**
@@ -3174,17 +3166,17 @@ export class BaseClient {
      * To get the elements only, see `zunion`.
      *
      * When in cluster mode, all keys in `keys` must map to the same hash slot.
-     * 
+     *
      * See https://valkey.io/commands/zunion/ for more details.
-     * 
+     *
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
      * @returns The resulting sorted set with scores.
-     * 
+     *
      * since Valkey version 6.2.0.
-     * 
+     *
      * @example
      * ```typescript
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});

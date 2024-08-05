@@ -33,7 +33,7 @@ import {
     SignedEncoding,
     SortOrder,
     Transaction,
-    UnsignedEncoding
+    UnsignedEncoding,
 } from "..";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -781,9 +781,15 @@ export async function transactionTest(
         baseTransaction.zinter([key26, key25]);
         responseData.push(["zinter([key26, key25])", ["one", "two"]]);
         baseTransaction.zinterWithScores([key26, key25]);
-        responseData.push(["zinterWithScores([key26, key25])", {one: 2, two: 4}]);
+        responseData.push([
+            "zinterWithScores([key26, key25])",
+            { one: 2, two: 4 },
+        ]);
         baseTransaction.zunionWithScores([key26, key25]);
-        responseData.push(["zunionWithScores([key26, key25])", {one: 2, two: 4, three: 3.5}]);
+        responseData.push([
+            "zunionWithScores([key26, key25])",
+            { one: 2, two: 4, three: 3.5 },
+        ]);
     } else {
         baseTransaction.zinterstore(key12, [key12, key13]);
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
