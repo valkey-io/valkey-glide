@@ -4029,7 +4029,7 @@ export class BaseClient {
      * @param fullOptions - If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
-     * @returns A map of detailed stream information for the given `key`. See
+     * @returns A `Record` of detailed stream information for the given `key`. See
      *     the example for a sample response.
      * @example
      * ```typescript

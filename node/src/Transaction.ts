@@ -2228,7 +2228,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
      *
-     * Command Response - A map of detailed stream information for the given `key`. See
+     * Command Response - A `Record` of detailed stream information for the given `key`. See
      *     the example for a sample response.
      */
     public xinfoStream(key: string, fullOptions?: boolean | number): T {
