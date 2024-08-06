@@ -104,6 +104,21 @@ export function createGetDel(key: string): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 
+/**
+ * @internal
+ */
+export function createGetRange(
+    key: string,
+    start: number,
+    end: number,
+): command_request.Command {
+    return createCommand(RequestType.GetRange, [
+        key,
+        start.toString(),
+        end.toString(),
+    ]);
+}
+
 export type SetOptions = {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.

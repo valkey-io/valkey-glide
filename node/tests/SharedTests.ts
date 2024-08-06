@@ -1190,6 +1190,50 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getrange test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const nonStringKey = uuidv4();
+
+                expect(await client.set(key, "This is a string")).toEqual("OK");
+                expect(await client.getrange(key, 0, 3)).toEqual("This");
+                expect(await client.getrange(key, -3, -1)).toEqual("ing");
+                expect(await client.getrange(key, 0, -1)).toEqual(
+                    "This is a string",
+                );
+
+                // out of range
+                expect(await client.getrange(key, 10, 100)).toEqual("string");
+                expect(await client.getrange(key, -200, -3)).toEqual(
+                    "This is a stri",
+                );
+                expect(await client.getrange(key, 100, 200)).toEqual("");
+
+                // incorrect range
+                expect(await client.getrange(key, -1, -3)).toEqual("");
+
+                // a bug fixed in version 8: https://github.com/redis/redis/issues/13207
+                expect(await client.getrange(key, -200, -100)).toEqual(
+                    cluster.checkIfServerVersionLessThan("8.0.0") ? "T" : "",
+                );
+
+                // empty key (returning null isn't implemented)
+                expect(await client.getrange(nonStringKey, 0, -1)).toEqual(
+                    cluster.checkIfServerVersionLessThan("8.0.0") ? "" : null,
+                );
+
+                // non-string key
+                expect(await client.lpush(nonStringKey, ["_"])).toEqual(1);
+                await expect(
+                    client.getrange(nonStringKey, 0, -1),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `testing hset and hget with multiple existing fields and one non existing field_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
