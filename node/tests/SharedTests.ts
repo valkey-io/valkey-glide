@@ -6726,6 +6726,9 @@ export function runBaseTests<Context>(config: {
                     },
                 });
 
+                // wait to get some minIdleTime
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
                 expect(await client.xpending(key, group)).toEqual([
                     2,
                     "0-1",
@@ -6737,6 +6740,7 @@ export function runBaseTests<Context>(config: {
                     start: InfScoreBoundary.NegativeInfinity,
                     end: InfScoreBoundary.PositiveInfinity,
                     count: 1,
+                    minIdleTime: 42,
                 });
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
