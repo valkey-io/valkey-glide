@@ -151,6 +151,7 @@ import {
     createWatch,
     createXAdd,
     createXDel,
+    createXInfoConsumers,
     createXLen,
     createXRead,
     createXTrim,
@@ -3631,6 +3632,39 @@ export class BaseClient {
      */
     public xlen(key: string): Promise<number> {
         return this.createWritePromise(createXLen(key));
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xinfo-consumers/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @returns An `Array` of `Records`, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at `key`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xinfoConsumers("my_stream", "my_group");
+     * console.log(result); // Output:
+     * // [
+     * //     {
+     * //         "name": "Alice",
+     * //         "pending": 1,
+     * //         "idle": 9104628,
+     * //         "inactive": 18104698   // Added in 7.2.0
+     * //     },
+     * //     ...
+     * // ]
+     * ```
+     */
+    public async xinfoConsumers(
+        key: string,
+        group: string,
+    ): Promise<Record<string, string | number>[]> {
+        return this.createWritePromise(createXInfoConsumers(key, group));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

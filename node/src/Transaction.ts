@@ -182,6 +182,7 @@ import {
     createUnlink,
     createXAdd,
     createXDel,
+    createXInfoConsumers,
     createXLen,
     createXRead,
     createXTrim,
@@ -2103,6 +2104,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xlen(key: string): T {
         return this.addAndReturn(createXLen(key));
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xinfo-consumers/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     *
+     * Command Response - An `Array` of `Records`, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at `key`.
+     */
+    public xinfoConsumers(key: string, group: string): T {
+        return this.addAndReturn(createXInfoConsumers(key, group));
     }
 
     /**

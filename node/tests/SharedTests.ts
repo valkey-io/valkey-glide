@@ -6622,6 +6622,164 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xinfoconsumers xinfo consumers %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const groupName1 = uuidv4();
+                const consumer1 = uuidv4();
+                const consumer2 = uuidv4();
+                const streamId1 = "0-1";
+                const streamId2 = "0-2";
+                const streamId3 = "0-3";
+                const streamId4 = "0-4";
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["entry1_field1", "entry1_value1"],
+                            ["entry1_field2", "entry1_value2"],
+                        ],
+                        { id: streamId1 },
+                    ),
+                ).toEqual(streamId1);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["entry2_field1", "entry2_value1"],
+                            ["entry2_field2", "entry2_value2"],
+                        ],
+                        { id: streamId2 },
+                    ),
+                ).toEqual(streamId2);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [["entry3_field1", "entry3_value1"]],
+                        { id: streamId3 },
+                    ),
+                ).toEqual(streamId3);
+
+                expect(
+                    await client.customCommand([
+                        "XGROUP",
+                        "CREATE",
+                        key,
+                        groupName1,
+                        "0-0",
+                    ]),
+                ).toEqual("OK");
+                expect(
+                    await client.customCommand([
+                        "XREADGROUP",
+                        "GROUP",
+                        groupName1,
+                        consumer1,
+                        "COUNT",
+                        "1",
+                        "STREAMS",
+                        key,
+                        ">",
+                    ]),
+                ).toEqual({
+                    [key]: {
+                        [streamId1]: [
+                            ["entry1_field1", "entry1_value1"],
+                            ["entry1_field2", "entry1_value2"],
+                        ],
+                    },
+                });
+                // Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                let result = await client.xinfoConsumers(key, groupName1);
+                expect(result.length).toEqual(1);
+                expect(result[0].name).toEqual(consumer1);
+                expect(result[0].pending).toEqual(1);
+                expect(result[0].idle).toBeGreaterThan(0);
+
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(result[0].inactive).toBeGreaterThan(0);
+                }
+
+                expect(
+                    await client.customCommand([
+                        "XGROUP",
+                        "CREATECONSUMER",
+                        key,
+                        groupName1,
+                        consumer2,
+                    ]),
+                ).toBeTruthy();
+                expect(
+                    await client.customCommand([
+                        "XREADGROUP",
+                        "GROUP",
+                        groupName1,
+                        consumer2,
+                        "STREAMS",
+                        key,
+                        ">",
+                    ]),
+                ).toEqual({
+                    [key]: {
+                        [streamId2]: [
+                            ["entry2_field1", "entry2_value1"],
+                            ["entry2_field2", "entry2_value2"],
+                        ],
+                        [streamId3]: [["entry3_field1", "entry3_value1"]],
+                    },
+                });
+
+                // Verify that xinfo_consumers contains info for 2 consumers now
+                result = await client.xinfoConsumers(key, groupName1);
+                expect(result.length).toEqual(2);
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xinfoConsumers(stringKey, "_"),
+                ).rejects.toThrow(RequestError);
+
+                // Passing a non-existing key raises an error
+                const key2 = uuidv4();
+                await expect(client.xinfoConsumers(key2, "_")).rejects.toThrow(
+                    RequestError,
+                );
+
+                expect(
+                    await client.xadd(key2, [["field", "value"]], {
+                        id: streamId4,
+                    }),
+                ).toEqual(streamId4);
+
+                // Passing a non-existing group raises an error
+                await expect(client.xinfoConsumers(key2, "_")).rejects.toThrow(
+                    RequestError,
+                );
+
+                expect(
+                    await client.customCommand([
+                        "XGROUP",
+                        "CREATE",
+                        key2,
+                        groupName1,
+                        "0-0",
+                    ]),
+                ).toEqual("OK");
+                expect(await client.xinfoConsumers(key2, groupName1)).toEqual(
+                    [],
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmpop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster: RedisCluster) => {
