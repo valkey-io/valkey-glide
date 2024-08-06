@@ -6710,13 +6710,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(streamId3);
 
                 expect(
-                    await client.customCommand([
-                        "XGROUP",
-                        "CREATE",
-                        key,
-                        groupName1,
-                        "0-0",
-                    ]),
+                    await client.xgroupCreate(key, groupName1, "0-0"),
                 ).toEqual("OK");
                 expect(
                     await client.customCommand([
@@ -6807,13 +6801,7 @@ export function runBaseTests<Context>(config: {
                 );
 
                 expect(
-                    await client.customCommand([
-                        "XGROUP",
-                        "CREATE",
-                        key2,
-                        groupName1,
-                        "0-0",
-                    ]),
+                    await client.xgroupCreate(key2, groupName1, "0-0"),
                 ).toEqual("OK");
                 expect(await client.xinfoConsumers(key2, groupName1)).toEqual(
                     [],

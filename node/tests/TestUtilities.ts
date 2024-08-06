@@ -886,8 +886,8 @@ export async function transactionTest(
         'xgroupCreate(key9, groupName2, "0-0", { mkStream: true })',
         "OK",
     ]);
-    baseTransaction.xinfoConsumers(key9, "group");
-    responseData.push(['xinfoConsumers(key9, "group")', []]);
+    baseTransaction.xinfoConsumers(key9, groupName1);
+    responseData.push(["xinfoConsumers(key9, groupName1)", []]);
     baseTransaction.xgroupDestroy(key9, groupName1);
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);
