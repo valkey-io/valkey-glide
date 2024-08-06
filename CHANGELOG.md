@@ -61,7 +61,8 @@
 #### Fixes
 * Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))
 * Node: Fix ZADD bug where command could not be called with only the `changed` optional parameter ([#1995](https://github.com/valkey-io/valkey-glide/pull/1995))
-* Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count  ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
+* Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
+* Python: Fix `XClaim` return type to `List[bytes]` instead of `List[TEncodable]` ([#2075](https://github.com/valkey-io/valkey-glide/pull/2075))
 
 ## 1.0.0 (2024-07-09)
 
