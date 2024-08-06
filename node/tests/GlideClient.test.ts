@@ -151,14 +151,8 @@ describe("GlideClient", () => {
                     0.1,
                 ),
                 client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
-                client.bzpopmax(
-                    ["key1", "key2"],
-                    cluster.checkIfServerVersionLessThan("6.0.0") ? 1.0 : 0.1,
-                ),
-                client.bzpopmin(
-                    ["key1", "key2"],
-                    cluster.checkIfServerVersionLessThan("6.0.0") ? 1.0 : 0.1,
-                ),
+                client.bzpopmax(["key1", "key2"], 0),
+                client.bzpopmin(["key1", "key2"], 0),
             ];
 
             try {
@@ -168,7 +162,6 @@ describe("GlideClient", () => {
                     });
                     await Promise.race([promise, timeoutPromise]);
                 }
-                
             } finally {
                 for (const promise of promiseList) {
                     await Promise.resolve([promise]);
@@ -177,7 +170,7 @@ describe("GlideClient", () => {
                 client.close();
             }
         },
-        10000,
+        5000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
