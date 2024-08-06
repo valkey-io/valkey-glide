@@ -49,6 +49,7 @@
 * Node: Added ZREMRANGEBYLEX command ([#2025](https://github.com/valkey-io/valkey-glide/pull/2025))
 * Node: Added ZSCAN command ([#2061](https://github.com/valkey-io/valkey-glide/pull/2061))
 * Node: Added SETRANGE command ([#2066](https://github.com/valkey-io/valkey-glide/pull/2066))
+* Node: Added APPEND command ([#2095](https://github.com/valkey-io/valkey-glide/pull/2095))
 * Node: Added XDEL command ([#2064](https://github.com/valkey-io/valkey-glide/pull/2064))
 * Node: Added LMPOP & BLMPOP command ([#2050](https://github.com/valkey-io/valkey-glide/pull/2050))
 * Node: Added PUBSUB support ([#1964](https://github.com/valkey-io/valkey-glide/pull/1964))
