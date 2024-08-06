@@ -2330,6 +2330,15 @@ export function createXRead(
 }
 
 /**
+ * Represents a the return type for XInfo Stream in the response
+ */
+export type ReturnTypeXinfoStream = {
+    [key: string]:
+        | StreamEntries
+        | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
+};
+
+/**
  * Represents an array of Stream Entires in the response
  */
 export type StreamEntries = string | number | (string | number | string[])[][];

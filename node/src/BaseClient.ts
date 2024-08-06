@@ -11,18 +11,15 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
-    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSubCommands,
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
-    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
-    BitOffsetOptions,
+    BitOffsetMultiplier,
     BitmapIndexType,
-    BitwiseOperation,
-    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitwiseOperation, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -33,19 +30,16 @@ import {
     GeoUnit,
     GeospatialData,
     InsertPosition,
-    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
-    LPosOptions,
-    ListDirection,
-    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    KeyWeight,
+    ListDirection, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReturnTypeXinfoStream,
     ScoreBoundary,
     ScoreFilter,
-    SearchOrigin,
     SetOptions,
     StreamAddOptions,
-    StreamEntries,
     StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -4090,13 +4084,7 @@ export class BaseClient {
     public xinfoStream(
         key: string,
         fullOptions?: boolean | number,
-    ): Promise<
-        Record<
-            string,
-            | StreamEntries
-            | Record<string, StreamEntries | Record<string, StreamEntries>[]>[]
-        >
-    > {
+    ): Promise<ReturnTypeXinfoStream> {
         return this.createWritePromise(
             createXInfoStream(key, fullOptions ?? false),
         );
