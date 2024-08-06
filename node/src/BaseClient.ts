@@ -82,6 +82,7 @@ import {
     createHIncrByFloat,
     createHLen,
     createHMGet,
+    createHRandField,
     createHSet,
     createHSetNX,
     createHStrlen,
@@ -1583,6 +1584,81 @@ export class BaseClient {
      */
     public hstrlen(key: string, field: string): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
+    }
+
+    /**
+     * Returns a random field name from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @returns A random field name from the hash stored at `key`, or `null` when
+     *     the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.hrandfield("myHash")); // Output: 'field'
+     * ```
+     */
+    public async hrandfield(key: string): Promise<string | null> {
+        return this.createWritePromise(createHRandField(key));
+    }
+
+    /**
+     * Retrieves up to `count` random field names from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     * @returns An `array` of random field names from the hash stored at `key`,
+     *     or an `empty array` when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.hrandfieldCount("myHash", 2)); // Output: ['field1', 'field2']
+     * ```
+     */
+    public async hrandfieldCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createHRandField(key, count));
+    }
+
+    /**
+     * Retrieves up to `count` random field names along with their values from the hash
+     * value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
+     *     field name from the hash and `value` is the associated value of the field name.
+     *     If the hash does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.hrandfieldCountWithValues("myHash", 2);
+     * console.log(result); // Output: [['field1', 'value1'], ['field2', 'value2']]
+     * ```
+     */
+    public async hrandfieldWithValues(
+        key: string,
+        count: number,
+    ): Promise<[string, string][]> {
+        return this.createWritePromise(createHRandField(key, count, true));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
