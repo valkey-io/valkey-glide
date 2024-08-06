@@ -47,6 +47,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
@@ -61,6 +62,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createGeoAdd,
@@ -90,6 +92,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMPop,
     createLMove,
     createLPop,
     createLPos,
@@ -108,11 +111,15 @@ import {
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
     createPfCount,
     createPfMerge,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
     createRPop,
     createRPush,
     createRPushX,
@@ -136,12 +143,15 @@ import {
     createSUnionStore,
     createSet,
     createSetBit,
+    createSetRange,
     createStrlen,
     createTTL,
     createTouch,
     createType,
     createUnlink,
+    createWatch,
     createXAdd,
+    createXDel,
     createXLen,
     createXRead,
     createXTrim,
@@ -169,8 +179,8 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
     createZScan,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -2483,6 +2493,35 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
+     *
+     * See https://valkey.io/commands/expiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.expiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = await client.set(myKey, "value");
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
+     * ```
+     */
+    public async expiretime(key: string): Promise<number> {
+        return this.createWritePromise(createExpireTime(key));
+    }
+
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
@@ -2539,6 +2578,34 @@ export class BaseClient {
         return this.createWritePromise(
             createPExpireAt(key, unixMilliseconds, option),
         );
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * See https://valkey.io/commands/pexpiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * const result1 = client.pexpiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = client.set(myKey, "value");
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
+     * ```
+     */
+    public async pexpiretime(key: string): Promise<number> {
+        return this.createWritePromise(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
@@ -3548,6 +3615,26 @@ export class BaseClient {
     }
 
     /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     * @returns The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.xdel("key", ["1538561698944-0", "1538561698944-1"]));
+     * // Output is 2 since the stream marked 2 entries as deleted.
+     * ```
+     */
+    public xdel(key: string, ids: string[]): Promise<number> {
+        return this.createWritePromise(createXDel(key, ids));
+    }
+
+    /**
      * Trims the stream stored at `key` by evicting older entries.
      * See https://valkey.io/commands/xtrim/ for more details.
      *
@@ -4519,8 +4606,204 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public touch(keys: string[]): Promise<number> {
+    public async touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction. Executing a transaction will automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to watch.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * ```
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * await client.set("sampleKey", "hello world");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
+     * ```
+     */
+    public async watch(keys: string[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys));
+    }
+
+    /**
+     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
+     * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
+     *
+     * See https://valkey.io/commands/setrange/ for more details.
+     *
+     * @param key - The key of the string to update.
+     * @param offset - The position in the string where `value` should be written.
+     * @param value - The string written with `offset`.
+     * @returns The length of the string stored at `key` after it was modified.
+     *
+     * @example
+     * ```typescript
+     * const len = await client.setrange("key", 6, "GLIDE");
+     * console.log(len); // Output: 11 - New key was created with length of 11 symbols
+     * const value = await client.get("key");
+     * console.log(result); // Output: "\0\0\0\0\0\0GLIDE" - The string was padded with zero bytes
+     * ```
+     */
+    public async setrange(
+        key: string,
+        offset: number,
+        value: string,
+    ): Promise<number> {
+        return this.createWritePromise(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     * @returns A `Record` of key-name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey", ["one", "two", "three"]);
+     * await client.lpush("testKey2", ["five", "six", "seven"]);
+     * const result = await client.lmpop(["testKey", "testKey2"], ListDirection.LEFT, 1L);
+     * console.log(result.get("testKey")); // Output: { "testKey": ["three"] }
+     * ```
+     */
+    public async lmpop(
+        keys: string[],
+        direction: ListDirection,
+        count?: number,
+    ): Promise<Record<string, string[]>> {
+        return this.createWritePromise(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     * @returns - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * await client.lpush("testKey", ["one", "two", "three"]);
+     * await client.lpush("testKey2", ["five", "six", "seven"]);
+     * const result = await client.blmpop(["testKey", "testKey2"], ListDirection.LEFT, 0.1, 1L);
+     * console.log(result.get("testKey")); // Output: { "testKey": ["three"] }
+     * ```
+     */
+    public async blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): Promise<Record<string, string[]>> {
+        return this.createWritePromise(
+            createBLMPop(timeout, keys, direction, count),
+        );
+    }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-channels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * @returns A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const channels = await client.pubsubChannels();
+     * console.log(channels); // Output: ["channel1", "channel2"]
+     *
+     * const newsChannels = await client.pubsubChannels("news.*");
+     * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
+     * ```
+     */
+    public async pubsubChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numpat for more details.
+     *
+     * @returns The number of unique patterns.
+     *
+     * @example
+     * ```typescript
+     * const patternCount = await client.pubsubNumpat();
+     * console.log(patternCount); // Output: 3
+     * ```
+     */
+    public async pubsubNumPat(): Promise<number> {
+        return this.createWritePromise(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numsub for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubNumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubNumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubNumSub(channels));
     }
 
     /**

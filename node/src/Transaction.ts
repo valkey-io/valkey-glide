@@ -51,6 +51,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
@@ -75,6 +76,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createFlushAll,
@@ -111,6 +113,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMPop,
     createLMove,
     createLPop,
     createLPos,
@@ -131,13 +134,19 @@ import {
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
     createPfCount,
     createPfMerge,
     createPing,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRPop,
     createRPush,
     createRPushX,
@@ -163,6 +172,7 @@ import {
     createSelect,
     createSet,
     createSetBit,
+    createSetRange,
     createSort,
     createSortReadOnly,
     createStrlen,
@@ -172,6 +182,7 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXDel,
     createXLen,
     createXRead,
     createXTrim,
@@ -1355,6 +1366,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createExpireAt(key, unixSeconds, option));
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
+     *
+     * See https://valkey.io/commands/expiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     *
+     * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public expireTime(key: string): T {
+        return this.addAndReturn(createExpireTime(key));
+    }
+
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
@@ -1397,6 +1424,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createPExpireAt(key, unixMilliseconds, option),
         );
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * See https://valkey.io/commands/pexpiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     *
+     * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public pexpireTime(key: string): T {
+        return this.addAndReturn(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
@@ -2009,7 +2051,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
-     * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
+     * @param options - (Optional) Stream add options.
+     *
+     * Command Response - The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
         key: string,
@@ -2020,12 +2064,28 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     */
+    public xdel(key: string, ids: string[]): T {
+        return this.addAndReturn(createXDel(key, ids));
+    }
+
+    /**
      * Trims the stream stored at `key` by evicting older entries.
      * See https://valkey.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+     *
+     * Command Response - The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXTrim(key, options));
@@ -2034,7 +2094,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Returns the server time.
      * See https://valkey.io/commands/time/ for details.
      *
-     * @returns - The current server time as a two items `array`:
+     * Command Response - The current server time as a two items `array`:
      * A Unix timestamp and the amount of microseconds already elapsed in the current second.
      * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
      */
@@ -2048,7 +2108,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
-     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     *
+     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
      */
     public xread(
         keys_and_ids: Record<string, string>,
@@ -2529,8 +2590,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param timeout - The number of seconds to wait for a blocking operation to complete.
-     *     A value of 0 will block indefinitely.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the element
@@ -2719,6 +2779,113 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public randomKey(): T {
         return this.addAndReturn(createRandomKey());
+    }
+
+    /**
+     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
+     * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
+     *
+     * See https://valkey.io/commands/setrange/ for more details.
+     *
+     * @param key - The key of the string to update.
+     * @param offset - The position in the string where `value` should be written.
+     * @param value - The string written with `offset`.
+     *
+     * Command Response - The length of the string stored at `key` after it was modified.
+     */
+    public setrange(key: string, offset: number, value: string): T {
+        return this.addAndReturn(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+        return this.addAndReturn(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
+    }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-channels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * Command Response - A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     */
+    public pubsubChannels(pattern?: string): T {
+        return this.addAndReturn(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numpat for more details.
+     *
+     * Command Response - The number of unique patterns.
+     */
+    public pubsubNumPat(): T {
+        return this.addAndReturn(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numsub for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * Command Response - A map where keys are the channel names and values are the number of subscribers.
+     */
+    public pubsubNumSub(channels?: string[]): T {
+        return this.addAndReturn(createPubSubNumSub(channels));
     }
 }
 
@@ -2987,5 +3154,36 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         sharded: boolean = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
+    }
+
+    /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-shardchannels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * Command Response - A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     */
+    public pubsubShardChannels(pattern?: string): ClusterTransaction {
+        return this.addAndReturn(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-shardnumsub for more details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     */
+    public pubsubShardNumSub(channels?: string[]): ClusterTransaction {
+        return this.addAndReturn(createPubSubShardNumSub(channels));
     }
 }
