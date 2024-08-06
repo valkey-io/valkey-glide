@@ -44,6 +44,7 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
@@ -153,6 +154,8 @@ import {
     createWatch,
     createXAdd,
     createXDel,
+    createXGroupCreate,
+    createXGroupDestroy,
     createXLen,
     createXRead,
     createXTrim,
@@ -3717,6 +3720,56 @@ export class BaseClient {
      */
     public xlen(key: string): Promise<number> {
         return this.createWritePromise(createXLen(key));
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-create/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * // Create the consumer group "mygroup", using zero as the starting ID:
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output is "OK"
+     * ```
+     */
+    public async xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-destroy/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
+     *
+     * @example
+     * ```typescript
+     * // Destroys the consumer group "mygroup"
+     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output is true
+     * ```
+     */
+    public async xgroupDestroy(
+        key: string,
+        groupName: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(createXGroupDestroy(key, groupName));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

@@ -48,6 +48,7 @@ import {
     SortClusterOptions,
     SortOptions,
     StreamAddOptions,
+    StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
@@ -187,6 +188,8 @@ import {
     createXLen,
     createXRead,
     createXTrim,
+    createXGroupCreate,
+    createXGroupDestroy,
     createZAdd,
     createZCard,
     createZCount,
@@ -2143,6 +2146,44 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xlen(key: string): T {
         return this.addAndReturn(createXLen(key));
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream
+     * stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-create/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-destroy/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     *
+     * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
+     */
+    public xgroupDestroy(key: string, groupName: string): T {
+        return this.addAndReturn(createXGroupDestroy(key, groupName));
     }
 
     /**
