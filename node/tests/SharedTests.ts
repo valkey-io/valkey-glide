@@ -7718,10 +7718,38 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(0);
 
-                // TODO: use XREADGROUP to mark pending messages for the consumer so that we get non-zero return
+                // Add two stream entries
+                const streamid1: string | null = await client.xadd(key, [
+                    ["field1", "value1"],
+                ]);
+                expect(streamid1).not.toBeNull();
+                const streamid2 = await client.xadd(key, [
+                    ["field2", "value2"],
+                ]);
+                expect(streamid2).not.toBeNull();
+
+                // read the entire stream for the consumer and mark messages as pending
+                expect(
+                    await client.customCommand([
+                        "XREADGROUP",
+                        "GROUP",
+                        groupName,
+                        consumer,
+                        "STREAMS",
+                        key,
+                        ">",
+                    ]),
+                ).toEqual({
+                    [key]: {
+                        [streamid1 as string]: [["field1", "value1"]],
+                        [streamid2 as string]: [["field2", "value2"]],
+                    },
+                });
+
+                // delete one of the streams
                 expect(
                     await client.xgroupDelConsumer(key, groupName, consumer),
-                ).toEqual(0);
+                ).toEqual(2);
 
                 // attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
                 await expect(
