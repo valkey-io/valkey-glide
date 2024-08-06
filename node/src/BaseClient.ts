@@ -11,15 +11,18 @@ import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
+    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSet, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldSubCommands,
     BitOffset, // eslint-disable-line @typescript-eslint/no-unused-vars
-    BitOffsetMultiplier,
+    BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitOffsetOptions,
     BitmapIndexType,
-    BitwiseOperation, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -30,14 +33,17 @@ import {
     GeoUnit,
     GeospatialData,
     InsertPosition,
-    KeyWeight,
+    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
+    LPosOptions,
     ListDirection, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ReturnTypeXinfoStream,
     ScoreBoundary,
     ScoreFilter,
+    SearchOrigin,
     SetOptions,
     StreamAddOptions,
     StreamGroupOptions,
