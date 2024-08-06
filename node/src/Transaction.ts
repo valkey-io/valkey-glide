@@ -2112,7 +2112,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param consumer - The group consumer.
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param ids - An array of entry ids.
-     * @param options - Stream claim options {@link StreamClaimOptions}.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
      *
      * Command Response - A `Record` of message entries that are claimed by the consumer.
      */
@@ -2140,7 +2140,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param consumer - The group consumer.
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param ids - An array of entry ids.
-     * @param options - Stream claim options {@link StreamClaimOptions}.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
      *
      * Command Response - An `array` of message ids claimed by the consumer.
      */
