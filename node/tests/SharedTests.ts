@@ -6702,7 +6702,7 @@ export function runBaseTests<Context>(config: {
                 expect(result[0].pending).toEqual(1);
                 expect(result[0].idle).toBeGreaterThan(0);
 
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                if (cluster.checkIfServerVersionLessThan("7.2.0")) {
                     expect(result[0].inactive).toBeGreaterThan(0);
                 }
 
