@@ -480,6 +480,12 @@ export async function transactionTest(
 
     baseTransaction.publish("test_message", key1);
     responseData.push(['publish("test_message", key1)', 0]);
+    baseTransaction.pubsubChannels();
+    responseData.push(["pubsubChannels()", []]);
+    baseTransaction.pubsubNumPat();
+    responseData.push(["pubsubNumPat()", 0]);
+    baseTransaction.pubsubNumSub();
+    responseData.push(["pubsubNumSub()", {}]);
 
     baseTransaction.flushall();
     responseData.push(["flushall()", "OK"]);
@@ -495,6 +501,8 @@ export async function transactionTest(
     responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.randomKey();
     responseData.push(["randomKey()", key1]);
+    baseTransaction.getrange(key1, 0, -1);
+    responseData.push(["getrange(key1, 0, -1)", "bar"]);
     baseTransaction.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
     baseTransaction.set(key1, "bar");
@@ -507,6 +515,15 @@ export async function transactionTest(
     responseData.push(["echo(value)", value]);
     baseTransaction.persist(key1);
     responseData.push(["persist(key1)", false]);
+
+    if (gte(version, "7.0.0")) {
+        baseTransaction.expireTime(key1);
+        responseData.push(["expiretime(key1)", -1]);
+
+        baseTransaction.pexpireTime(key1);
+        responseData.push(["pexpiretime(key1)", -1]);
+    }
+
     baseTransaction.set(key2, "baz", { returnOldValue: true });
     responseData.push(['set(key2, "baz", { returnOldValue: true })', null]);
     baseTransaction.customCommand(["MGET", key1, key2]);

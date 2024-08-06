@@ -104,6 +104,21 @@ export function createGetDel(key: string): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 
+/**
+ * @internal
+ */
+export function createGetRange(
+    key: string,
+    start: number,
+    end: number,
+): command_request.Command {
+    return createCommand(RequestType.GetRange, [
+        key,
+        start.toString(),
+        end.toString(),
+    ]);
+}
+
 export type SetOptions = {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
@@ -1268,6 +1283,13 @@ export function createExpireAt(
 /**
  * @internal
  */
+export function createExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.ExpireTime, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createPExpire(
     key: string,
     milliseconds: number,
@@ -1293,6 +1315,13 @@ export function createPExpireAt(
             ? [key, unixMilliseconds.toString()]
             : [key, unixMilliseconds.toString(), option];
     return createCommand(RequestType.PExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createPExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.PExpireTime, [key]);
 }
 
 /**
@@ -3057,6 +3086,16 @@ export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
 }
 
+/** @internal */
+export function createWatch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Watch, keys);
+}
+
+/** @internal */
+export function createUnWatch(): command_request.Command {
+    return createCommand(RequestType.UnWatch, []);
+}
+
 /**
  * This base class represents the common set of optional arguments for the SCAN family of commands.
  * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
@@ -3151,4 +3190,47 @@ export function createBLMPop(
     }
 
     return createCommand(RequestType.BLMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubChannels(
+    pattern?: string,
+): command_request.Command {
+    return createCommand(RequestType.PubSubChannels, pattern ? [pattern] : []);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubNumPat(): command_request.Command {
+    return createCommand(RequestType.PubSubNumPat, []);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubNumSub(
+    channels?: string[],
+): command_request.Command {
+    return createCommand(RequestType.PubSubNumSub, channels ? channels : []);
+}
+
+/**
+ * @internal
+ */
+export function createPubsubShardChannels(
+    pattern?: string,
+): command_request.Command {
+    return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubShardNumSub(
+    channels?: string[],
+): command_request.Command {
+    return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
 }
