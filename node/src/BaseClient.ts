@@ -74,6 +74,7 @@ import {
     createGet,
     createGetBit,
     createGetDel,
+    createGetRange,
     createHDel,
     createHExists,
     createHGet,
@@ -118,6 +119,9 @@ import {
     createPfAdd,
     createPfCount,
     createPfMerge,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
     createRPop,
     createRPush,
     createRPushX,
@@ -840,6 +844,41 @@ export class BaseClient {
      */
     public getdel(key: string): Promise<string | null> {
         return this.createWritePromise(createGetDel(key));
+    }
+
+    /**
+     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
+     * an offset starting from the end of the string. So `-1` means the last character, `-2` the
+     * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
+     * or `end` are out of range, returns the substring within the valid range of the string.
+     *
+     * See https://valkey.io/commands/getrange/ for details.
+     *
+     * @param key - The key of the string.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @returns A substring extracted from the value stored at `key`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("mykey", "This is a string")
+     * let result = await client.getrange("mykey", 0, 3)
+     * console.log(result); // Output: "This"
+     * result = await client.getrange("mykey", -3, -1)
+     * console.log(result); // Output: "ing" - extracted last 3 characters of a string
+     * result = await client.getrange("mykey", 0, 100)
+     * console.log(result); // Output: "This is a string"
+     * result = await client.getrange("mykey", 5, 6)
+     * console.log(result); // Output: ""
+     * ```
+     */
+    public async getrange(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(createGetRange(key, start, end));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -4743,6 +4782,78 @@ export class BaseClient {
         return this.createWritePromise(
             createBLMPop(timeout, keys, direction, count),
         );
+    }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-channels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * @returns A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const channels = await client.pubsubChannels();
+     * console.log(channels); // Output: ["channel1", "channel2"]
+     *
+     * const newsChannels = await client.pubsubChannels("news.*");
+     * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
+     * ```
+     */
+    public async pubsubChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numpat for more details.
+     *
+     * @returns The number of unique patterns.
+     *
+     * @example
+     * ```typescript
+     * const patternCount = await client.pubsubNumpat();
+     * console.log(patternCount); // Output: 3
+     * ```
+     */
+    public async pubsubNumPat(): Promise<number> {
+        return this.createWritePromise(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numsub for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubNumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubNumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubNumSub(channels));
     }
 
     /**
