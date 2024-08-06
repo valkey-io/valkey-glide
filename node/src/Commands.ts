@@ -3091,6 +3091,14 @@ export function createSetRange(
     return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
 }
 
+/** @internal */
+export function createAppend(
+    key: string,
+    value: string,
+): command_request.Command {
+    return createCommand(RequestType.Append, [key, value]);
+}
+
 /**
  * @internal
  */

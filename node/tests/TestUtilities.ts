@@ -534,7 +534,11 @@ export async function transactionTest(
     baseTransaction.strlen(key1);
     responseData.push(["strlen(key1)", 3]);
     baseTransaction.setrange(key1, 0, "GLIDE");
-    responseData.push(["setrange(key1, 0, 'GLIDE'", 5]);
+    responseData.push(["setrange(key1, 0, 'GLIDE')", 5]);
+    baseTransaction.del([key1]);
+    responseData.push(["del([key1])", 1]);
+    baseTransaction.append(key1, "bar");
+    responseData.push(["append(key1, value)", 3]);
     baseTransaction.del([key1]);
     responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
