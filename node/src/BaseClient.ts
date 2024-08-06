@@ -35,7 +35,7 @@ import {
     InsertPosition,
     KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
     LPosOptions,
-    ListDirection, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ListDirection,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
