@@ -905,7 +905,7 @@ export async function transactionTest(
         'xpending(key9, "group1")',
         [1, "0-2", "0-2", [["consumer1", "1"]]],
     ]);
-    baseTransaction.xpending(key9, "group1", {
+    baseTransaction.xpendingWithOptions(key9, "group1", {
         start: InfScoreBoundary.NegativeInfinity,
         end: InfScoreBoundary.PositiveInfinity,
         count: 10,

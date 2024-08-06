@@ -2104,7 +2104,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns stream message information for pending messages matching a given range of IDs.
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * See https://valkey.io/commands/xpending/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     *
+     * Command Response - An `array` that includes the summary of the pending messages.
+     * See example of {@link BaseClient.xpending|xpending} for more details.
+     */
+    public xpending(key: string, group: string): T {
+        return this.addAndReturn(createXPending(key, group));
+    }
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
      *
      * See https://valkey.io/commands/xpending/ for more details.
      *
@@ -2112,13 +2127,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param group - The consumer group name.
      * @param options - Additional options to filter entries, see {@link StreamPendingOptions}.
      *
-     * Command Response - An `array` that includes the summary of the pending messages or extended message information if `options` are given.
-     * See examples of {@link BaseClient.xpending|xpending} and {@link BaseClient.xpendingWithOptions|xpending with options} for more details.
+     * Command Response - A 2D-`array` of 4-tuples containing extended message information.
+     * See example of {@link BaseClient.xpendingWithOptions|xpendingWithOptions} for more details.
      */
-    public xpending(
+    public xpendingWithOptions(
         key: string,
         group: string,
-        options?: StreamPendingOptions,
+        options: StreamPendingOptions,
     ): T {
         return this.addAndReturn(createXPending(key, group, options));
     }
