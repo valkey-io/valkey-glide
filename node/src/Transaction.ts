@@ -48,12 +48,13 @@ import {
     SortClusterOptions,
     SortOptions,
     StreamAddOptions,
+    StreamClaimOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMPop,
     createBLMove,
     createBLPop,
-    createBLMPop,
     createBRPop,
     createBZMPop,
     createBitCount,
@@ -113,8 +114,8 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
-    createLMove,
     createLMPop,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -176,6 +177,7 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXClaim,
     createXDel,
     createXLen,
     createXRead,
@@ -2098,6 +2100,61 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xlen(key: string): T {
         return this.addAndReturn(createXLen(key));
+    }
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - Stream claim options {@link StreamClaimOptions}.
+     *
+     * Command Response - A `Record` of message entries that are claimed by the consumer.
+     */
+    public xclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): T {
+        return this.addAndReturn(
+            createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Changes the ownership of a pending message. This function returns an `array` with
+     * only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - Stream claim options {@link StreamClaimOptions}.
+     *
+     * Command Response - An `array` of message ids claimed by the consumer.
+     */
+    public xclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): T {
+        return this.addAndReturn(
+            createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+        );
     }
 
     /**

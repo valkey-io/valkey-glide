@@ -6622,6 +6622,131 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xclaim test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const group = uuidv4();
+
+                expect(
+                    await client.customCommand([
+                        "xgroup",
+                        "create",
+                        key,
+                        group,
+                        "0",
+                        "MKSTREAM",
+                    ]),
+                ).toEqual("OK");
+                expect(
+                    await client.customCommand([
+                        "xgroup",
+                        "createconsumer",
+                        key,
+                        group,
+                        "consumer",
+                    ]),
+                ).toEqual(true);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["entry1_field1", "entry1_value1"],
+                            ["entry1_field2", "entry1_value2"],
+                        ],
+                        { id: "0-1" },
+                    ),
+                ).toEqual("0-1");
+                expect(
+                    await client.xadd(
+                        key,
+                        [["entry2_field1", "entry2_value1"]],
+                        { id: "0-2" },
+                    ),
+                ).toEqual("0-2");
+
+                expect(
+                    await client.customCommand([
+                        "xreadgroup",
+                        "group",
+                        group,
+                        "consumer",
+                        "STREAMS",
+                        key,
+                        ">",
+                    ]),
+                ).toEqual({
+                    [key]: {
+                        "0-1": [
+                            ["entry1_field1", "entry1_value1"],
+                            ["entry1_field2", "entry1_value2"],
+                        ],
+                        "0-2": [["entry2_field1", "entry2_value1"]],
+                    },
+                });
+
+                expect(
+                    await client.xclaim(key, group, "consumer", 0, ["0-1"]),
+                ).toEqual({
+                    "0-1": [
+                        ["entry1_field1", "entry1_value1"],
+                        ["entry1_field2", "entry1_value2"],
+                    ],
+                });
+                expect(
+                    await client.xclaimJustId(key, group, "consumer", 0, [
+                        "0-2",
+                    ]),
+                ).toEqual(["0-2"]);
+
+                // add one more entry
+                expect(
+                    await client.xadd(
+                        key,
+                        [["entry3_field1", "entry3_value1"]],
+                        { id: "0-3" },
+                    ),
+                ).toEqual("0-3");
+                // using force, we can xclaim the message without reading it
+                expect(
+                    await client.xclaimJustId(
+                        key,
+                        group,
+                        "consumer",
+                        0,
+                        ["0-3"],
+                        { isForce: true, retryCount: 99 },
+                    ),
+                ).toEqual(["0-3"]);
+
+                // incorrect IDs - response is empty
+                expect(
+                    await client.xclaim(key, group, "consumer", 0, ["000"]),
+                ).toEqual({});
+                expect(
+                    await client.xclaimJustId(key, group, "consumer", 0, [
+                        "000",
+                    ]),
+                ).toEqual([]);
+
+                // empty ID array
+                await expect(
+                    client.xclaim(key, group, "consumer", 0, []),
+                ).rejects.toThrow(RequestError);
+
+                // key exists, but it is not a stream
+                const stringKey = uuidv4();
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xclaim(stringKey, "_", "_", 0, ["_"]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmpop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster: RedisCluster) => {

@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added XCLAIM command ([#2092](https://github.com/valkey-io/valkey-glide/pull/2092))
 * Node: Added EXPIRETIME and PEXPIRETIME commands ([#2063](https://github.com/valkey-io/valkey-glide/pull/2063))
 * Node: Added SORT commands ([#2028](https://github.com/valkey-io/valkey-glide/pull/2028))
 * Node: Added LASTSAVE command ([#2059](https://github.com/valkey-io/valkey-glide/pull/2059))
