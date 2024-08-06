@@ -3649,7 +3649,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.xclaim("my_stream", "my_group", "my_consumer", 42,
+     * const result = await client.xclaim("myStream", "myGroup", "myConsumer", 42,
      *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
      * console.log(result); // Output:
      * // {
