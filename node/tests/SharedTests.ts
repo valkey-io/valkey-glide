@@ -6673,14 +6673,9 @@ export function runBaseTests<Context>(config: {
                 const group = uuidv4();
 
                 expect(
-                    await client.customCommand([
-                        "xgroup",
-                        "create",
-                        key,
-                        group,
-                        "0",
-                        "MKSTREAM",
-                    ]),
+                    await client.xgroupCreate(key, group, "0", {
+                        mkStream: true,
+                    }),
                 ).toEqual("OK");
                 expect(
                     await client.customCommand([
