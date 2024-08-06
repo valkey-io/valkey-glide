@@ -2325,7 +2325,9 @@ export class BaseClient {
         );
     }
 
-    /** Returns a random element from the set value stored at `key`.
+    /**
+     * Returns a random element from the set value stored at `key`.
+     *
      * See https://valkey.io/commands/srandmember for more details.
      *
      * @param key - The key from which to retrieve the set member.
@@ -2349,7 +2351,9 @@ export class BaseClient {
         return this.createWritePromise(createSRandMember(key));
     }
 
-    /** Returns one or more random elements from the set value stored at `key`.
+    /**
+     * Returns one or more random elements from the set value stored at `key`.
+     *
      * See https://valkey.io/commands/srandmember for more details.
      *
      * @param key - The key of the sorted set.

@@ -1268,6 +1268,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns a random element from the set value stored at `key`.
+     *
      * See https://valkey.io/commands/srandmember for more details.
      *
      * @param key - The key from which to retrieve the set member.
@@ -1278,6 +1279,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns one or more random elements from the set value stored at `key`.
+     *
      * See https://valkey.io/commands/srandmember for more details.
      *
      * @param key - The key of the sorted set.
