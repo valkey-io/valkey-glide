@@ -500,6 +500,8 @@ export async function transactionTest(
     responseData.push(['set(key1, "bar")', "OK"]);
     baseTransaction.randomKey();
     responseData.push(["randomKey()", key1]);
+    baseTransaction.getrange(key1, 0, -1);
+    responseData.push(["getrange(key1, 0, -1)", "bar"]);
     baseTransaction.getdel(key1);
     responseData.push(["getdel(key1)", "bar"]);
     baseTransaction.set(key1, "bar");
