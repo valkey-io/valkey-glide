@@ -2657,6 +2657,48 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `srandmember and srandmemberCount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const members = ["member1", "member2", "member3"];
+                expect(await client.sadd(key, members)).toEqual(3);
+
+                const result2 = await client.srandmember(key);
+                expect(members).toContain(result2);
+                expect(await client.srandmember("nonExistingKey")).toEqual(
+                    null,
+                );
+
+                // unique values are expected as count is positive
+                let result = await client.srandmemberCount(key, 4);
+                expect(result.length).toEqual(3);
+                expect(new Set(result)).toEqual(new Set(members));
+
+                // duplicate values are expected as count is negative
+                result = await client.srandmemberCount(key, -4);
+                expect(result.length).toEqual(4);
+                result.forEach((member) => {
+                    expect(members).toContain(member);
+                });
+
+                // empty return values for non-existing or empty keys
+                result = await client.srandmemberCount(key, 0);
+                expect(result.length).toEqual(0);
+                expect(result).toEqual([]);
+                expect(
+                    await client.srandmemberCount("nonExistingKey", 0),
+                ).toEqual([]);
+
+                expect(await client.set(key, "value")).toBe("OK");
+                await expect(client.srandmember(key)).rejects.toThrow();
+                await expect(client.srandmemberCount(key, 2)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `exists with existing keys, an non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
