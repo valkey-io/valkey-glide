@@ -1194,6 +1194,17 @@ export function createSPop(
 /**
  * @internal
  */
+export function createSRandMember(
+    key: string,
+    count?: number,
+): command_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.SRandMember, args);
+}
+
+/**
+ * @internal
+ */
 export function createCustomCommand(args: string[]) {
     return createCommand(RequestType.CustomCommand, args);
 }
