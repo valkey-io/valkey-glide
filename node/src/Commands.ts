@@ -2359,6 +2359,14 @@ export function createXLen(key: string): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
+/** @internal */
+export function createXInfoConsumers(
+    key: string,
+    group: string,
+): command_request.Command {
+    return createCommand(RequestType.XInfoConsumers, [key, group]);
+}
+
 /** Optional parameters for {@link BaseClient.xclaim|xclaim} command. */
 export type StreamClaimOptions = {
     /**
