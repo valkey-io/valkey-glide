@@ -2330,6 +2330,41 @@ export function createXRead(
 }
 
 /**
+ * Represents a the return type for XInfo Stream in the response
+ */
+export type ReturnTypeXinfoStream = {
+    [key: string]:
+        | StreamEntries
+        | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
+};
+
+/**
+ * Represents an array of Stream Entires in the response
+ */
+export type StreamEntries = string | number | (string | number | string[])[][];
+
+/**
+ * @internal
+ */
+export function createXInfoStream(
+    key: string,
+    options: boolean | number,
+): command_request.Command {
+    const args: string[] = [key];
+
+    if (options != false) {
+        args.push("FULL");
+
+        if (typeof options === "number") {
+            args.push("COUNT");
+            args.push(options.toString());
+        }
+    }
+
+    return createCommand(RequestType.XInfoStream, args);
+}
+
+/**
  * @internal
  */
 export function createXLen(key: string): command_request.Command {
