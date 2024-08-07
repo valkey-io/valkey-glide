@@ -24,6 +24,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -48,6 +49,8 @@ import {
     SortClusterOptions,
     SortOptions,
     StreamAddOptions,
+    StreamClaimOptions,
+    StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
@@ -85,6 +88,7 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
@@ -183,10 +187,13 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXClaim,
     createXDel,
     createXLen,
     createXRead,
     createXTrim,
+    createXGroupCreate,
+    createXGroupDestroy,
     createZAdd,
     createZCard,
     createZCount,
@@ -213,6 +220,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createGeoSearchStore,
+    GeoSearchStoreResultOptions,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2183,6 +2192,99 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Changes the ownership of a pending message.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     *
+     * Command Response - A `Record` of message entries that are claimed by the consumer.
+     */
+    public xclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): T {
+        return this.addAndReturn(
+            createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Changes the ownership of a pending message. This function returns an `array` with
+     * only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     *
+     * Command Response - An `array` of message ids claimed by the consumer.
+     */
+    public xclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): T {
+        return this.addAndReturn(
+            createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+        );
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream
+     * stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-create/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-destroy/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     *
+     * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
+     */
+    public xgroupDestroy(key: string, groupName: string): T {
+        return this.addAndReturn(createXGroupDestroy(key, groupName));
+    }
+
+    /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
      * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
@@ -2450,6 +2552,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     *
+     * - `"running_script"` with information about the running script.
+     * - `"engines"` with information about available engines and their stats.
+     */
+    public functionStats(): T {
+        return this.addAndReturn(createFunctionStats());
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -2588,6 +2707,48 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
+     * Searches for members in a sorted set stored at `source` representing geospatial data
+     * within a circular or rectangular area and stores the result in `destination`.
+     *
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * To get the result directly, see {@link geosearch}.
+     *
+     * See https://valkey.io/commands/geosearchstore/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param source - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     * @param searchBy - The query's shape options, could be one of:
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     *
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public geosearchstore(
+        destination: string,
+        source: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchStoreResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearchStore(
+                destination,
+                source,
+                searchFrom,
+                searchBy,
+                resultOptions,
+            ),
         );
     }
 
