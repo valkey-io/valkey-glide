@@ -45,6 +45,7 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -159,6 +160,7 @@ import {
     createUnlink,
     createWatch,
     createXAdd,
+    createXClaim,
     createXDel,
     createXGroupCreate,
     createXGroupDestroy,
@@ -193,8 +195,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    StreamClaimOptions,
-    createXClaim,
 } from "./Commands";
 import {
     ClosingError,
@@ -3136,10 +3136,10 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns A list of elements within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
      *
@@ -3174,10 +3174,10 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
      *
@@ -3223,16 +3223,18 @@ export class BaseClient {
      * @param destination - The key for the destination sorted set.
      * @param source - The key of the source sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index `0` as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns The number of elements in the resulting sorted set.
+     *
+     * since - Redis version 6.2.0.
      *
      * @example
      * ```typescript
-     * //
-     * const result = await client.zrange("destination_key", "my_sorted_set", { start: 0, stop: -1 });
+     * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, stop: -1 });
      * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
      * ```
      * @example
