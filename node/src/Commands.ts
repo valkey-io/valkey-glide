@@ -1617,28 +1617,34 @@ type SortedSetRange<T> = {
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
+/** The usage scope of {@link ScoreBoundary}. */
+enum ScoreBoundaryType {
+    SortedSetLex = "BYLEX",
+    SortedSetScore = "BYSCORE",
+    Stream = "",
+}
+
 /**
- * Returns a string representation of a score boundary in Redis protocol format.
- * @param score - The score boundary object containing value and inclusivity
- *     information.
- * @param isLex - Indicates whether to return lexical representation for
- *     positive/negative infinity.
- * @returns A string representation of the score boundary in Redis protocol
- *     format.
+ * Returns a string representation of a score boundary as a command argument.
+ * @param score - The score boundary object containing value and inclusivity information.
+ * @param type - The usage type, which defines how score should be converted to a command arg.
+ * @returns A string representation of the score boundary as a command argument.
  */
 function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
-    isLex: boolean = false,
+    type: ScoreBoundaryType,
 ): string {
     if (score == InfScoreBoundary.PositiveInfinity) {
         return (
-            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
+            InfScoreBoundary.PositiveInfinity.toString() +
+            (type == ScoreBoundaryType.SortedSetScore ? "inf" : "")
         );
     }
 
     if (score == InfScoreBoundary.NegativeInfinity) {
         return (
-            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
+            InfScoreBoundary.NegativeInfinity.toString() +
+            (type == ScoreBoundaryType.SortedSetScore ? "inf" : "")
         );
     }
 
@@ -1646,7 +1652,9 @@ function getScoreBoundaryArg(
         return "(" + score.value.toString();
     }
 
-    const value = isLex ? "[" + score.value.toString() : score.value.toString();
+    const value =
+        (type == ScoreBoundaryType.SortedSetLex ? "[" : "") +
+        score.value.toString();
     return value;
 }
 
@@ -1660,10 +1668,13 @@ function createZRangeArgs(
 
     if (typeof rangeQuery.start != "number") {
         rangeQuery = rangeQuery as RangeByScore | RangeByLex;
-        const isLex = rangeQuery.type == "byLex";
-        args.push(getScoreBoundaryArg(rangeQuery.start, isLex));
-        args.push(getScoreBoundaryArg(rangeQuery.stop, isLex));
-        args.push(isLex == true ? "BYLEX" : "BYSCORE");
+        const queryType =
+            rangeQuery.type == "byLex"
+                ? ScoreBoundaryType.SortedSetLex
+                : ScoreBoundaryType.SortedSetScore;
+        args.push(getScoreBoundaryArg(rangeQuery.start, queryType));
+        args.push(getScoreBoundaryArg(rangeQuery.stop, queryType));
+        args.push(queryType);
     } else {
         args.push(rangeQuery.start.toString());
         args.push(rangeQuery.stop.toString());
@@ -1697,8 +1708,8 @@ export function createZCount(
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
     const args = [key];
-    args.push(getScoreBoundaryArg(minScore));
-    args.push(getScoreBoundaryArg(maxScore));
+    args.push(getScoreBoundaryArg(minScore, ScoreBoundaryType.SortedSetScore));
+    args.push(getScoreBoundaryArg(maxScore, ScoreBoundaryType.SortedSetScore));
     return createCommand(RequestType.ZCount, args);
 }
 
@@ -1837,8 +1848,8 @@ export function createZRemRangeByLex(
 ): command_request.Command {
     const args = [
         key,
-        getScoreBoundaryArg(minLex, true),
-        getScoreBoundaryArg(maxLex, true),
+        getScoreBoundaryArg(minLex, ScoreBoundaryType.SortedSetLex),
+        getScoreBoundaryArg(maxLex, ScoreBoundaryType.SortedSetLex),
     ];
     return createCommand(RequestType.ZRemRangeByLex, args);
 }
@@ -1852,8 +1863,8 @@ export function createZRemRangeByScore(
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
     const args = [key];
-    args.push(getScoreBoundaryArg(minScore));
-    args.push(getScoreBoundaryArg(maxScore));
+    args.push(getScoreBoundaryArg(minScore, ScoreBoundaryType.SortedSetScore));
+    args.push(getScoreBoundaryArg(maxScore, ScoreBoundaryType.SortedSetScore));
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
@@ -1871,8 +1882,8 @@ export function createZLexCount(
 ): command_request.Command {
     const args = [
         key,
-        getScoreBoundaryArg(minLex, true),
-        getScoreBoundaryArg(maxLex, true),
+        getScoreBoundaryArg(minLex, ScoreBoundaryType.SortedSetLex),
+        getScoreBoundaryArg(maxLex, ScoreBoundaryType.SortedSetLex),
     ];
     return createCommand(RequestType.ZLexCount, args);
 }
@@ -2338,14 +2349,8 @@ export function createXPending(
         if (options.minIdleTime !== undefined)
             args.push("IDLE", options.minIdleTime.toString());
         args.push(
-            // pass enum (string actually) as is, because XRANGE and ZRANGE are not
-            // aligned in how range boundaries are converted to args :facepalm:
-            typeof options.start === "string"
-                ? options.start
-                : getScoreBoundaryArg(options.start, false),
-            typeof options.end === "string"
-                ? options.end
-                : getScoreBoundaryArg(options.end, false),
+            getScoreBoundaryArg(options.start, ScoreBoundaryType.Stream),
+            getScoreBoundaryArg(options.end, ScoreBoundaryType.Stream),
             options.count.toString(),
         );
         if (options.consumer) args.push(options.consumer);
