@@ -187,6 +187,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    StreamClaimOptions,
+    createXClaim,
 } from "./Commands";
 import {
     ClosingError,
@@ -3688,21 +3690,23 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
-     * console.log(result); // Output: {
-     *                      //     "my_stream": {
-     *                      //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
-     *                      //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
-     *                      //     }, "writers": {
-     *                      //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
-     *                      //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
-     *                      //     }
-     *                      // }
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
+     * //     }
+     * // }
      * ```
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
-    ): Promise<Record<string, Record<string, string[][]>>> {
+    ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
@@ -3722,6 +3726,76 @@ export class BaseClient {
      */
     public xlen(key: string): Promise<number> {
         return this.createWritePromise(createXLen(key));
+    }
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @returns A `Record` of message entries that are claimed by the consumer.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xclaim("myStream", "myGroup", "myConsumer", 42,
+     *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
+     * console.log(result); // Output:
+     * // {
+     * //     "2-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]]
+     * // }
+     * ```
+     */
+    public async xclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): Promise<Record<string, [string, string][]>> {
+        return this.createWritePromise(
+            createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Changes the ownership of a pending message. This function returns an `array` with
+     * only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @returns An `array` of message ids claimed by the consumer.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xclaimJustId("my_stream", "my_group", "my_consumer", 42,
+     *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
+     * console.log(result); // Output: [ "2-0", "3-0" ]
+     * ```
+     */
+    public async xclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(
+            createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+        );
     }
 
     /**
