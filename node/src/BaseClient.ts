@@ -29,6 +29,7 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
+    GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InsertPosition,
@@ -44,15 +45,19 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamGroupOptions,
     StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createAppend,
     createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
+    createBZPopMax,
+    createBZPopMin,
     createBitCount,
     createBitField,
     createBitOp,
@@ -71,6 +76,7 @@ import {
     createGeoHash,
     createGeoPos,
     createGeoSearch,
+    createGeoSearchStore,
     createGet,
     createGetBit,
     createGetDel,
@@ -83,6 +89,7 @@ import {
     createHIncrByFloat,
     createHLen,
     createHMGet,
+    createHRandField,
     createHSet,
     createHSetNX,
     createHStrlen,
@@ -139,6 +146,7 @@ import {
     createSMembers,
     createSMove,
     createSPop,
+    createSRandMember,
     createSRem,
     createSUnion,
     createSUnionStore,
@@ -153,6 +161,9 @@ import {
     createWatch,
     createXAdd,
     createXDel,
+    createXGroupCreate,
+    createXGroupDestroy,
+    createXInfoConsumers,
     createXLen,
     createXPending,
     createXRead,
@@ -183,6 +194,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    StreamClaimOptions,
+    createXClaim,
 } from "./Commands";
 import {
     ClosingError,
@@ -1587,6 +1600,81 @@ export class BaseClient {
         return this.createWritePromise(createHStrlen(key, field));
     }
 
+    /**
+     * Returns a random field name from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @returns A random field name from the hash stored at `key`, or `null` when
+     *     the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.hrandfield("myHash")); // Output: 'field'
+     * ```
+     */
+    public async hrandfield(key: string): Promise<string | null> {
+        return this.createWritePromise(createHRandField(key));
+    }
+
+    /**
+     * Retrieves up to `count` random field names from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     * @returns An `array` of random field names from the hash stored at `key`,
+     *     or an `empty array` when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.hrandfieldCount("myHash", 2)); // Output: ['field1', 'field2']
+     * ```
+     */
+    public async hrandfieldCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createHRandField(key, count));
+    }
+
+    /**
+     * Retrieves up to `count` random field names along with their values from the hash
+     * value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
+     *     field name from the hash and `value` is the associated value of the field name.
+     *     If the hash does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.hrandfieldCountWithValues("myHash", 2);
+     * console.log(result); // Output: [['field1', 'value1'], ['field2', 'value2']]
+     * ```
+     */
+    public async hrandfieldWithValues(
+        key: string,
+        count: number,
+    ): Promise<[string, string][]> {
+        return this.createWritePromise(createHRandField(key, count, true));
+    }
+
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
@@ -2370,6 +2458,64 @@ export class BaseClient {
         return this.createWritePromise<string[]>(createSPop(key, count)).then(
             (spop) => new Set<string>(spop),
         );
+    }
+
+    /**
+     * Returns a random element from the set value stored at `key`.
+     *
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key from which to retrieve the set member.
+     * @returns A random element from the set, or null if `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmember method to return a random member from a set
+     * const result = await client.srandmember("my_set");
+     * console.log(result); // Output: 'member1' - A random member of "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmember method with non-existing key
+     * const result = await client.srandmember("non_existing_set");
+     * console.log(result); // Output: null
+     * ```
+     */
+    public srandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createSRandMember(key));
+    }
+
+    /**
+     * Returns one or more random elements from the set value stored at `key`.
+     *
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - The number of members to return.
+     *                If `count` is positive, returns unique members.
+     *                If `count` is negative, allows for duplicates members.
+     * @returns a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmemberCount method to return multiple random members from a set
+     * const result = await client.srandmemberCount("my_set", -3);
+     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmemberCount method with non-existing key
+     * const result = await client.srandmemberCount("non_existing_set", 3);
+     * console.log(result); // Output: [] - An empty list since the key does not exist.
+     * ```
+     */
+    public async srandmemberCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createSRandMember(key, count));
     }
 
     /** Returns the number of keys in `keys` that exist in the database.
@@ -3276,6 +3422,34 @@ export class BaseClient {
         return this.createWritePromise(createZPopMin(key, count));
     }
 
+    /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMIN` is the blocking variant of {@link zpopmin}.
+     *
+     * See https://valkey.io/commands/bzpopmin/ for more details.
+     *
+     * @remarks When in cluster mode, `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.bzpopmin(["zset1", "zset2"], 0.5);
+     * console.log(data); // Output: ["zset1", "a", 2];
+     * ```
+     */
+    public async bzpopmin(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string, number] | null> {
+        return this.createWritePromise(createBZPopMin(keys, timeout));
+    }
+
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
@@ -3306,6 +3480,34 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZPopMax(key, count));
+    }
+
+    /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMAX` is the blocking variant of {@link zpopmax}.
+     *
+     * See https://valkey.io/commands/zpopmax/ for more details.
+     *
+     * @remarks When in cluster mode, `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.bzpopmax(["zset1", "zset2"], 0.5);
+     * console.log(data); // Output: ["zset1", "c", 2];
+     * ```
+     */
+    public async bzpopmax(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string, number] | null> {
+        return this.createWritePromise(createBZPopMax(keys, timeout));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
@@ -3635,21 +3837,23 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
-     * console.log(result); // Output: {
-     *                      //     "my_stream": {
-     *                      //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
-     *                      //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
-     *                      //     }, "writers": {
-     *                      //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
-     *                      //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
-     *                      //     }
-     *                      // }
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
+     * //     }
+     * // }
      * ```
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
-    ): Promise<Record<string, Record<string, string[][]>>> {
+    ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
@@ -3740,6 +3944,159 @@ export class BaseClient {
         options: StreamPendingOptions,
     ): Promise<[string, string, number, number][]> {
         return this.createWritePromise(createXPending(key, group, options));
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xinfo-consumers/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @returns An `Array` of `Records`, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at `key`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xinfoConsumers("my_stream", "my_group");
+     * console.log(result); // Output:
+     * // [
+     * //     {
+     * //         "name": "Alice",
+     * //         "pending": 1,
+     * //         "idle": 9104628,
+     * //         "inactive": 18104698   // Added in 7.2.0
+     * //     },
+     * //     ...
+     * // ]
+     * ```
+     */
+    public async xinfoConsumers(
+        key: string,
+        group: string,
+    ): Promise<Record<string, string | number>[]> {
+        return this.createWritePromise(createXInfoConsumers(key, group));
+    }
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @returns A `Record` of message entries that are claimed by the consumer.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xclaim("myStream", "myGroup", "myConsumer", 42,
+     *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
+     * console.log(result); // Output:
+     * // {
+     * //     "2-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]]
+     * // }
+     * ```
+     */
+    public async xclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): Promise<Record<string, [string, string][]>> {
+        return this.createWritePromise(
+            createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Changes the ownership of a pending message. This function returns an `array` with
+     * only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @returns An `array` of message ids claimed by the consumer.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xclaimJustId("my_stream", "my_group", "my_consumer", 42,
+     *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
+     * console.log(result); // Output: [ "2-0", "3-0" ]
+     * ```
+     */
+    public async xclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(
+            createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+        );
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-create/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * // Create the consumer group "mygroup", using zero as the starting ID:
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output is "OK"
+     * ```
+     */
+    public async xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-destroy/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
+     *
+     * @example
+     * ```typescript
+     * // Destroys the consumer group "mygroup"
+     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output is true
+     * ```
+     */
+    public async xgroupDestroy(
+        key: string,
+        groupName: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(createXGroupDestroy(key, groupName));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
@@ -4222,22 +4579,15 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
-     *
      * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
-     *
      * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
-     *
      * @param searchBy - The query's shape options, could be one of:
-     *
      * - {@link GeoCircleShape} to search inside circular area according to given radius.
-     *
      * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
-     *
-     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
      * @returns By default, returns an `Array` of members (locations) names.
      *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
      *     where each sub-array represents a single item in the following order:
-     *
      * - The member (location) name.
      * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
      * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
@@ -4291,9 +4641,88 @@ export class BaseClient {
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchResultOptions,
-    ): Promise<(Buffer | (number | number[])[])[]> {
+    ): Promise<(string | (number | number[])[])[]> {
         return this.createWritePromise(
             createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
+     * Searches for members in a sorted set stored at `source` representing geospatial data
+     * within a circular or rectangular area and stores the result in `destination`.
+     *
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * To get the result directly, see {@link geosearch}.
+     *
+     * See https://valkey.io/commands/geosearchstore/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param source - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     * @param searchBy - The query's shape options, could be one of:
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo' and store in `destination`:
+     * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
+     * // query the stored results
+     * const result1 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * console.log(result1); // Output:
+     * // {
+     * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
+     * //     Catania: 3479447370796909
+     * // }
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting to store distance instead of geohashes,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * await client.geosearchstore(
+     *     "destination",
+     *     "mySortedSet",
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         storeDist: true,
+     *     },
+     * );
+     * // query the stored results
+     * const result2 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * console.log(result2); // Output:
+     * // {
+     * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
+     * //     Catania: 56.4413,    // the distance is measured in units used for the search query (miles)
+     * // }
+     * ```
+     */
+    public async geosearchstore(
+        destination: string,
+        source: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchStoreResultOptions,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createGeoSearchStore(
+                destination,
+                source,
+                searchFrom,
+                searchBy,
+                resultOptions,
+            ),
         );
     }
 
@@ -4718,6 +5147,32 @@ export class BaseClient {
         value: string,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Appends a `value` to a `key`. If `key` does not exist it is created and set as an empty string,
+     * so `APPEND` will be similar to {@link set} in this special case.
+     *
+     * See https://valkey.io/commands/append/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param value - The key of the string.
+     * @returns The length of the string after appending the value.
+     *
+     * @example
+     * ```typescript
+     * const len = await client.append("key", "Hello");
+     * console.log(len);
+     *     // Output: 5 - Indicates that "Hello" has been appended to the value of "key", which was initially
+     *     // empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+     * len = await client.append("key", " world");
+     * console.log(result);
+     *     // Output: 11 - Indicates that " world" has been appended to the value of "key", resulting in a
+     *     // new value of "Hello world" with a length of 11.
+     * ```
+     */
+    public async append(key: string, value: string): Promise<number> {
+        return this.createWritePromise(createAppend(key, value));
     }
 
     /**

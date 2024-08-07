@@ -25,11 +25,17 @@ import {
     ScoreFilter,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode, SortOrder } from "../build-ts/src/Commands";
+import {
+    FlushMode,
+    FunctionStatsResponse,
+    GeoUnit,
+    SortOrder,
+} from "../build-ts/src/Commands";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkFunctionListResponse,
+    checkFunctionStatsResponse,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -339,6 +345,8 @@ describe("GlideClusterClient", () => {
                 client.sortStore("abc", "zyx", { isAlpha: true }),
                 client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
                 client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                client.bzpopmax(["abc", "def"], 0.5),
+                client.bzpopmin(["abc", "def"], 0.5),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {
@@ -354,6 +362,12 @@ describe("GlideClusterClient", () => {
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
                     client.copy("abc", "zxy", true),
+                    client.geosearchstore(
+                        "abc",
+                        "zxy",
+                        { member: "_" },
+                        { radius: 5, unit: GeoUnit.METERS },
+                    ),
                 );
             }
 
@@ -733,7 +747,7 @@ describe("GlideClusterClient", () => {
                 "Single node route = %s",
                 (singleNodeRoute) => {
                     it(
-                        "function load and function list",
+                        "function load function list function stats",
                         async () => {
                             if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
@@ -769,6 +783,21 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) => expect(value).toEqual([]),
                                 );
+
+                                let functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            0,
+                                            0,
+                                        ),
+                                );
+
                                 // load the library
                                 expect(await client.functionLoad(code)).toEqual(
                                     libName,
@@ -795,6 +824,19 @@ describe("GlideClusterClient", () => {
                                             libName,
                                             expectedDescription,
                                             expectedFlags,
+                                        ),
+                                );
+                                functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            1,
+                                            1,
                                         ),
                                 );
 
@@ -873,6 +915,19 @@ describe("GlideClusterClient", () => {
                                             expectedDescription,
                                             expectedFlags,
                                             newCode,
+                                        ),
+                                );
+                                functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            1,
+                                            2,
                                         ),
                                 );
 
