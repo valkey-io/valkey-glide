@@ -19,6 +19,7 @@ import {
     ClusterTransaction,
     FlushMode,
     FunctionListResponse,
+    FunctionStatsResponse,
     GeoUnit,
     GeospatialData,
     GlideClient,
@@ -394,6 +395,43 @@ export function checkFunctionListResponse(
     }
 
     expect(hasLib).toBeTruthy();
+}
+
+/**
+ * Validate whether `FUNCTION STATS` response contains required info.
+ *
+ * @param response - The response from server.
+ * @param runningFunction - Command line of running function expected. Empty, if nothing expected.
+ * @param libCount - Expected libraries count.
+ * @param functionCount - Expected functions count.
+ */
+export function checkFunctionStatsResponse(
+    response: FunctionStatsResponse,
+    runningFunction: string[],
+    libCount: number,
+    functionCount: number,
+) {
+    if (response.running_script === null && runningFunction.length > 0) {
+        fail("No running function info");
+    }
+
+    if (response.running_script !== null && runningFunction.length == 0) {
+        fail(
+            "Unexpected running function info: " +
+                (response.running_script.command as string[]).join(" "),
+        );
+    }
+
+    if (response.running_script !== null) {
+        expect(response.running_script.command).toEqual(runningFunction);
+        // command line format is:
+        // fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+        expect(response.running_script.name).toEqual(runningFunction[1]);
+    }
+
+    expect(response.engines).toEqual({
+        LUA: { libraries_count: libCount, functions_count: functionCount },
+    });
 }
 
 /**
@@ -1183,6 +1221,8 @@ export async function transactionTest(
     );
 
     if (gte(version, "7.0.0")) {
+        baseTransaction.functionFlush();
+        responseData.push(["functionFlush()", "OK"]);
         baseTransaction.functionLoad(code);
         responseData.push(["functionLoad(code)", libName]);
         baseTransaction.functionLoad(code, true);
@@ -1195,6 +1235,14 @@ export async function transactionTest(
         responseData.push([
             'fcallReadonly(funcName, [], ["one", "two"]',
             "one",
+        ]);
+        baseTransaction.functionStats();
+        responseData.push([
+            "functionStats()",
+            {
+                running_script: null,
+                engines: { LUA: { libraries_count: 1, functions_count: 1 } },
+            },
         ]);
         baseTransaction.functionDelete(libName);
         responseData.push(["functionDelete(libName)", "OK"]);
