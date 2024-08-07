@@ -4083,6 +4083,92 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bzpopmax test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const key3 = "{key}-3" + uuidv4();
+
+                expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
+                expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
+                expect(await client.bzpopmax([key1, key2], 0.5)).toEqual([
+                    key1,
+                    "b",
+                    1.5,
+                ]);
+
+                // nothing popped out / key does not exist
+                expect(
+                    await client.bzpopmax(
+                        [key3],
+                        cluster.checkIfServerVersionLessThan("6.0.0")
+                            ? 1.0
+                            : 0.001,
+                    ),
+                ).toBeNull();
+
+                // pops from the second key
+                expect(await client.bzpopmax([key3, key2], 0.5)).toEqual([
+                    key2,
+                    "c",
+                    2.0,
+                ]);
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key3, "bzpopmax")).toBe("OK");
+                await expect(client.bzpopmax([key3], 0.5)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `bzpopmin test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const key3 = "{key}-3" + uuidv4();
+
+                expect(await client.zadd(key1, { a: 1.0, b: 1.5 })).toBe(2);
+                expect(await client.zadd(key2, { c: 2.0 })).toBe(1);
+                expect(await client.bzpopmin([key1, key2], 0.5)).toEqual([
+                    key1,
+                    "a",
+                    1.0,
+                ]);
+
+                // nothing popped out / key does not exist
+                expect(
+                    await client.bzpopmin(
+                        [key3],
+                        cluster.checkIfServerVersionLessThan("6.0.0")
+                            ? 1.0
+                            : 0.001,
+                    ),
+                ).toBeNull();
+
+                // pops from the second key
+                expect(await client.bzpopmin([key3, key2], 0.5)).toEqual([
+                    key2,
+                    "c",
+                    2.0,
+                ]);
+
+                // key exists but holds non-ZSET value
+                expect(await client.set(key3, "bzpopmin")).toBe("OK");
+                await expect(client.bzpopmin([key3], 0.5)).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `Pttl test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

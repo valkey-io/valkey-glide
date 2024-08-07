@@ -861,6 +861,14 @@ export async function transactionTest(
     responseData.push(["zpopmin(key8)", { member2: 3.0 }]);
     baseTransaction.zpopmax(key8);
     responseData.push(["zpopmax(key8)", { member5: 5 }]);
+    baseTransaction.zadd(key8, { member6: 6 });
+    responseData.push(["zadd(key8, {member6: 6})", 1]);
+    baseTransaction.bzpopmax([key8], 0.5);
+    responseData.push(["bzpopmax([key8], 0.5)", [key8, "member6", 6]]);
+    baseTransaction.zadd(key8, { member7: 1 });
+    responseData.push(["zadd(key8, {member7: 1})", 1]);
+    baseTransaction.bzpopmin([key8], 0.5);
+    responseData.push(["bzpopmin([key8], 0.5)", [key8, "member7", 1]]);
     baseTransaction.zremRangeByRank(key8, 1, 1);
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(

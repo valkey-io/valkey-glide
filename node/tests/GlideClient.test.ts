@@ -143,21 +143,18 @@ describe("GlideClient", () => {
                 ),
             );
 
-            const blmovePromise = client.blmove(
-                "source",
-                "destination",
-                ListDirection.LEFT,
-                ListDirection.LEFT,
-                0.1,
-            );
-
-            const blmpopPromise = client.blmpop(
-                ["key1", "key2"],
-                ListDirection.LEFT,
-                0.1,
-            );
-
-            const promiseList = [blmovePromise, blmpopPromise];
+            const promiseList = [
+                client.blmove(
+                    "source",
+                    "destination",
+                    ListDirection.LEFT,
+                    ListDirection.LEFT,
+                    0.1,
+                ),
+                client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
+                client.bzpopmax(["key1", "key2"], 0),
+                client.bzpopmin(["key1", "key2"], 0),
+            ];
 
             try {
                 for (const promise of promiseList) {
