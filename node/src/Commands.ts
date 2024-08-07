@@ -2172,6 +2172,19 @@ export function createFunctionList(
     return createCommand(RequestType.FunctionList, args);
 }
 
+/** Type of the response of `FUNCTION STATS` command. */
+export type FunctionStatsResponse = Record<
+    string,
+    | null
+    | Record<string, string | string[] | number>
+    | Record<string, Record<string, number>>
+>;
+
+/** @internal */
+export function createFunctionStats(): command_request.Command {
+    return createCommand(RequestType.FunctionStats, []);
+}
+
 /**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
