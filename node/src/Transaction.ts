@@ -54,6 +54,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createAppend,
     createBLMPop,
     createBLMove,
     createBLPop,
@@ -3034,6 +3035,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public setrange(key: string, offset: number, value: string): T {
         return this.addAndReturn(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Appends a `value` to a `key`. If `key` does not exist it is created and set as an empty string,
+     * so `APPEND` will be similar to {@link set} in this special case.
+     *
+     * See https://valkey.io/commands/append/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param value - The key of the string.
+     *
+     * Command Response - The length of the string after appending the value.
+     */
+    public append(key: string, value: string): T {
+        return this.addAndReturn(createAppend(key, value));
     }
 
     /**
