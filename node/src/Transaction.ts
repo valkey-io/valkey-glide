@@ -24,6 +24,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -87,6 +88,7 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
@@ -2490,6 +2492,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public functionList(options?: FunctionListOptions): T {
         return this.addAndReturn(createFunctionList(options));
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     *
+     * - `"running_script"` with information about the running script.
+     * - `"engines"` with information about available engines and their stats.
+     */
+    public functionStats(): T {
+        return this.addAndReturn(createFunctionStats());
     }
 
     /**
