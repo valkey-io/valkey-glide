@@ -887,12 +887,68 @@ export async function transactionTest(
         'xgroupCreate(key9, groupName2, "0-0", { mkStream: true })',
         "OK",
     ]);
+    baseTransaction.xdel(key9, ["0-3", "0-5"]);
+    responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
+
+    // key9 has one entry here: {"0-2":[["field","value2"]]}
+
+    baseTransaction.customCommand([
+        "xgroup",
+        "createconsumer",
+        key9,
+        groupName1,
+        "consumer1",
+    ]);
+    responseData.push([
+        'xgroupCreateConsumer(key9, groupName1, "consumer1")',
+        true,
+    ]);
+    baseTransaction.customCommand([
+        "xreadgroup",
+        "group",
+        groupName1,
+        "consumer1",
+        "STREAMS",
+        key9,
+        ">",
+    ]);
+    responseData.push([
+        'xreadgroup(groupName1, "consumer1", key9, >)',
+        { [key9]: { "0-2": [["field", "value2"]] } },
+    ]);
+    baseTransaction.xclaim(key9, groupName1, "consumer1", 0, ["0-2"]);
+    responseData.push([
+        'xclaim(key9, groupName1, "consumer1", 0, ["0-2"])',
+        { "0-2": [["field", "value2"]] },
+    ]);
+    baseTransaction.xclaim(key9, groupName1, "consumer1", 0, ["0-2"], {
+        isForce: true,
+        retryCount: 0,
+        idle: 0,
+    });
+    responseData.push([
+        'xclaim(key9, groupName1, "consumer1", 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
+        { "0-2": [["field", "value2"]] },
+    ]);
+    baseTransaction.xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"]);
+    responseData.push([
+        'xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"])',
+        ["0-2"],
+    ]);
+    baseTransaction.xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"], {
+        isForce: true,
+        retryCount: 0,
+        idle: 0,
+    });
+    responseData.push([
+        'xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
+        ["0-2"],
+    ]);
     baseTransaction.xgroupDestroy(key9, groupName1);
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);
     responseData.push(["xgroupDestroy(key9, groupName2)", true]);
-    baseTransaction.xdel(key9, ["0-3", "0-5"]);
-    responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
+
     baseTransaction.rename(key9, key10);
     responseData.push(["rename(key9, key10)", "OK"]);
     baseTransaction.exists([key10]);

@@ -2312,6 +2312,69 @@ export function createXLen(key: string): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
+/** Optional parameters for {@link BaseClient.xclaim|xclaim} command. */
+export type StreamClaimOptions = {
+    /**
+     * Set the idle time (last time it was delivered) of the message in milliseconds. If `idle`
+     * is not specified, an `idle` of `0` is assumed, that is, the time count is reset
+     * because the message now has a new owner trying to process it.
+     */
+    idle?: number; // in milliseconds
+
+    /**
+     * This is the same as {@link idle} but instead of a relative amount of milliseconds, it sets the
+     * idle time to a specific Unix time (in milliseconds). This is useful in order to rewrite the AOF
+     * file generating `XCLAIM` commands.
+     */
+    idleUnixTime?: number; // in unix-time milliseconds
+
+    /**
+     * Set the retry counter to the specified value. This counter is incremented every time a message
+     * is delivered again. Normally {@link BaseClient.xclaim|xclaim} does not alter this counter,
+     * which is just served to clients when the {@link BaseClient.xpending|xpending} command is called:
+     * this way clients can detect anomalies, like messages that are never processed for some reason
+     * after a big number of delivery attempts.
+     */
+    retryCount?: number;
+
+    /**
+     * Creates the pending message entry in the PEL even if certain specified IDs are not already in
+     * the PEL assigned to a different client. However, the message must exist in the stream,
+     * otherwise the IDs of non-existing messages are ignored.
+     */
+    isForce?: boolean;
+
+    /** The last ID of the entry which should be claimed. */
+    lastId?: string;
+};
+
+/** @internal */
+export function createXClaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    ids: string[],
+    options?: StreamClaimOptions,
+    justId?: boolean,
+): command_request.Command {
+    const args = [key, group, consumer, minIdleTime.toString(), ...ids];
+
+    if (options) {
+        if (options.idle !== undefined)
+            args.push("IDLE", options.idle.toString());
+        if (options.idleUnixTime !== undefined)
+            args.push("TIME", options.idleUnixTime.toString());
+        if (options.retryCount !== undefined)
+            args.push("RETRYCOUNT", options.retryCount.toString());
+        if (options.isForce) args.push("FORCE");
+        if (options.lastId) args.push("LASTID", options.lastId);
+    }
+
+    if (justId) args.push("JUSTID");
+    return createCommand(RequestType.XClaim, args);
+}
+
 /**
  * Optional arguments for {@link BaseClient.xgroupCreate|xgroupCreate}.
  *
