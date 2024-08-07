@@ -2722,7 +2722,7 @@ export function createGeoHash(
  * Optional parameters for {@link BaseClient.geosearch|geosearch} command which defines what should be included in the
  * search results and how results should be ordered and limited.
  */
-export type GeoSearchResultOptions = {
+export type GeoSearchResultOptions = GeoSearchCommonResultOptions & {
     /** Include the coordinate of the returned items. */
     withCoord?: boolean;
     /**
@@ -2732,6 +2732,22 @@ export type GeoSearchResultOptions = {
     withDist?: boolean;
     /** Include the geohash of the returned items. */
     withHash?: boolean;
+};
+
+/**
+ * Optional parameters for {@link BaseClient.geosearchstore|geosearchstore} command which defines what should be included in the
+ * search results and how results should be ordered and limited.
+ */
+export type GeoSearchStoreResultOptions = GeoSearchCommonResultOptions & {
+    /**
+     * Determines what is stored as the sorted set score. Defaults to `false`.
+     * - If set to `false`, the geohash of the location will be stored as the sorted set score.
+     * - If set to `true`, the distance from the center of the shape (circle or box) will be stored as the sorted set score. The distance is represented as a floating-point number in the same unit specified for that shape.
+     */
+    storeDist?: boolean;
+};
+
+type GeoSearchCommonResultOptions = {
     /** Indicates the order the result should be sorted in. */
     sortOrder?: SortOrder;
     /** Indicates the number of matches the result should be limited to. */
@@ -2782,16 +2798,39 @@ export type MemberOrigin = {
     member: string;
 };
 
-/**
- * @internal
- */
+/** @internal */
 export function createGeoSearch(
     key: string,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchResultOptions,
 ): command_request.Command {
-    let args: string[] = [key];
+    const args = [key].concat(
+        convertGeoSearchOptionsToArgs(searchFrom, searchBy, resultOptions),
+    );
+    return createCommand(RequestType.GeoSearch, args);
+}
+
+/** @internal */
+export function createGeoSearchStore(
+    destination: string,
+    source: string,
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchStoreResultOptions,
+): command_request.Command {
+    const args = [destination, source].concat(
+        convertGeoSearchOptionsToArgs(searchFrom, searchBy, resultOptions),
+    );
+    return createCommand(RequestType.GeoSearchStore, args);
+}
+
+function convertGeoSearchOptionsToArgs(
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchCommonResultOptions,
+): string[] {
+    let args: string[] = [];
 
     if ("position" in searchFrom) {
         args = args.concat(
@@ -2819,9 +2858,14 @@ export function createGeoSearch(
     }
 
     if (resultOptions) {
-        if (resultOptions.withCoord) args.push("WITHCOORD");
-        if (resultOptions.withDist) args.push("WITHDIST");
-        if (resultOptions.withHash) args.push("WITHHASH");
+        if ("withCoord" in resultOptions && resultOptions.withCoord)
+            args.push("WITHCOORD");
+        if ("withDist" in resultOptions && resultOptions.withDist)
+            args.push("WITHDIST");
+        if ("withHash" in resultOptions && resultOptions.withHash)
+            args.push("WITHHASH");
+        if ("storeDist" in resultOptions && resultOptions.storeDist)
+            args.push("STOREDIST");
 
         if (resultOptions.count) {
             args.push("COUNT", resultOptions.count?.toString());
@@ -2832,7 +2876,7 @@ export function createGeoSearch(
         if (resultOptions.sortOrder) args.push(resultOptions.sortOrder);
     }
 
-    return createCommand(RequestType.GeoSearch, args);
+    return args;
 }
 
 /**

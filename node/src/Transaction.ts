@@ -216,6 +216,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createGeoSearchStore,
+    GeoSearchStoreResultOptions,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2592,6 +2594,48 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
+     * Searches for members in a sorted set stored at `source` representing geospatial data
+     * within a circular or rectangular area and stores the result in `destination`.
+     *
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * To get the result directly, see {@link geosearch}.
+     *
+     * See https://valkey.io/commands/geosearchstore/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param source - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     * @param searchBy - The query's shape options, could be one of:
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     *
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public geosearchstore(
+        destination: string,
+        source: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchStoreResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearchStore(
+                destination,
+                source,
+                searchFrom,
+                searchBy,
+                resultOptions,
+            ),
         );
     }
 
