@@ -55,6 +55,8 @@ import {
     createBLPop,
     createBRPop,
     createBZMPop,
+    createBZPopMax,
+    createBZPopMin,
     createBitCount,
     createBitField,
     createBitOp,
@@ -3417,6 +3419,34 @@ export class BaseClient {
         return this.createWritePromise(createZPopMin(key, count));
     }
 
+    /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMIN` is the blocking variant of {@link zpopmin}.
+     *
+     * See https://valkey.io/commands/bzpopmin/ for more details.
+     *
+     * @remarks When in cluster mode, `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.bzpopmin(["zset1", "zset2"], 0.5);
+     * console.log(data); // Output: ["zset1", "a", 2];
+     * ```
+     */
+    public async bzpopmin(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string, number] | null> {
+        return this.createWritePromise(createBZPopMin(keys, timeout));
+    }
+
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
@@ -3447,6 +3477,34 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZPopMax(key, count));
+    }
+
+    /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMAX` is the blocking variant of {@link zpopmax}.
+     *
+     * See https://valkey.io/commands/zpopmax/ for more details.
+     *
+     * @remarks When in cluster mode, `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.bzpopmax(["zset1", "zset2"], 0.5);
+     * console.log(data); // Output: ["zset1", "c", 2];
+     * ```
+     */
+    public async bzpopmax(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string, number] | null> {
+        return this.createWritePromise(createBZPopMax(keys, timeout));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
