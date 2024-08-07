@@ -472,6 +472,7 @@ export async function transactionTest(
     const key22 = "{key}" + uuidv4(); // list for sort
     const key23 = "{key}" + uuidv4(); // zset random
     const key24 = "{key}" + uuidv4(); // list value
+    const key25 = "{key}" + uuidv4(); // Geospatial Data/ZSET
     const field = uuidv4();
     const value = uuidv4();
     const groupName1 = uuidv4();
@@ -1103,6 +1104,17 @@ export async function transactionTest(
                     ],
                 ],
             ],
+        ]);
+
+        baseTransaction.geosearchstore(
+            key25,
+            key18,
+            { position: { longitude: 15, latitude: 37 } },
+            { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+        );
+        responseData.push([
+            "geosearchstore(key25, key18, (15, 37), 400x400 KM)",
+            2,
         ]);
     }
 
