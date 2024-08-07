@@ -1190,6 +1190,50 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getrange test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const nonStringKey = uuidv4();
+
+                expect(await client.set(key, "This is a string")).toEqual("OK");
+                expect(await client.getrange(key, 0, 3)).toEqual("This");
+                expect(await client.getrange(key, -3, -1)).toEqual("ing");
+                expect(await client.getrange(key, 0, -1)).toEqual(
+                    "This is a string",
+                );
+
+                // out of range
+                expect(await client.getrange(key, 10, 100)).toEqual("string");
+                expect(await client.getrange(key, -200, -3)).toEqual(
+                    "This is a stri",
+                );
+                expect(await client.getrange(key, 100, 200)).toEqual("");
+
+                // incorrect range
+                expect(await client.getrange(key, -1, -3)).toEqual("");
+
+                // a bug fixed in version 8: https://github.com/redis/redis/issues/13207
+                expect(await client.getrange(key, -200, -100)).toEqual(
+                    cluster.checkIfServerVersionLessThan("8.0.0") ? "T" : "",
+                );
+
+                // empty key (returning null isn't implemented)
+                expect(await client.getrange(nonStringKey, 0, -1)).toEqual(
+                    cluster.checkIfServerVersionLessThan("8.0.0") ? "" : null,
+                );
+
+                // non-string key
+                expect(await client.lpush(nonStringKey, ["_"])).toEqual(1);
+                await expect(
+                    client.getrange(nonStringKey, 0, -1),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `testing hset and hget with multiple existing fields and one non existing field_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -2688,6 +2732,12 @@ export function runBaseTests<Context>(config: {
                             ExpireOptions.HasExistingExpiry,
                         ),
                     ).toEqual(true);
+                    expect(await client.expiretime(key)).toBeGreaterThan(
+                        Math.floor(Date.now() / 1000),
+                    );
+                    expect(await client.pexpiretime(key)).toBeGreaterThan(
+                        Date.now(),
+                    );
                 }
 
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
@@ -2751,7 +2801,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `expire, pexpire, expireAt and pexpireAt with timestamp in the past or negative timeout_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.ttl(key)).toEqual(-1);
@@ -2769,6 +2819,13 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(true);
                 expect(await client.ttl(key)).toEqual(-2);
                 expect(await client.set(key, "foo")).toEqual("OK");
+
+                // no timeout set yet
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(await client.expiretime(key)).toEqual(-1);
+                    expect(await client.pexpiretime(key)).toEqual(-1);
+                }
+
                 expect(
                     await client.pexpireAt(
                         key,
@@ -2784,7 +2841,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `expire, pexpire, expireAt, pexpireAt and ttl with non-existing key_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 expect(await client.expire(key, 10)).toEqual(false);
                 expect(await client.pexpire(key, 10000)).toEqual(false);
@@ -2801,6 +2858,11 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(false);
                 expect(await client.ttl(key)).toEqual(-2);
+
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(await client.expiretime(key)).toEqual(-2);
+                    expect(await client.pexpiretime(key)).toEqual(-2);
+                }
             }, protocol);
         },
         config.timeout,
@@ -5541,12 +5603,14 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `geosearch test_%p`,
+        `geosearch geosearchstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
-                const key = uuidv4();
+                const key1 = "{geosearch}" + uuidv4();
+                const key2 = "{geosearch}" + uuidv4();
+                const key3 = "{geosearch}" + uuidv4();
 
                 const members: string[] = [
                     "Catania",
@@ -5610,30 +5674,55 @@ export function runBaseTests<Context>(config: {
                 ];
 
                 // geoadd
-                expect(await client.geoadd(key, membersToCoordinates)).toBe(
+                expect(await client.geoadd(key1, membersToCoordinates)).toBe(
                     members.length,
                 );
 
                 let searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                 );
                 // using set to compare, because results are reordrered
                 expect(new Set(searchResult)).toEqual(membersSet);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    ),
+                ).toEqual(4);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(searchResult);
 
                 // order search result
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                     { sortOrder: SortOrder.ASC },
                 );
                 expect(searchResult).toEqual(members);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                        { sortOrder: SortOrder.ASC, storeDist: true },
+                    ),
+                ).toEqual(4);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(searchResult);
 
                 // order and query all extra data
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                     {
@@ -5647,7 +5736,7 @@ export function runBaseTests<Context>(config: {
 
                 // order, query and limit by 1
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
                     {
@@ -5659,11 +5748,28 @@ export function runBaseTests<Context>(config: {
                     },
                 );
                 expect(searchResult).toEqual(expectedResult.slice(0, 1));
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                        {
+                            sortOrder: SortOrder.ASC,
+                            count: 1,
+                            storeDist: true,
+                        },
+                    ),
+                ).toEqual(1);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual([members[0]]);
 
                 // test search by box, unit: meters, from member, with distance
                 const meters = 400 * 1000;
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { member: "Catania" },
                     { width: meters, height: meters, unit: GeoUnit.METERS },
                     {
@@ -5677,11 +5783,33 @@ export function runBaseTests<Context>(config: {
                     ["Palermo", [166274.1516]],
                     ["Catania", [0.0]],
                 ]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { member: "Catania" },
+                        { width: meters, height: meters, unit: GeoUnit.METERS },
+                        { sortOrder: SortOrder.DESC, storeDist: true },
+                    ),
+                ).toEqual(3);
+                // TODO deep close to https://github.com/maasencioh/jest-matcher-deep-close-to
+                expect(
+                    await client.zrangeWithScores(
+                        key2,
+                        { start: 0, stop: -1 },
+                        true,
+                    ),
+                ).toEqual({
+                    edge2: 236529.17986494553,
+                    Palermo: 166274.15156960033,
+                    Catania: 0.0,
+                });
 
                 // test search by box, unit: feet, from member, with limited count 2, with hash
                 const feet = 400 * 3280.8399;
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { member: "Palermo" },
                     { width: feet, height: feet, unit: GeoUnit.FEET },
                     {
@@ -5696,39 +5824,97 @@ export function runBaseTests<Context>(config: {
                     ["Palermo", [3479099956230698]],
                     ["edge1", [3479273021651468]],
                 ]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { member: "Palermo" },
+                        { width: feet, height: feet, unit: GeoUnit.FEET },
+                        {
+                            sortOrder: SortOrder.ASC,
+                            count: 2,
+                        },
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrangeWithScores(key2, { start: 0, stop: -1 }),
+                ).toEqual({
+                    Palermo: 3479099956230698,
+                    edge1: 3479273021651468,
+                });
 
                 // test search by box, unit: miles, from geospatial position, with limited ANY count to 1
                 const miles = 250;
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { width: miles, height: miles, unit: GeoUnit.MILES },
                     { count: 1, isAny: true },
                 );
                 expect(members).toContainEqual(searchResult[0]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: miles, height: miles, unit: GeoUnit.MILES },
+                        { count: 1, isAny: true },
+                    ),
+                ).toEqual(1);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(searchResult);
 
                 // test search by radius, units: feet, from member
                 const feetRadius = 200 * 3280.8399;
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { member: "Catania" },
                     { radius: feetRadius, unit: GeoUnit.FEET },
                     { sortOrder: SortOrder.ASC },
                 );
                 expect(searchResult).toEqual(["Catania", "Palermo"]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { member: "Catania" },
+                        { radius: feetRadius, unit: GeoUnit.FEET },
+                        { sortOrder: SortOrder.ASC, storeDist: true },
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(searchResult);
 
                 // Test search by radius, unit: meters, from member
                 const metersRadius = 200 * 1000;
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { member: "Catania" },
                     { radius: metersRadius, unit: GeoUnit.METERS },
                     { sortOrder: SortOrder.DESC },
                 );
                 expect(searchResult).toEqual(["Palermo", "Catania"]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { member: "Catania" },
+                        { radius: metersRadius, unit: GeoUnit.METERS },
+                        { sortOrder: SortOrder.DESC, storeDist: true },
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }, true),
+                ).toEqual(searchResult);
 
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { member: "Catania" },
                     { radius: metersRadius, unit: GeoUnit.METERS },
                     {
@@ -5743,7 +5929,7 @@ export function runBaseTests<Context>(config: {
 
                 // Test search by radius, unit: miles, from geospatial data
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { radius: 175, unit: GeoUnit.MILES },
                     { sortOrder: SortOrder.DESC },
@@ -5754,10 +5940,23 @@ export function runBaseTests<Context>(config: {
                     "Palermo",
                     "Catania",
                 ]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 175, unit: GeoUnit.MILES },
+                        { sortOrder: SortOrder.DESC, storeDist: true },
+                    ),
+                ).toEqual(4);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }, true),
+                ).toEqual(searchResult);
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { radius: 200, unit: GeoUnit.KILOMETERS },
                     {
@@ -5769,10 +5968,27 @@ export function runBaseTests<Context>(config: {
                     },
                 );
                 expect(searchResult).toEqual(expectedResult.slice(0, 2));
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 200, unit: GeoUnit.KILOMETERS },
+                        {
+                            sortOrder: SortOrder.ASC,
+                            count: 2,
+                            storeDist: true,
+                        },
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(members.slice(0, 2));
 
                 // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { radius: 200, unit: GeoUnit.KILOMETERS },
                     {
@@ -5785,40 +6001,94 @@ export function runBaseTests<Context>(config: {
                     },
                 );
                 expect(members).toContainEqual(searchResult[0][0]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 200, unit: GeoUnit.KILOMETERS },
+                        {
+                            sortOrder: SortOrder.ASC,
+                            count: 1,
+                            isAny: true,
+                        },
+                    ),
+                ).toEqual(1);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual([searchResult[0][0]]);
 
                 // no members within the area
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { width: 50, height: 50, unit: GeoUnit.METERS },
                     { sortOrder: SortOrder.ASC },
                 );
                 expect(searchResult).toEqual([]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: 50, height: 50, unit: GeoUnit.METERS },
+                        { sortOrder: SortOrder.ASC },
+                    ),
+                ).toEqual(0);
+                expect(await client.zcard(key2)).toEqual(0);
 
                 // no members within the area
                 searchResult = await client.geosearch(
-                    key,
+                    key1,
                     { position: { longitude: 15, latitude: 37 } },
                     { radius: 5, unit: GeoUnit.METERS },
                     { sortOrder: SortOrder.ASC },
                 );
                 expect(searchResult).toEqual([]);
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        key2,
+                        key1,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 5, unit: GeoUnit.METERS },
+                        { sortOrder: SortOrder.ASC },
+                    ),
+                ).toEqual(0);
+                expect(await client.zcard(key2)).toEqual(0);
 
                 // member does not exist
                 await expect(
                     client.geosearch(
-                        key,
+                        key1,
+                        { member: "non-existing-member" },
+                        { radius: 100, unit: GeoUnit.METERS },
+                    ),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.geosearchstore(
+                        key2,
+                        key1,
                         { member: "non-existing-member" },
                         { radius: 100, unit: GeoUnit.METERS },
                     ),
                 ).rejects.toThrow(RequestError);
 
                 // key exists but holds a non-ZSET value
-                const key2 = uuidv4();
-                expect(await client.set(key2, uuidv4())).toEqual("OK");
+                expect(await client.set(key3, uuidv4())).toEqual("OK");
                 await expect(
                     client.geosearch(
+                        key3,
+                        { position: { longitude: 15, latitude: 37 } },
+                        { radius: 100, unit: GeoUnit.METERS },
+                    ),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.geosearchstore(
                         key2,
+                        key3,
                         { position: { longitude: 15, latitude: 37 } },
                         { radius: 100, unit: GeoUnit.METERS },
                     ),
@@ -6709,6 +6979,93 @@ export function runBaseTests<Context>(config: {
                 expect(await client.set(nonListKey, "blmpop")).toBe("OK");
                 await expect(
                     client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xgroupCreate and xgroupDestroy test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const nonExistentKey = uuidv4();
+                const stringKey = uuidv4();
+                const groupName1 = uuidv4();
+                const groupName2 = uuidv4();
+                const streamId = "0-1";
+
+                // trying to create a consumer group for a non-existing stream without the "MKSTREAM" arg results in error
+                await expect(
+                    client.xgroupCreate(nonExistentKey, groupName1, streamId),
+                ).rejects.toThrow(RequestError);
+
+                // calling with the "MKSTREAM" arg should create the new stream automatically
+                expect(
+                    await client.xgroupCreate(key, groupName1, streamId, {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+
+                // invalid arg - group names must be unique, but group_name1 already exists
+                await expect(
+                    client.xgroupCreate(key, groupName1, streamId),
+                ).rejects.toThrow(RequestError);
+
+                // Invalid stream ID format
+                await expect(
+                    client.xgroupCreate(
+                        key,
+                        groupName2,
+                        "invalid_stream_id_format",
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                expect(await client.xgroupDestroy(key, groupName1)).toEqual(
+                    true,
+                );
+                // calling xgroup_destroy again returns False because the group was already destroyed above
+                expect(await client.xgroupDestroy(key, groupName1)).toEqual(
+                    false,
+                );
+
+                // attempting to destroy a group for a non-existing key should raise an error
+                await expect(
+                    client.xgroupDestroy(nonExistentKey, groupName1),
+                ).rejects.toThrow(RequestError);
+
+                // "ENTRIESREAD" option was added in Valkey 7.0.0
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    await expect(
+                        client.xgroupCreate(key, groupName1, streamId, {
+                            entriesRead: "10",
+                        }),
+                    ).rejects.toThrow(RequestError);
+                } else {
+                    expect(
+                        await client.xgroupCreate(key, groupName1, streamId, {
+                            entriesRead: "10",
+                        }),
+                    ).toEqual("OK");
+
+                    // invalid entries_read_id - cannot be the zero ("0-0") ID
+                    await expect(
+                        client.xgroupCreate(key, groupName1, streamId, {
+                            entriesRead: "0-0",
+                        }),
+                    ).rejects.toThrow(RequestError);
+                }
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xgroupCreate(stringKey, groupName1, streamId, {
+                        mkStream: true,
+                    }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xgroupDestroy(stringKey, groupName1),
                 ).rejects.toThrow(RequestError);
             }, protocol);
         },

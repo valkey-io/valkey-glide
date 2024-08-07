@@ -29,6 +29,7 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
+    GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InsertPosition,
@@ -44,9 +45,11 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
@@ -55,13 +58,13 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
-    createBLMPop,
     createDecr,
     createDecrBy,
     createDel,
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createGeoAdd,
@@ -69,9 +72,11 @@ import {
     createGeoHash,
     createGeoPos,
     createGeoSearch,
+    createGeoSearchStore,
     createGet,
     createGetBit,
     createGetDel,
+    createGetRange,
     createHDel,
     createHExists,
     createHGet,
@@ -91,8 +96,8 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
-    createLMove,
     createLMPop,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -110,11 +115,15 @@ import {
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
     createPfCount,
     createPfMerge,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
     createRPop,
     createRPush,
     createRPushX,
@@ -143,8 +152,11 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWatch,
     createXAdd,
     createXDel,
+    createXGroupCreate,
+    createXGroupDestroy,
     createXLen,
     createXRead,
     createXTrim,
@@ -172,8 +184,8 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
     createZScan,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -835,6 +847,41 @@ export class BaseClient {
      */
     public getdel(key: string): Promise<string | null> {
         return this.createWritePromise(createGetDel(key));
+    }
+
+    /**
+     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
+     * an offset starting from the end of the string. So `-1` means the last character, `-2` the
+     * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
+     * or `end` are out of range, returns the substring within the valid range of the string.
+     *
+     * See https://valkey.io/commands/getrange/ for details.
+     *
+     * @param key - The key of the string.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @returns A substring extracted from the value stored at `key`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("mykey", "This is a string")
+     * let result = await client.getrange("mykey", 0, 3)
+     * console.log(result); // Output: "This"
+     * result = await client.getrange("mykey", -3, -1)
+     * console.log(result); // Output: "ing" - extracted last 3 characters of a string
+     * result = await client.getrange("mykey", 0, 100)
+     * console.log(result); // Output: "This is a string"
+     * result = await client.getrange("mykey", 5, 6)
+     * console.log(result); // Output: ""
+     * ```
+     */
+    public async getrange(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(createGetRange(key, start, end));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -2428,6 +2475,35 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
+     *
+     * See https://valkey.io/commands/expiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.expiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = await client.set(myKey, "value");
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
+     * ```
+     */
+    public async expiretime(key: string): Promise<number> {
+        return this.createWritePromise(createExpireTime(key));
+    }
+
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
@@ -2484,6 +2560,34 @@ export class BaseClient {
         return this.createWritePromise(
             createPExpireAt(key, unixMilliseconds, option),
         );
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * See https://valkey.io/commands/pexpiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * const result1 = client.pexpiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = client.set(myKey, "value");
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
+     * ```
+     */
+    public async pexpiretime(key: string): Promise<number> {
+        return this.createWritePromise(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
@@ -3570,6 +3674,56 @@ export class BaseClient {
         return this.createWritePromise(createXLen(key));
     }
 
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-create/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * // Create the consumer group "mygroup", using zero as the starting ID:
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output is "OK"
+     * ```
+     */
+    public async xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-destroy/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
+     *
+     * @example
+     * ```typescript
+     * // Destroys the consumer group "mygroup"
+     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output is true
+     * ```
+     */
+    public async xgroupDestroy(
+        key: string,
+        groupName: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(createXGroupDestroy(key, groupName));
+    }
+
     private readonly MAP_READ_FROM_STRATEGY: Record<
         ReadFrom,
         connection_request.ReadFrom
@@ -4050,22 +4204,15 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
-     *
      * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
-     *
      * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
-     *
      * @param searchBy - The query's shape options, could be one of:
-     *
      * - {@link GeoCircleShape} to search inside circular area according to given radius.
-     *
      * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
-     *
-     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
      * @returns By default, returns an `Array` of members (locations) names.
      *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
      *     where each sub-array represents a single item in the following order:
-     *
      * - The member (location) name.
      * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
      * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
@@ -4119,9 +4266,88 @@ export class BaseClient {
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchResultOptions,
-    ): Promise<(Buffer | (number | number[])[])[]> {
+    ): Promise<(string | (number | number[])[])[]> {
         return this.createWritePromise(
             createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
+     * Searches for members in a sorted set stored at `source` representing geospatial data
+     * within a circular or rectangular area and stores the result in `destination`.
+     *
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * To get the result directly, see {@link geosearch}.
+     *
+     * See https://valkey.io/commands/geosearchstore/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param source - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     * @param searchBy - The query's shape options, could be one of:
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo' and store in `destination`:
+     * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
+     * // query the stored results
+     * const result1 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * console.log(result1); // Output:
+     * // {
+     * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
+     * //     Catania: 3479447370796909
+     * // }
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting to store distance instead of geohashes,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * await client.geosearchstore(
+     *     "destination",
+     *     "mySortedSet",
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         storeDist: true,
+     *     },
+     * );
+     * // query the stored results
+     * const result2 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * console.log(result2); // Output:
+     * // {
+     * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
+     * //     Catania: 56.4413,    // the distance is measured in units used for the search query (miles)
+     * // }
+     * ```
+     */
+    public async geosearchstore(
+        destination: string,
+        source: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchStoreResultOptions,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createGeoSearchStore(
+                destination,
+                source,
+                searchFrom,
+                searchBy,
+                resultOptions,
+            ),
         );
     }
 
@@ -4484,8 +4710,40 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public touch(keys: string[]): Promise<number> {
+    public async touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction. Executing a transaction will automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/watch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     * @param keys - The keys to watch.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * ```
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * await client.set("sampleKey", "hello world");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
+     * ```
+     */
+    public async watch(keys: string[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys));
     }
 
     /**
@@ -4578,6 +4836,78 @@ export class BaseClient {
         return this.createWritePromise(
             createBLMPop(timeout, keys, direction, count),
         );
+    }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-channels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * @returns A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const channels = await client.pubsubChannels();
+     * console.log(channels); // Output: ["channel1", "channel2"]
+     *
+     * const newsChannels = await client.pubsubChannels("news.*");
+     * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
+     * ```
+     */
+    public async pubsubChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numpat for more details.
+     *
+     * @returns The number of unique patterns.
+     *
+     * @example
+     * ```typescript
+     * const patternCount = await client.pubsubNumpat();
+     * console.log(patternCount); // Output: 3
+     * ```
+     */
+    public async pubsubNumPat(): Promise<number> {
+        return this.createWritePromise(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numsub for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubNumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubNumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubNumSub(channels));
     }
 
     /**
