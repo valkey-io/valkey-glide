@@ -3419,3 +3419,23 @@ export function createPubSubShardNumSub(
 ): command_request.Command {
     return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
 }
+
+/**
+ * @internal
+ */
+export function createBZPopMax(
+    keys: string[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.BZPopMax, [...keys, timeout.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createBZPopMin(
+    keys: string[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
+}
