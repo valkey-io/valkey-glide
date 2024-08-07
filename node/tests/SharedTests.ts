@@ -1533,6 +1533,63 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hrandfield test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+
+                // key does not exist
+                expect(await client.hrandfield(key1)).toBeNull();
+                expect(await client.hrandfieldCount(key1, 5)).toEqual([]);
+                expect(await client.hrandfieldWithValues(key1, 5)).toEqual([]);
+
+                const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
+                const fields = Object.keys(data);
+                const entries = Object.entries(data);
+                expect(await client.hset(key1, data)).toEqual(3);
+
+                expect(fields).toContain(await client.hrandfield(key1));
+
+                // With Count - positive count
+                let result = await client.hrandfieldCount(key1, 5);
+                expect(result).toEqual(fields);
+
+                // With Count - negative count
+                result = await client.hrandfieldCount(key1, -5);
+                expect(result.length).toEqual(5);
+                result.map((r) => expect(fields).toContain(r));
+
+                // With values - positive count
+                let result2 = await client.hrandfieldWithValues(key1, 5);
+                expect(result2).toEqual(entries);
+
+                // With values - negative count
+                result2 = await client.hrandfieldWithValues(key1, -5);
+                expect(result2.length).toEqual(5);
+                result2.map((r) => expect(entries).toContainEqual(r));
+
+                // key exists but holds non hash type value
+                expect(await client.set(key2, "value")).toEqual("OK");
+                await expect(client.hrandfield(key2)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(client.hrandfieldCount(key2, 42)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(
+                    client.hrandfieldWithValues(key2, 42),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
