@@ -952,6 +952,8 @@ export async function transactionTest(
         'xgroupCreate(key9, groupName2, "0-0", { mkStream: true })',
         "OK",
     ]);
+    baseTransaction.xinfoConsumers(key9, groupName1);
+    responseData.push(["xinfoConsumers(key9, groupName1)", []]);
     baseTransaction.xdel(key9, ["0-3", "0-5"]);
     responseData.push(["xdel(key9, [['0-3', '0-5']])", 1]);
 
