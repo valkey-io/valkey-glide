@@ -4035,59 +4035,61 @@ export class BaseClient {
      * @param fullOptions - If `true`, returns verbose information with a limit of the first 10 PEL entries.
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
-     * @returns A `Record` of detailed stream information for the given `key`. See
+     * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
      *     the example for a sample response.
      * @example
      * ```typescript
      * const infoResult = await client.xinfoStream("my_stream");
-     * console.log(infoResult); // Output: {
-     *                          //   length: 2,
-     *                          //   'radix-tree-keys': 1,
-     *                          //   'radix-tree-nodes': 2,
-     *                          //   'last-generated-id': '1719877599564-1',
-     *                          //   'max-deleted-entry-id': '0-0',
-     *                          //   'entries-added': 2,
-     *                          //   'recorded-first-entry-id': '1719877599564-0',
-     *                          //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     *                          //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
-     *                          //   groups: 1,
-     *                          // }
+     * console.log(infoResult);
+     * // Output: {
+     * //   length: 2,
+     * //   'radix-tree-keys': 1,
+     * //   'radix-tree-nodes': 2,
+     * //   'last-generated-id': '1719877599564-1',
+     * //   'max-deleted-entry-id': '0-0',
+     * //   'entries-added': 2,
+     * //   'recorded-first-entry-id': '1719877599564-0',
+     * //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   groups: 1,
+     * // }
      * ```
      *
      * @example
      * ```typescript
      * const infoResult = await client.xinfoStream("my_stream", true); // default limit of 10 entries
      * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
-     * console.log(infoResult); // Output: {
-     *                          //   length: 2,
-     *                          //   'radix-tree-keys': 1,
-     *                          //   'radix-tree-nodes': 2,
-     *                          //   'last-generated-id': '1719877599564-1',
-     *                          //   'max-deleted-entry-id': '0-0',
-     *                          //   'entries-added': 2,
-     *                          //   'recorded-first-entry-id': '1719877599564-0',
-     *                          //   entries: [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
-     *                          //   groups: [ {
-     *                          //     name: 'group',
-     *                          //     'last-delivered-id': '1719877599564-0',
-     *                          //     'entries-read': 1,
-     *                          //     lag: 1,
-     *                          //     'pel-count': 1,
-     *                          //     pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     *                          //     consumers: [ {
-     *                          //         name: 'consumer',
-     *                          //         'seen-time': 1722624726802,
-     *                          //         'active-time': 1722624726802,
-     *                          //         'pel-count': 1,
-     *                          //         pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
-     *                          //         }
-     *                          //       ]
-     *                          //     }
-     *                          //   ]
-     *                          // }
+     * console.log(infoResult);
+     * // Output: {
+     * //   length: 2,
+     * //   'radix-tree-keys': 1,
+     * //   'radix-tree-nodes': 2,
+     * //   'last-generated-id': '1719877599564-1',
+     * //   'max-deleted-entry-id': '0-0',
+     * //   'entries-added': 2,
+     * //   'recorded-first-entry-id': '1719877599564-0',
+     * //   entries: [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
+     * //   groups: [ {
+     * //     name: 'group',
+     * //     'last-delivered-id': '1719877599564-0',
+     * //     'entries-read': 1,
+     * //     lag: 1,
+     * //     'pel-count': 1,
+     * //     pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //     consumers: [ {
+     * //         name: 'consumer',
+     * //         'seen-time': 1722624726802,
+     * //         'active-time': 1722624726802,
+     * //         'pel-count': 1,
+     * //         pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //         }
+     * //       ]
+     * //     }
+     * //   ]
+     * // }
      * ```
      */
-    public xinfoStream(
+    public async xinfoStream(
         key: string,
         fullOptions?: boolean | number,
     ): Promise<ReturnTypeXinfoStream> {

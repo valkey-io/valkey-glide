@@ -3,6 +3,7 @@
  */
 
 import {
+    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
@@ -42,6 +43,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
@@ -2228,8 +2230,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `number` is specified, returns verbose information limiting the returned PEL entries.
      * If `0` is specified, returns verbose information with no limit.
      *
-     * Command Response - A `Record` of detailed stream information for the given `key`. See
-     *     the example for a sample response.
+     * Command Response - A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`.
+     *     See example of {@link BaseClient.xinfoStream} for more details.
      */
     public xinfoStream(key: string, fullOptions?: boolean | number): T {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
