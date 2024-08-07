@@ -489,7 +489,7 @@ export async function transactionTest(
     const key1 = "{key}" + uuidv4(); // string
     const key2 = "{key}" + uuidv4(); // string
     const key3 = "{key}" + uuidv4(); // string
-    const key4 = "{key}" + uuidv4();
+    const key4 = "{key}" + uuidv4(); // hash
     const key5 = "{key}" + uuidv4();
     const key6 = "{key}" + uuidv4();
     const key7 = "{key}" + uuidv4();
@@ -593,6 +593,12 @@ export async function transactionTest(
     responseData.push(["hstrlen(key4, field)", value.length]);
     baseTransaction.hlen(key4);
     responseData.push(["hlen(key4)", 1]);
+    baseTransaction.hrandfield(key4);
+    responseData.push(["hrandfield(key4)", field]);
+    baseTransaction.hrandfieldCount(key4, -2);
+    responseData.push(["hrandfieldCount(key4, -2)", [field, field]]);
+    baseTransaction.hrandfieldWithValues(key4, 2);
+    responseData.push(["hrandfieldWithValues(key4, 2)", [[field, value]]]);
     baseTransaction.hsetnx(key4, field, value);
     responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
@@ -607,6 +613,9 @@ export async function transactionTest(
     responseData.push(["hmget(key4, [field])", [null]]);
     baseTransaction.hexists(key4, field);
     responseData.push(["hexists(key4, field)", false]);
+    baseTransaction.hrandfield(key4);
+    responseData.push(["hrandfield(key4)", null]);
+
     baseTransaction.lpush(key5, [
         field + "1",
         field + "2",

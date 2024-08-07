@@ -3189,6 +3189,18 @@ export function createHStrlen(
     return createCommand(RequestType.HStrlen, [key, field]);
 }
 
+/** @internal */
+export function createHRandField(
+    key: string,
+    count?: number,
+    withValues?: boolean,
+): command_request.Command {
+    const args = [key];
+    if (count !== undefined) args.push(count.toString());
+    if (withValues) args.push("WITHVALUES");
+    return createCommand(RequestType.HRandField, args);
+}
+
 /**
  * @internal
  */

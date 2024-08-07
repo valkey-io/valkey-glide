@@ -107,6 +107,7 @@ import {
     createHLen,
     createHMGet,
     createHScan,
+    createHRandField,
     createHSet,
     createHSetNX,
     createHStrlen,
@@ -688,25 +689,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createHGet(key, field));
     }
 
-    /**
-     * Iterates incrementally over a hash.
-     *
-     * See https://valkey.io/commands/hscan for more details.
-     *
-     * @param key - The key of the set.
-     * @param cursor - The cursor that points to the next iteration of results. A value of `0` indicates the start of the search.
-     * @param options - The {@link BaseScanOptions}.
-     *
-     * Command Response -  An `Array` of the `cursor` and the subset of the hash held by `key`.
-     * The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
-     * returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
-     * hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
-     * where the value is at even indices and the score is at odd indices.
-     */
-    public hscan(key: string, cursor: string, options?: BaseScanOptions): T {
-        return this.addAndReturn(createHScan(key, cursor, options));
-    }
-
     /** Sets the specified fields to their respective values in the hash stored at `key`.
      * See https://valkey.io/commands/hset/ for details.
      *
@@ -852,6 +834,62 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hstrlen(key: string, field: string): T {
         return this.addAndReturn(createHStrlen(key, field));
+    }
+
+    /**
+     * Returns a random field name from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - A random field name from the hash stored at `key`, or `null` when
+     *     the key does not exist.
+     */
+    public hrandfield(key: string): T {
+        return this.addAndReturn(createHRandField(key));
+    }
+
+    /**
+     * Retrieves up to `count` random field names from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *
+     * Command Response - An `array` of random field names from the hash stored at `key`,
+     *     or an `empty array` when the key does not exist.
+     */
+    public hrandfieldCount(key: string, count: number): T {
+        return this.addAndReturn(createHRandField(key, count));
+    }
+
+    /**
+     * Retrieves up to `count` random field names along with their values from the hash
+     * value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *
+     * Command Response - A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
+     *     field name from the hash and `value` is the associated value of the field name.
+     *     If the hash does not exist or is empty, the response will be an empty `array`.
+     */
+    public hrandfieldWithValues(key: string, count: number): T {
+        return this.addAndReturn(createHRandField(key, count, true));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
