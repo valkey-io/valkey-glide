@@ -49,6 +49,7 @@ import {
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createAppend,
     createBLMPop,
     createBLMove,
     createBLPop,
@@ -5027,6 +5028,32 @@ export class BaseClient {
         value: string,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Appends a `value` to a `key`. If `key` does not exist it is created and set as an empty string,
+     * so `APPEND` will be similar to {@link set} in this special case.
+     *
+     * See https://valkey.io/commands/append/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param value - The key of the string.
+     * @returns The length of the string after appending the value.
+     *
+     * @example
+     * ```typescript
+     * const len = await client.append("key", "Hello");
+     * console.log(len);
+     *     // Output: 5 - Indicates that "Hello" has been appended to the value of "key", which was initially
+     *     // empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+     * len = await client.append("key", " world");
+     * console.log(result);
+     *     // Output: 11 - Indicates that " world" has been appended to the value of "key", resulting in a
+     *     // new value of "Hello world" with a length of 11.
+     * ```
+     */
+    public async append(key: string, value: string): Promise<number> {
+        return this.createWritePromise(createAppend(key, value));
     }
 
     /**

@@ -5028,6 +5028,29 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "append test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const value = uuidv4();
+
+                // Append on non-existing string(similar to SET)
+                expect(await client.append(key1, value)).toBe(value.length);
+                expect(await client.append(key1, value)).toBe(value.length * 2);
+                expect(await client.get(key1)).toEqual(value.concat(value));
+
+                // key exists but holding the wrong kind of value
+                expect(await client.sadd(key2, ["a"])).toBe(1);
+                await expect(client.append(key2, "_")).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
