@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added XINFO CONSUMERS command ([#2093](https://github.com/valkey-io/valkey-glide/pull/2093))
 * Node: Added HRANDFIELD command ([#2096](https://github.com/valkey-io/valkey-glide/pull/2096))
 * Node: Added FUNCTION STATS commands ([#2082](https://github.com/valkey-io/valkey-glide/pull/2082))
 * Node: Added XCLAIM command ([#2092](https://github.com/valkey-io/valkey-glide/pull/2092))
