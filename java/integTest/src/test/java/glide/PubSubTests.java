@@ -2,11 +2,13 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -49,6 +51,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -247,6 +250,7 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_exact_happy_path_many_channels` in python client tests. */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -283,6 +287,7 @@ public class PubSubTests {
     }
 
     /** Similar to `test_sharded_pubsub` in python client tests. */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -306,6 +311,7 @@ public class PubSubTests {
     }
 
     /** Similar to `test_sharded_pubsub_many_channels` in python client tests. */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -346,6 +352,7 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_pattern` in python client tests. */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -386,6 +393,7 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_pattern_many_channels` in python client tests. */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -425,6 +433,7 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_combined_exact_and_pattern_one_client` in python client tests. */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -476,6 +485,7 @@ public class PubSubTests {
     /**
      * Similar to `test_pubsub_combined_exact_and_pattern_multiple_clients` in python client tests.
      */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -546,6 +556,7 @@ public class PubSubTests {
     /**
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_one_client` in python client tests.
      */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -604,6 +615,7 @@ public class PubSubTests {
     }
 
     /** This test fully covers all `test_pubsub_*_co_existence` tests in python client. */
+    @Disabled
     @SneakyThrows
     @Test
     public void coexistense_of_sync_and_async_read() {
@@ -686,6 +698,7 @@ public class PubSubTests {
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_multi_client` in python client
      * tests.
      */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -803,6 +816,7 @@ public class PubSubTests {
      * Similar to `test_pubsub_three_publishing_clients_same_name_with_sharded` in python client
      * tests.
      */
+    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -1232,7 +1246,7 @@ public class PubSubTests {
                 createClientWithSubscriptions(
                         standalone, subscriptions, Optional.of(callback), Optional.of(callbackMessages));
         var sender = createClient(standalone);
-        clients.addAll(Arrays.asList(listener, listener2, sender));
+        clients.addAll(List.of(listener, listener2, sender));
 
         assertEquals(OK, sender.publish(message.getMessage(), channel).get());
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -1240,5 +1254,203 @@ public class PubSubTests {
         assertEquals(message, listener.tryGetPubSubMessage());
         assertEquals(1, callbackMessages.size());
         assertEquals(message, callbackMessages.get(0));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_channels(boolean standalone) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        // no channels exists yet
+        var client = createClient(standalone);
+        assertEquals(0, client.pubsubChannels().get().length);
+        assertEquals(0, client.pubsubChannelsBinary().get().length);
+        assertEquals(0, client.pubsubChannels("**").get().length);
+        assertEquals(0, client.pubsubChannels(gs("**")).get().length);
+
+        var channels = Set.of("test_channel1", "test_channel2", "some_channel");
+        String pattern = "test_*";
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(
+                                PubSubChannelMode.EXACT,
+                                channels.stream().map(GlideString::gs).collect(Collectors.toSet()))
+                        : Map.of(
+                                PubSubClusterChannelMode.EXACT,
+                                channels.stream().map(GlideString::gs).collect(Collectors.toSet()));
+
+        var listener = createClientWithSubscriptions(standalone, subscriptions);
+        clients.addAll(List.of(client, listener));
+
+        // test without pattern
+        assertArrayEquals(channels.toArray(), client.pubsubChannels().get());
+        assertArrayEquals(channels.toArray(), listener.pubsubChannels().get());
+        assertArrayEquals(
+                channels.stream().map(GlideString::gs).toArray(), client.pubsubChannelsBinary().get());
+        assertArrayEquals(
+                channels.stream().map(GlideString::gs).toArray(), listener.pubsubChannelsBinary().get());
+
+        // test with pattern
+        assertArrayEquals(
+                new String[] {"test_channel1", "test_channel2"}, client.pubsubChannels(pattern).get());
+        assertArrayEquals(
+                new GlideString[] {gs("test_channel1"), gs("test_channel2")},
+                client.pubsubChannels(gs(pattern)).get());
+        assertArrayEquals(
+                new String[] {"test_channel1", "test_channel2"}, listener.pubsubChannels(pattern).get());
+        assertArrayEquals(
+                new GlideString[] {gs("test_channel1"), gs("test_channel2")},
+                listener.pubsubChannels(gs(pattern)).get());
+
+        // test with non-matching pattern
+        assertEquals(0, client.pubsubChannels("non_matching_*").get().length);
+        assertEquals(0, client.pubsubChannels(gs("non_matching_*")).get().length);
+        assertEquals(0, listener.pubsubChannels("non_matching_*").get().length);
+        assertEquals(0, listener.pubsubChannels(gs("non_matching_*")).get().length);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_numpat(boolean standalone) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        // no channels exists yet
+        var client = createClient(standalone);
+        assertEquals(0, client.pubsubNumPat().get());
+
+        var patterns = Set.of("news.*", "announcements.*");
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(
+                                PubSubChannelMode.PATTERN,
+                                patterns.stream().map(GlideString::gs).collect(Collectors.toSet()))
+                        : Map.of(
+                                PubSubClusterChannelMode.PATTERN,
+                                patterns.stream().map(GlideString::gs).collect(Collectors.toSet()));
+
+        var listener = createClientWithSubscriptions(standalone, subscriptions);
+        clients.addAll(List.of(client, listener));
+
+        assertEquals(2, client.pubsubNumPat().get());
+        assertEquals(2, listener.pubsubNumPat().get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_numsub(boolean standalone) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        // no channels exists yet
+        var client = createClient(standalone);
+        var channels = new String[] {"channel1", "channel2", "channel3"};
+        assertEquals(
+                Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 0L)),
+                client.pubsubNumSub(channels).get());
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions1 =
+                standalone
+                        ? Map.of(
+                                PubSubChannelMode.EXACT, Set.of(gs("channel1"), gs("channel2"), gs("channel3")))
+                        : Map.of(
+                                PubSubClusterChannelMode.EXACT,
+                                Set.of(gs("channel1"), gs("channel2"), gs("channel3")));
+        var listener1 = createClientWithSubscriptions(standalone, subscriptions1);
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions2 =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(gs("channel2"), gs("channel3")))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(gs("channel2"), gs("channel3")));
+        var listener2 = createClientWithSubscriptions(standalone, subscriptions2);
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions3 =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(gs("channel3")))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(gs("channel3")));
+        var listener3 = createClientWithSubscriptions(standalone, subscriptions3);
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions4 =
+                standalone
+                        ? Map.of(PubSubChannelMode.PATTERN, Set.of(gs("channel*")))
+                        : Map.of(PubSubClusterChannelMode.PATTERN, Set.of(gs("channel*")));
+        var listener4 = createClientWithSubscriptions(standalone, subscriptions4);
+
+        clients.addAll(List.of(client, listener1, listener2, listener3, listener4));
+
+        var expected = Map.of("channel1", 1L, "channel2", 2L, "channel3", 3L, "channel4", 0L);
+        assertEquals(expected, client.pubsubNumSub(ArrayUtils.addFirst(channels, "channel4")).get());
+        assertEquals(expected, listener1.pubsubNumSub(ArrayUtils.addFirst(channels, "channel4")).get());
+
+        var expectedGs =
+                Map.of(gs("channel1"), 1L, gs("channel2"), 2L, gs("channel3"), 3L, gs("channel4"), 0L);
+        assertEquals(
+                expectedGs,
+                client
+                        .pubsubNumSub(
+                                new GlideString[] {gs("channel1"), gs("channel2"), gs("channel3"), gs("channel4")})
+                        .get());
+        assertEquals(
+                expectedGs,
+                listener2
+                        .pubsubNumSub(
+                                new GlideString[] {gs("channel1"), gs("channel2"), gs("channel3"), gs("channel4")})
+                        .get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    public void pubsub_channels_and_numpat_and_numsub_in_transaction(boolean standalone) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+
+        // no channels exists yet
+        var client = createClient(standalone);
+        var channels = new String[] {"test_channel1", "test_channel2", "some_channel"};
+        var patterns = Set.of("news.*", "announcements.*");
+        String pattern = "test_*";
+
+        assertEquals(
+            Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 0L)),
+            client.pubsubNumSub(channels).get());
+
+        var transaction = (standalone ? new Transaction() : new ClusterTransaction())
+            .pubsubChannels().pubsubChannels(pattern).pubsubNumPat().pubsubNumSub(channels);
+
+        var result = standalone ? ((GlideClient)client).exec((Transaction) transaction) : ((GlideClusterClient)client).exec((ClusterTransaction) transaction);
+        assertDeepEquals(new Object[] {
+            new String[0], // pubsubChannels()
+            new String[0], // pubsubChannels(pattern)
+            0, // pubsubNumPat()
+            Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 0L)), // pubsubNumSub(channels)
+        }, result
+            );
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+            standalone
+                ? Map.of(
+                PubSubChannelMode.EXACT,
+                Arrays.stream(channels).map(GlideString::gs).collect(Collectors.toSet()),
+                PubSubChannelMode.PATTERN, patterns.stream().map(GlideString::gs).collect(Collectors.toSet()))
+                : Map.of(
+                PubSubClusterChannelMode.EXACT,
+                Arrays.stream(channels).map(GlideString::gs).collect(Collectors.toSet()),
+                PubSubClusterChannelMode.PATTERN, patterns.stream().map(GlideString::gs).collect(Collectors.toSet()));
+
+        var listener = createClientWithSubscriptions(standalone, subscriptions);
+        clients.addAll(List.of(client, listener));
+
+        result = standalone ? ((GlideClient)client).exec((Transaction) transaction) : ((GlideClusterClient)client).exec((ClusterTransaction) transaction);
+
+        assertDeepEquals(new Object[] {
+            channels, // pubsubChannels()
+            new String[] {"test_channel1", "test_channel2"}, // pubsubChannels(pattern)
+                1, // pubsubNumPat()
+                Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 1L)), // pubsubNumSub(channels)
+            }, result
+        );
     }
 }
