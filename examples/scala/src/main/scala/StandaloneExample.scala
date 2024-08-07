@@ -4,6 +4,7 @@ import glide.api.models.configuration.GlideClientConfiguration
 import glide.api.models.configuration.NodeAddress
 import glide.api.models.exceptions.{ClosingException, ConnectionException, ExecAbortException, TimeoutException}
 
+import java.util.concurrent.TimeUnit
 import scala.concurrent.{Await, CancellationException, ExecutionContext, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -119,7 +120,8 @@ object StandaloneExample {
         // Optional - set the logger to write to a file
         // Logger.setLoggerConfig(Logger.Level.INFO, file)
 
-        // Await is used only for this example. Not recommended for use in production environments.
-        Await.result(execAppLogic(), Duration.Inf)
+        val Timeout = 50
+        // Change the timeout based on your production environments.
+        Await.result(execAppLogic(), Duration(Timeout, TimeUnit.SECONDS))
     }
 }
