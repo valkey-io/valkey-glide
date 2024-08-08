@@ -3464,7 +3464,7 @@ export function createBZPopMin(
  * Optional arguments to getex command.
  */
 export type GetExOptions = {
-    expiry?: /**
+    expiry: /**
      * Retain the time to live associated with the key. Equivalent to
      * `PERSIST` in the VALKEY API.
      */
@@ -3492,8 +3492,6 @@ export type GetExOptions = {
                   | "unixMilliseconds";
               count: number;
           };
-    /** The amount of time to live before the key expires. */
-    count?: number;
 };
 
 /**

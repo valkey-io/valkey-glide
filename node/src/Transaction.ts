@@ -295,12 +295,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createGet(key));
     }
 
-    /** Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
+    /**
+     * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
      * See https://valkey.io/commands/getex for more details.
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) set expiriation to the given key.
-     *                  Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the VALKEY API.
      *
      * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      */
