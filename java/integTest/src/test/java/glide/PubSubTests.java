@@ -8,7 +8,6 @@ import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -29,6 +28,8 @@ import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
 import glide.api.models.exceptions.ConfigurationError;
@@ -53,7 +54,7 @@ import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -114,10 +115,9 @@ public class PubSubTests {
 
     @SneakyThrows
     private BaseClient createClient(boolean standalone) {
-        if (standalone) {
-            return GlideClient.createClient(commonClientConfig().build()).get();
-        }
-        return GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+        return standalone
+                ? GlideClient.createClient(commonClientConfig().build()).get()
+                : GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
     }
 
     /**
@@ -131,17 +131,23 @@ public class PubSubTests {
 
     private static final int MESSAGE_DELIVERY_DELAY = 500; // ms
 
-    @BeforeEach
+    @AfterEach
     @SneakyThrows
     public void cleanup() {
         for (var client : clients) {
             if (client instanceof GlideClusterClient) {
-                ((GlideClusterClient) client).customCommand(new String[] {"unsubscribe"}, ALL_NODES).get();
-                ((GlideClusterClient) client).customCommand(new String[] {"punsubscribe"}, ALL_NODES).get();
-                ((GlideClusterClient) client).customCommand(new String[] {"sunsubscribe"}, ALL_NODES).get();
+                ((GlideClusterClient) client)
+                        .customCommand(new GlideString[] {gs("unsubscribe")}, ALL_NODES)
+                        .get();
+                ((GlideClusterClient) client)
+                        .customCommand(new GlideString[] {gs("punsubscribe")}, ALL_NODES)
+                        .get();
+                ((GlideClusterClient) client)
+                        .customCommand(new GlideString[] {gs("sunsubscribe")}, ALL_NODES)
+                        .get();
             } else {
-                ((GlideClient) client).customCommand(new String[] {"unsubscribe"}).get();
-                ((GlideClient) client).customCommand(new String[] {"punsubscribe"}).get();
+                ((GlideClient) client).customCommand(new GlideString[] {gs("unsubscribe")}).get();
+                ((GlideClient) client).customCommand(new GlideString[] {gs("punsubscribe")}).get();
             }
             client.close();
         }
@@ -250,7 +256,6 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_exact_happy_path_many_channels` in python client tests. */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -287,7 +292,6 @@ public class PubSubTests {
     }
 
     /** Similar to `test_sharded_pubsub` in python client tests. */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -311,7 +315,6 @@ public class PubSubTests {
     }
 
     /** Similar to `test_sharded_pubsub_many_channels` in python client tests. */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -352,7 +355,6 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_pattern` in python client tests. */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -393,7 +395,6 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_pattern_many_channels` in python client tests. */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -433,7 +434,6 @@ public class PubSubTests {
     }
 
     /** Similar to `test_pubsub_combined_exact_and_pattern_one_client` in python client tests. */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -485,7 +485,6 @@ public class PubSubTests {
     /**
      * Similar to `test_pubsub_combined_exact_and_pattern_multiple_clients` in python client tests.
      */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
@@ -556,7 +555,6 @@ public class PubSubTests {
     /**
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_one_client` in python client tests.
      */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -615,7 +613,6 @@ public class PubSubTests {
     }
 
     /** This test fully covers all `test_pubsub_*_co_existence` tests in python client. */
-    @Disabled
     @SneakyThrows
     @Test
     public void coexistense_of_sync_and_async_read() {
@@ -698,7 +695,6 @@ public class PubSubTests {
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_multi_client` in python client
      * tests.
      */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -816,7 +812,6 @@ public class PubSubTests {
      * Similar to `test_pubsub_three_publishing_clients_same_name_with_sharded` in python client
      * tests.
      */
-    @Disabled
     @SneakyThrows
     @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
@@ -1285,24 +1280,26 @@ public class PubSubTests {
         clients.addAll(List.of(client, listener));
 
         // test without pattern
-        assertArrayEquals(channels.toArray(), client.pubsubChannels().get());
-        assertArrayEquals(channels.toArray(), listener.pubsubChannels().get());
-        assertArrayEquals(
-                channels.stream().map(GlideString::gs).toArray(), client.pubsubChannelsBinary().get());
-        assertArrayEquals(
-                channels.stream().map(GlideString::gs).toArray(), listener.pubsubChannelsBinary().get());
+        assertEquals(channels, Set.of(client.pubsubChannels().get()));
+        assertEquals(channels, Set.of(listener.pubsubChannels().get()));
+        assertEquals(
+                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
+                Set.of(client.pubsubChannelsBinary().get()));
+        assertEquals(
+                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
+                Set.of(listener.pubsubChannelsBinary().get()));
 
         // test with pattern
-        assertArrayEquals(
-                new String[] {"test_channel1", "test_channel2"}, client.pubsubChannels(pattern).get());
-        assertArrayEquals(
-                new GlideString[] {gs("test_channel1"), gs("test_channel2")},
-                client.pubsubChannels(gs(pattern)).get());
-        assertArrayEquals(
-                new String[] {"test_channel1", "test_channel2"}, listener.pubsubChannels(pattern).get());
-        assertArrayEquals(
-                new GlideString[] {gs("test_channel1"), gs("test_channel2")},
-                listener.pubsubChannels(gs(pattern)).get());
+        assertEquals(
+                Set.of("test_channel1", "test_channel2"), Set.of(client.pubsubChannels(pattern).get()));
+        assertEquals(
+                Set.of(gs("test_channel1"), gs("test_channel2")),
+                Set.of(client.pubsubChannels(gs(pattern)).get()));
+        assertEquals(
+                Set.of("test_channel1", "test_channel2"), Set.of(listener.pubsubChannels(pattern).get()));
+        assertEquals(
+                Set.of(gs("test_channel1"), gs("test_channel2")),
+                Set.of(listener.pubsubChannels(gs(pattern)).get()));
 
         // test with non-matching pattern
         assertEquals(0, client.pubsubChannels("non_matching_*").get().length);
@@ -1407,50 +1404,68 @@ public class PubSubTests {
     public void pubsub_channels_and_numpat_and_numsub_in_transaction(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        // no channels exists yet
+        var prefix = "{boo}-";
+        var route = new SlotKeyRoute(prefix, SlotType.PRIMARY);
         var client = createClient(standalone);
-        var channels = new String[] {"test_channel1", "test_channel2", "some_channel"};
-        var patterns = Set.of("news.*", "announcements.*");
-        String pattern = "test_*";
+        var channels =
+                new String[] {prefix + "test_channel1", prefix + "test_channel2", prefix + "some_channel"};
+        var patterns = Set.of(prefix + "news.*", prefix + "announcements.*");
+        String pattern = prefix + "test_*";
 
-        assertEquals(
-            Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 0L)),
-            client.pubsubNumSub(channels).get());
-
-        var transaction = (standalone ? new Transaction() : new ClusterTransaction())
-            .pubsubChannels().pubsubChannels(pattern).pubsubNumPat().pubsubNumSub(channels);
-
-        var result = standalone ? ((GlideClient)client).exec((Transaction) transaction) : ((GlideClusterClient)client).exec((ClusterTransaction) transaction);
-        assertDeepEquals(new Object[] {
-            new String[0], // pubsubChannels()
-            new String[0], // pubsubChannels(pattern)
-            0, // pubsubNumPat()
-            Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 0L)), // pubsubNumSub(channels)
-        }, result
-            );
+        var transaction =
+                (standalone ? new Transaction() : new ClusterTransaction())
+                        .pubsubChannels()
+                        .pubsubChannels(pattern)
+                        .pubsubNumPat()
+                        .pubsubNumSub(channels);
+        // no channels exists yet
+        var result =
+                standalone
+                        ? ((GlideClient) client).exec((Transaction) transaction).get()
+                        : ((GlideClusterClient) client).exec((ClusterTransaction) transaction, route).get();
+        assertDeepEquals(
+                new Object[] {
+                    new String[0], // pubsubChannels()
+                    new String[0], // pubsubChannels(pattern)
+                    0L, // pubsubNumPat()
+                    Arrays.stream(channels)
+                            .collect(Collectors.toMap(c -> c, c -> 0L)), // pubsubNumSub(channels)
+                },
+                result);
 
         Map<? extends ChannelMode, Set<GlideString>> subscriptions =
-            standalone
-                ? Map.of(
-                PubSubChannelMode.EXACT,
-                Arrays.stream(channels).map(GlideString::gs).collect(Collectors.toSet()),
-                PubSubChannelMode.PATTERN, patterns.stream().map(GlideString::gs).collect(Collectors.toSet()))
-                : Map.of(
-                PubSubClusterChannelMode.EXACT,
-                Arrays.stream(channels).map(GlideString::gs).collect(Collectors.toSet()),
-                PubSubClusterChannelMode.PATTERN, patterns.stream().map(GlideString::gs).collect(Collectors.toSet()));
+                standalone
+                        ? Map.of(
+                                PubSubChannelMode.EXACT,
+                                Arrays.stream(channels).map(GlideString::gs).collect(Collectors.toSet()),
+                                PubSubChannelMode.PATTERN,
+                                patterns.stream().map(GlideString::gs).collect(Collectors.toSet()))
+                        : Map.of(
+                                PubSubClusterChannelMode.EXACT,
+                                Arrays.stream(channels).map(GlideString::gs).collect(Collectors.toSet()),
+                                PubSubClusterChannelMode.PATTERN,
+                                patterns.stream().map(GlideString::gs).collect(Collectors.toSet()));
 
         var listener = createClientWithSubscriptions(standalone, subscriptions);
         clients.addAll(List.of(client, listener));
 
-        result = standalone ? ((GlideClient)client).exec((Transaction) transaction) : ((GlideClusterClient)client).exec((ClusterTransaction) transaction);
+        result =
+                standalone
+                        ? ((GlideClient) client).exec((Transaction) transaction).get()
+                        : ((GlideClusterClient) client).exec((ClusterTransaction) transaction, route).get();
 
-        assertDeepEquals(new Object[] {
-            channels, // pubsubChannels()
-            new String[] {"test_channel1", "test_channel2"}, // pubsubChannels(pattern)
-                1, // pubsubNumPat()
-                Arrays.stream(channels).collect(Collectors.toMap(c -> c, c -> 1L)), // pubsubNumSub(channels)
-            }, result
-        );
+        // convert arrays to sets, because we can't compare arrays - they received reordered
+        result[0] = Set.of((Object[]) result[0]);
+        result[1] = Set.of((Object[]) result[1]);
+
+        assertDeepEquals(
+                new Object[] {
+                    Set.of(channels), // pubsubChannels()
+                    Set.of("{boo}-test_channel1", "{boo}-test_channel2"), // pubsubChannels(pattern)
+                    2L, // pubsubNumPat()
+                    Arrays.stream(channels)
+                            .collect(Collectors.toMap(c -> c, c -> 1L)), // pubsubNumSub(channels)
+                },
+                result);
     }
 }

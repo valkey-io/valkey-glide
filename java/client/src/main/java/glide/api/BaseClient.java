@@ -4511,7 +4511,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 PubSubChannels,
                 new GlideString[0],
-                response -> castArray(handleArrayResponse(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -4527,7 +4527,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 PubSubChannels,
                 new GlideString[] {pattern},
-                response -> castArray(handleArrayResponse(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
