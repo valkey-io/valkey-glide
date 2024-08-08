@@ -25,6 +25,7 @@ import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     checkFunctionListResponse,
+    checkFunctionStatsResponse,
     convertStringArrayToBuffer,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -142,21 +143,18 @@ describe("GlideClient", () => {
                 ),
             );
 
-            const blmovePromise = client.blmove(
-                "source",
-                "destination",
-                ListDirection.LEFT,
-                ListDirection.LEFT,
-                0.1,
-            );
-
-            const blmpopPromise = client.blmpop(
-                ["key1", "key2"],
-                ListDirection.LEFT,
-                0.1,
-            );
-
-            const promiseList = [blmovePromise, blmpopPromise];
+            const promiseList = [
+                client.blmove(
+                    "source",
+                    "destination",
+                    ListDirection.LEFT,
+                    ListDirection.LEFT,
+                    0.1,
+                ),
+                client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
+                client.bzpopmax(["key1", "key2"], 0),
+                client.bzpopmin(["key1", "key2"], 0),
+            ];
 
             try {
                 for (const promise of promiseList) {
@@ -547,7 +545,7 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "function load test_%p",
+        "function load function list function stats test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
@@ -573,6 +571,9 @@ describe("GlideClient", () => {
                 expect(
                     await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
+
+                let functionStats = await client.functionStats();
+                checkFunctionStatsResponse(functionStats, [], 1, 1);
 
                 let functionList = await client.functionList({
                     libNamePattern: libName,
@@ -632,6 +633,9 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
+                functionStats = await client.functionStats();
+                checkFunctionStatsResponse(functionStats, [], 1, 2);
+
                 expect(
                     await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
@@ -640,6 +644,8 @@ describe("GlideClient", () => {
                 ).toEqual(2);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
+                const functionStats = await client.functionStats();
+                checkFunctionStatsResponse(functionStats, [], 0, 0);
                 client.close();
             }
         },
@@ -1081,6 +1087,61 @@ describe("GlideClient", () => {
             // sanity check
             expect(await client.get(key1)).toEqual("foobar");
             expect(await client.get(key2)).toEqual("foobar");
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "xinfo stream transaction test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            const transaction = new Transaction();
+            transaction.xadd(key, [["field1", "value1"]], { id: "0-1" });
+            transaction.xinfoStream(key);
+            transaction.xinfoStream(key, true);
+            const result = await client.exec(transaction);
+            expect(result).not.toBeNull();
+
+            const versionLessThan7 =
+                cluster.checkIfServerVersionLessThan("7.0.0");
+
+            const expectedXinfoStreamResult = {
+                length: 1,
+                "radix-tree-keys": 1,
+                "radix-tree-nodes": 2,
+                "last-generated-id": "0-1",
+                groups: 0,
+                "first-entry": ["0-1", ["field1", "value1"]],
+                "last-entry": ["0-1", ["field1", "value1"]],
+                "max-deleted-entry-id": versionLessThan7 ? undefined : "0-0",
+                "entries-added": versionLessThan7 ? undefined : 1,
+                "recorded-first-entry-id": versionLessThan7 ? undefined : "0-1",
+            };
+
+            const expectedXinfoStreamFullResult = {
+                length: 1,
+                "radix-tree-keys": 1,
+                "radix-tree-nodes": 2,
+                "last-generated-id": "0-1",
+                entries: [["0-1", ["field1", "value1"]]],
+                groups: [],
+                "max-deleted-entry-id": versionLessThan7 ? undefined : "0-0",
+                "entries-added": versionLessThan7 ? undefined : 1,
+                "recorded-first-entry-id": versionLessThan7 ? undefined : "0-1",
+            };
+
+            if (result != null) {
+                expect(result[0]).toEqual("0-1"); // xadd
+                expect(result[1]).toEqual(expectedXinfoStreamResult);
+                expect(result[2]).toEqual(expectedXinfoStreamFullResult);
+            }
 
             client.close();
         },
