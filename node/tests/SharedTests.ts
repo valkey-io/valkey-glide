@@ -4770,7 +4770,6 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(streamId1_0);
 
-                // TODO: uncomment when XGROUP CREATE is implemented
                 expect(
                     await client.xgroupCreate(key, groupName, streamId0_0),
                 ).toEqual("OK");
