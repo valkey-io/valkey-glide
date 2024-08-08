@@ -82,6 +82,7 @@ import {
     createGet,
     createGetBit,
     createGetDel,
+    createGetEx,
     createGetRange,
     createHDel,
     createHExists,
@@ -203,6 +204,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    TimeUnit,
 } from "./Commands";
 import {
     ClosingError,
@@ -930,6 +932,32 @@ export class BaseClient {
      */
     public get(key: string, decoder?: Decoder): Promise<string | null> {
         return this.createWritePromise(createGet(key), { decoder: decoder });
+    }
+
+    /**
+     * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}
+     *
+     * See https://valkey.io/commands/getex for more details.
+     *
+     * @param key - The key to retrieve from the database.
+     * @param options - (Optional) set expiriation to the given key.
+     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.getex("key", {expiry: { type: "seconds", count: 5 }});
+     * console.log(result); // Output: 'value'
+     * ```
+     */
+    public async getex(
+        key: string,
+        options?: "persist" | { unit: TimeUnit; duration: number },
+    ): Promise<string | null> {
+        return this.createWritePromise(createGetEx(key, options));
     }
 
     /**
