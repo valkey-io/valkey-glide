@@ -960,15 +960,9 @@ export async function transactionTest(
 
     // key9 has one entry here: {"0-2":[["field","value2"]]}
 
-    baseTransaction.customCommand([
-        "xgroup",
-        "createconsumer",
-        key9,
-        groupName1,
-        "consumer1",
-    ]);
+    baseTransaction.xgroupCreateConsumer(key9, groupName1, "consumer1");
     responseData.push([
-        'xgroupCreateConsumer(key9, groupName1, "consumer1")',
+        "xgroupCreateConsumer(key9, groupName1, consumer1)",
         true,
     ]);
     baseTransaction.customCommand([
