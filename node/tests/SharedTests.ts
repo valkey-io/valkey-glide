@@ -3963,7 +3963,7 @@ export function runBaseTests<Context>(config: {
                     client.zrangeWithScores(key, { start: 0, stop: 1 }),
                 ).rejects.toThrow();
 
-                // test zrangeStore - added in version 6.2.0 
+                // test zrangeStore - added in version 6.2.0
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
 
                 // test non-existing key - stores an empty set
