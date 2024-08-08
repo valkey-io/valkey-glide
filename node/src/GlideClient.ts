@@ -36,6 +36,7 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
+    createMove,
     createPing,
     createPublish,
     createRandomKey,
@@ -422,6 +423,26 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(
             createCopy(source, destination, options),
         );
+    }
+
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * See https://valkey.io/commands/move/ for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.move("key", 1);
+     * console.log(result); // Output: true
+     * ```
+     */
+    public async move(key: string, dbIndex: number): Promise<boolean> {
+        return this.createWritePromise(createMove(key, dbIndex));
     }
 
     /**

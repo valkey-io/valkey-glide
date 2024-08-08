@@ -2522,6 +2522,16 @@ export function createCopy(
 }
 
 /**
+ * @internal
+ */
+export function createMove(
+    key: string,
+    dbIndex: number,
+): command_request.Command {
+    return createCommand(RequestType.Move, [key, dbIndex.toString()]);
+}
+
+/**
  * Optional arguments to LPOS command.
  *
  * See https://valkey.io/commands/lpos/ for more details.

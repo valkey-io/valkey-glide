@@ -507,6 +507,46 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "move test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+            const value = uuidv4();
+
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.move(key1, 1)).toEqual(false);
+
+            expect(await client.set(key1, value)).toEqual("OK");
+            expect(await client.get(key1)).toEqual(value);
+            expect(await client.move(key1, 1)).toEqual(true);
+            expect(await client.get(key1)).toEqual(null);
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(key1)).toEqual(value);
+
+            await expect(client.move(key1, -1)).rejects.toThrow(RequestError);
+
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(1);
+            transaction.move(key2, 0);
+            transaction.set(key2, value);
+            transaction.move(key2, 0);
+            transaction.select(0);
+            transaction.get(key2);
+            const results = await client.exec(transaction);
+
+            expect(results).toEqual(["OK", false, "OK", true, "OK", value]);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "function load test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
