@@ -1628,45 +1628,52 @@ type SortedSetRange<T> = {
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
-/** The usage scope of {@link ScoreBoundary}. */
-enum ScoreBoundaryType {
-    SortedSetLex = "BYLEX",
-    SortedSetScore = "BYSCORE",
-    Stream = "",
-}
-
-/**
- * Returns a string representation of a score boundary as a command argument.
- * @param score - The score boundary object containing value and inclusivity information.
- * @param type - The usage type, which defines how score should be converted to a command arg.
- * @returns A string representation of the score boundary as a command argument.
- */
+/** Returns a string representation of a score boundary as a command argument. */
 function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
-    type: ScoreBoundaryType,
 ): string {
-    if (score == InfScoreBoundary.PositiveInfinity) {
-        return (
-            InfScoreBoundary.PositiveInfinity.toString() +
-            (type == ScoreBoundaryType.SortedSetScore ? "inf" : "")
-        );
-    }
-
-    if (score == InfScoreBoundary.NegativeInfinity) {
-        return (
-            InfScoreBoundary.NegativeInfinity.toString() +
-            (type == ScoreBoundaryType.SortedSetScore ? "inf" : "")
-        );
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score + "inf";
     }
 
     if (score.isInclusive == false) {
         return "(" + score.value.toString();
     }
 
-    const value =
-        (type == ScoreBoundaryType.SortedSetLex ? "[" : "") +
-        score.value.toString();
-    return value;
+    return score.value.toString();
+}
+
+/** Returns a string representation of a lex boundary as a command argument. */
+function getLexBoundaryArg(
+    score: ScoreBoundary<number> | ScoreBoundary<string>,
+): string {
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score;
+    }
+
+    if (score.isInclusive == false) {
+        return "(" + score.value.toString();
+    }
+
+    return "[" + score.value.toString();
+}
+
+/** Returns a string representation of a stream boundary as a command argument. */
+function getStreamBoundaryArg(
+    score: ScoreBoundary<number> | ScoreBoundary<string>,
+): string {
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score;
+    }
+
+    if (score.isInclusive == false) {
+        return "(" + score.value.toString();
+    }
+
+    return score.value.toString();
 }
 
 function createZRangeArgs(
@@ -1679,13 +1686,20 @@ function createZRangeArgs(
 
     if (typeof rangeQuery.start != "number") {
         rangeQuery = rangeQuery as RangeByScore | RangeByLex;
-        const queryType =
-            rangeQuery.type == "byLex"
-                ? ScoreBoundaryType.SortedSetLex
-                : ScoreBoundaryType.SortedSetScore;
-        args.push(getScoreBoundaryArg(rangeQuery.start, queryType));
-        args.push(getScoreBoundaryArg(rangeQuery.stop, queryType));
-        args.push(queryType);
+
+        if (rangeQuery.type == "byLex") {
+            args.push(
+                getLexBoundaryArg(rangeQuery.start),
+                getLexBoundaryArg(rangeQuery.stop),
+                "BYLEX",
+            );
+        } else {
+            args.push(
+                getScoreBoundaryArg(rangeQuery.start),
+                getScoreBoundaryArg(rangeQuery.stop),
+                "BYSCORE",
+            );
+        }
     } else {
         args.push(rangeQuery.start.toString());
         args.push(rangeQuery.stop.toString());
@@ -1718,9 +1732,11 @@ export function createZCount(
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
-    const args = [key];
-    args.push(getScoreBoundaryArg(minScore, ScoreBoundaryType.SortedSetScore));
-    args.push(getScoreBoundaryArg(maxScore, ScoreBoundaryType.SortedSetScore));
+    const args = [
+        key,
+        getScoreBoundaryArg(minScore),
+        getScoreBoundaryArg(maxScore),
+    ];
     return createCommand(RequestType.ZCount, args);
 }
 
@@ -1857,11 +1873,7 @@ export function createZRemRangeByLex(
     minLex: ScoreBoundary<string>,
     maxLex: ScoreBoundary<string>,
 ): command_request.Command {
-    const args = [
-        key,
-        getScoreBoundaryArg(minLex, ScoreBoundaryType.SortedSetLex),
-        getScoreBoundaryArg(maxLex, ScoreBoundaryType.SortedSetLex),
-    ];
+    const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZRemRangeByLex, args);
 }
 
@@ -1873,12 +1885,15 @@ export function createZRemRangeByScore(
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
-    const args = [key];
-    args.push(getScoreBoundaryArg(minScore, ScoreBoundaryType.SortedSetScore));
-    args.push(getScoreBoundaryArg(maxScore, ScoreBoundaryType.SortedSetScore));
+    const args = [
+        key,
+        getScoreBoundaryArg(minScore),
+        getScoreBoundaryArg(maxScore),
+    ];
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
+/** @internal */
 export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
@@ -1891,11 +1906,7 @@ export function createZLexCount(
     minLex: ScoreBoundary<string>,
     maxLex: ScoreBoundary<string>,
 ): command_request.Command {
-    const args = [
-        key,
-        getScoreBoundaryArg(minLex, ScoreBoundaryType.SortedSetLex),
-        getScoreBoundaryArg(maxLex, ScoreBoundaryType.SortedSetLex),
-    ];
+    const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZLexCount, args);
 }
 
@@ -2373,8 +2384,8 @@ export function createXPending(
         if (options.minIdleTime !== undefined)
             args.push("IDLE", options.minIdleTime.toString());
         args.push(
-            getScoreBoundaryArg(options.start, ScoreBoundaryType.Stream),
-            getScoreBoundaryArg(options.end, ScoreBoundaryType.Stream),
+            getStreamBoundaryArg(options.start),
+            getStreamBoundaryArg(options.end),
             options.count.toString(),
         );
         if (options.consumer) args.push(options.consumer);
