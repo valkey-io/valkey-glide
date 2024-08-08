@@ -58,6 +58,7 @@ format:
 	golines -w --shorten-comments -m 127 .
 
 test:
+	LD_LIBRARY_PATH=$(shell find . -name libglide_rs.so|tail -1|xargs dirname|xargs readlink -f):${LD_LIBRARY_PATH} \
 	go test -v -race ./...
 
 # Note: this task is no longer run by CI because:
