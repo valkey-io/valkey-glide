@@ -3758,7 +3758,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by score test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };
@@ -3844,7 +3845,8 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by lex test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
                 const membersScores = { a: 1, b: 2, c: 3 };
@@ -3930,10 +3932,12 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrange and zrangeStore different types of keys test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 const key = "{testKey}:1-" + uuidv4();
                 const nonExistingKey = "{testKey}:2-" + uuidv4();
                 const destkey = "{testKey}:3-" + uuidv4();
+
+                // test non-existing key - return an empty set
                 expect(
                     await client.zrange(nonExistingKey, {
                         start: 0,
@@ -3948,13 +3952,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toEqual({});
 
-                expect(
-                    await client.zrangeStore(destkey, nonExistingKey, {
-                        start: 0,
-                        stop: 1,
-                    }),
-                ).toEqual(0);
-
+                // test against a non-sorted set - throw RequestError
                 expect(await client.set(key, "value")).toEqual("OK");
 
                 await expect(
@@ -3965,6 +3963,18 @@ export function runBaseTests<Context>(config: {
                     client.zrangeWithScores(key, { start: 0, stop: 1 }),
                 ).rejects.toThrow();
 
+                // test zrangeStore - added in version 6.2.0 
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+                // test non-existing key - stores an empty set
+                expect(
+                    await client.zrangeStore(destkey, nonExistingKey, {
+                        start: 0,
+                        stop: 1,
+                    }),
+                ).toEqual(0);
+
+                // test against a non-sorted set - throw RequestError
                 await expect(
                     client.zrangeStore(destkey, key, { start: 0, stop: 1 }),
                 ).rejects.toThrow();
