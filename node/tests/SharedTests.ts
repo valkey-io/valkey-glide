@@ -4771,15 +4771,8 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(streamId1_0);
 
                 // TODO: uncomment when XGROUP CREATE is implemented
-                // expect(await client.xgroupCreate(key, groupName, streamId0_0)).toEqual("Ok");
                 expect(
-                    await client.customCommand([
-                        "XGROUP",
-                        "CREATE",
-                        key,
-                        groupName,
-                        streamId0_0,
-                    ]),
+                    await client.xgroupCreate(key, groupName, streamId0_0),
                 ).toEqual("OK");
 
                 // TODO: uncomment when XREADGROUP is implemented
@@ -7373,13 +7366,11 @@ export function runBaseTests<Context>(config: {
                 }
 
                 expect(
-                    await client.customCommand([
-                        "XGROUP",
-                        "CREATECONSUMER",
+                    await client.xgroupCreateConsumer(
                         key,
                         groupName1,
                         consumer2,
-                    ]),
+                    ),
                 ).toBeTruthy();
                 expect(
                     await client.customCommand([
@@ -7452,13 +7443,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toEqual("OK");
                 expect(
-                    await client.customCommand([
-                        "xgroup",
-                        "createconsumer",
-                        key,
-                        group,
-                        "consumer",
-                    ]),
+                    await client.xgroupCreateConsumer(key, group, "consumer"),
                 ).toEqual(true);
 
                 expect(
