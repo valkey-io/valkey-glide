@@ -4963,16 +4963,8 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(streamId1_0);
 
-                // TODO: uncomment when XGROUP CREATE is implemented
-                // expect(await client.xgroupCreate(key, groupName, streamId0_0)).toEqual("Ok");
                 expect(
-                    await client.customCommand([
-                        "XGROUP",
-                        "CREATE",
-                        key,
-                        groupName,
-                        streamId0_0,
-                    ]),
+                    await client.xgroupCreate(key, groupName, streamId0_0),
                 ).toEqual("OK");
 
                 // TODO: uncomment when XREADGROUP is implemented
@@ -7566,13 +7558,11 @@ export function runBaseTests<Context>(config: {
                 }
 
                 expect(
-                    await client.customCommand([
-                        "XGROUP",
-                        "CREATECONSUMER",
+                    await client.xgroupCreateConsumer(
                         key,
                         groupName1,
                         consumer2,
-                    ]),
+                    ),
                 ).toBeTruthy();
                 expect(
                     await client.customCommand([
@@ -7645,13 +7635,7 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toEqual("OK");
                 expect(
-                    await client.customCommand([
-                        "xgroup",
-                        "createconsumer",
-                        key,
-                        group,
-                        "consumer",
-                    ]),
+                    await client.xgroupCreateConsumer(key, group, "consumer"),
                 ).toEqual(true);
 
                 expect(
@@ -7858,6 +7842,115 @@ export function runBaseTests<Context>(config: {
                 expect(await client.set(nonListKey, "blmpop")).toBe("OK");
                 await expect(
                     client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, 1),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xgroupCreateConsumer and xgroupDelConsumer test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistentKey = uuidv4();
+                const stringKey = uuidv4();
+                const groupName = uuidv4();
+                const consumer = uuidv4();
+                const streamId0 = "0";
+
+                // create group and consumer for the group
+                expect(
+                    await client.xgroupCreate(key, groupName, streamId0, {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+                expect(
+                    await client.xgroupCreateConsumer(key, groupName, consumer),
+                ).toEqual(true);
+
+                // attempting to create/delete a consumer for a group that does not exist results in a NOGROUP request error
+                await expect(
+                    client.xgroupCreateConsumer(
+                        key,
+                        "nonExistentGroup",
+                        consumer,
+                    ),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xgroupDelConsumer(key, "nonExistentGroup", consumer),
+                ).rejects.toThrow(RequestError);
+
+                // attempt to create consumer for group again
+                expect(
+                    await client.xgroupCreateConsumer(key, groupName, consumer),
+                ).toEqual(false);
+
+                // attempting to delete a consumer that has not been created yet returns 0
+                expect(
+                    await client.xgroupDelConsumer(
+                        key,
+                        groupName,
+                        "nonExistentConsumer",
+                    ),
+                ).toEqual(0);
+
+                // Add two stream entries
+                const streamid1: string | null = await client.xadd(key, [
+                    ["field1", "value1"],
+                ]);
+                expect(streamid1).not.toBeNull();
+                const streamid2 = await client.xadd(key, [
+                    ["field2", "value2"],
+                ]);
+                expect(streamid2).not.toBeNull();
+
+                // read the entire stream for the consumer and mark messages as pending
+                expect(
+                    await client.customCommand([
+                        "XREADGROUP",
+                        "GROUP",
+                        groupName,
+                        consumer,
+                        "STREAMS",
+                        key,
+                        ">",
+                    ]),
+                ).toEqual({
+                    [key]: {
+                        [streamid1 as string]: [["field1", "value1"]],
+                        [streamid2 as string]: [["field2", "value2"]],
+                    },
+                });
+
+                // delete one of the streams
+                expect(
+                    await client.xgroupDelConsumer(key, groupName, consumer),
+                ).toEqual(2);
+
+                // attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
+                await expect(
+                    client.xgroupCreateConsumer(
+                        nonExistentKey,
+                        groupName,
+                        consumer,
+                    ),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xgroupDelConsumer(
+                        nonExistentKey,
+                        groupName,
+                        consumer,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xgroupCreateConsumer(stringKey, groupName, consumer),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xgroupDelConsumer(stringKey, groupName, consumer),
                 ).rejects.toThrow(RequestError);
             }, protocol);
         },

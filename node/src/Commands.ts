@@ -2053,6 +2053,36 @@ export function createXTrim(
 /**
  * @internal
  */
+export function createXGroupCreateConsumer(
+    key: string,
+    groupName: string,
+    consumerName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupCreateConsumer, [
+        key,
+        groupName,
+        consumerName,
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupDelConsumer(
+    key: string,
+    groupName: string,
+    consumerName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupDelConsumer, [
+        key,
+        groupName,
+        consumerName,
+    ]);
+}
+
+/**
+ * @internal
+ */
 export function createTime(): command_request.Command {
     return createCommand(RequestType.Time, []);
 }
