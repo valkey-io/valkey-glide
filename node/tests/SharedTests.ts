@@ -3704,7 +3704,9 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zrangeStore by index test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
                 const key = "{testKey}:1-" + uuidv4();
                 const destkey = "{testKey}:2-" + uuidv4();
                 const membersScores = { one: 1, two: 2, three: 3 };

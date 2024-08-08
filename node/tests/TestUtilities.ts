@@ -811,8 +811,6 @@ export async function transactionTest(
         "zrangeWithScores(key8, { start: 0, stop: -1 })",
         { member2: 3, member3: 3.5, member4: 4, member5: 5 },
     ]);
-    baseTransaction.zrangeStore(key8, key8, { start: 0, stop: -1 });
-    responseData.push(["zrangeStore(key8, key8, { start: 0, stop: -1 })", 4]);
     baseTransaction.zadd(key12, { one: 1, two: 2 });
     responseData.push(["zadd(key12, { one: 1, two: 2 })", 2]);
     baseTransaction.zscan(key12, "0");
@@ -826,6 +824,11 @@ export async function transactionTest(
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
     if (gte(version, "6.2.0")) {
+        baseTransaction.zrangeStore(key8, key8, { start: 0, stop: -1 });
+        responseData.push([
+            "zrangeStore(key8, key8, { start: 0, stop: -1 })",
+            4,
+        ]);
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
