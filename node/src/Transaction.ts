@@ -683,12 +683,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/bitfield_ro/ for more details.
      *
+     * Since Valkey version 6.0.0.
+     *
      * @param key - The key of the string.
      * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
      *
      * Command Response - An array of results from the {@link BitFieldGet} subcommands.
      *
-     * since Valkey version 6.0.0.
      */
     public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
         return this.addAndReturn(createBitField(key, subcommands, true));
@@ -881,7 +882,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/hrandfield/ for more details.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      *
@@ -916,7 +917,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/hrandfield/ for more details.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -936,7 +937,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/hrandfield/ for more details.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -1044,14 +1045,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/lmove/ for details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      *
      * Command Response - The popped element, or `null` if `source` does not exist.
-     *
-     * since Valkey version 6.2.0.
      */
     public lmove(
         source: string,
@@ -1071,11 +1072,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * of the list stored at `destination` depending on `whereTo`.
      * `BLMOVE` is the blocking variant of {@link lmove}.
      *
+     * See https://valkey.io/commands/blmove/ for details.
+     *
+     * Since Valkey version 6.2.0.
+     *
      * @remarks
      * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
      * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
-     *
-     * See https://valkey.io/commands/blmove/ for details.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -1084,8 +1087,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      *
      * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
-     *
-     * since Valkey version 6.2.0.
      */
     public blmove(
         source: string,
@@ -1288,11 +1289,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/sintercard/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param keys - The keys of the sets.
      *
      * Command Response - The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
-     *
-     * since Valkey version 7.0.0.
      */
     public sintercard(keys: string[], limit?: number): T {
         return this.addAndReturn(createSInterCard(keys, limit));
@@ -1387,12 +1388,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/smismember/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param key - The key of the set to check.
      * @param members - A list of members to check for existence in the set.
      *
      * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
-     *
-     * since Valkey version 6.2.0.
      */
     public smismember(key: string, members: string[]): T {
         return this.addAndReturn(createSMIsMember(key, members));
@@ -1518,11 +1519,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/expiretime/ for details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param key - The `key` to determine the expiration value of.
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
-     *
-     * since Valkey version 7.0.0.
      */
     public expireTime(key: string): T {
         return this.addAndReturn(createExpireTime(key));
@@ -1577,11 +1578,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/pexpiretime/ for details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param key - The `key` to determine the expiration value of.
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
-     *
-     * since Valkey version 7.0.0.
      */
     public pexpireTime(key: string): T {
         return this.addAndReturn(createPExpireTime(key));
@@ -1672,13 +1673,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zintercard/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param keys - The keys of the sorted sets to intersect.
      * @param limit - An optional argument that can be used to specify a maximum number for the
      * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
      *
      * Command Response - The cardinality of the intersection of the given sorted sets.
-     *
-     * since - Redis version 7.0.0.
      */
     public zintercard(keys: string[], limit?: number): T {
         return this.addAndReturn(createZInterCard(keys, limit));
@@ -1690,12 +1691,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zdiff/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param keys - The keys of the sorted sets.
      *
      * Command Response - An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
-     *
-     * since Valkey version 6.2.0.
      */
     public zdiff(keys: string[]): T {
         return this.addAndReturn(createZDiff(keys));
@@ -1707,12 +1708,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zdiff/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param keys - The keys of the sorted sets.
      *
      * Command Response - A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
-     *
-     * since Valkey version 6.2.0.
      */
     public zdiffWithScores(keys: string[]): T {
         return this.addAndReturn(createZDiffWithScores(keys));
@@ -1725,12 +1726,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zdiffstore/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param destination - The key for the resulting sorted set.
      * @param keys - The keys of the sorted sets to compare.
      *
      * Command Response - The number of members in the resulting sorted set stored at `destination`.
-     *
-     * since Valkey version 6.2.0.
      */
     public zdiffstore(destination: string, keys: string[]): T {
         return this.addAndReturn(createZDiffStore(destination, keys));
@@ -1755,13 +1756,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zmscore/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param key - The key of the sorted set.
      * @param members - A list of members in the sorted set.
      *
      * Command Response - An `array` of scores corresponding to `members`.
      * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
-     *
-     * since Valkey version 6.2.0.
      */
     public zmscore(key: string, members: string[]): T {
         return this.addAndReturn(createZMScore(key, members));
@@ -1841,6 +1842,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zrangestore/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param destination - The key for the destination sorted set.
      * @param source - The key of the source sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
@@ -1850,8 +1853,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
      * Command Response - The number of elements in the resulting sorted set.
-     *
-     * since - Redis version 6.2.0.
      */
     public zrangeStore(
         destination: string,
@@ -1984,7 +1985,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
-     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *     `0` will block indefinitely. Since Valkey version 6.0.0: timeout is interpreted as a double instead of an integer.
      *
      * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
@@ -2146,15 +2147,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
+     *
      * See https://valkey.io/commands/zrank for more details.
+     *
+     * Since Valkey version 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
      *
      * Command Response - A list containing the rank and score of `member` in the sorted set.
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
-     *
-     * since - Redis version 7.2.0.
      */
     public zrankWithScore(key: string, member: string): T {
         return this.addAndReturn(createZRank(key, member, true));
@@ -2183,14 +2185,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zrevrank/ for more details.
      *
+     * Since Valkey version 7.2.0.
+     *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
      *
      * Command Response -  A list containing the rank and score of `member` in the sorted set, where ranks
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
-     *
-     * since - Valkey version 7.2.0.
      */
     public zrevrankWithScore(key: string, member: string): T {
         return this.addAndReturn(createZRevRankWithScore(key, member));
@@ -2849,7 +2851,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/fcall/ for more details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -2867,7 +2869,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/fcall/ for more details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
@@ -2885,7 +2887,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/function-delete/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      *
@@ -2900,7 +2902,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/function-load/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param replace - Whether the given library should overwrite a library with the same name if it
@@ -2917,7 +2919,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/function-flush/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * Command Response - `OK`.
@@ -2931,7 +2933,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/function-list/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param options - Parameters to filter and request additional info.
      *
@@ -2947,7 +2949,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/function-stats/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
      *
@@ -2991,14 +2993,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/lpos/ for more details.
      *
+     * Since Valkey version 6.0.6.
+     *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
      * @param options - The LPOS options.
      *
      * Command Response - The index of `element`, or `null` if `element` is not in the list. If the `count`
      * option is specified, then the function returns an `array` of indices of matching elements within the list.
-     *
-     * since - Valkey version 6.0.6.
      */
     public lpos(key: string, element: string, options?: LPosOptions): T {
         return this.addAndReturn(createLPos(key, element, options));
@@ -3063,7 +3065,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/geosearch/ for more details.
      *
-     * since - Valkey 6.2.0 and above.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
@@ -3110,7 +3112,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/geosearchstore/ for more details.
      *
-     * since - Valkey 6.2.0 and above.
+     * Since Valkey version 6.2.0.
      *
      * @param destination - The key of the destination sorted set.
      * @param source - The key of the sorted set.
@@ -3165,6 +3167,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/zmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
@@ -3173,8 +3177,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A two-element `array` containing the key name of the set from which the
      *     element was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      */
     public zmpop(keys: string[], modifier: ScoreFilter, count?: number): T {
         return this.addAndReturn(createZMPop(keys, modifier, count));
@@ -3187,6 +3189,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/bzmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
      * for more details and best practices.
      * @param keys - The keys of the sorted sets.
@@ -3198,8 +3202,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      */
     public bzmpop(
         keys: string[],
@@ -3299,7 +3301,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * See https://valkey.io/commands/lcs/ for more details.
      *
@@ -3316,7 +3318,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * See https://valkey.io/commands/lcs/ for more details.
      *
@@ -3333,7 +3335,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * See https://valkey.io/commands/lcs/ for more details.
      *
@@ -3420,14 +3422,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/lmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param count - (Optional) The maximum number of popped elements.
      *
      * Command Response - A `Record` of `key` name mapped array of popped elements.
-     *
-     * since Valkey version 7.0.0.
      */
     public lmpop(keys: string[], direction: ListDirection, count?: number): T {
         return this.addAndReturn(createLMPop(keys, direction, count));
@@ -3439,6 +3441,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * See https://valkey.io/commands/blmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
@@ -3447,8 +3451,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A `Record` of `key` name mapped array of popped elements.
      *     If no member could be popped and the timeout expired, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      */
     public blmpop(
         keys: string[],
@@ -3567,7 +3569,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortOptions}.
@@ -3612,6 +3614,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param destinationDB - (Optional) The alternative logical database index for the destination key.
@@ -3620,8 +3624,6 @@ export class Transaction extends BaseTransaction<Transaction> {
      *     value to it. If not provided, no action will be performed if the key already exists.
      *
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
      */
     public copy(
         source: string,
@@ -3702,7 +3704,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortClusterOptions}.
@@ -3748,14 +3750,14 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      *
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
      */
     public copy(
         source: string,
