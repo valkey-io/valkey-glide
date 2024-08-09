@@ -223,7 +223,7 @@ describe("GlideClusterClient", () => {
                     type: "routeByAddress",
                     host: "foo",
                 }),
-            ).rejects.toThrowError();
+            ).rejects.toThrowError(RequestError);
         },
         TIMEOUT,
     );
