@@ -161,6 +161,7 @@ jobs:
 
     combine-binaries-to-one-directory:
         needs: create-binaries-to-publish
+        runs-on: ubuntu-latest
         steps:
             - name: Move all files to one zip file
               run:
