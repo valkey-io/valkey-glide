@@ -59,7 +59,7 @@ public interface PubSubBaseCommands {
 
     /**
      * Lists the currently active channels.<br>
-     * Dislike of {@link #pubsubChannels()}, returns channel names as {@link GlideString}s.
+     * Unlike of {@link #pubsubChannels()}, returns channel names as {@link GlideString}s.
      *
      * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
      *     into a single array.
