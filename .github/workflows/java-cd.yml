@@ -24,25 +24,25 @@ permissions:
       id-token: write
 
 jobs:
-    start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-            with:
-                fetch-depth: 0
-
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+#    start-self-hosted-runner:
+#        if: github.repository_owner == 'valkey-io'
+#        runs-on: ubuntu-latest
+#        environment: AWS_ACTIONS
+#        steps:
+#          - name: Checkout
+#            uses: actions/checkout@v4
+#            with:
+#                fetch-depth: 0
+#
+#          - name: Start self hosted EC2 runner
+#            uses: ./.github/workflows/start-self-hosted-runner
+#            with:
+#                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+#                aws-region: ${{ secrets.AWS_REGION }}
+#                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     create-binaries-to-publish:
-        needs: start-self-hosted-runner
+#        needs: start-self-hosted-runner
         if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         env:
@@ -73,7 +73,7 @@ jobs:
                     TARGET: aarch64-apple-darwin,
                   }
 
-        runs-on: ${{ matrix.host.RUNNER }}
+        runs-on: self-hosted
 
         steps:
             - name: Setup self-hosted runner access
@@ -137,7 +137,8 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  ./gradlew :client:publishToMavenLocal
+#                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
               env:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
 
@@ -161,7 +162,7 @@ jobs:
 
     combine-binaries-to-one-directory:
         needs: create-binaries-to-publish
-        runs-on: ubuntu-latest
+        runs-on: self-hosted
         steps:
             - name: Move all files to one zip file
               run:

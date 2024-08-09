@@ -227,11 +227,11 @@ java {
     withJavadocJar()
 }
 
-tasks.withType(Sign) {
-    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
-    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != defaultReleaseVersion;
-    onlyIf("isReleaseVersion is set") { isReleaseVersion }
-}
+//tasks.withType(Sign) {
+//    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion;
+//    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != defaultReleaseVersion;
+//    onlyIf("isReleaseVersion is set") { isReleaseVersion }
+//}
 
 signing {
     sign publishing.publications
