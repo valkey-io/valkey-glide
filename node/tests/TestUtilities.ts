@@ -876,6 +876,11 @@ export async function transactionTest(
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
     if (gte(version, "6.2.0")) {
+        baseTransaction.zrangeStore(key8, key8, { start: 0, stop: -1 });
+        responseData.push([
+            "zrangeStore(key8, key8, { start: 0, stop: -1 })",
+            4,
+        ]);
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -1028,6 +1033,20 @@ export async function transactionTest(
     responseData.push([
         'xreadgroup(groupName1, "consumer1", key9, >)',
         { [key9]: { "0-2": [["field", "value2"]] } },
+    ]);
+    baseTransaction.xpending(key9, groupName1);
+    responseData.push([
+        "xpending(key9, groupName1)",
+        [1, "0-2", "0-2", [["consumer1", "1"]]],
+    ]);
+    baseTransaction.xpendingWithOptions(key9, groupName1, {
+        start: InfScoreBoundary.NegativeInfinity,
+        end: InfScoreBoundary.PositiveInfinity,
+        count: 10,
+    });
+    responseData.push([
+        "xpending(key9, groupName1, -, +, 10)",
+        [["0-2", "consumer1", 0, 1]],
     ]);
     baseTransaction.xclaim(key9, groupName1, "consumer1", 0, ["0-2"]);
     responseData.push([
