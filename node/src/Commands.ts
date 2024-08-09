@@ -441,16 +441,10 @@ export function createHScan(
     cursor: string,
     options?: BaseScanOptions,
 ): command_request.Command {
-    const args: string[] = [key, cursor];
+    let args: string[] = [key, cursor];
 
     if (options) {
-        if (options.match) {
-            args.push("MATCH", options.match);
-        }
-
-        if (options.count !== undefined) {
-            args.push("COUNT", options.count.toString());
-        }
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
     }
 
     return createCommand(RequestType.HScan, args);
@@ -3371,21 +3365,34 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
+export function convertBaseScanOptionsToArgsArray(
+    options: BaseScanOptions,
+): string[] {
+    const args: string[] = [];
+
+    if (options.match) {
+        args.push("MATCH", options.match);
+    }
+
+    if (options.count !== undefined) {
+        args.push("COUNT", options.count.toString());
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
 export function createZScan(
     key: string,
     cursor: string,
     options?: BaseScanOptions,
 ): command_request.Command {
-    const args: string[] = [key, cursor];
+    let args: string[] = [key, cursor];
 
     if (options) {
-        if (options.match) {
-            args.push("MATCH", options.match);
-        }
-
-        if (options.count !== undefined) {
-            args.push("COUNT", options.count.toString());
-        }
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
     }
 
     return createCommand(RequestType.ZScan, args);
