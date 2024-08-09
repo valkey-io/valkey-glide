@@ -46,6 +46,7 @@ import {
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
@@ -160,6 +161,7 @@ import {
     createUnlink,
     createWatch,
     createXAdd,
+    createXClaim,
     createXDel,
     createXGroupCreate,
     createXGroupDestroy,
@@ -186,6 +188,7 @@ import {
     createZPopMin,
     createZRandMember,
     createZRange,
+    createZRangeStore,
     createZRangeWithScores,
     createZRank,
     createZRem,
@@ -196,8 +199,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    StreamClaimOptions,
-    createXClaim,
 } from "./Commands";
 import {
     ClosingError,
@@ -3139,10 +3140,10 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns A list of elements within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
      *
@@ -3177,10 +3178,10 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
      *
@@ -3212,6 +3213,53 @@ export class BaseClient {
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
             createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Stores a specified range of elements from the sorted set at `source`, into a new
+     * sorted set at `destination`. If `destination` doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.
+     *
+     * See https://valkey.io/commands/zrangestore/ for more details.
+     *
+     * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
+     * @param destination - The key for the destination sorted set.
+     * @param source - The key of the source sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     * @returns The number of elements in the resulting sorted set.
+     *
+     * since - Redis version 6.2.0.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, stop: -1 });
+     * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
+     * ```
+     * @example
+     * ```typescript
+     * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
+     *              start: InfScoreBoundary.NegativeInfinity,
+     *              stop: { value: 3, isInclusive: false },
+     *              type: "byScore",
+     *           });
+     * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
+     * ```
+     */
+    public zrangeStore(
+        destination: string,
+        source: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): Promise<string[]> {
+        return this.createWritePromise(
+            createZRangeStore(destination, source, rangeQuery, reverse),
         );
     }
 
