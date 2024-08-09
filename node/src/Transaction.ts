@@ -141,6 +141,7 @@ import {
     createMGet,
     createMSet,
     createMSetNX,
+    createMove,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -3416,6 +3417,21 @@ export class Transaction extends BaseTransaction<Transaction> {
         options?: { destinationDB?: number; replace?: boolean },
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
+    }
+
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * See https://valkey.io/commands/move/ for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     *
+     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     */
+    public move(key: string, dbIndex: number): Transaction {
+        return this.addAndReturn(createMove(key, dbIndex));
     }
 
     /** Publish a message on pubsub channel.
