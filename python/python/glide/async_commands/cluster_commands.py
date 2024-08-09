@@ -49,9 +49,10 @@ class ClusterCommands(CoreCommands):
         Returns:
             TClusterResponse[TResult]: The returning value depends on the executed command and the route.
         """
-        return cast(TClusterResponse[TResult], await self._execute_command(
-            RequestType.CustomCommand, command_args, route
-        ))
+        return cast(
+            TClusterResponse[TResult],
+            await self._execute_command(RequestType.CustomCommand, command_args, route),
+        )
 
     async def info(
         self,
