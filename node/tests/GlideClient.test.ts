@@ -17,6 +17,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    ReturnType,
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
@@ -27,6 +28,7 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    createLuaLibWithLongRunningFunction,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -35,6 +37,7 @@ import {
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
+    waitForNotBusy,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -686,6 +689,152 @@ describe("GlideClient", () => {
                 await expect(client.functionDelete(libName)).rejects.toThrow(
                     `Library not found`,
                 );
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function kill RO func %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                10000,
+            );
+            const client = await GlideClient.createClient(config);
+            const testClient = await GlideClient.createClient(config);
+
+            try {
+                const libName = "function_kill_no_write";
+                const funcName = "deadlock_no_write";
+                const code = createLuaLibWithLongRunningFunction(
+                    libName,
+                    funcName,
+                    6,
+                    true,
+                );
+                expect(await client.functionFlush()).toEqual("OK");
+                // nothing to kill
+                await expect(client.functionKill()).rejects.toThrow(/notbusy/i);
+
+                // load the lib
+                expect(await client.functionLoad(code, true)).toEqual(libName);
+
+                try {
+                    // call the function without await
+                    testClient
+                        .fcall(funcName, [], [])
+                        .catch((e) =>
+                            expect((e as Error).message).toContain(
+                                "Script killed",
+                            ),
+                        );
+
+                    let killed = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            expect(await client.functionKill()).toEqual("OK");
+                            killed = true;
+                            break;
+                        } catch {
+                            /* do nothing */
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(killed).toBeTruthy();
+                } finally {
+                    waitForNotBusy(client);
+                }
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function kill RW func %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                10000,
+            );
+            const client = await GlideClient.createClient(config);
+            const testClient = await GlideClient.createClient(config);
+
+            try {
+                const libName = "function_kill_write";
+                const key = libName;
+                const funcName = "deadlock_write";
+                const code = createLuaLibWithLongRunningFunction(
+                    libName,
+                    funcName,
+                    6,
+                    false,
+                );
+                expect(await client.functionFlush()).toEqual("OK");
+                // nothing to kill
+                await expect(client.functionKill()).rejects.toThrow(/notbusy/i);
+
+                // load the lib
+                expect(await client.functionLoad(code, true)).toEqual(libName);
+
+                let promise = new Promise<ReturnType>(() => null);
+
+                try {
+                    // call the function without await
+                    promise = testClient.fcall(funcName, [key], []);
+
+                    let foundUnkillable = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            // valkey kills a function with 5 sec delay
+                            // but this will always throw an error in the test
+                            await client.functionKill();
+                        } catch (err) {
+                            // looking for an error with "unkillable" in the message
+                            // at that point we can break the loop
+                            if (
+                                (err as Error).message
+                                    .toLowerCase()
+                                    .includes("unkillable")
+                            ) {
+                                foundUnkillable = true;
+                                break;
+                            }
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(foundUnkillable).toBeTruthy();
+                } finally {
+                    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                    // test to fail. Wait for the function to complete (we cannot kill it)
+                    expect(await promise).toContain("Timed out");
+                }
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 client.close();
