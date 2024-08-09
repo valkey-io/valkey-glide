@@ -368,6 +368,7 @@ describe("GlideClusterClient", () => {
                         { member: "_" },
                         { radius: 5, unit: GeoUnit.METERS },
                     ),
+                    client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
                 );
             }
 
