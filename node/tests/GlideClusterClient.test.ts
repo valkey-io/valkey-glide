@@ -218,12 +218,12 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            expect(() =>
+            await expect(
                 client.info(undefined, {
                     type: "routeByAddress",
                     host: "foo",
                 }),
-            ).toThrowError();
+            ).rejects.toThrowError();
         },
         TIMEOUT,
     );
