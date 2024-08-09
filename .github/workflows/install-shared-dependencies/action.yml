@@ -47,9 +47,9 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              sudo apt update -y
-              sudo apt install -y git gcc pkg-config openssl libssl-dev
-          
+              apt update -y
+              apt install -y git gcc pkg-config openssl libssl-dev
+
         - name: Install software dependencies for Ubuntu MUSL
           shell: bash
           if: "${{ contains(inputs.target, 'musl') }}"
