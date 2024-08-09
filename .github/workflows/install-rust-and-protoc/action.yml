@@ -5,12 +5,12 @@ inputs:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
         required: false
-        default: "x86_64-unknown-linux-gnu"
+        default: "aarch64-unknown-linux-gnu"
         options:
-            - x86_64-unknown-linux-gnu
+#            - x86_64-unknown-linux-gnu
             - aarch64-unknown-linux-gnu
-            - x86_64-apple-darwin
-            - aarch64-apple-darwin
+#            - x86_64-apple-darwin
+#            - aarch64-apple-darwin
     github-token:
         description: "GitHub token"
         type: string

@@ -52,26 +52,26 @@ jobs:
             fail-fast: false
             matrix:
                 host:
-                  - {
-                    OS: ubuntu,
-                    RUNNER: ubuntu-latest,
-                    TARGET: x86_64-unknown-linux-gnu,
-                  }
+#                  - {
+#                    OS: ubuntu,
+#                    RUNNER: ubuntu-latest,
+#                    TARGET: x86_64-unknown-linux-gnu,
+#                  }
                   - {
                     OS: ubuntu,
                     RUNNER: ["self-hosted", "Linux", "ARM64"],
                     TARGET: aarch64-unknown-linux-gnu,
                   }
-                  - {
-                    OS: macos,
-                    RUNNER: macos-12,
-                    TARGET: x86_64-apple-darwin,
-                  }
-                  - {
-                    OS: macos,
-                    RUNNER: macos-latest,
-                    TARGET: aarch64-apple-darwin,
-                  }
+#                  - {
+#                    OS: macos,
+#                    RUNNER: macos-12,
+#                    TARGET: x86_64-apple-darwin,
+#                  }
+#                  - {
+#                    OS: macos,
+#                    RUNNER: macos-latest,
+#                    TARGET: aarch64-apple-darwin,
+#                  }
 
         runs-on: self-hosted
 
