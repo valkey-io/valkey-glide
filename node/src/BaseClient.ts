@@ -1437,11 +1437,11 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/bitfield_ro/ for more details.
      *
+     * Since Valkey version 6.0.0.
+     *
      * @param key - The key of the string.
      * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
      * @returns An array of results from the {@link BitFieldGet} subcommands.
-     *
-     * since Valkey version 6.0.0.
      *
      * @example
      * ```typescript
@@ -1739,7 +1739,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/hrandfield/ for more details.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @returns A random field name from the hash stored at `key`, or `null` when
@@ -1804,7 +1804,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/hrandfield/ for more details.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -1831,7 +1831,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/hrandfield/ for more details.
      *
-     * since Valkey version 6.2.0.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the hash.
      * @param count - The number of field names to return.
@@ -2023,13 +2023,13 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/lmove/ for details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @returns The popped element, or `null` if `source` does not exist.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2069,14 +2069,14 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/blmove/ for details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2419,12 +2419,12 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/sintercard/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sets.
      * @param limit - The limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -2595,11 +2595,11 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/smismember/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param key - The key of the set to check.
      * @param members - A list of members to check for existence in the set.
      * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2833,10 +2833,10 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/expiretime/ for details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -2919,10 +2919,10 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/pexpiretime/ for details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @param key - The `key` to determine the expiration value of.
      * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -3190,13 +3190,13 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zintercard/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sorted sets to intersect.
      * @param limit - An optional argument that can be used to specify a maximum number for the
      * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
      * @returns The cardinality of the intersection of the given sorted sets.
-     *
-     * since - Redis version 7.0.0.
      *
      * @example
      * ```typescript
@@ -3214,12 +3214,12 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zdiff/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sorted sets.
      * @returns An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -3240,12 +3240,12 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zdiff/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sorted sets.
      * @returns A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -3269,12 +3269,12 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zdiffstore/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
      * @param destination - The key for the resulting sorted set.
      * @param keys - The keys of the sorted sets to compare.
      * @returns The number of members in the resulting sorted set stored at `destination`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -3333,12 +3333,12 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zmscore/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param key - The key of the sorted set.
      * @param members - A list of members in the sorted set.
      * @returns An `array` of scores corresponding to `members`.
      * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -3427,6 +3427,7 @@ export class BaseClient {
 
     /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
      * Similar to ZRANGE but with a WITHSCORE flag.
+     *
      * See https://valkey.io/commands/zrange/ for more details.
      *
      * @param key - The key of the sorted set.
@@ -3476,6 +3477,8 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zrangestore/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
      * @param destination - The key for the destination sorted set.
      * @param source - The key of the source sorted set.
@@ -3485,8 +3488,6 @@ export class BaseClient {
      * - For range queries by score, use {@link RangeByScore}.
      * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns The number of elements in the resulting sorted set.
-     *
-     * since - Redis version 6.2.0.
      *
      * @example
      * ```typescript
@@ -4002,14 +4003,15 @@ export class BaseClient {
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
+     *
      * See https://valkey.io/commands/zrank for more details.
+     *
+     * Since Valkey version 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
      * @returns A list containing the rank and score of `member` in the sorted set.
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
-     *
-     * since - Redis version 7.2.0.
      *
      * @example
      * ```typescript
@@ -4060,13 +4062,13 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zrevrank/ for more details.
      *
+     * Since Valkey version 7.2.0.
+     *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
      * @returns A list containing the rank and score of `member` in the sorted set, where ranks
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
-     *
-     * since - Valkey version 7.2.0.
      *
      * @example
      * ```typescript
@@ -4975,7 +4977,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/fcall/ for more details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param func - The function name.
@@ -5003,7 +5005,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/fcall/ for more details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param func - The function name.
@@ -5034,13 +5036,13 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/lpos/ for more details.
      *
+     * Since Valkey version 6.0.6.
+     *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
      * @param options - The LPOS options.
      * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
      * is specified, then the function returns an `array` of indices of matching elements within the list.
-     *
-     * since - Valkey version 6.0.6.
      *
      * @example
      * ```typescript
@@ -5124,7 +5126,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/geosearch/ for more details.
      *
-     * since - Valkey 6.2.0 and above.
+     * Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
@@ -5206,7 +5208,7 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/geosearchstore/ for more details.
      *
-     * since - Valkey 6.2.0 and above.
+     * Since Valkey version 6.2.0.
      *
      * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
      *
@@ -5310,6 +5312,8 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/zmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
@@ -5318,8 +5322,6 @@ export class BaseClient {
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -5344,6 +5346,8 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/bzmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks
      *      1. When in cluster mode, all `keys` must map to the same hash slot.
      *      2. `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
@@ -5357,8 +5361,6 @@ export class BaseClient {
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -5518,11 +5520,11 @@ export class BaseClient {
     /**
      * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * Since Valkey version 7.0.0.
      *
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/lcs/ for more details.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -5543,11 +5545,11 @@ export class BaseClient {
     /**
      * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * Since Valkey version 7.0.0.
      *
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/lcs/ for more details.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -5568,11 +5570,11 @@ export class BaseClient {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
+     * See https://valkey.io/commands/lcs/ for more details.
+     *
+     * Since Valkey version 7.0.0.
      *
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/lcs/ for more details.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -5754,13 +5756,13 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/lmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks When in cluster mode, all `key`s must map to the same hash slot.
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param count - (Optional) The maximum number of popped elements.
      * @returns A `Record` of key-name mapped array of popped elements.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -5784,6 +5786,8 @@ export class BaseClient {
      *
      * See https://valkey.io/commands/blmpop/ for more details.
      *
+     * Since Valkey version 7.0.0.
+     *
      * @remarks When in cluster mode, all `key`s must map to the same hash slot.
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
@@ -5791,8 +5795,6 @@ export class BaseClient {
      * @param count - (Optional) The maximum number of popped elements.
      * @returns - A `Record` of `key` name mapped array of popped elements.
      *     If no member could be popped and the timeout expired, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
