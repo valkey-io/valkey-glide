@@ -53,6 +53,7 @@
 * Node: Added WATCH and UNWATCH commands ([#2076](https://github.com/valkey-io/valkey-glide/pull/2076))
 * Node: Added ZLEXCOUNT command ([#2022](https://github.com/valkey-io/valkey-glide/pull/2022))
 * Node: Added ZREMRANGEBYLEX command ([#2025](https://github.com/valkey-io/valkey-glide/pull/2025))
+* Node: Added ZRANGESTORE command ([#2068](https://github.com/valkey-io/valkey-glide/pull/2068))
 * Node: Added SRANDMEMBER command ([#2067](https://github.com/valkey-io/valkey-glide/pull/2067))
 * Node: Added XINFO STREAM command ([#2083](https://github.com/valkey-io/valkey-glide/pull/2083))
 * Node: Added ZSCAN command ([#2061](https://github.com/valkey-io/valkey-glide/pull/2061))
