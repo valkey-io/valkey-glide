@@ -31,6 +31,7 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
+    GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InfoOptions,
@@ -53,6 +54,7 @@ import {
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
+    StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
@@ -140,6 +142,7 @@ import {
     createMGet,
     createMSet,
     createMSetNX,
+    createMove,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
@@ -196,13 +199,16 @@ import {
     createXAdd,
     createXClaim,
     createXDel,
+    createXGroupCreate,
+    createXGroupCreateConsumer,
+    createXGroupDelConsumer,
+    createXGroupDestroy,
     createXInfoConsumers,
     createXInfoStream,
     createXLen,
+    createXPending,
     createXRead,
     createXTrim,
-    createXGroupCreate,
-    createXGroupDestroy,
     createZAdd,
     createZCard,
     createZCount,
@@ -219,6 +225,7 @@ import {
     createZPopMin,
     createZRandMember,
     createZRange,
+    createZRangeStore,
     createZRangeWithScores,
     createZRank,
     createZRem,
@@ -229,9 +236,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    createXPending,
-    GeoSearchStoreResultOptions,
-    StreamPendingOptions,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1743,10 +1747,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
      * Command Response - A list of elements within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
@@ -1765,10 +1769,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
      * Command Response - A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
@@ -1780,6 +1784,36 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Stores a specified range of elements from the sorted set at `source`, into a new
+     * sorted set at `destination`. If `destination` doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.
+     *
+     * See https://valkey.io/commands/zrangestore/ for more details.
+     *
+     * @param destination - The key for the destination sorted set.
+     * @param source - The key of the source sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     *
+     * Command Response - The number of elements in the resulting sorted set.
+     *
+     * since - Redis version 6.2.0.
+     */
+    public zrangeStore(
+        destination: string,
+        source: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): T {
+        return this.addAndReturn(
+            createZRangeStore(destination, source, rangeQuery, reverse),
         );
     }
 
@@ -2422,6 +2456,48 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xgroupDestroy(key: string, groupName: string): T {
         return this.addAndReturn(createXGroupDestroy(key, groupName));
+    }
+
+    /**
+     * Creates a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-createconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The newly created consumer.
+     *
+     * Command Response - `true` if the consumer is created. Otherwise, returns `false`.
+     */
+    public xgroupCreateConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): T {
+        return this.addAndReturn(
+            createXGroupCreateConsumer(key, groupName, consumerName),
+        );
+    }
+
+    /**
+     * Deletes a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-delconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The consumer to delete.
+     *
+     * Command Response - The number of pending messages the `consumer` had before it was deleted.
+     */
+    public xgroupDelConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): T {
+        return this.addAndReturn(
+            createXGroupDelConsumer(key, groupName, consumerName),
+        );
     }
 
     /**
@@ -3379,6 +3455,21 @@ export class Transaction extends BaseTransaction<Transaction> {
         options?: { destinationDB?: number; replace?: boolean },
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
+    }
+
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * See https://valkey.io/commands/move/ for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     *
+     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     */
+    public move(key: string, dbIndex: number): Transaction {
+        return this.addAndReturn(createMove(key, dbIndex));
     }
 
     /** Publish a message on pubsub channel.

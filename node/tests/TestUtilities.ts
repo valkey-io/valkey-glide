@@ -515,6 +515,7 @@ export async function transactionTest(
     const value = uuidv4();
     const groupName1 = uuidv4();
     const groupName2 = uuidv4();
+    const consumer = uuidv4();
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, ReturnType][] = [];
 
@@ -824,6 +825,11 @@ export async function transactionTest(
     responseData.push(["zadd(key13, { one: 1, two: 2, three: 3.5 })", 3]);
 
     if (gte(version, "6.2.0")) {
+        baseTransaction.zrangeStore(key8, key8, { start: 0, stop: -1 });
+        responseData.push([
+            "zrangeStore(key8, key8, { start: 0, stop: -1 })",
+            4,
+        ]);
         baseTransaction.zdiff([key13, key12]);
         responseData.push(["zdiff([key13, key12])", ["three"]]);
         baseTransaction.zdiffWithScores([key13, key12]);
@@ -959,15 +965,9 @@ export async function transactionTest(
 
     // key9 has one entry here: {"0-2":[["field","value2"]]}
 
-    baseTransaction.customCommand([
-        "xgroup",
-        "createconsumer",
-        key9,
-        groupName1,
-        "consumer1",
-    ]);
+    baseTransaction.xgroupCreateConsumer(key9, groupName1, "consumer1");
     responseData.push([
-        'xgroupCreateConsumer(key9, groupName1, "consumer1")',
+        "xgroupCreateConsumer(key9, groupName1, consumer1)",
         true,
     ]);
     baseTransaction.customCommand([
@@ -1025,6 +1025,13 @@ export async function transactionTest(
         'xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
         ["0-2"],
     ]);
+    baseTransaction.xgroupCreateConsumer(key9, groupName1, consumer);
+    responseData.push([
+        "xgroupCreateConsumer(key9, groupName1, consumer)",
+        true,
+    ]);
+    baseTransaction.xgroupDelConsumer(key9, groupName1, consumer);
+    responseData.push(["xgroupDelConsumer(key9, groupName1, consumer)", 0]);
     baseTransaction.xgroupDestroy(key9, groupName1);
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);

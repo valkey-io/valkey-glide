@@ -1767,6 +1767,22 @@ export function createZRangeWithScores(
 /**
  * @internal
  */
+export function createZRangeStore(
+    destination: string,
+    source: string,
+    rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
+    reverse: boolean = false,
+): command_request.Command {
+    const args = [
+        destination,
+        ...createZRangeArgs(source, rangeQuery, reverse, false),
+    ];
+    return createCommand(RequestType.ZRangeStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createType(key: string): command_request.Command {
     return createCommand(RequestType.Type, [key]);
 }
@@ -2047,6 +2063,36 @@ export function createXTrim(
     const args = [key];
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupCreateConsumer(
+    key: string,
+    groupName: string,
+    consumerName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupCreateConsumer, [
+        key,
+        groupName,
+        consumerName,
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupDelConsumer(
+    key: string,
+    groupName: string,
+    consumerName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupDelConsumer, [
+        key,
+        groupName,
+        consumerName,
+    ]);
 }
 
 /**
@@ -2707,6 +2753,16 @@ export function createCopy(
     }
 
     return createCommand(RequestType.Copy, args);
+}
+
+/**
+ * @internal
+ */
+export function createMove(
+    key: string,
+    dbIndex: number,
+): command_request.Command {
+    return createCommand(RequestType.Move, [key, dbIndex.toString()]);
 }
 
 /**
