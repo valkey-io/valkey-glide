@@ -158,3 +158,18 @@ jobs:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
                       java/bundle*.jar
+
+    combine-binaries-to-one-directory:
+        needs: create-binaries-to-publish
+        steps:
+            - name: Move all files to one zip file
+              run:
+                  zip -r bundles-${R_VERSION}.zip java
+
+            - name: Upload artifacts to publish
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: bundles-${R_VERSION}.zip
+                  path: |
+                      java/bundles-${R_VERSION}.zip
