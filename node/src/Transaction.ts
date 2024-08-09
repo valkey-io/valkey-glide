@@ -198,6 +198,8 @@ import {
     createXClaim,
     createXDel,
     createXGroupCreate,
+    createXGroupCreateConsumer,
+    createXGroupDelConsumer,
     createXGroupDestroy,
     createXInfoConsumers,
     createXInfoStream,
@@ -2415,6 +2417,48 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xgroupDestroy(key: string, groupName: string): T {
         return this.addAndReturn(createXGroupDestroy(key, groupName));
+    }
+
+    /**
+     * Creates a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-createconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The newly created consumer.
+     *
+     * Command Response - `true` if the consumer is created. Otherwise, returns `false`.
+     */
+    public xgroupCreateConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): T {
+        return this.addAndReturn(
+            createXGroupCreateConsumer(key, groupName, consumerName),
+        );
+    }
+
+    /**
+     * Deletes a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-delconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The consumer to delete.
+     *
+     * Command Response - The number of pending messages the `consumer` had before it was deleted.
+     */
+    public xgroupDelConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): T {
+        return this.addAndReturn(
+            createXGroupDelConsumer(key, groupName, consumerName),
+        );
     }
 
     /**
