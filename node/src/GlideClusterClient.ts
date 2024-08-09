@@ -672,14 +672,14 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -728,7 +728,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/fcall/ for more details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
@@ -757,7 +757,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/fcall/ for more details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
@@ -787,7 +787,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-delete/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      * @param route - The command will be routed to all primary node, unless `route` is provided, in which
@@ -814,7 +814,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-load/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param replace - Whether the given library should overwrite a library with the same name if it
@@ -846,7 +846,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-flush/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
@@ -873,7 +873,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-list/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param options - Parameters to filter and request additional info.
      * @param route - The client will route the command to the nodes defined by `route`.
@@ -914,7 +914,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-stats/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param route - The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed to all primary nodes.
@@ -1177,7 +1177,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortClusterOptions}.

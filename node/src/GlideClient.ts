@@ -410,6 +410,8 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/copy/ for more details.
      *
+     * Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param destinationDB - (Optional) The alternative logical database index for the destination key.
@@ -417,8 +419,6 @@ export class GlideClient extends BaseClient {
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -487,7 +487,7 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-delete/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      * @returns A simple OK response.
@@ -507,7 +507,7 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-load/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param replace - Whether the given library should overwrite a library with the same name if it
@@ -535,7 +535,7 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-flush/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns A simple OK response.
@@ -555,7 +555,7 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-list/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param options - Parameters to filter and request additional info.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
@@ -591,7 +591,7 @@ export class GlideClient extends BaseClient {
      *
      * See https://valkey.io/commands/function-stats/ for details.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @returns A `Record` with two keys:
      *     - `"running_script"` with information about the running script.
@@ -766,7 +766,7 @@ export class GlideClient extends BaseClient {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * since Valkey version 7.0.0.
+     * Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - The {@link SortOptions}.
