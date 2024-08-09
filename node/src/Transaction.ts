@@ -31,6 +31,7 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
+    GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InfoOptions,
@@ -99,6 +100,7 @@ import {
     createGeoHash,
     createGeoPos,
     createGeoSearch,
+    createGeoSearchStore,
     createGet,
     createGetBit,
     createGetDel,
@@ -192,18 +194,19 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWait,
     createXAdd,
     createXClaim,
     createXDel,
+    createXGroupCreate,
+    createXGroupCreateConsumer,
+    createXGroupDelConsumer,
+    createXGroupDestroy,
     createXInfoConsumers,
     createXInfoStream,
     createXLen,
     createXRead,
     createXTrim,
-    createXGroupCreate,
-    createXGroupDestroy,
-    createXGroupCreateConsumer,
-    createXGroupDelConsumer,
     createZAdd,
     createZCard,
     createZCount,
@@ -230,8 +233,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    createGeoSearchStore,
-    GeoSearchStoreResultOptions,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2598,6 +2599,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred and
+     * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
+     * even if the specified number of replicas were not yet reached.
+     *
+     * See https://valkey.io/commands/wait/ for more details.
+     *
+     * @param numreplicas - The number of replicas to reach.
+     * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+     *
+     * Command Response - The number of replicas reached by all the writes performed in the context of the
+     *     current connection.
+     */
+    public wait(numreplicas: number, timeout: number): T {
+        return this.addAndReturn(createWait(numreplicas, timeout));
     }
 
     /**

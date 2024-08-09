@@ -3323,6 +3323,17 @@ export function createUnWatch(): command_request.Command {
     return createCommand(RequestType.UnWatch, []);
 }
 
+/** @internal */
+export function createWait(
+    numreplicas: number,
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.Wait, [
+        numreplicas.toString(),
+        timeout.toString(),
+    ]);
+}
+
 /**
  * This base class represents the common set of optional arguments for the SCAN family of commands.
  * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
