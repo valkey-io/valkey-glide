@@ -9793,6 +9793,41 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xack test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                const key = "{testKey}:1-" + uuidv4();
+                //const nonExistingKey = "{testKey}:2-" + uuidv4();
+                //const string_key = "{testKey}:3-" + uuidv4();
+                const groupName = uuidv4();
+                //const consumerName = uuidv4();
+                const stream_id0 = "0";
+                const stream_id1_0 = "1-0";
+                const stream_id1_1 = "1-1";
+                const stream_id1_2 = "1-2";
+
+                // setup: add 2 entries to the stream, create consumer group and read to mark them as pending
+                expect(
+                    await client.xadd(key, [["f0", "v0"]], {
+                        id: stream_id1_0,
+                    }),
+                ).toEqual(stream_id1_0);
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], {
+                        id: stream_id1_1,
+                    }),
+                ).toEqual(stream_id1_1);
+                expect(
+                    await client.xgroupCreate(key, groupName, stream_id0),
+                ).toBe("OK");
+                //expect(await client.xread)
+                //TODO: finish test with xreadGroup
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmpop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster: RedisCluster) => {

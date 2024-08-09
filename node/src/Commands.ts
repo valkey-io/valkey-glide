@@ -3929,3 +3929,14 @@ export function createGetEx(
 
     return createCommand(RequestType.GetEx, args);
 }
+
+/**
+ * @internal
+ */
+export function createXAck(
+    key: string,
+    group: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XAck, [key, group, ...ids]);
+}
