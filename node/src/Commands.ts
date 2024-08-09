@@ -1757,6 +1757,22 @@ export function createZRangeWithScores(
 /**
  * @internal
  */
+export function createZRangeStore(
+    destination: string,
+    source: string,
+    rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
+    reverse: boolean = false,
+): command_request.Command {
+    const args = [
+        destination,
+        ...createZRangeArgs(source, rangeQuery, reverse, false),
+    ];
+    return createCommand(RequestType.ZRangeStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createType(key: string): command_request.Command {
     return createCommand(RequestType.Type, [key]);
 }

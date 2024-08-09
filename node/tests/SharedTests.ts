@@ -3895,24 +3895,257 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `zrange different typesn of keys test_%p`,
+        `zrangeStore by index test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+                const key = "{testKey}:1-" + uuidv4();
+                const destkey = "{testKey}:2-" + uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
                 expect(
-                    await client.zrange("nonExistingKey", {
+                    await client.zrangeStore(destkey, key, {
+                        start: 0,
+                        stop: 1,
+                    }),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["one", "two"]);
+
+                expect(
+                    await client.zrangeStore(
+                        destkey,
+                        key,
+                        { start: 0, stop: 1 },
+                        true,
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(
+                        destkey,
+                        {
+                            start: 0,
+                            stop: -1,
+                        },
+                        true,
+                    ),
+                ).toEqual(["three", "two"]);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: 3,
+                        stop: 1,
+                    }),
+                ).toEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrangeStore by score test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key = "{testKey}:1-" + uuidv4();
+                const destkey = "{testKey}:2-" + uuidv4();
+                const membersScores = { one: 1, two: 2, three: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: InfScoreBoundary.NegativeInfinity,
+                        stop: { value: 3, isInclusive: false },
+                        type: "byScore",
+                    }),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["one", "two"]);
+
+                expect(
+                    await client.zrangeStore(
+                        destkey,
+                        key,
+                        {
+                            start: { value: 3, isInclusive: false },
+                            stop: InfScoreBoundary.NegativeInfinity,
+                            type: "byScore",
+                        },
+                        true,
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(
+                        destkey,
+                        {
+                            start: 0,
+                            stop: -1,
+                        },
+                        true,
+                    ),
+                ).toEqual(["two", "one"]);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: InfScoreBoundary.NegativeInfinity,
+                        stop: InfScoreBoundary.PositiveInfinity,
+                        limit: { offset: 1, count: 2 },
+                        type: "byScore",
+                    }),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["two", "three"]);
+
+                expect(
+                    await client.zrangeStore(
+                        destkey,
+                        key,
+                        {
+                            start: InfScoreBoundary.NegativeInfinity,
+                            stop: { value: 3, isInclusive: false },
+                            type: "byScore",
+                        },
+                        true,
+                    ),
+                ).toEqual(0);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: InfScoreBoundary.PositiveInfinity,
+                        stop: { value: 3, isInclusive: false },
+                        type: "byScore",
+                    }),
+                ).toEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrangeStore by lex test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key = "{testKey}:1-" + uuidv4();
+                const destkey = "{testKey}:2-" + uuidv4();
+                const membersScores = { a: 1, b: 2, c: 3 };
+                expect(await client.zadd(key, membersScores)).toEqual(3);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: InfScoreBoundary.NegativeInfinity,
+                        stop: { value: "c", isInclusive: false },
+                        type: "byLex",
+                    }),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["a", "b"]);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: InfScoreBoundary.NegativeInfinity,
+                        stop: InfScoreBoundary.PositiveInfinity,
+                        limit: { offset: 1, count: 2 },
+                        type: "byLex",
+                    }),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(destkey, {
+                        start: 0,
+                        stop: -1,
+                    }),
+                ).toEqual(["b", "c"]);
+
+                expect(
+                    await client.zrangeStore(
+                        destkey,
+                        key,
+                        {
+                            start: { value: "c", isInclusive: false },
+                            stop: InfScoreBoundary.NegativeInfinity,
+                            type: "byLex",
+                        },
+                        true,
+                    ),
+                ).toEqual(2);
+                expect(
+                    await client.zrange(
+                        destkey,
+                        {
+                            start: 0,
+                            stop: -1,
+                        },
+                        true,
+                    ),
+                ).toEqual(["b", "a"]);
+
+                expect(
+                    await client.zrangeStore(
+                        destkey,
+                        key,
+                        {
+                            start: InfScoreBoundary.NegativeInfinity,
+                            stop: { value: "c", isInclusive: false },
+                            type: "byLex",
+                        },
+                        true,
+                    ),
+                ).toEqual(0);
+
+                expect(
+                    await client.zrangeStore(destkey, key, {
+                        start: InfScoreBoundary.PositiveInfinity,
+                        stop: { value: "c", isInclusive: false },
+                        type: "byLex",
+                    }),
+                ).toEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zrange and zrangeStore different types of keys test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                const key = "{testKey}:1-" + uuidv4();
+                const nonExistingKey = "{testKey}:2-" + uuidv4();
+                const destkey = "{testKey}:3-" + uuidv4();
+
+                // test non-existing key - return an empty set
+                expect(
+                    await client.zrange(nonExistingKey, {
                         start: 0,
                         stop: 1,
                     }),
                 ).toEqual([]);
 
                 expect(
-                    await client.zrangeWithScores("nonExistingKey", {
+                    await client.zrangeWithScores(nonExistingKey, {
                         start: 0,
                         stop: 1,
                     }),
                 ).toEqual({});
 
+                // test against a non-sorted set - throw RequestError
                 expect(await client.set(key, "value")).toEqual("OK");
 
                 await expect(
@@ -3921,6 +4154,22 @@ export function runBaseTests<Context>(config: {
 
                 await expect(
                     client.zrangeWithScores(key, { start: 0, stop: 1 }),
+                ).rejects.toThrow();
+
+                // test zrangeStore - added in version 6.2.0
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+
+                // test non-existing key - stores an empty set
+                expect(
+                    await client.zrangeStore(destkey, nonExistingKey, {
+                        start: 0,
+                        stop: 1,
+                    }),
+                ).toEqual(0);
+
+                // test against a non-sorted set - throw RequestError
+                await expect(
+                    client.zrangeStore(destkey, key, { start: 0, stop: 1 }),
                 ).rejects.toThrow();
             }, protocol);
         },
