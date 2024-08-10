@@ -22,9 +22,9 @@ inputs:
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
     engine-version:
-      description: "Engine version to install"
-      required: true
-      type: string
+        description: "Engine version to install"
+        required: true
+        type: string
 
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
@@ -47,8 +47,8 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
-              apt update -y
-              apt install -y git gcc pkg-config openssl libssl-dev
+              sudo apt update -y
+              sudo apt install -y git gcc pkg-config openssl libssl-dev
 
         - name: Install software dependencies for Ubuntu MUSL
           shell: bash
@@ -69,8 +69,8 @@ runs:
           if: "${{ !contains(inputs.target, 'musl') }}"
           uses: ./.github/workflows/install-rust-and-protoc
           with:
-            target: ${{ inputs.target }}
-            github-token: ${{ inputs.github-token }}
+              target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
 
         - name: Install Valkey
           uses: ./.github/workflows/install-valkey

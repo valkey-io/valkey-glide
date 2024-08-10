@@ -11,39 +11,39 @@ on:
         tags:
             - "v*.*"
     workflow_dispatch:
-      inputs:
-        version:
-          description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
-          required: true
+        inputs:
+            version:
+                description: 'The release version of GLIDE, formatted as *.*.* or *.*.*-rc*'
+                required: true
 
 concurrency:
     group: java-cd-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 permissions:
-      id-token: write
+    id-token: write
 
 jobs:
-#    start-self-hosted-runner:
-#        if: github.repository_owner == 'valkey-io'
-#        runs-on: ubuntu-latest
-#        environment: AWS_ACTIONS
-#        steps:
-#          - name: Checkout
-#            uses: actions/checkout@v4
-#            with:
-#                fetch-depth: 0
-#
-#          - name: Start self hosted EC2 runner
-#            uses: ./.github/workflows/start-self-hosted-runner
-#            with:
-#                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-#                aws-region: ${{ secrets.AWS_REGION }}
-#                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+    start-self-hosted-runner:
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Start self hosted EC2 runner
+              uses: ./.github/workflows/start-self-hosted-runner
+              with:
+                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     create-binaries-to-publish:
-#        needs: start-self-hosted-runner
-#        if: github.repository_owner == 'valkey-io'
+        needs: start-self-hosted-runner
+        if: github.repository_owner == 'valkey-io'
         timeout-minutes: 35
         env:
             JAVA_VERSION: '11'
@@ -52,36 +52,36 @@ jobs:
             fail-fast: false
             matrix:
                 host:
-#                  - {
-#                    OS: ubuntu,
-#                    RUNNER: ubuntu-latest,
-#                    TARGET: x86_64-unknown-linux-gnu,
-#                  }
-                  - {
-                    OS: ubuntu,
-                    RUNNER: ["self-hosted", "Linux", "ARM64"],
-                    TARGET: aarch64-unknown-linux-gnu,
-                  }
-#                  - {
-#                    OS: macos,
-#                    RUNNER: macos-12,
-#                    TARGET: x86_64-apple-darwin,
-#                  }
-#                  - {
-#                    OS: macos,
-#                    RUNNER: macos-latest,
-#                    TARGET: aarch64-apple-darwin,
-#                  }
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ubuntu-latest,
+                        TARGET: x86_64-unknown-linux-gnu,
+                    }
+                    - {
+                        OS: ubuntu,
+                        RUNNER: ["self-hosted", "Linux", "ARM64"],
+                        TARGET: aarch64-unknown-linux-gnu,
+                    }
+                    - {
+                        OS: macos,
+                        RUNNER: macos-12,
+                        TARGET: x86_64-apple-darwin,
+                    }
+                    - {
+                        OS: macos,
+                        RUNNER: macos-latest,
+                        TARGET: aarch64-apple-darwin,
+                    }
 
-        runs-on: self-hosted
+        runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
             - name: Setup self-hosted runner access
               run: |
                   GHA_HOME=/home/ubuntu/actions-runner/_work/valkey-glide
                   if [ -d $GHA_HOME ]; then
-                    chown -R $USER:$USER $GHA_HOME
-                    rm -rf $GHA_HOME
+                    sudo chown -R $USER:$USER $GHA_HOME
+                    sudo rm -rf $GHA_HOME
                     mkdir -p $GHA_HOME/valkey-glide
                   else
                     echo "No cleaning needed"
@@ -104,8 +104,8 @@ jobs:
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_ENV
                   echo "Release version detected: $R_VERSION"
               env:
-                EVENT_NAME: ${{ github.event_name }}
-                INPUT_VERSION: ${{ github.event.inputs.version }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             - name: Set up JDK
               uses: actions/setup-java@v4
@@ -137,8 +137,7 @@ jobs:
             - name: Build java client
               working-directory: java
               run: |
-                  ./gradlew :client:publishToMavenLocal
-#                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
               env:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
 
