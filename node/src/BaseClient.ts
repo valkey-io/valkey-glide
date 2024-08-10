@@ -3961,11 +3961,11 @@ export class BaseClient {
      * @param start - Filters the claimed entries to those that have an ID equal or greater than the
      *     specified value.
      * @param count - (Optional) Limits the number of claimed entries to the specified value.
-     * @returns An `array` containing the following elements:
+     * @returns A `tuple` containing the following elements:
      *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
      *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
      *     the entire stream was scanned.
-     *   - A mapping of the claimed entries.
+     *   - A `Record` of the claimed entries.
      *   - If you are using Valkey 7.0.0 or above, the response list will also include a list containing
      *     the message IDs that were in the Pending Entries List but no longer exist in the stream.
      *     These IDs are deleted from the Pending Entries List.
@@ -3975,7 +3975,7 @@ export class BaseClient {
      * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
      * console.log(result); // Output:
      * // [
-     * //     "0-0",                            // value to be used as `start` argument
+     * //     "1609338788321-0",                // value to be used as `start` argument
      * //                                       // for the next `xautoclaim` call
      * //     {
      * //         "1609338752495-0": [          // claimed entries
@@ -3983,8 +3983,10 @@ export class BaseClient {
      * //             ["field 2", "value 2"]
      * //         ]
      * //     },
-     * //     [                                 // array of IDs of deleted messages,
-     * //     ]                                 // included in the response only on valkey 7.0.0 and above
+     * //     [
+     * //         "1594324506465-0",            // array of IDs of deleted messages,
+     * //         "1594568784150-0"             // included in the response only on valkey 7.0.0 and above
+     * //     ]
      * // ]
      * ```
      */
@@ -4029,14 +4031,16 @@ export class BaseClient {
      * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
      * console.log(result); // Output:
      * // [
-     * //     "0-0",                            // value to be used as `start` argument
+     * //     "1609338788321-0",                // value to be used as `start` argument
      * //                                       // for the next `xautoclaim` call
      * //     [
      * //         "1609338752495-0",            // claimed entries
      * //         "1609338752495-1",
      * //     ],
-     * //     [                                 // array of IDs of deleted messages,
-     * //     ]                                 // included in the response only on valkey 7.0.0 and above
+     * //     [
+     * //         "1594324506465-0",            // array of IDs of deleted messages,
+     * //         "1594568784150-0"             // included in the response only on valkey 7.0.0 and above
+     * //     ]
      * // ]
      * ```
      */
