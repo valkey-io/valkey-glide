@@ -701,13 +701,13 @@ describe("SocketConnectionInternals", () => {
             });
             const result1 = await connection.customCommand(
                 ["SET", "foo", "bar"],
-                route1,
+                {route: route1},
             );
             expect(result1).toBeNull();
 
             const result2 = await connection.customCommand(
                 ["GET", "foo"],
-                route2,
+                {route: route2},
             );
             expect(result2).toBeNull();
         });

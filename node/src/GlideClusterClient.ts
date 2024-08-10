@@ -6,6 +6,7 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Decoder,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
@@ -341,7 +342,7 @@ export class GlideClusterClient extends BaseClient {
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
-     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+     * See the [Glide for Valkey Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
      *
      * @example
@@ -351,10 +352,12 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: string[], route?: Routes): Promise<ReturnType> {
+    public customCommand(args: string[], 
+        options?: {route?: Routes; decoder?: Decoder;}): Promise<ReturnType> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 

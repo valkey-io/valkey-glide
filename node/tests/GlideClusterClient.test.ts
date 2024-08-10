@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    Decoder,
     FunctionListResponse,
     GlideClusterClient,
     InfoOptions,
@@ -165,7 +166,7 @@ describe("GlideClusterClient", () => {
                 intoString(
                     await client.customCommand(
                         ["cluster", "nodes"],
-                        "randomNode",
+                        {route:"randomNode"},
                     ),
                 ),
             );
@@ -179,10 +180,10 @@ describe("GlideClusterClient", () => {
 
             const secondResult = cleanResult(
                 intoString(
-                    await client.customCommand(["cluster", "nodes"], {
+                    await client.customCommand(["cluster", "nodes"], {route:{
                         type: "routeByAddress",
                         host,
-                    }),
+                    }}),
                 ),
             );
 
@@ -193,11 +194,11 @@ describe("GlideClusterClient", () => {
             // check that routing with explicit port works
             const thirdResult = cleanResult(
                 intoString(
-                    await client.customCommand(["cluster", "nodes"], {
+                    await client.customCommand(["cluster", "nodes"], {route:{
                         type: "routeByAddress",
                         host: host2,
                         port: Number(port),
-                    }),
+                    }}),
                 ),
             );
 
@@ -219,6 +220,27 @@ describe("GlideClusterClient", () => {
                 }),
             ).toThrowError();
         },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `dump and restore custom command_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = "key";
+            const value = uuidv4();
+            const valueEncoded = Buffer.from(value);
+            expect(await client.set(key, value)).toEqual("OK");
+            const result = await client.customCommand(["DUMP", "key"]);
+            expect(result).toEqual(valueEncoded);
+            const resultBytesDecoder = await client.customCommand(["DUMP", key], {decoder: Decoder.Bytes});
+            expect(resultBytesDecoder).toEqual(valueEncoded);
+            const resultStringDecoder = await client.customCommand(["DUMP", key], {decoder: Decoder.String});
+            expect(resultStringDecoder).toEqual(value);
+        }, 
         TIMEOUT,
     );
 

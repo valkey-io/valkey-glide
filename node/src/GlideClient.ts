@@ -205,7 +205,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: string[]): Promise<ReturnType> {
+    public customCommand(args: string[], decoder?: Decoder): Promise<ReturnType> {
         return this.createWritePromise(createCustomCommand(args));
     }
 
