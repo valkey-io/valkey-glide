@@ -151,14 +151,6 @@ jobs:
                   cd -
                   cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
 
-            - name: Upload artifacts to publish
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: java-${{ matrix.host.TARGET }}
-                  path: |
-                      java/bundle*.jar
-
     combine-binaries-to-one-directory:
         needs: create-binaries-to-publish
         runs-on: self-hosted
