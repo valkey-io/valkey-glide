@@ -22,11 +22,11 @@ public interface GenericCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * @apiNote See <a
+     * @see <a
      *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
      *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
-     * @return The returning value depends on the executed command.
+     * @return The returned value for the custom command.
      * @example
      *     <pre>{@code
      * Object response = client.customCommand(new String[] {"ping", "GLIDE"}).get();
@@ -41,11 +41,11 @@ public interface GenericCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * @apiNote See <a
+     * @see <a
      *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
      *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
-     * @return The returning value depends on the executed command.
+     * @return The returned value for the custom command.
      * @example
      *     <pre>{@code
      * Object response = client.customCommand(new GlideString[] {gs("ping"), gs("GLIDE")}).get();

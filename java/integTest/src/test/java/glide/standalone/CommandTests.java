@@ -109,6 +109,7 @@ public class CommandTests {
     @SneakyThrows
     public void custom_command_info_binary() {
         Object data = regularClient.customCommand(new GlideString[] {gs("info")}).get();
+        assertInstanceOf(GlideString.class, data);
         assertTrue(data.toString().contains("# Stats"));
     }
 

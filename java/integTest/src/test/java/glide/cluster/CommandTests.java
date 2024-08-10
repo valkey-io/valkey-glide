@@ -180,6 +180,7 @@ public class CommandTests {
         ClusterValue<Object> data = clusterClient.customCommand(new GlideString[] {gs("info")}).get();
         assertTrue(data.hasMultiData());
         for (Object info : data.getMultiValue().values()) {
+            assertInstanceOf(GlideString.class, info);
             assertTrue(info.toString().contains("# Stats"));
         }
     }
@@ -204,10 +205,12 @@ public class CommandTests {
         ClusterValue<Object> data =
                 clusterClient.customCommand(new GlideString[] {gs("info")}, ALL_NODES).get();
         for (Object info : data.getMultiValue().values()) {
+            assertInstanceOf(GlideString.class, info);
             assertTrue(info.toString().contains("# Stats"));
         }
 
         data = clusterClient.customCommand(new GlideString[] {gs("info")}, RANDOM).get();
+        assertInstanceOf(GlideString.class, data.getSingleValue());
         assertTrue(data.getSingleValue().toString().contains("# Stats"));
     }
 
