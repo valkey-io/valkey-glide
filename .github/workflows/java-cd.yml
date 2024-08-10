@@ -166,12 +166,12 @@ jobs:
         steps:
             - name: Move all files to one zip file
               run:
-                  zip -r java/bundles-test.zip java
+                  zip -r java/bundles-${{ github.event.inputs.version }}.zip java
 
             - name: Upload artifacts to publish
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: bundles-test.zip
+                  name: bundles-${{ github.event.inputs.version }}.zip
                   path: |
-                      java/bundles-test.zip
+                      java/bundles-${{ github.event.inputs.version }}.zip
