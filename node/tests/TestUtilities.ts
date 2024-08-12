@@ -1021,6 +1021,8 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+    baseTransaction.xinfoGroups(key9);
+    responseData.push(["xinfoGroups(key9)", []]);
     baseTransaction.xgroupCreate(key9, groupName1, "0-0");
     responseData.push(['xgroupCreate(key9, groupName1, "0-0")', "OK"]);
     baseTransaction.xgroupCreate(key9, groupName2, "0-0", { mkStream: true });

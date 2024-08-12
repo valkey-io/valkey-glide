@@ -206,6 +206,7 @@ import {
     createXGroupDelConsumer,
     createXGroupDestroy,
     createXInfoConsumers,
+    createXInfoGroups,
     createXInfoStream,
     createXLen,
     createXPending,
@@ -2273,6 +2274,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xinfoStream(key: string, fullOptions?: boolean | number): T {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
+    }
+
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xinfo-groups/ for more details.
+     *
+     * @param key - The key of the stream.
+     *
+     * Command Response -  An `Array` of `Records`, where each mapping represents the
+     *     attributes of a consumer group for the stream at `key`.
+     */
+    public xinfoGroups(key: string): T {
+        return this.addAndReturn(createXInfoGroups(key));
     }
 
     /** Returns the server time.
