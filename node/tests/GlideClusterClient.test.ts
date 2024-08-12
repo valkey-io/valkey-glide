@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    Decoder,
     FunctionListResponse,
     GlideClusterClient,
     InfoOptions,
@@ -113,9 +114,7 @@ describe("GlideClusterClient", () => {
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server]),
             );
-            expect(intoString(info_server)).toEqual(
-                expect.stringContaining("# Server"),
-            );
+            expect(info_server).toEqual(expect.stringContaining("# Server"));
 
             const infoReplicationValues = Object.values(
                 await client.info([InfoOptions.Replication]),
@@ -141,12 +140,8 @@ describe("GlideClusterClient", () => {
                 [InfoOptions.Server],
                 "randomNode",
             );
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Server"),
-            );
-            expect(intoString(result)).toEqual(
-                expect.not.stringContaining("# Errorstats"),
-            );
+            expect(result).toEqual(expect.stringContaining("# Server"));
+            expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
         },
         TIMEOUT,
     );
@@ -169,10 +164,9 @@ describe("GlideClusterClient", () => {
             );
             const result = cleanResult(
                 intoString(
-                    await client.customCommand(
-                        ["cluster", "nodes"],
-                        "randomNode",
-                    ),
+                    await client.customCommand(["cluster", "nodes"], {
+                        route: "randomNode",
+                    }),
                 ),
             );
 
@@ -186,8 +180,10 @@ describe("GlideClusterClient", () => {
             const secondResult = cleanResult(
                 intoString(
                     await client.customCommand(["cluster", "nodes"], {
-                        type: "routeByAddress",
-                        host,
+                        route: {
+                            type: "routeByAddress",
+                            host,
+                        },
                     }),
                 ),
             );
@@ -200,9 +196,11 @@ describe("GlideClusterClient", () => {
             const thirdResult = cleanResult(
                 intoString(
                     await client.customCommand(["cluster", "nodes"], {
-                        type: "routeByAddress",
-                        host: host2,
-                        port: Number(port),
+                        route: {
+                            type: "routeByAddress",
+                            host: host2,
+                            port: Number(port),
+                        },
                     }),
                 ),
             );
@@ -224,6 +222,44 @@ describe("GlideClusterClient", () => {
                     host: "foo",
                 }),
             ).toThrowError();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `dump and restore custom command_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = "key";
+            const value = "value";
+            const valueEncoded = Buffer.from(value);
+            expect(await client.set(key, value)).toEqual("OK");
+            // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
+            // TODO: fix custom command with unmatch decoder to return an error: https://github.com/valkey-io/valkey-glide/issues/2119
+            // expect(await client.customCommand(["DUMP", key])).toThrowError();
+            const dumpResult = await client.customCommand(["DUMP", key], {
+                decoder: Decoder.Bytes,
+            });
+            expect(await client.del([key])).toEqual(1);
+
+            if (dumpResult instanceof Buffer) {
+                // check the delete
+                expect(await client.get(key)).toEqual(null);
+                expect(
+                    await client.customCommand(
+                        ["RESTORE", key, "0", dumpResult],
+                        { decoder: Decoder.Bytes },
+                    ),
+                ).toEqual("OK");
+                // check the restore
+                expect(await client.get(key)).toEqual(value);
+                expect(await client.get(key, Decoder.Bytes)).toEqual(
+                    valueEncoded,
+                );
+            }
         },
         TIMEOUT,
     );

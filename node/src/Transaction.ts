@@ -4,6 +4,7 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GlideString,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
@@ -2169,7 +2170,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A response from Redis with an `Object`.
      */
-    public customCommand(args: string[]): T {
+    public customCommand(args: GlideString[]): T {
         return this.addAndReturn(createCustomCommand(args));
     }
 
