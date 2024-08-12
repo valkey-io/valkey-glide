@@ -138,7 +138,6 @@ function initialize() {
         StreamGroupOptions,
         StreamTrimOptions,
         StreamAddOptions,
-        StreamRangeBound,
         StreamReadOptions,
         StreamClaimOptions,
         StreamPendingOptions,
@@ -234,12 +233,7 @@ function initialize() {
         StreamGroupOptions,
         StreamTrimOptions,
         StreamAddOptions,
-<<<<<<< HEAD
-        StreamIdBoundary,
-        StreamRangeBound,
-=======
         StreamClaimOptions,
->>>>>>> main
         StreamReadOptions,
         StreamPendingOptions,
         ScriptOptions,
