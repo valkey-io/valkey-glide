@@ -961,65 +961,6 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Returns information about the function that's currently running and information about the
-     * available execution engines.
-     *
-     * See https://valkey.io/commands/function-stats/ for details.
-     *
-     * since Valkey version 7.0.0.
-     *
-     * @param route - The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all primary nodes.
-     * @returns A `Record` with two keys:
-     *     - `"running_script"` with information about the running script.
-     *     - `"engines"` with information about available engines and their stats.
-     *
-     * See example for more details.
-     *
-     * @example
-     * ```typescript
-     * const response = await client.functionStats("randomNode");
-     * console.log(response); // Output:
-     * // {
-     * //     "running_script":
-     * //     {
-     * //         "name": "deep_thought",
-     * //         "command": ["fcall", "deep_thought", "0"],
-     * //         "duration_ms": 5008
-     * //     },
-     * //     "engines":
-     * //     {
-     * //         "LUA":
-     * //         {
-     * //             "libraries_count": 2,
-     * //             "functions_count": 3
-     * //         }
-     * //     }
-     * // }
-     * // Output if no scripts running:
-     * // {
-     * //     "running_script": null
-     * //     "engines":
-     * //     {
-     * //         "LUA":
-     * //         {
-     * //             "libraries_count": 2,
-     * //             "functions_count": 3
-     * //         }
-     * //     }
-     * // }
-     * ```
-     */
-    public async functionStats(
-        route?: Routes,
-    ): Promise<ClusterResponse<FunctionStatsResponse>> {
-        return this.createWritePromise(
-            createFunctionStats(),
-            toProtobufRoute(route),
-        );
-    }
-
-    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.

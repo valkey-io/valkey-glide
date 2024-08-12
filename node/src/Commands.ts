@@ -435,23 +435,6 @@ export function createHGet(
 /**
  * @internal
  */
-export function createHScan(
-    key: string,
-    cursor: string,
-    options?: BaseScanOptions,
-): command_request.Command {
-    let args: string[] = [key, cursor];
-
-    if (options) {
-        args = args.concat(convertBaseScanOptionsToArgsArray(options));
-    }
-
-    return createCommand(RequestType.HScan, args);
-}
-
-/**
- * @internal
- */
 export function createHSet(
     key: string,
     fieldValueMap: Record<string, string>,
@@ -1198,7 +1181,6 @@ export function createSRandMember(
 /**
  * @internal
  */
-export function createCustomCommand(args: string[]) {
 export function createCustomCommand(args: GlideString[]) {
     return createCommand(RequestType.CustomCommand, args);
 }
@@ -1690,22 +1672,6 @@ function getStreamBoundaryArg(
         return "(" + score.value.toString();
     }
 
-    return "[" + score.value.toString();
-}
-
-/** Returns a string representation of a stream boundary as a command argument. */
-function getStreamBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
-): string {
-    if (typeof score === "string") {
-        // InfScoreBoundary
-        return score;
-    }
-
-    if (score.isInclusive == false) {
-        return "(" + score.value.toString();
-    }
-      
     return score.value.toString();
 }
 
@@ -2579,6 +2545,28 @@ export function createXClaim(
     return createCommand(RequestType.XClaim, args);
 }
 
+/** @internal */
+export function createXAutoClaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    start: string,
+    count?: number,
+    justId?: boolean,
+): command_request.Command {
+    const args = [
+        key,
+        group,
+        consumer,
+        minIdleTime.toString(),
+        start.toString(),
+    ];
+    if (count !== undefined) args.push("COUNT", count.toString());
+    if (justId) args.push("JUSTID");
+    return createCommand(RequestType.XAutoClaim, args);
+}
+
 /**
  * Optional arguments for {@link BaseClient.xgroupCreate|xgroupCreate}.
  *
@@ -3372,6 +3360,23 @@ export function createHRandField(
     if (count !== undefined) args.push(count.toString());
     if (withValues) args.push("WITHVALUES");
     return createCommand(RequestType.HRandField, args);
+}
+
+/**
+ * @internal
+ */
+export function createHScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.HScan, args);
 }
 
 /**
