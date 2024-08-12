@@ -162,6 +162,7 @@ import {
     createUnlink,
     createWatch,
     createXAdd,
+    createXAutoClaim,
     createXClaim,
     createXDel,
     createXGroupCreate,
@@ -4150,6 +4151,124 @@ export class BaseClient {
     ): Promise<Record<string, [string, string][]>> {
         return this.createWritePromise(
             createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * See https://valkey.io/commands/xautoclaim/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param start - Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count - (Optional) Limits the number of claimed entries to the specified value.
+     * @returns A `tuple` containing the following elements:
+     *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+     *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+     *     the entire stream was scanned.
+     *   - A `Record` of the claimed entries.
+     *   - If you are using Valkey 7.0.0 or above, the response list will also include a list containing
+     *     the message IDs that were in the Pending Entries List but no longer exist in the stream.
+     *     These IDs are deleted from the Pending Entries List.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * console.log(result); // Output:
+     * // [
+     * //     "1609338788321-0",                // value to be used as `start` argument
+     * //                                       // for the next `xautoclaim` call
+     * //     {
+     * //         "1609338752495-0": [          // claimed entries
+     * //             ["field 1", "value 1"],
+     * //             ["field 2", "value 2"]
+     * //         ]
+     * //     },
+     * //     [
+     * //         "1594324506465-0",            // array of IDs of deleted messages,
+     * //         "1594568784150-0"             // included in the response only on valkey 7.0.0 and above
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xautoclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        start: string,
+        count?: number,
+    ): Promise<[string, Record<string, [string, string][]>, string[]?]> {
+        return this.createWritePromise(
+            createXAutoClaim(key, group, consumer, minIdleTime, start, count),
+        );
+    }
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * See https://valkey.io/commands/xautoclaim/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param start - Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count - (Optional) Limits the number of claimed entries to the specified value.
+     * @returns An `array` containing the following elements:
+     *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+     *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+     *     the entire stream was scanned.
+     *   - A list of the IDs for the claimed entries.
+     *   - If you are using Valkey 7.0.0 or above, the response list will also include a list containing
+     *     the message IDs that were in the Pending Entries List but no longer exist in the stream.
+     *     These IDs are deleted from the Pending Entries List.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * console.log(result); // Output:
+     * // [
+     * //     "1609338788321-0",                // value to be used as `start` argument
+     * //                                       // for the next `xautoclaim` call
+     * //     [
+     * //         "1609338752495-0",            // claimed entries
+     * //         "1609338752495-1",
+     * //     ],
+     * //     [
+     * //         "1594324506465-0",            // array of IDs of deleted messages,
+     * //         "1594568784150-0"             // included in the response only on valkey 7.0.0 and above
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xautoclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        start: string,
+        count?: number,
+    ): Promise<[string, string[], string[]?]> {
+        return this.createWritePromise(
+            createXAutoClaim(
+                key,
+                group,
+                consumer,
+                minIdleTime,
+                start,
+                count,
+                true,
+            ),
         );
     }
 
