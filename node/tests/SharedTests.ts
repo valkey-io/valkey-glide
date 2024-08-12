@@ -2761,6 +2761,46 @@ export function runBaseTests<Context>(config: {
         `sscan test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const initialCursor = "0";
+                const defaultCount = 10;
+
+                const numberMembers: string[] = [];
+
+                for(let i = 0; i < numberMembers.length; i++) {
+                    numberMembers[i] = i.toString();
+                }
+
+                const numberMembersSet: Set<string> = new Set(numberMembers);
+                const charMembers = ["a", "b", "c", "d", "e"];
+                const charMembersSet = Set<string> = new Set(charMembers);
+                const resultCursorIndex = 0;
+                const resultCollectionIndex = 1;
+
+                // Empty set
+                let result = await client.sscan(key1, initialCursor);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
+                // Negative cursor
+                result = await client.sscan(key1, "-1");
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
+                // Result contains the whole set
+                expect(await client.sadd(key1, charMembers)).toEqual(charMembers.length);
+                result = await client.sscan(key1, initialCursor);
+                expect(await result[resultCursorIndex]).toEqual(initialCursor);
+                expect((result[resultCollectionIndex]).length).toEqual(charMembers.length);
+
+                const resultMembers = (
+                    (result[resultCollectionIndex] as Object[]).map((item) => item as Object));
+
+                const allResultMember = resultMembers.every(
+                    () => key in charMap,
+                );
+                expect(allKeysIncluded).toEqual(true);
 
             }, protocol);
         },
