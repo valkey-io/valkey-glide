@@ -2768,13 +2768,13 @@ export function runBaseTests<Context>(config: {
 
                 const numberMembers: string[] = [];
 
-                for(let i = 0; i < numberMembers.length; i++) {
+                for (let i = 0; i < numberMembers.length; i++) {
                     numberMembers[i] = i.toString();
                 }
 
                 const numberMembersSet: Set<string> = new Set(numberMembers);
-                const charMembers = ["a", "b", "c", "d", "e"];
-                const charMembersSet = Set<string> = new Set(charMembers);
+                const charMembers: string[] = ["a", "b", "c", "d", "e"];
+                const charMembersSet: Set<string> = new Set(charMembers);
                 const resultCursorIndex = 0;
                 const resultCollectionIndex = 1;
 
@@ -2789,18 +2789,61 @@ export function runBaseTests<Context>(config: {
                 expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Result contains the whole set
-                expect(await client.sadd(key1, charMembers)).toEqual(charMembers.length);
+                expect(await client.sadd(key1, charMembers)).toEqual(
+                    charMembers.length,
+                );
                 result = await client.sscan(key1, initialCursor);
                 expect(await result[resultCursorIndex]).toEqual(initialCursor);
-                expect((result[resultCollectionIndex]).length).toEqual(charMembers.length);
-
-                const resultMembers = (
-                    (result[resultCollectionIndex] as Object[]).map((item) => item as Object));
-
-                const allResultMember = resultMembers.every(
-                    () => key in charMap,
+                expect(result[resultCollectionIndex].length).toEqual(
+                    charMembers.length,
                 );
-                expect(allKeysIncluded).toEqual(true);
+
+                const resultMembers = result[resultCollectionIndex] as string[];
+
+                const allResultMember = resultMembers.every((member) =>
+                    charMembersSet.has(member),
+                );
+                expect(allResultMember).toEqual(true);
+
+                // testing sscan with match
+                result = await client.sscan(key1, initialCursor, {
+                    match: "a",
+                });
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual(["a"]);
+
+                // Result contains a subset of the key
+                expect(client.sadd(key1, numberMembers)).toEqual(
+                    numberMembers.length,
+                );
+                let resultCursor = "0";
+                const secondResultValues: Set<string> = new Set<string>();
+
+                let isFirstLoop = true;
+
+                do {
+                    result = await client.sscan(key1, resultCursor);
+                    resultCursor = result[resultCursorIndex].toString();
+                    secondResultValues.forEach(value => secondResultValues.add(value));
+
+                    if (isFirstLoop) {
+                        expect(resultCursor).not.toBe("0");
+                        isFirstLoop = false;
+                    } else if (resultCursor === initialCursor) {
+                        break;
+                    }
+
+                    // Scan with result cursor has a different set
+                    const secondResult = await client.sscan(key1, resultCursor);
+                    const newResultCursor =
+                        secondResult[resultCursorIndex].toString();
+                    expect(resultCursor).not.toBe(newResultCursor);
+                    resultCursor = newResultCursor;
+                    expect(result[resultCollectionIndex]).not.toBe(
+                        secondResult[resultCollectionIndex],
+                    );
+                    //secondResultValues.forEach()
+                } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
 
             }, protocol);
         },
