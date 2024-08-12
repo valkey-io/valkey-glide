@@ -1262,7 +1262,6 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}-1" + uuidv4();
-                const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
                 const defaultCount = 20;
                 const resultCursorIndex = 0;
