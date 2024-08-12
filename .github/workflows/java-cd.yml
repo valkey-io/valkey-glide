@@ -154,15 +154,17 @@ jobs:
     combine-binaries-to-one-directory:
         needs: create-binaries-to-publish
         runs-on: ubuntu-latest
+        env:
+            INPUT_VERSION: ${{ github.event.inputs.version }}
         steps:
             - name: Move all files to one zip file
               run:
-                  zip -r java/bundles-${{ github.event.inputs.version }}.zip java
+                  zip -r java/bundles-${{ env.INPUT_VERSION }}.zip java
 
             - name: Upload artifacts to publish
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: bundles-${{ github.event.inputs.version }}.zip
+                  name: bundles-${{ env.INPUT_VERSION }}.zip
                   path: |
-                      java/bundles-${{ github.event.inputs.version }}.zip
+                      java/bundles-${{ env.INPUT_VERSION }}.zip
