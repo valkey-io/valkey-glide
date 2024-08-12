@@ -4802,7 +4802,7 @@ export function runBaseTests<Context>(config: {
                     await client.xrange(
                         key,
                         { isInclusive: false, value: streamId2 },
-                        { value: 5 },
+                        { value: "5" },
                         1,
                     ),
                 ).toEqual({ [streamId3]: [["f3", "v3"]] });
