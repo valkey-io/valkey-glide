@@ -343,6 +343,8 @@ export class GlideClusterClient extends BaseClient {
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
+     * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
+     *
      * See the [Glide for Valkey Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
      *

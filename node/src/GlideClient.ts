@@ -180,7 +180,7 @@ export class GlideClient extends BaseClient {
      */
     public exec(
         transaction: Transaction,
-        decoder: Decoder = Decoder.String,
+        decoder: Decoder = this.defaultDecoder,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
@@ -195,6 +195,8 @@ export class GlideClient extends BaseClient {
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
+     *
+     * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
      * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.

@@ -429,7 +429,7 @@ export class BaseClient {
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
     private isClosed = false;
-    private defaultDecoder = Decoder.String;
+    protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;

@@ -28,6 +28,7 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    encodableTransactionTest,
     encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -273,6 +274,53 @@ describe("GlideClient", () => {
             const expectedRes = await encodedTransactionTest(transaction);
             transaction.select(0);
             const result = await client.exec(transaction, Decoder.Bytes);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transaction with default string decoder_%p`,
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.String;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+            const transaction = new Transaction();
+            const expectedRes = await encodableTransactionTest(
+                transaction,
+                "value",
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transaction with default bytes decoder_%p`,
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.Bytes;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+            const transaction = new Transaction();
+            const valueEncoded = Buffer.from("value");
+            const expectedRes = await encodableTransactionTest(
+                transaction,
+                valueEncoded,
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
