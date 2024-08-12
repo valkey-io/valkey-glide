@@ -2604,7 +2604,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Blocks the current client until all the previous write commands are successfully transferred and
      * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
-     * even if the specified number of replicas were not yet reached.
+     * the number of replicas were not yet reached.
      *
      * See https://valkey.io/commands/wait/ for more details.
      *
