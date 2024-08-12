@@ -104,6 +104,21 @@ export function createGetDel(key: string): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 
+/**
+ * @internal
+ */
+export function createGetRange(
+    key: string,
+    start: number,
+    end: number,
+): command_request.Command {
+    return createCommand(RequestType.GetRange, [
+        key,
+        start.toString(),
+        end.toString(),
+    ]);
+}
+
 export type SetOptions = {
     /**
      *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
@@ -1156,6 +1171,17 @@ export function createSPop(
 /**
  * @internal
  */
+export function createSRandMember(
+    key: string,
+    count?: number,
+): command_request.Command {
+    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    return createCommand(RequestType.SRandMember, args);
+}
+
+/**
+ * @internal
+ */
 export function createCustomCommand(args: string[]) {
     return createCommand(RequestType.CustomCommand, args);
 }
@@ -1268,6 +1294,13 @@ export function createExpireAt(
 /**
  * @internal
  */
+export function createExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.ExpireTime, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createPExpire(
     key: string,
     milliseconds: number,
@@ -1293,6 +1326,13 @@ export function createPExpireAt(
             ? [key, unixMilliseconds.toString()]
             : [key, unixMilliseconds.toString(), option];
     return createCommand(RequestType.PExpireAt, args);
+}
+
+/**
+ * @internal
+ */
+export function createPExpireTime(key: string): command_request.Command {
+    return createCommand(RequestType.PExpireTime, [key]);
 }
 
 /**
@@ -1588,37 +1628,52 @@ type SortedSetRange<T> = {
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
-/**
- * Returns a string representation of a score boundary in Redis protocol format.
- * @param score - The score boundary object containing value and inclusivity
- *     information.
- * @param isLex - Indicates whether to return lexical representation for
- *     positive/negative infinity.
- * @returns A string representation of the score boundary in Redis protocol
- *     format.
- */
+/** Returns a string representation of a score boundary as a command argument. */
 function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
-    isLex: boolean = false,
 ): string {
-    if (score == InfScoreBoundary.PositiveInfinity) {
-        return (
-            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
-        );
-    }
-
-    if (score == InfScoreBoundary.NegativeInfinity) {
-        return (
-            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
-        );
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score + "inf";
     }
 
     if (score.isInclusive == false) {
         return "(" + score.value.toString();
     }
 
-    const value = isLex ? "[" + score.value.toString() : score.value.toString();
-    return value;
+    return score.value.toString();
+}
+
+/** Returns a string representation of a lex boundary as a command argument. */
+function getLexBoundaryArg(
+    score: ScoreBoundary<number> | ScoreBoundary<string>,
+): string {
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score;
+    }
+
+    if (score.isInclusive == false) {
+        return "(" + score.value.toString();
+    }
+
+    return "[" + score.value.toString();
+}
+
+/** Returns a string representation of a stream boundary as a command argument. */
+function getStreamBoundaryArg(
+    score: ScoreBoundary<number> | ScoreBoundary<string>,
+): string {
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score;
+    }
+
+    if (score.isInclusive == false) {
+        return "(" + score.value.toString();
+    }
+
+    return score.value.toString();
 }
 
 function createZRangeArgs(
@@ -1631,10 +1686,20 @@ function createZRangeArgs(
 
     if (typeof rangeQuery.start != "number") {
         rangeQuery = rangeQuery as RangeByScore | RangeByLex;
-        const isLex = rangeQuery.type == "byLex";
-        args.push(getScoreBoundaryArg(rangeQuery.start, isLex));
-        args.push(getScoreBoundaryArg(rangeQuery.stop, isLex));
-        args.push(isLex == true ? "BYLEX" : "BYSCORE");
+
+        if (rangeQuery.type == "byLex") {
+            args.push(
+                getLexBoundaryArg(rangeQuery.start),
+                getLexBoundaryArg(rangeQuery.stop),
+                "BYLEX",
+            );
+        } else {
+            args.push(
+                getScoreBoundaryArg(rangeQuery.start),
+                getScoreBoundaryArg(rangeQuery.stop),
+                "BYSCORE",
+            );
+        }
     } else {
         args.push(rangeQuery.start.toString());
         args.push(rangeQuery.stop.toString());
@@ -1667,9 +1732,11 @@ export function createZCount(
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
-    const args = [key];
-    args.push(getScoreBoundaryArg(minScore));
-    args.push(getScoreBoundaryArg(maxScore));
+    const args = [
+        key,
+        getScoreBoundaryArg(minScore),
+        getScoreBoundaryArg(maxScore),
+    ];
     return createCommand(RequestType.ZCount, args);
 }
 
@@ -1695,6 +1762,22 @@ export function createZRangeWithScores(
 ): command_request.Command {
     const args = createZRangeArgs(key, rangeQuery, reverse, true);
     return createCommand(RequestType.ZRange, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRangeStore(
+    destination: string,
+    source: string,
+    rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
+    reverse: boolean = false,
+): command_request.Command {
+    const args = [
+        destination,
+        ...createZRangeArgs(source, rangeQuery, reverse, false),
+    ];
+    return createCommand(RequestType.ZRangeStore, args);
 }
 
 /**
@@ -1806,11 +1889,7 @@ export function createZRemRangeByLex(
     minLex: ScoreBoundary<string>,
     maxLex: ScoreBoundary<string>,
 ): command_request.Command {
-    const args = [
-        key,
-        getScoreBoundaryArg(minLex, true),
-        getScoreBoundaryArg(maxLex, true),
-    ];
+    const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZRemRangeByLex, args);
 }
 
@@ -1822,12 +1901,15 @@ export function createZRemRangeByScore(
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
-    const args = [key];
-    args.push(getScoreBoundaryArg(minScore));
-    args.push(getScoreBoundaryArg(maxScore));
+    const args = [
+        key,
+        getScoreBoundaryArg(minScore),
+        getScoreBoundaryArg(maxScore),
+    ];
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
+/** @internal */
 export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
@@ -1840,11 +1922,7 @@ export function createZLexCount(
     minLex: ScoreBoundary<string>,
     maxLex: ScoreBoundary<string>,
 ): command_request.Command {
-    const args = [
-        key,
-        getScoreBoundaryArg(minLex, true),
-        getScoreBoundaryArg(maxLex, true),
-    ];
+    const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZLexCount, args);
 }
 
@@ -1933,6 +2011,9 @@ function addTrimOptions(options: StreamTrimOptions, args: string[]) {
     }
 }
 
+/**
+ * @internal
+ */
 export function createXAdd(
     key: string,
     values: [string, string][],
@@ -1960,6 +2041,16 @@ export function createXAdd(
     });
 
     return createCommand(RequestType.XAdd, args);
+}
+
+/**
+ * @internal
+ */
+export function createXDel(
+    key: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XDel, [key, ...ids]);
 }
 
 /**
@@ -2027,6 +2118,36 @@ export function createXRange(
     }
 
     return createCommand(RequestType.XRange, args);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupCreateConsumer(
+    key: string,
+    groupName: string,
+    consumerName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupCreateConsumer, [
+        key,
+        groupName,
+        consumerName,
+    ]);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupDelConsumer(
+    key: string,
+    groupName: string,
+    consumerName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupDelConsumer, [
+        key,
+        groupName,
+        consumerName,
+    ]);
 }
 
 /**
@@ -2160,6 +2281,19 @@ export function createFunctionList(
     }
 
     return createCommand(RequestType.FunctionList, args);
+}
+
+/** Type of the response of `FUNCTION STATS` command. */
+export type FunctionStatsResponse = Record<
+    string,
+    | null
+    | Record<string, string | string[] | number>
+    | Record<string, Record<string, number>>
+>;
+
+/** @internal */
+export function createFunctionStats(): command_request.Command {
+    return createCommand(RequestType.FunctionStats, []);
 }
 
 /**
@@ -2319,10 +2453,207 @@ export function createXRead(
 }
 
 /**
+ * Represents a the return type for XInfo Stream in the response
+ */
+export type ReturnTypeXinfoStream = {
+    [key: string]:
+        | StreamEntries
+        | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
+};
+
+/**
+ * Represents an array of Stream Entires in the response
+ */
+export type StreamEntries = string | number | (string | number | string[])[][];
+
+/**
+ * @internal
+ */
+export function createXInfoStream(
+    key: string,
+    options: boolean | number,
+): command_request.Command {
+    const args: string[] = [key];
+
+    if (options != false) {
+        args.push("FULL");
+
+        if (typeof options === "number") {
+            args.push("COUNT");
+            args.push(options.toString());
+        }
+    }
+
+    return createCommand(RequestType.XInfoStream, args);
+}
+
+/**
  * @internal
  */
 export function createXLen(key: string): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
+}
+
+/** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
+export type StreamPendingOptions = {
+    /** Filter pending entries by their idle time - in milliseconds */
+    minIdleTime?: number;
+    /** Starting stream ID bound for range. */
+    start: ScoreBoundary<string>;
+    /** Ending stream ID bound for range. */
+    end: ScoreBoundary<string>;
+    /** Limit the number of messages returned. */
+    count: number;
+    /** Filter pending entries by consumer. */
+    consumer?: string;
+};
+
+/** @internal */
+export function createXPending(
+    key: string,
+    group: string,
+    options?: StreamPendingOptions,
+): command_request.Command {
+    const args = [key, group];
+
+    if (options) {
+        if (options.minIdleTime !== undefined)
+            args.push("IDLE", options.minIdleTime.toString());
+        args.push(
+            getStreamBoundaryArg(options.start),
+            getStreamBoundaryArg(options.end),
+            options.count.toString(),
+        );
+        if (options.consumer) args.push(options.consumer);
+    }
+
+    return createCommand(RequestType.XPending, args);
+}
+
+/** @internal */
+export function createXInfoConsumers(
+    key: string,
+    group: string,
+): command_request.Command {
+    return createCommand(RequestType.XInfoConsumers, [key, group]);
+}
+
+/** Optional parameters for {@link BaseClient.xclaim|xclaim} command. */
+export type StreamClaimOptions = {
+    /**
+     * Set the idle time (last time it was delivered) of the message in milliseconds. If `idle`
+     * is not specified, an `idle` of `0` is assumed, that is, the time count is reset
+     * because the message now has a new owner trying to process it.
+     */
+    idle?: number; // in milliseconds
+
+    /**
+     * This is the same as {@link idle} but instead of a relative amount of milliseconds, it sets the
+     * idle time to a specific Unix time (in milliseconds). This is useful in order to rewrite the AOF
+     * file generating `XCLAIM` commands.
+     */
+    idleUnixTime?: number; // in unix-time milliseconds
+
+    /**
+     * Set the retry counter to the specified value. This counter is incremented every time a message
+     * is delivered again. Normally {@link BaseClient.xclaim|xclaim} does not alter this counter,
+     * which is just served to clients when the {@link BaseClient.xpending|xpending} command is called:
+     * this way clients can detect anomalies, like messages that are never processed for some reason
+     * after a big number of delivery attempts.
+     */
+    retryCount?: number;
+
+    /**
+     * Creates the pending message entry in the PEL even if certain specified IDs are not already in
+     * the PEL assigned to a different client. However, the message must exist in the stream,
+     * otherwise the IDs of non-existing messages are ignored.
+     */
+    isForce?: boolean;
+
+    /** The last ID of the entry which should be claimed. */
+    lastId?: string;
+};
+
+/** @internal */
+export function createXClaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    ids: string[],
+    options?: StreamClaimOptions,
+    justId?: boolean,
+): command_request.Command {
+    const args = [key, group, consumer, minIdleTime.toString(), ...ids];
+
+    if (options) {
+        if (options.idle !== undefined)
+            args.push("IDLE", options.idle.toString());
+        if (options.idleUnixTime !== undefined)
+            args.push("TIME", options.idleUnixTime.toString());
+        if (options.retryCount !== undefined)
+            args.push("RETRYCOUNT", options.retryCount.toString());
+        if (options.isForce) args.push("FORCE");
+        if (options.lastId) args.push("LASTID", options.lastId);
+    }
+
+    if (justId) args.push("JUSTID");
+    return createCommand(RequestType.XClaim, args);
+}
+
+/**
+ * Optional arguments for {@link BaseClient.xgroupCreate|xgroupCreate}.
+ *
+ * See https://valkey.io/commands/xgroup-create/ for more details.
+ */
+export type StreamGroupOptions = {
+    /**
+     * If `true`and the stream doesn't exist, creates a new stream with a length of `0`.
+     */
+    mkStream?: boolean;
+    /**
+     * An arbitrary ID (that isn't the first ID, last ID, or the zero `"0-0"`. Use it to
+     * find out how many entries are between the arbitrary ID (excluding it) and the stream's last
+     * entry.
+     *
+     * since Valkey version 7.0.0.
+     */
+    entriesRead?: string;
+};
+
+/**
+ * @internal
+ */
+export function createXGroupCreate(
+    key: string,
+    groupName: string,
+    id: string,
+    options?: StreamGroupOptions,
+): command_request.Command {
+    const args: string[] = [key, groupName, id];
+
+    if (options) {
+        if (options.mkStream) {
+            args.push("MKSTREAM");
+        }
+
+        if (options.entriesRead) {
+            args.push("ENTRIESREAD");
+            args.push(options.entriesRead);
+        }
+    }
+
+    return createCommand(RequestType.XGroupCreate, args);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupDestroy(
+    key: string,
+    groupName: string,
+): command_request.Command {
+    return createCommand(RequestType.XGroupDestroy, [key, groupName]);
 }
 
 /**
@@ -2477,6 +2808,16 @@ export function createCopy(
     }
 
     return createCommand(RequestType.Copy, args);
+}
+
+/**
+ * @internal
+ */
+export function createMove(
+    key: string,
+    dbIndex: number,
+): command_request.Command {
+    return createCommand(RequestType.Move, [key, dbIndex.toString()]);
 }
 
 /**
@@ -2657,7 +2998,7 @@ export function createGeoHash(
  * Optional parameters for {@link BaseClient.geosearch|geosearch} command which defines what should be included in the
  * search results and how results should be ordered and limited.
  */
-export type GeoSearchResultOptions = {
+export type GeoSearchResultOptions = GeoSearchCommonResultOptions & {
     /** Include the coordinate of the returned items. */
     withCoord?: boolean;
     /**
@@ -2667,6 +3008,22 @@ export type GeoSearchResultOptions = {
     withDist?: boolean;
     /** Include the geohash of the returned items. */
     withHash?: boolean;
+};
+
+/**
+ * Optional parameters for {@link BaseClient.geosearchstore|geosearchstore} command which defines what should be included in the
+ * search results and how results should be ordered and limited.
+ */
+export type GeoSearchStoreResultOptions = GeoSearchCommonResultOptions & {
+    /**
+     * Determines what is stored as the sorted set score. Defaults to `false`.
+     * - If set to `false`, the geohash of the location will be stored as the sorted set score.
+     * - If set to `true`, the distance from the center of the shape (circle or box) will be stored as the sorted set score. The distance is represented as a floating-point number in the same unit specified for that shape.
+     */
+    storeDist?: boolean;
+};
+
+type GeoSearchCommonResultOptions = {
     /** Indicates the order the result should be sorted in. */
     sortOrder?: SortOrder;
     /** Indicates the number of matches the result should be limited to. */
@@ -2717,16 +3074,39 @@ export type MemberOrigin = {
     member: string;
 };
 
-/**
- * @internal
- */
+/** @internal */
 export function createGeoSearch(
     key: string,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchResultOptions,
 ): command_request.Command {
-    let args: string[] = [key];
+    const args = [key].concat(
+        convertGeoSearchOptionsToArgs(searchFrom, searchBy, resultOptions),
+    );
+    return createCommand(RequestType.GeoSearch, args);
+}
+
+/** @internal */
+export function createGeoSearchStore(
+    destination: string,
+    source: string,
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchStoreResultOptions,
+): command_request.Command {
+    const args = [destination, source].concat(
+        convertGeoSearchOptionsToArgs(searchFrom, searchBy, resultOptions),
+    );
+    return createCommand(RequestType.GeoSearchStore, args);
+}
+
+function convertGeoSearchOptionsToArgs(
+    searchFrom: SearchOrigin,
+    searchBy: GeoSearchShape,
+    resultOptions?: GeoSearchCommonResultOptions,
+): string[] {
+    let args: string[] = [];
 
     if ("position" in searchFrom) {
         args = args.concat(
@@ -2754,9 +3134,14 @@ export function createGeoSearch(
     }
 
     if (resultOptions) {
-        if (resultOptions.withCoord) args.push("WITHCOORD");
-        if (resultOptions.withDist) args.push("WITHDIST");
-        if (resultOptions.withHash) args.push("WITHHASH");
+        if ("withCoord" in resultOptions && resultOptions.withCoord)
+            args.push("WITHCOORD");
+        if ("withDist" in resultOptions && resultOptions.withDist)
+            args.push("WITHDIST");
+        if ("withHash" in resultOptions && resultOptions.withHash)
+            args.push("WITHHASH");
+        if ("storeDist" in resultOptions && resultOptions.storeDist)
+            args.push("STOREDIST");
 
         if (resultOptions.count) {
             args.push("COUNT", resultOptions.count?.toString());
@@ -2767,7 +3152,7 @@ export function createGeoSearch(
         if (resultOptions.sortOrder) args.push(resultOptions.sortOrder);
     }
 
-    return createCommand(RequestType.GeoSearch, args);
+    return args;
 }
 
 /**
@@ -2993,6 +3378,18 @@ export function createHStrlen(
     return createCommand(RequestType.HStrlen, [key, field]);
 }
 
+/** @internal */
+export function createHRandField(
+    key: string,
+    count?: number,
+    withValues?: boolean,
+): command_request.Command {
+    const args = [key];
+    if (count !== undefined) args.push(count.toString());
+    if (withValues) args.push("WITHVALUES");
+    return createCommand(RequestType.HRandField, args);
+}
+
 /**
  * @internal
  */
@@ -3053,4 +3450,181 @@ export function createTouch(keys: string[]): command_request.Command {
 /** @internal */
 export function createRandomKey(): command_request.Command {
     return createCommand(RequestType.RandomKey, []);
+}
+
+/** @internal */
+export function createWatch(keys: string[]): command_request.Command {
+    return createCommand(RequestType.Watch, keys);
+}
+
+/** @internal */
+export function createUnWatch(): command_request.Command {
+    return createCommand(RequestType.UnWatch, []);
+}
+
+/**
+ * This base class represents the common set of optional arguments for the SCAN family of commands.
+ * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
+ * and ZSCAN).
+ */
+export type BaseScanOptions = {
+    /**
+     * The match filter is applied to the result of the command and will only include
+     * strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+     * only a subset of the sorted set then there could be a case where the result is empty although there are
+     * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+     * that it will only fetch and match `10` items from the list.
+     */
+    readonly match?: string;
+    /**
+     * `COUNT` is a just a hint for the command for how many elements to fetch from the
+     * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
+     * represent the results as compact single-allocation packed encoding.
+     */
+    readonly count?: number;
+};
+
+/**
+ * @internal
+ */
+export function createZScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        if (options.match) {
+            args = args.concat("MATCH", options.match);
+        }
+
+        if (options.count !== undefined) {
+            args = args.concat("COUNT", options.count.toString());
+        }
+    }
+
+    return createCommand(RequestType.ZScan, args);
+}
+
+/** @internal */
+export function createSetRange(
+    key: string,
+    offset: number,
+    value: string,
+): command_request.Command {
+    return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
+}
+
+/** @internal */
+export function createAppend(
+    key: string,
+    value: string,
+): command_request.Command {
+    return createCommand(RequestType.Append, [key, value]);
+}
+
+/**
+ * @internal
+ */
+export function createLMPop(
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [keys.length.toString(), ...keys, direction];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.LMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createBLMPop(
+    timeout: number,
+    keys: string[],
+    direction: ListDirection,
+    count?: number,
+): command_request.Command {
+    const args: string[] = [
+        timeout.toString(),
+        keys.length.toString(),
+        ...keys,
+        direction,
+    ];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.BLMPop, args);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubChannels(
+    pattern?: string,
+): command_request.Command {
+    return createCommand(RequestType.PubSubChannels, pattern ? [pattern] : []);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubNumPat(): command_request.Command {
+    return createCommand(RequestType.PubSubNumPat, []);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubNumSub(
+    channels?: string[],
+): command_request.Command {
+    return createCommand(RequestType.PubSubNumSub, channels ? channels : []);
+}
+
+/**
+ * @internal
+ */
+export function createPubsubShardChannels(
+    pattern?: string,
+): command_request.Command {
+    return createCommand(RequestType.PubSubSChannels, pattern ? [pattern] : []);
+}
+
+/**
+ * @internal
+ */
+export function createPubSubShardNumSub(
+    channels?: string[],
+): command_request.Command {
+    return createCommand(RequestType.PubSubSNumSub, channels ? channels : []);
+}
+
+/**
+ * @internal
+ */
+export function createBZPopMax(
+    keys: string[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.BZPopMax, [...keys, timeout.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createBZPopMin(
+    keys: string[],
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
 }

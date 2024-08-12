@@ -12,13 +12,20 @@ import {
 } from "@jest/globals";
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
-import { GlideClient, ListDirection, ProtocolVersion, Transaction } from "..";
+import {
+    GlideClient,
+    ListDirection,
+    ProtocolVersion,
+    RequestError,
+    Transaction,
+} from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { FlushMode, SortOrder } from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     checkFunctionListResponse,
+    checkFunctionStatsResponse,
     convertStringArrayToBuffer,
     flushAndCloseClient,
     generateLuaLibCode,
@@ -136,21 +143,31 @@ describe("GlideClient", () => {
                 ),
             );
 
-            const blmovePromise = client.blmove(
-                "source",
-                "destination",
-                ListDirection.LEFT,
-                ListDirection.LEFT,
-                0.1,
-            );
-            const timeoutPromise = new Promise((resolve) => {
-                setTimeout(resolve, 500);
-            });
+            const promiseList = [
+                client.blmove(
+                    "source",
+                    "destination",
+                    ListDirection.LEFT,
+                    ListDirection.LEFT,
+                    0.1,
+                ),
+                client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
+                client.bzpopmax(["key1", "key2"], 0),
+                client.bzpopmin(["key1", "key2"], 0),
+            ];
 
             try {
-                await Promise.race([blmovePromise, timeoutPromise]);
+                for (const promise of promiseList) {
+                    const timeoutPromise = new Promise((resolve) => {
+                        setTimeout(resolve, 500);
+                    });
+                    await Promise.race([promise, timeoutPromise]);
+                }
             } finally {
-                Promise.resolve(blmovePromise);
+                for (const promise of promiseList) {
+                    await Promise.resolve([promise]);
+                }
+
                 client.close();
             }
         },
@@ -214,7 +231,7 @@ describe("GlideClient", () => {
             );
             const transaction = new Transaction();
             transaction.get("key");
-            const result1 = await client1.customCommand(["WATCH", "key"]);
+            const result1 = await client1.watch(["key"]);
             expect(result1).toEqual("OK");
 
             const result2 = await client2.set("key", "foo");
@@ -488,7 +505,47 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "function load test_%p",
+        "move test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+            const value = uuidv4();
+
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.move(key1, 1)).toEqual(false);
+
+            expect(await client.set(key1, value)).toEqual("OK");
+            expect(await client.get(key1)).toEqual(value);
+            expect(await client.move(key1, 1)).toEqual(true);
+            expect(await client.get(key1)).toEqual(null);
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(key1)).toEqual(value);
+
+            await expect(client.move(key1, -1)).rejects.toThrow(RequestError);
+
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(1);
+            transaction.move(key2, 0);
+            transaction.set(key2, value);
+            transaction.move(key2, 0);
+            transaction.select(0);
+            transaction.get(key2);
+            const results = await client.exec(transaction);
+
+            expect(results).toEqual(["OK", false, "OK", true, "OK", value]);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function load function list function stats test_%p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
@@ -514,6 +571,9 @@ describe("GlideClient", () => {
                 expect(
                     await client.fcallReadonly(funcName, [], ["one", "two"]),
                 ).toEqual("one");
+
+                let functionStats = await client.functionStats();
+                checkFunctionStatsResponse(functionStats, [], 1, 1);
 
                 let functionList = await client.functionList({
                     libNamePattern: libName,
@@ -573,6 +633,9 @@ describe("GlideClient", () => {
                     newCode,
                 );
 
+                functionStats = await client.functionStats();
+                checkFunctionStatsResponse(functionStats, [], 1, 2);
+
                 expect(
                     await client.fcall(func2Name, [], ["one", "two"]),
                 ).toEqual(2);
@@ -581,6 +644,8 @@ describe("GlideClient", () => {
                 ).toEqual(2);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
+                const functionStats = await client.functionStats();
+                checkFunctionStatsResponse(functionStats, [], 0, 0);
                 client.close();
             }
         },
@@ -920,6 +985,163 @@ describe("GlideClient", () => {
             expect(await client.select(0)).toEqual("OK");
             // DB 0 should still have no keys, so randomKey should still return null
             expect(await client.randomKey()).toBeNull();
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "watch test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+            const key3 = "{key}-3" + uuidv4();
+            const key4 = "{key}-4" + uuidv4();
+            const setFoobarTransaction = new Transaction();
+            const setHelloTransaction = new Transaction();
+
+            // Returns null when a watched key is modified before it is executed in a transaction command.
+            // Transaction commands are not performed.
+            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.set(key2, "hello")).toEqual("OK");
+            setFoobarTransaction
+                .set(key1, "foobar")
+                .set(key2, "foobar")
+                .set(key3, "foobar");
+            let results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(null);
+            // sanity check
+            expect(await client.get(key1)).toEqual(null);
+            expect(await client.get(key2)).toEqual("hello");
+            expect(await client.get(key3)).toEqual(null);
+
+            // Transaction executes command successfully with a read command on the watch key before
+            // transaction is executed.
+            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.get(key2)).toEqual("hello");
+            results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(["OK", "OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("foobar");
+            expect(await client.get(key2)).toEqual("foobar");
+            expect(await client.get(key3)).toEqual("foobar");
+
+            // Transaction executes command successfully with unmodified watched keys
+            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(["OK", "OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("foobar");
+            expect(await client.get(key2)).toEqual("foobar");
+            expect(await client.get(key3)).toEqual("foobar");
+
+            // Transaction executes command successfully with a modified watched key but is not in the
+            // transaction.
+            expect(await client.watch([key4])).toEqual("OK");
+            setHelloTransaction
+                .set(key1, "hello")
+                .set(key2, "hello")
+                .set(key3, "hello");
+            results = await client.exec(setHelloTransaction);
+            expect(results).toEqual(["OK", "OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("hello");
+            expect(await client.get(key2)).toEqual("hello");
+            expect(await client.get(key3)).toEqual("hello");
+
+            // WATCH can not have an empty String array parameter
+            await expect(client.watch([])).rejects.toThrow(RequestError);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "unwatch test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+
+            const setFoobarTransaction = new Transaction();
+
+            // UNWATCH returns OK when there no watched keys
+            expect(await client.unwatch()).toEqual("OK");
+
+            // Transaction executes successfully after modifying a watched key then calling UNWATCH
+            expect(await client.watch([key1, key2])).toEqual("OK");
+            expect(await client.set(key2, "hello")).toEqual("OK");
+            expect(await client.unwatch()).toEqual("OK");
+            setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
+            const results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(["OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("foobar");
+            expect(await client.get(key2)).toEqual("foobar");
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "xinfo stream transaction test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+
+            const transaction = new Transaction();
+            transaction.xadd(key, [["field1", "value1"]], { id: "0-1" });
+            transaction.xinfoStream(key);
+            transaction.xinfoStream(key, true);
+            const result = await client.exec(transaction);
+            expect(result).not.toBeNull();
+
+            const versionLessThan7 =
+                cluster.checkIfServerVersionLessThan("7.0.0");
+
+            const expectedXinfoStreamResult = {
+                length: 1,
+                "radix-tree-keys": 1,
+                "radix-tree-nodes": 2,
+                "last-generated-id": "0-1",
+                groups: 0,
+                "first-entry": ["0-1", ["field1", "value1"]],
+                "last-entry": ["0-1", ["field1", "value1"]],
+                "max-deleted-entry-id": versionLessThan7 ? undefined : "0-0",
+                "entries-added": versionLessThan7 ? undefined : 1,
+                "recorded-first-entry-id": versionLessThan7 ? undefined : "0-1",
+            };
+
+            const expectedXinfoStreamFullResult = {
+                length: 1,
+                "radix-tree-keys": 1,
+                "radix-tree-nodes": 2,
+                "last-generated-id": "0-1",
+                entries: [["0-1", ["field1", "value1"]]],
+                groups: [],
+                "max-deleted-entry-id": versionLessThan7 ? undefined : "0-0",
+                "entries-added": versionLessThan7 ? undefined : 1,
+                "recorded-first-entry-id": versionLessThan7 ? undefined : "0-1",
+            };
+
+            if (result != null) {
+                expect(result[0]).toEqual("0-1"); // xadd
+                expect(result[1]).toEqual(expectedXinfoStreamResult);
+                expect(result[2]).toEqual(expectedXinfoStreamFullResult);
+            }
 
             client.close();
         },

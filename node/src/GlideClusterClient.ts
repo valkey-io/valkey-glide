@@ -14,6 +14,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
+    FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
     SortClusterOptions,
@@ -35,15 +36,19 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createInfo,
     createLastSave,
     createLolwut,
     createPing,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRandomKey,
     createSort,
     createSortReadOnly,
     createTime,
+    createUnWatch,
 } from "./Commands";
 import { RequestError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
@@ -831,7 +836,7 @@ export class GlideClusterClient extends BaseClient {
      * since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns A simple OK response.
      *
@@ -885,6 +890,65 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<FunctionListResponse>> {
         return this.createWritePromise(
             createFunctionList(options),
+            toProtobufRoute(route),
+        );
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to all primary nodes.
+     * @returns A `Record` with two keys:
+     *     - `"running_script"` with information about the running script.
+     *     - `"engines"` with information about available engines and their stats.
+     *
+     * See example for more details.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.functionStats("randomNode");
+     * console.log(response); // Output:
+     * // {
+     * //     "running_script":
+     * //     {
+     * //         "name": "deep_thought",
+     * //         "command": ["fcall", "deep_thought", "0"],
+     * //         "duration_ms": 5008
+     * //     },
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * // Output if no scripts running:
+     * // {
+     * //     "running_script": null
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * ```
+     */
+    public async functionStats(
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionStatsResponse>> {
+        return this.createWritePromise(
+            createFunctionStats(),
             toProtobufRoute(route),
         );
     }
@@ -989,6 +1053,57 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
         );
+    }
+
+    /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-shardchannels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * @returns A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const allChannels = await client.pubsubShardchannels();
+     * console.log(allChannels); // Output: ["channel1", "channel2"]
+     *
+     * const filteredChannels = await client.pubsubShardchannels("channel*");
+     * console.log(filteredChannels); // Output: ["channel1", "channel2"]
+     * ```
+     */
+    public async pubsubShardChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-shardnumsub for more details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubShardnumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubShardnumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubShardNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubShardNumSub(channels));
     }
 
     /**
@@ -1117,10 +1232,32 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name.
      * ```
      */
-    public randomKey(route?: Routes): Promise<string | null> {
+    public async randomKey(route?: Routes): Promise<string | null> {
         return this.createWritePromise(
             createRandomKey(),
             toProtobufRoute(route),
         );
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction. Executing a transaction will
+     * automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
+     *      in which case the client will route the command to the nodes defined by `route`.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * let response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * response = await client.unwatch();
+     * console.log(response); // Output: "OK"
+     * ```
+     */
+    public async unwatch(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createUnWatch(), toProtobufRoute(route));
     }
 }

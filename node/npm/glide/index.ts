@@ -75,6 +75,7 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
+        BaseScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -105,6 +106,7 @@ function initialize() {
         GlideClientConfiguration,
         FunctionListOptions,
         FunctionListResponse,
+        FunctionStatsResponse,
         SlotIdTypes,
         SlotKeyTypes,
         RouteByAddress,
@@ -133,16 +135,21 @@ function initialize() {
         SortClusterOptions,
         SortOptions,
         SortedSetRange,
+        StreamGroupOptions,
         StreamTrimOptions,
         StreamAddOptions,
         StreamRangeBound,
         StreamReadOptions,
+        StreamClaimOptions,
+        StreamPendingOptions,
         ScriptOptions,
         ClosingError,
         ConfigurationError,
         ExecAbortError,
         RedisError,
         ReturnType,
+        StreamEntries,
+        ReturnTypeXinfoStream,
         RequestError,
         TimeoutError,
         ConnectionError,
@@ -162,6 +169,7 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
+        BaseScanOptions,
         BitEncoding,
         BitFieldGet,
         BitFieldIncrBy,
@@ -192,8 +200,11 @@ function initialize() {
         GlideClientConfiguration,
         FunctionListOptions,
         FunctionListResponse,
+        FunctionStatsResponse,
         SlotIdTypes,
         SlotKeyTypes,
+        StreamEntries,
+        ReturnTypeXinfoStream,
         RouteByAddress,
         Routes,
         SingleNodeRoute,
@@ -220,11 +231,17 @@ function initialize() {
         SortClusterOptions,
         SortOptions,
         SortedSetRange,
+        StreamGroupOptions,
         StreamTrimOptions,
         StreamAddOptions,
+<<<<<<< HEAD
         StreamIdBoundary,
         StreamRangeBound,
+=======
+        StreamClaimOptions,
+>>>>>>> main
         StreamReadOptions,
+        StreamPendingOptions,
         ScriptOptions,
         ClosingError,
         ConfigurationError,

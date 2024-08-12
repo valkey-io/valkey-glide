@@ -3,11 +3,13 @@
  */
 
 import {
+    BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
 import {
     AggregationType,
+    BaseScanOptions,
     BitFieldGet,
     BitFieldIncrBy, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitFieldOverflow, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -23,11 +25,13 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
+    GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InfoOptions,
@@ -40,6 +44,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
@@ -47,14 +52,21 @@ import {
     SortClusterOptions,
     SortOptions,
     StreamAddOptions,
+    StreamClaimOptions,
+    StreamGroupOptions,
+    StreamPendingOptions,
     StreamRangeBound,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
+    createAppend,
+    createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
+    createBZPopMax,
+    createBZPopMin,
     createBitCount,
     createBitField,
     createBitOp,
@@ -75,6 +87,7 @@ import {
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createFlushAll,
@@ -83,14 +96,17 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createGeoAdd,
     createGeoDist,
     createGeoHash,
     createGeoPos,
     createGeoSearch,
+    createGeoSearchStore,
     createGet,
     createGetBit,
     createGetDel,
+    createGetRange,
     createHDel,
     createHExists,
     createHGet,
@@ -99,6 +115,7 @@ import {
     createHIncrByFloat,
     createHLen,
     createHMGet,
+    createHRandField,
     createHSet,
     createHSetNX,
     createHStrlen,
@@ -111,6 +128,7 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
+    createLMPop,
     createLMove,
     createLPop,
     createLPos,
@@ -125,19 +143,26 @@ import {
     createMGet,
     createMSet,
     createMSetNX,
+    createMove,
     createObjectEncoding,
     createObjectFreq,
     createObjectIdletime,
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
     createPfCount,
     createPfMerge,
     createPing,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRPop,
     createRPush,
     createRPushX,
@@ -156,12 +181,14 @@ import {
     createSMembers,
     createSMove,
     createSPop,
+    createSRandMember,
     createSRem,
     createSUnion,
     createSUnionStore,
     createSelect,
     createSet,
     createSetBit,
+    createSetRange,
     createSort,
     createSortReadOnly,
     createStrlen,
@@ -171,7 +198,16 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXClaim,
+    createXDel,
+    createXGroupCreate,
+    createXGroupCreateConsumer,
+    createXGroupDelConsumer,
+    createXGroupDestroy,
+    createXInfoConsumers,
+    createXInfoStream,
     createXLen,
+    createXPending,
     createXRange,
     createXRead,
     createXTrim,
@@ -191,6 +227,7 @@ import {
     createZPopMin,
     createZRandMember,
     createZRange,
+    createZRangeStore,
     createZRangeWithScores,
     createZRank,
     createZRem,
@@ -199,6 +236,7 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
+    createZScan,
     createZScore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -274,6 +312,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public getdel(key: string): T {
         return this.addAndReturn(createGetDel(key));
+    }
+
+    /**
+     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
+     * an offset starting from the end of the string. So `-1` means the last character, `-2` the
+     * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
+     * or `end` are out of range, returns the substring within the valid range of the string.
+     *
+     * See https://valkey.io/commands/getrange/ for details.
+     *
+     * @param key - The key of the string.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     *
+     * Command Response - substring extracted from the value stored at `key`.
+     */
+    public getrange(key: string, start: number, end: number): T {
+        return this.addAndReturn(createGetRange(key, start, end));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -793,6 +850,62 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createHStrlen(key, field));
     }
 
+    /**
+     * Returns a random field name from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - A random field name from the hash stored at `key`, or `null` when
+     *     the key does not exist.
+     */
+    public hrandfield(key: string): T {
+        return this.addAndReturn(createHRandField(key));
+    }
+
+    /**
+     * Retrieves up to `count` random field names from the hash value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *
+     * Command Response - An `array` of random field names from the hash stored at `key`,
+     *     or an `empty array` when the key does not exist.
+     */
+    public hrandfieldCount(key: string, count: number): T {
+        return this.addAndReturn(createHRandField(key, count));
+    }
+
+    /**
+     * Retrieves up to `count` random field names along with their values from the hash
+     * value stored at `key`.
+     *
+     * See https://valkey.io/commands/hrandfield/ for more details.
+     *
+     * since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     *
+     * Command Response - A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
+     *     field name from the hash and `value` is the associated value of the field name.
+     *     If the hash does not exist or is empty, the response will be an empty `array`.
+     */
+    public hrandfieldWithValues(key: string, count: number): T {
+        return this.addAndReturn(createHRandField(key, count, true));
+    }
+
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
@@ -1266,6 +1379,31 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSPop(key, count), true);
     }
 
+    /** Returns a random element from the set value stored at `key`.
+     *
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key from which to retrieve the set member.
+     * Command Response - A random element from the set, or null if `key` does not exist.
+     */
+    public srandmember(key: string): T {
+        return this.addAndReturn(createSRandMember(key));
+    }
+
+    /** Returns one or more random elements from the set value stored at `key`.
+     *
+     * See https://valkey.io/commands/srandmember for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - The number of members to return.
+     *                If `count` is positive, returns unique members.
+     *                If `count` is negative, allows for duplicates members.
+     * Command Response - A list of members from the set. If the set does not exist or is empty, an empty list will be returned.
+     */
+    public srandmemberCount(key: string, count: number): T {
+        return this.addAndReturn(createSRandMember(key, count));
+    }
+
     /** Returns the number of keys in `keys` that exist in the database.
      * See https://valkey.io/commands/exists/ for details.
      *
@@ -1329,6 +1467,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createExpireAt(key, unixSeconds, option));
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
+     *
+     * See https://valkey.io/commands/expiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     *
+     * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public expireTime(key: string): T {
+        return this.addAndReturn(createExpireTime(key));
+    }
+
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
@@ -1371,6 +1525,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createPExpireAt(key, unixMilliseconds, option),
         );
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * See https://valkey.io/commands/pexpiretime/ for details.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     *
+     * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public pexpireTime(key: string): T {
+        return this.addAndReturn(createPExpireTime(key));
     }
 
     /** Returns the remaining time to live of `key` that has a timeout.
@@ -1580,10 +1749,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
      * Command Response - A list of elements within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
@@ -1602,10 +1771,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      *
      * Command Response - A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
@@ -1617,6 +1786,36 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Stores a specified range of elements from the sorted set at `source`, into a new
+     * sorted set at `destination`. If `destination` doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.
+     *
+     * See https://valkey.io/commands/zrangestore/ for more details.
+     *
+     * @param destination - The key for the destination sorted set.
+     * @param source - The key of the source sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     *
+     * Command Response - The number of elements in the resulting sorted set.
+     *
+     * since - Redis version 6.2.0.
+     */
+    public zrangeStore(
+        destination: string,
+        source: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): T {
+        return this.addAndReturn(
+            createZRangeStore(destination, source, rangeQuery, reverse),
         );
     }
 
@@ -1730,6 +1929,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZPopMin(key, count));
     }
 
+    /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMIN` is the blocking variant of {@link zpopmin}.
+     *
+     * See https://valkey.io/commands/bzpopmin/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *
+     * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     */
+    public bzpopmin(keys: string[], timeout: number): T {
+        return this.addAndReturn(createBZPopMin(keys, timeout));
+    }
+
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
@@ -1744,6 +1962,25 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zpopmax(key: string, count?: number): T {
         return this.addAndReturn(createZPopMax(key, count));
+    }
+
+    /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMAX` is the blocking variant of {@link zpopmax}.
+     *
+     * See https://valkey.io/commands/bzpopmax/ for more details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     *
+     * Command Response - An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     */
+    public bzpopmax(keys: string[], timeout: number): T {
+        return this.addAndReturn(createBZPopMax(keys, timeout));
     }
 
     /** Echoes the provided `message` back.
@@ -1983,7 +2220,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
-     * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
+     * @param options - (Optional) Stream add options.
+     *
+     * Command Response - The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public xadd(
         key: string,
@@ -1994,21 +2233,52 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * See https://valkey.io/commands/xdel for more details.
+     *
+     * @param key - The key of the stream.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of entries removed from the stream. This number may be less than the number of entries in
+     *      `ids`, if the specified `ids` don't exist in the stream.
+     */
+    public xdel(key: string, ids: string[]): T {
+        return this.addAndReturn(createXDel(key, ids));
+    }
+
+    /**
      * Trims the stream stored at `key` by evicting older entries.
      * See https://valkey.io/commands/xtrim/ for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
-     * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
+     *
+     * Command Response - The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
     public xtrim(key: string, options: StreamTrimOptions): T {
         return this.addAndReturn(createXTrim(key, options));
     }
 
+    /**
+     * Returns information about the stream stored at `key`.
+     *
+     * @param key - The key of the stream.
+     * @param fullOptions - If `true`, returns verbose information with a limit of the first 10 PEL entries.
+     * If `number` is specified, returns verbose information limiting the returned PEL entries.
+     * If `0` is specified, returns verbose information with no limit.
+     *
+     * Command Response - A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`.
+     *     See example of {@link BaseClient.xinfoStream} for more details.
+     */
+    public xinfoStream(key: string, fullOptions?: boolean | number): T {
+        return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
+    }
+
     /** Returns the server time.
      * See https://valkey.io/commands/time/ for details.
      *
-     * @returns - The current server time as a two items `array`:
+     * Command Response - The current server time as a two items `array`:
      * A Unix timestamp and the amount of microseconds already elapsed in the current second.
      * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
      */
@@ -2051,7 +2321,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
-     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     *
+     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
      */
     public xread(
         keys_and_ids: Record<string, string>,
@@ -2071,6 +2342,193 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xlen(key: string): T {
         return this.addAndReturn(createXLen(key));
+    }
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * See https://valkey.io/commands/xpending/ for more details.
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xinfo-consumers/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     *
+     * Command Response - An `array` that includes the summary of the pending messages.
+     * See example of {@link BaseClient.xpending|xpending} for more details.
+     */
+    public xpending(key: string, group: string): T {
+        return this.addAndReturn(createXPending(key, group));
+    }
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * See https://valkey.io/commands/xpending/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param options - Additional options to filter entries, see {@link StreamPendingOptions}.
+     *
+     * Command Response - A 2D-`array` of 4-tuples containing extended message information.
+     * See example of {@link BaseClient.xpendingWithOptions|xpendingWithOptions} for more details.
+     */
+    public xpendingWithOptions(
+        key: string,
+        group: string,
+        options: StreamPendingOptions,
+    ): T {
+        return this.addAndReturn(createXPending(key, group, options));
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xinfo-consumers/ for more details.
+     *
+     * Command Response - An `Array` of `Records`, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at `key`.
+     */
+    public xinfoConsumers(key: string, group: string): T {
+        return this.addAndReturn(createXInfoConsumers(key, group));
+    }
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     *
+     * Command Response - A `Record` of message entries that are claimed by the consumer.
+     */
+    public xclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): T {
+        return this.addAndReturn(
+            createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Changes the ownership of a pending message. This function returns an `array` with
+     * only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+     *
+     * See https://valkey.io/commands/xclaim/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     *
+     * Command Response - An `array` of message ids claimed by the consumer.
+     */
+    public xclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): T {
+        return this.addAndReturn(
+            createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+        );
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream
+     * stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-create/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-destroy/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     *
+     * Command Response - `true` if the consumer group is destroyed. Otherwise, `false`.
+     */
+    public xgroupDestroy(key: string, groupName: string): T {
+        return this.addAndReturn(createXGroupDestroy(key, groupName));
+    }
+
+    /**
+     * Creates a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-createconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The newly created consumer.
+     *
+     * Command Response - `true` if the consumer is created. Otherwise, returns `false`.
+     */
+    public xgroupCreateConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): T {
+        return this.addAndReturn(
+            createXGroupCreateConsumer(key, groupName, consumerName),
+        );
+    }
+
+    /**
+     * Deletes a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xgroup-delconsumer for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The consumer to delete.
+     *
+     * Command Response - The number of pending messages the `consumer` had before it was deleted.
+     */
+    public xgroupDelConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): T {
+        return this.addAndReturn(
+            createXGroupDelConsumer(key, groupName, consumerName),
+        );
     }
 
     /**
@@ -2341,6 +2799,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     *
+     * - `"running_script"` with information about the running script.
+     * - `"engines"` with information about available engines and their stats.
+     */
+    public functionStats(): T {
+        return this.addAndReturn(createFunctionStats());
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -2483,6 +2958,48 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Searches for members in a sorted set stored at `source` representing geospatial data
+     * within a circular or rectangular area and stores the result in `destination`.
+     *
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * To get the result directly, see {@link geosearch}.
+     *
+     * See https://valkey.io/commands/geosearchstore/ for more details.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param source - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     * @param searchBy - The query's shape options, could be one of:
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     *
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public geosearchstore(
+        destination: string,
+        source: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchStoreResultOptions,
+    ): T {
+        return this.addAndReturn(
+            createGeoSearchStore(
+                destination,
+                source,
+                searchFrom,
+                searchBy,
+                resultOptions,
+            ),
+        );
+    }
+
+    /**
      * Returns the positions (longitude, latitude) of all the specified `members` of the
      * geospatial index represented by the sorted set at `key`.
      *
@@ -2532,8 +3049,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
-     * @param timeout - The number of seconds to wait for a blocking operation to complete.
-     *     A value of 0 will block indefinitely.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
      *
      * Command Response - A two-element `array` containing the key name of the set from which the element
@@ -2566,6 +3082,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zincrby(key: string, increment: number, member: string): T {
         return this.addAndReturn(createZIncrBy(key, increment, member));
+    }
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * See https://valkey.io/commands/zscan for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
+     *      the search.
+     * @param options - (Optional) The zscan options.
+     *
+     * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+     *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+     *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+     *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+     *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     */
+    public zscan(key: string, cursor: string, options?: BaseScanOptions): T {
+        return this.addAndReturn(createZScan(key, cursor, options));
     }
 
     /**
@@ -2703,6 +3239,128 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public randomKey(): T {
         return this.addAndReturn(createRandomKey());
     }
+
+    /**
+     * Overwrites part of the string stored at `key`, starting at the specified `offset`,
+     * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
+     * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
+     *
+     * See https://valkey.io/commands/setrange/ for more details.
+     *
+     * @param key - The key of the string to update.
+     * @param offset - The position in the string where `value` should be written.
+     * @param value - The string written with `offset`.
+     *
+     * Command Response - The length of the string stored at `key` after it was modified.
+     */
+    public setrange(key: string, offset: number, value: string): T {
+        return this.addAndReturn(createSetRange(key, offset, value));
+    }
+
+    /**
+     * Appends a `value` to a `key`. If `key` does not exist it is created and set as an empty string,
+     * so `APPEND` will be similar to {@link set} in this special case.
+     *
+     * See https://valkey.io/commands/append/ for more details.
+     *
+     * @param key - The key of the string.
+     * @param value - The key of the string.
+     *
+     * Command Response - The length of the string after appending the value.
+     */
+    public append(key: string, value: string): T {
+        return this.addAndReturn(createAppend(key, value));
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided `keys`.
+     *
+     * See https://valkey.io/commands/lmpop/ for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+        return this.addAndReturn(createLMPop(keys, direction, count));
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
+     *
+     * See https://valkey.io/commands/blmpop/ for more details.
+     *
+     * @param keys - An array of keys to lists.
+     * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely.
+     * @param count - (Optional) The maximum number of popped elements.
+     *
+     * Command Response - A `Record` of `key` name mapped array of popped elements.
+     *     If no member could be popped and the timeout expired, returns `null`.
+     *
+     * since Valkey version 7.0.0.
+     */
+    public blmpop(
+        keys: string[],
+        direction: ListDirection,
+        timeout: number,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
+    }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-channels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * Command Response - A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     */
+    public pubsubChannels(pattern?: string): T {
+        return this.addAndReturn(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numpat for more details.
+     *
+     * Command Response - The number of unique patterns.
+     */
+    public pubsubNumPat(): T {
+        return this.addAndReturn(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-numsub for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * Command Response - A map where keys are the channel names and values are the number of subscribers.
+     */
+    public pubsubNumSub(channels?: string[]): T {
+        return this.addAndReturn(createPubSubNumSub(channels));
+    }
 }
 
 /**
@@ -2828,6 +3486,21 @@ export class Transaction extends BaseTransaction<Transaction> {
         options?: { destinationDB?: number; replace?: boolean },
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
+    }
+
+    /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * See https://valkey.io/commands/move/ for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     *
+     * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     */
+    public move(key: string, dbIndex: number): Transaction {
+        return this.addAndReturn(createMove(key, dbIndex));
     }
 
     /** Publish a message on pubsub channel.
@@ -2970,5 +3643,36 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         sharded: boolean = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
+    }
+
+    /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-shardchannels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * Command Response - A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     */
+    public pubsubShardChannels(pattern?: string): ClusterTransaction {
+        return this.addAndReturn(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-shardnumsub for more details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     */
+    public pubsubShardNumSub(channels?: string[]): ClusterTransaction {
+        return this.addAndReturn(createPubSubShardNumSub(channels));
     }
 }

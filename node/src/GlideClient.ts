@@ -14,6 +14,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
+    FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
     SortOptions,
@@ -33,9 +34,11 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createInfo,
     createLastSave,
     createLolwut,
+    createMove,
     createPing,
     createPublish,
     createRandomKey,
@@ -43,6 +46,7 @@ import {
     createSort,
     createSortReadOnly,
     createTime,
+    createUnWatch,
 } from "./Commands";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
@@ -424,6 +428,26 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * See https://valkey.io/commands/move/ for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.move("key", 1);
+     * console.log(result); // Output: true
+     * ```
+     */
+    public async move(key: string, dbIndex: number): Promise<boolean> {
+        return this.createWritePromise(createMove(key, dbIndex));
+    }
+
+    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -542,6 +566,58 @@ export class GlideClient extends BaseClient {
         options?: FunctionListOptions,
     ): Promise<FunctionListResponse> {
         return this.createWritePromise(createFunctionList(options));
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @returns A `Record` with two keys:
+     *     - `"running_script"` with information about the running script.
+     *     - `"engines"` with information about available engines and their stats.
+     *
+     * See example for more details.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.functionStats();
+     * console.log(response); // Output:
+     * // {
+     * //     "running_script":
+     * //     {
+     * //         "name": "deep_thought",
+     * //         "command": ["fcall", "deep_thought", "0"],
+     * //         "duration_ms": 5008
+     * //     },
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * // Output if no scripts running:
+     * // {
+     * //     "running_script": null
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * ```
+     */
+    public async functionStats(): Promise<FunctionStatsResponse> {
+        return this.createWritePromise(createFunctionStats());
     }
 
     /**
@@ -742,7 +818,27 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
      * ```
      */
-    public randomKey(): Promise<string | null> {
+    public async randomKey(): Promise<string | null> {
         return this.createWritePromise(createRandomKey());
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction. Executing a transaction will
+     * automatically flush all previously watched keys.
+     *
+     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/#cas for more details.
+     *
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * let response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * response = await client.unwatch();
+     * console.log(response); // Output: "OK"
+     * ```
+     */
+    public async unwatch(): Promise<"OK"> {
+        return this.createWritePromise(createUnWatch());
     }
 }
