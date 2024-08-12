@@ -3365,6 +3365,23 @@ export function createHRandField(
 /**
  * @internal
  */
+export function createHScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.HScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRandMember(
     key: string,
     count?: number,
@@ -3459,6 +3476,23 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
+    const args: string[] = [];
+
+    if (options.match) {
+        args.push("MATCH", options.match);
+    }
+
+    if (options.count !== undefined) {
+        args.push("COUNT", options.count.toString());
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
 export function createZScan(
     key: string,
     cursor: string,
@@ -3467,13 +3501,7 @@ export function createZScan(
     let args: string[] = [key, cursor];
 
     if (options) {
-        if (options.match) {
-            args = args.concat("MATCH", options.match);
-        }
-
-        if (options.count !== undefined) {
-            args = args.concat("COUNT", options.count.toString());
-        }
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
     }
 
     return createCommand(RequestType.ZScan, args);
