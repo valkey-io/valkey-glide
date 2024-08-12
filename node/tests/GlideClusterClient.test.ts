@@ -1212,6 +1212,9 @@ describe("GlideClusterClient", () => {
                                     expect(killed).toBeTruthy();
                                 } finally {
                                     waitForNotBusy(client);
+                                    await new Promise((resolve) =>
+                                        setTimeout(resolve, 500),
+                                    );
                                 }
                             } finally {
                                 expect(await client.functionFlush()).toEqual(
