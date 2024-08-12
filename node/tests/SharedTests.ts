@@ -5076,7 +5076,6 @@ export function runBaseTests<Context>(config: {
                     "last-entry": (string | number | string[])[];
                     groups: number;
                 };
-                console.log(result);
 
                 // verify result:
                 expect(result.length).toEqual(1);
