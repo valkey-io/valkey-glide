@@ -49,7 +49,6 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
-    StreamRangeBound,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
