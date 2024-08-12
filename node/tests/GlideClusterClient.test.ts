@@ -231,15 +231,23 @@ describe("GlideClusterClient", () => {
             );
 
             const key = "key";
-            const value = uuidv4();
+            const value = "value";
             const valueEncoded = Buffer.from(value);
             expect(await client.set(key, value)).toEqual("OK");
-            const result = await client.customCommand(["DUMP", "key"]);
-            expect(result).toEqual(valueEncoded);
-            const resultBytesDecoder = await client.customCommand(["DUMP", key], {decoder: Decoder.Bytes});
-            expect(resultBytesDecoder).toEqual(valueEncoded);
-            const resultStringDecoder = await client.customCommand(["DUMP", key], {decoder: Decoder.String});
-            expect(resultStringDecoder).toEqual(value);
+            // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
+            // expect(await client.customCommand(["DUMP", key])).toThrowError();
+            const dumpResult = await client.customCommand(["DUMP", key], {decoder: Decoder.Bytes});
+            expect(await client.del([key])).toEqual(1);
+            if(dumpResult instanceof Buffer){
+
+                // check the delete
+                expect(await client.get(key)).toEqual(null);
+                expect(await client.customCommand(["RESTORE", key, "0", dumpResult], {decoder: Decoder.Bytes})).toEqual("OK");
+                // check the restore
+                expect(await client.get(key)).toEqual(value);
+                expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+                
+            }
         }, 
         TIMEOUT,
     );

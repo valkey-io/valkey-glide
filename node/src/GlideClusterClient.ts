@@ -7,6 +7,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
+    GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
@@ -348,11 +349,11 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients with routing to all primary nodes
-     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], "allPrimaries");
+     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], {route: "allPrimaries", decoder: Decoder.String});
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: string[], 
+    public customCommand(args: GlideString[], 
         options?: {route?: Routes; decoder?: Decoder;}): Promise<ReturnType> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, {
@@ -375,11 +376,13 @@ export class GlideClusterClient extends BaseClient {
      */
     public exec(
         transaction: ClusterTransaction,
-        route?: SingleNodeRoute,
+        options?: {
+            route?: SingleNodeRoute;
+            decoder?: Decoder;}
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
-            { route: toProtobufRoute(route) },
+            { route: toProtobufRoute(options?.route), decoder: options?.decoder },
         ).then((result: ReturnType[] | null) => {
             return this.processResultWithSetCommands(
                 result,

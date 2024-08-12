@@ -1181,7 +1181,7 @@ export function createSRandMember(
 /**
  * @internal
  */
-export function createCustomCommand(args: string[]) {
+export function createCustomCommand(args: GlideString[]) {
     return createCommand(RequestType.CustomCommand, args);
 }
 
