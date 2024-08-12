@@ -99,7 +99,7 @@ export function createGet(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createGetDel(key: string): command_request.Command {
+export function createGetDel(key: GlideString): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 

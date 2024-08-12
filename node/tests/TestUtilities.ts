@@ -24,6 +24,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideString,
     InfBoundary,
     InsertPosition,
     ListDirection,
@@ -131,7 +132,7 @@ export function checkSimple(left: any): Checker {
 
 export type Client = {
     set: (key: string, value: string) => Promise<string | "OK" | null>;
-    get: (key: string) => Promise<string | null>;
+    get: (key: string) => Promise<GlideString | null>;
 };
 
 export async function GetAndSetRandomValue(client: Client) {

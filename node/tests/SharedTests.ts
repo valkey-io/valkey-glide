@@ -1177,11 +1177,18 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const value1 = uuidv4();
+                const value1Encoded = Buffer.from(value1);
                 const key2 = uuidv4();
 
                 expect(await client.set(key1, value1)).toEqual("OK");
                 expect(await client.getdel(key1)).toEqual(value1);
                 expect(await client.getdel(key1)).toEqual(null);
+
+                expect(await client.set(key1, value1)).toEqual("OK");
+                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(
+                    value1Encoded,
+                );
+                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(null);
 
                 // key isn't a string
                 expect(await client.sadd(key2, ["a"])).toEqual(1);
