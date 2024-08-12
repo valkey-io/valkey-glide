@@ -113,6 +113,9 @@
 * Java: `XRange`/`XRevRange` should return `null` instead of `GlideException` when given a negative count ([#1920](https://github.com/valkey-io/valkey-glide/pull/1920))
 * Python: Fix `XClaim` return type to `List[bytes]` instead of `List[TEncodable]` ([#2075](https://github.com/valkey-io/valkey-glide/pull/2075))
 
+### Operational Enhancements
+* CI/CD: Add workflow for automating Maven release ([#2128](https://github.com/valkey-io/valkey-glide/pull/2128))
+
 ## 1.0.0 (2024-07-09)
 
 #### Changes

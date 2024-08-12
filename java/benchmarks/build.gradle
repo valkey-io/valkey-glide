@@ -9,7 +9,13 @@ repositories {
 }
 
 dependencies {
-    implementation project(':client')
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION");
+
+    if (releaseVersion) {
+        implementation "io.valkey:valkey-glide:" + releaseVersion
+    } else {
+        implementation project(':client')
+    }
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:32.1.1-jre'
