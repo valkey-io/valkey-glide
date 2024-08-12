@@ -18,7 +18,6 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
@@ -864,7 +863,7 @@ describe("GlideClient", () => {
 
                 try {
                     // call the function without await
-                    testClient
+                    const promise = testClient
                         .fcall(funcName, [], [])
                         .catch((e) =>
                             expect((e as Error).message).toContain(
@@ -882,7 +881,7 @@ describe("GlideClient", () => {
                             killed = true;
                             break;
                         } catch {
-                            /* do nothing */
+                            // do nothing
                         }
 
                         await new Promise((resolve) =>
@@ -892,11 +891,13 @@ describe("GlideClient", () => {
                     }
 
                     expect(killed).toBeTruthy();
+                    await promise;
                 } finally {
-                    waitForNotBusy(client);
+                    await waitForNotBusy(client);
                 }
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
+                testClient.close();
                 client.close();
             }
         },
@@ -932,7 +933,7 @@ describe("GlideClient", () => {
                 // load the lib
                 expect(await client.functionLoad(code, true)).toEqual(libName);
 
-                let promise = new Promise<ReturnType>(() => null);
+                let promise = null;
 
                 try {
                     // call the function without await
@@ -974,6 +975,7 @@ describe("GlideClient", () => {
                 }
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
+                testClient.close();
                 client.close();
             }
         },

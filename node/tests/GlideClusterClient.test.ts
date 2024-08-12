@@ -22,7 +22,6 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
-    ReturnType,
     Routes,
     ScoreFilter,
 } from "..";
@@ -1212,7 +1211,7 @@ describe("GlideClusterClient", () => {
 
                                 try {
                                     // call the function without await
-                                    testClient
+                                    const promise = testClient
                                         .fcallWithRoute(funcName, [], route)
                                         .catch((e) =>
                                             expect(
@@ -1236,7 +1235,7 @@ describe("GlideClusterClient", () => {
                                             killed = true;
                                             break;
                                         } catch {
-                                            /* do nothing */
+                                            // do nothing
                                         }
 
                                         await new Promise((resolve) =>
@@ -1246,11 +1245,9 @@ describe("GlideClusterClient", () => {
                                     }
 
                                     expect(killed).toBeTruthy();
+                                    await promise;
                                 } finally {
-                                    waitForNotBusy(client);
-                                    await new Promise((resolve) =>
-                                        setTimeout(resolve, 500),
-                                    );
+                                    await waitForNotBusy(client);
                                 }
                             } finally {
                                 expect(await client.functionFlush()).toEqual(
@@ -1308,7 +1305,7 @@ describe("GlideClusterClient", () => {
                             await client.functionLoad(code, true, route),
                         ).toEqual(libName);
 
-                        let promise = new Promise<ReturnType>(() => null);
+                        let promise = null;
 
                         try {
                             // call the function without await
