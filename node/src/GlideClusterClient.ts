@@ -353,8 +353,10 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: GlideString[], 
-        options?: {route?: Routes; decoder?: Decoder;}): Promise<ReturnType> {
+    public customCommand(
+        args: GlideString[],
+        options?: { route?: Routes; decoder?: Decoder },
+    ): Promise<ReturnType> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, {
             route: toProtobufRoute(options?.route),
@@ -378,11 +380,15 @@ export class GlideClusterClient extends BaseClient {
         transaction: ClusterTransaction,
         options?: {
             route?: SingleNodeRoute;
-            decoder?: Decoder;}
+            decoder?: Decoder;
+        },
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
-            { route: toProtobufRoute(options?.route), decoder: options?.decoder },
+            {
+                route: toProtobufRoute(options?.route),
+                decoder: options?.decoder,
+            },
         ).then((result: ReturnType[] | null) => {
             return this.processResultWithSetCommands(
                 result,
@@ -947,10 +953,9 @@ export class GlideClusterClient extends BaseClient {
     public async functionStats(
         route?: Routes,
     ): Promise<ClusterResponse<FunctionStatsResponse>> {
-        return this.createWritePromise(
-            createFunctionStats(),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFunctionStats(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**

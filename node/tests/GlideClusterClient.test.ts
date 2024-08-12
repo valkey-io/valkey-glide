@@ -164,10 +164,9 @@ describe("GlideClusterClient", () => {
             );
             const result = cleanResult(
                 intoString(
-                    await client.customCommand(
-                        ["cluster", "nodes"],
-                        {route:"randomNode"},
-                    ),
+                    await client.customCommand(["cluster", "nodes"], {
+                        route: "randomNode",
+                    }),
                 ),
             );
 
@@ -180,10 +179,12 @@ describe("GlideClusterClient", () => {
 
             const secondResult = cleanResult(
                 intoString(
-                    await client.customCommand(["cluster", "nodes"], {route:{
-                        type: "routeByAddress",
-                        host,
-                    }}),
+                    await client.customCommand(["cluster", "nodes"], {
+                        route: {
+                            type: "routeByAddress",
+                            host,
+                        },
+                    }),
                 ),
             );
 
@@ -194,11 +195,13 @@ describe("GlideClusterClient", () => {
             // check that routing with explicit port works
             const thirdResult = cleanResult(
                 intoString(
-                    await client.customCommand(["cluster", "nodes"], {route:{
-                        type: "routeByAddress",
-                        host: host2,
-                        port: Number(port),
-                    }}),
+                    await client.customCommand(["cluster", "nodes"], {
+                        route: {
+                            type: "routeByAddress",
+                            host: host2,
+                            port: Number(port),
+                        },
+                    }),
                 ),
             );
 
@@ -236,19 +239,27 @@ describe("GlideClusterClient", () => {
             expect(await client.set(key, value)).toEqual("OK");
             // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
             // expect(await client.customCommand(["DUMP", key])).toThrowError();
-            const dumpResult = await client.customCommand(["DUMP", key], {decoder: Decoder.Bytes});
+            const dumpResult = await client.customCommand(["DUMP", key], {
+                decoder: Decoder.Bytes,
+            });
             expect(await client.del([key])).toEqual(1);
-            if(dumpResult instanceof Buffer){
 
+            if (dumpResult instanceof Buffer) {
                 // check the delete
                 expect(await client.get(key)).toEqual(null);
-                expect(await client.customCommand(["RESTORE", key, "0", dumpResult], {decoder: Decoder.Bytes})).toEqual("OK");
+                expect(
+                    await client.customCommand(
+                        ["RESTORE", key, "0", dumpResult],
+                        { decoder: Decoder.Bytes },
+                    ),
+                ).toEqual("OK");
                 // check the restore
                 expect(await client.get(key)).toEqual(value);
-                expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
-                
+                expect(await client.get(key, Decoder.Bytes)).toEqual(
+                    valueEncoded,
+                );
             }
-        }, 
+        },
         TIMEOUT,
     );
 

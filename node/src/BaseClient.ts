@@ -985,41 +985,6 @@ export class BaseClient {
         return this.createWritePromise(createGetRange(key, start, end));
     }
 
-    /**
-     * Returns the substring of the string value stored at `key`, determined by the offsets
-     * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
-     * an offset starting from the end of the string. So `-1` means the last character, `-2` the
-     * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
-     * or `end` are out of range, returns the substring within the valid range of the string.
-     *
-     * See https://valkey.io/commands/getrange/ for details.
-     *
-     * @param key - The key of the string.
-     * @param start - The starting offset.
-     * @param end - The ending offset.
-     * @returns A substring extracted from the value stored at `key`.
-     *
-     * @example
-     * ```typescript
-     * await client.set("mykey", "This is a string")
-     * let result = await client.getrange("mykey", 0, 3)
-     * console.log(result); // Output: "This"
-     * result = await client.getrange("mykey", -3, -1)
-     * console.log(result); // Output: "ing" - extracted last 3 characters of a string
-     * result = await client.getrange("mykey", 0, 100)
-     * console.log(result); // Output: "This is a string"
-     * result = await client.getrange("mykey", 5, 6)
-     * console.log(result); // Output: ""
-     * ```
-     */
-    public async getrange(
-        key: string,
-        start: number,
-        end: number,
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetRange(key, start, end));
-    }
-
     /** Set the given key with the given value. Return value is dependent on the passed options.
      * See https://valkey.io/commands/set/ for details.
      *

@@ -386,7 +386,9 @@ describe("SocketConnectionInternals", () => {
                 type: "primarySlotKey",
                 key: "key",
             };
-            const result = await connection.exec(transaction, {route: slotKey});
+            const result = await connection.exec(transaction, {
+                route: slotKey,
+            });
             expect(result).toBe("OK");
         });
     });
@@ -414,7 +416,9 @@ describe("SocketConnectionInternals", () => {
             });
             const transaction = new ClusterTransaction();
             transaction.info([InfoOptions.Server]);
-            const result = await connection.exec(transaction, {route:"randomNode"});
+            const result = await connection.exec(transaction, {
+                route: "randomNode",
+            });
             expect(result).toEqual(expect.stringContaining("# Server"));
         });
     });
@@ -701,14 +705,13 @@ describe("SocketConnectionInternals", () => {
             });
             const result1 = await connection.customCommand(
                 ["SET", "foo", "bar"],
-                {route: route1},
+                { route: route1 },
             );
             expect(result1).toBeNull();
 
-            const result2 = await connection.customCommand(
-                ["GET", "foo"],
-                {route: route2},
-            );
+            const result2 = await connection.customCommand(["GET", "foo"], {
+                route: route2,
+            });
             expect(result2).toBeNull();
         });
     });
