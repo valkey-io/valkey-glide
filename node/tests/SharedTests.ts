@@ -1402,6 +1402,30 @@ export function runBaseTests<Context>(config: {
                 });
                 expect(result[resultCursorIndex]).not.toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toBeGreaterThan(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `hscan empty set, negative cursor, negative count, and non-hash key exception tests`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const initialCursor = "0";
+                const resultCursorIndex = 0;
+                const resultCollectionIndex = 1;
+
+                // Empty set
+                let result = await client.hscan(key1, initialCursor);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
+                // Negative cursor
+                result = await client.hscan(key1, "-1");
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Exceptions
                 // Non-hash key
@@ -1422,29 +1446,6 @@ export function runBaseTests<Context>(config: {
                         count: -1,
                     }),
                 ).rejects.toThrow(RequestError);
-            }, protocol);
-        },
-        config.timeout,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `hscan, sscan, and zscan empty set and negative cursor tests`,
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                const key1 = "{key}-1" + uuidv4();
-                const initialCursor = "0";
-                const resultCursorIndex = 0;
-                const resultCollectionIndex = 1;
-
-                // Empty set
-                let result = await client.hscan(key1, initialCursor);
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
-
-                // Negative cursor
-                result = await client.hscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
             }, protocol);
         },
         config.timeout,

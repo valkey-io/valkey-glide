@@ -3476,9 +3476,7 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
-export function convertBaseScanOptionsToArgsArray(
-    options: BaseScanOptions,
-): string[] {
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
     const args: string[] = [];
 
     if (options.match) {
