@@ -2758,6 +2758,16 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sscan test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sunion test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

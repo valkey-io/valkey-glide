@@ -1045,6 +1045,29 @@ export function createSRem(
 /**
  * @internal
  */
+export function createSScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        if (options.match) {
+            args = args.concat("MATCH", options.match);
+        }
+
+        if (options.count !== undefined) {
+            args = args.concat("COUNT", options.count.toString());
+        }
+    }
+
+    return createCommand(RequestType.SScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createSMembers(key: string): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }

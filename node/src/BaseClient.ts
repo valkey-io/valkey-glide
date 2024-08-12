@@ -151,6 +151,7 @@ import {
     createSPop,
     createSRandMember,
     createSRem,
+    createSScan,
     createSUnion,
     createSUnionStore,
     createSet,
@@ -2261,6 +2262,42 @@ export class BaseClient {
      */
     public srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
+    }
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * See https://valkey.io/commands/sscan for details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - The {@link BaseScanOptions}.
+     * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
+     * `"0"` will be the `cursor` returned on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     *
+     * @example
+     * ```typescript
+     * // Assume key contains a set with 200 members
+     * let cursor = "0";
+     * let result = [][];
+     * do {
+     *   result = await client.sscan(key1, cursor, {
+     *          count: 20,
+     *      });
+     *   cursor = result[0];
+     *   const stringResults: string[] = result[1];
+     *
+     *   console.log("SSCAN iteration:");
+     *   stringResults.forEach(i => i + ", ");
+     * } while (!cursor.equals("0"));
+     * ```
+     */
+    public async sscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createSScan(key, cursor, options));
     }
 
     /** Returns all the members of the set value stored at `key`.
