@@ -6,16 +6,17 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient } from "src/BaseClient";
+import { BaseClient, Decoder } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClusterClient } from "src/GlideClusterClient";
+import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
 import RequestType = command_request.RequestType;
 
-function isLargeCommand(args: BulkString[]) {
+function isLargeCommand(args: GlideString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
@@ -29,12 +30,10 @@ function isLargeCommand(args: BulkString[]) {
     return false;
 }
 
-type BulkString = string | Uint8Array;
-
 /**
  * Convert a string array into Uint8Array[]
  */
-function toBuffersArray(args: BulkString[]) {
+function toBuffersArray(args: GlideString[]) {
     const argsBytes: Uint8Array[] = [];
 
     for (const arg of args) {
@@ -68,7 +67,7 @@ export function parseInfoResponse(response: string): Record<string, string> {
 
 function createCommand(
     requestType: command_request.RequestType,
-    args: BulkString[],
+    args: GlideString[],
 ): command_request.Command {
     const singleCommand = command_request.Command.create({
         requestType,
@@ -171,8 +170,8 @@ export type SetOptions = {
  * @internal
  */
 export function createSet(
-    key: BulkString,
-    value: BulkString,
+    key: GlideString,
+    value: GlideString,
     options?: SetOptions,
 ): command_request.Command {
     const args = [key, value];
@@ -1182,7 +1181,7 @@ export function createSRandMember(
 /**
  * @internal
  */
-export function createCustomCommand(args: string[]) {
+export function createCustomCommand(args: GlideString[]) {
     return createCommand(RequestType.CustomCommand, args);
 }
 
@@ -1628,37 +1627,52 @@ type SortedSetRange<T> = {
 export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
-/**
- * Returns a string representation of a score boundary in Redis protocol format.
- * @param score - The score boundary object containing value and inclusivity
- *     information.
- * @param isLex - Indicates whether to return lexical representation for
- *     positive/negative infinity.
- * @returns A string representation of the score boundary in Redis protocol
- *     format.
- */
+/** Returns a string representation of a score boundary as a command argument. */
 function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
-    isLex: boolean = false,
 ): string {
-    if (score == InfScoreBoundary.PositiveInfinity) {
-        return (
-            InfScoreBoundary.PositiveInfinity.toString() + (isLex ? "" : "inf")
-        );
-    }
-
-    if (score == InfScoreBoundary.NegativeInfinity) {
-        return (
-            InfScoreBoundary.NegativeInfinity.toString() + (isLex ? "" : "inf")
-        );
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score + "inf";
     }
 
     if (score.isInclusive == false) {
         return "(" + score.value.toString();
     }
 
-    const value = isLex ? "[" + score.value.toString() : score.value.toString();
-    return value;
+    return score.value.toString();
+}
+
+/** Returns a string representation of a lex boundary as a command argument. */
+function getLexBoundaryArg(
+    score: ScoreBoundary<number> | ScoreBoundary<string>,
+): string {
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score;
+    }
+
+    if (score.isInclusive == false) {
+        return "(" + score.value.toString();
+    }
+
+    return "[" + score.value.toString();
+}
+
+/** Returns a string representation of a stream boundary as a command argument. */
+function getStreamBoundaryArg(
+    score: ScoreBoundary<number> | ScoreBoundary<string>,
+): string {
+    if (typeof score === "string") {
+        // InfScoreBoundary
+        return score;
+    }
+
+    if (score.isInclusive == false) {
+        return "(" + score.value.toString();
+    }
+
+    return score.value.toString();
 }
 
 function createZRangeArgs(
@@ -1671,10 +1685,20 @@ function createZRangeArgs(
 
     if (typeof rangeQuery.start != "number") {
         rangeQuery = rangeQuery as RangeByScore | RangeByLex;
-        const isLex = rangeQuery.type == "byLex";
-        args.push(getScoreBoundaryArg(rangeQuery.start, isLex));
-        args.push(getScoreBoundaryArg(rangeQuery.stop, isLex));
-        args.push(isLex == true ? "BYLEX" : "BYSCORE");
+
+        if (rangeQuery.type == "byLex") {
+            args.push(
+                getLexBoundaryArg(rangeQuery.start),
+                getLexBoundaryArg(rangeQuery.stop),
+                "BYLEX",
+            );
+        } else {
+            args.push(
+                getScoreBoundaryArg(rangeQuery.start),
+                getScoreBoundaryArg(rangeQuery.stop),
+                "BYSCORE",
+            );
+        }
     } else {
         args.push(rangeQuery.start.toString());
         args.push(rangeQuery.stop.toString());
@@ -1707,9 +1731,11 @@ export function createZCount(
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
-    const args = [key];
-    args.push(getScoreBoundaryArg(minScore));
-    args.push(getScoreBoundaryArg(maxScore));
+    const args = [
+        key,
+        getScoreBoundaryArg(minScore),
+        getScoreBoundaryArg(maxScore),
+    ];
     return createCommand(RequestType.ZCount, args);
 }
 
@@ -1735,6 +1761,22 @@ export function createZRangeWithScores(
 ): command_request.Command {
     const args = createZRangeArgs(key, rangeQuery, reverse, true);
     return createCommand(RequestType.ZRange, args);
+}
+
+/**
+ * @internal
+ */
+export function createZRangeStore(
+    destination: string,
+    source: string,
+    rangeQuery: RangeByIndex | RangeByScore | RangeByLex,
+    reverse: boolean = false,
+): command_request.Command {
+    const args = [
+        destination,
+        ...createZRangeArgs(source, rangeQuery, reverse, false),
+    ];
+    return createCommand(RequestType.ZRangeStore, args);
 }
 
 /**
@@ -1846,11 +1888,7 @@ export function createZRemRangeByLex(
     minLex: ScoreBoundary<string>,
     maxLex: ScoreBoundary<string>,
 ): command_request.Command {
-    const args = [
-        key,
-        getScoreBoundaryArg(minLex, true),
-        getScoreBoundaryArg(maxLex, true),
-    ];
+    const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZRemRangeByLex, args);
 }
 
@@ -1862,12 +1900,15 @@ export function createZRemRangeByScore(
     minScore: ScoreBoundary<number>,
     maxScore: ScoreBoundary<number>,
 ): command_request.Command {
-    const args = [key];
-    args.push(getScoreBoundaryArg(minScore));
-    args.push(getScoreBoundaryArg(maxScore));
+    const args = [
+        key,
+        getScoreBoundaryArg(minScore),
+        getScoreBoundaryArg(maxScore),
+    ];
     return createCommand(RequestType.ZRemRangeByScore, args);
 }
 
+/** @internal */
 export function createPersist(key: string): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
@@ -1880,11 +1921,7 @@ export function createZLexCount(
     minLex: ScoreBoundary<string>,
     maxLex: ScoreBoundary<string>,
 ): command_request.Command {
-    const args = [
-        key,
-        getScoreBoundaryArg(minLex, true),
-        getScoreBoundaryArg(maxLex, true),
-    ];
+    const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZLexCount, args);
 }
 
@@ -2401,6 +2438,42 @@ export function createXLen(key: string): command_request.Command {
     return createCommand(RequestType.XLen, [key]);
 }
 
+/** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
+export type StreamPendingOptions = {
+    /** Filter pending entries by their idle time - in milliseconds */
+    minIdleTime?: number;
+    /** Starting stream ID bound for range. */
+    start: ScoreBoundary<string>;
+    /** Ending stream ID bound for range. */
+    end: ScoreBoundary<string>;
+    /** Limit the number of messages returned. */
+    count: number;
+    /** Filter pending entries by consumer. */
+    consumer?: string;
+};
+
+/** @internal */
+export function createXPending(
+    key: string,
+    group: string,
+    options?: StreamPendingOptions,
+): command_request.Command {
+    const args = [key, group];
+
+    if (options) {
+        if (options.minIdleTime !== undefined)
+            args.push("IDLE", options.minIdleTime.toString());
+        args.push(
+            getStreamBoundaryArg(options.start),
+            getStreamBoundaryArg(options.end),
+            options.count.toString(),
+        );
+        if (options.consumer) args.push(options.consumer);
+    }
+
+    return createCommand(RequestType.XPending, args);
+}
+
 /** @internal */
 export function createXInfoConsumers(
     key: string,
@@ -2470,6 +2543,28 @@ export function createXClaim(
 
     if (justId) args.push("JUSTID");
     return createCommand(RequestType.XClaim, args);
+}
+
+/** @internal */
+export function createXAutoClaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    start: string,
+    count?: number,
+    justId?: boolean,
+): command_request.Command {
+    const args = [
+        key,
+        group,
+        consumer,
+        minIdleTime.toString(),
+        start.toString(),
+    ];
+    if (count !== undefined) args.push("COUNT", count.toString());
+    if (justId) args.push("JUSTID");
+    return createCommand(RequestType.XAutoClaim, args);
 }
 
 /**
@@ -2614,6 +2709,12 @@ export type LolwutOptions = {
      *  For version `6`, those are number of columns and number of lines.
      */
     parameters?: number[];
+    /**
+     * An optional argument specifies the type of decoding.
+     *  Use Decoder.String to get the response as a String.
+     *  Use Decoder.Bytes to get the response in a buffer.
+     */
+    decoder?: Decoder;
 };
 
 /**
@@ -2679,6 +2780,16 @@ export function createCopy(
     }
 
     return createCommand(RequestType.Copy, args);
+}
+
+/**
+ * @internal
+ */
+export function createMove(
+    key: string,
+    dbIndex: number,
+): command_request.Command {
+    return createCommand(RequestType.Move, [key, dbIndex.toString()]);
 }
 
 /**

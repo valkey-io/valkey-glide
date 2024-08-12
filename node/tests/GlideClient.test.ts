@@ -13,6 +13,7 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    Decoder,
     GlideClient,
     ListDirection,
     ProtocolVersion,
@@ -27,10 +28,11 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    encodableTransactionTest,
+    encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
-    intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
@@ -120,13 +122,9 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info();
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Server"),
-            );
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Replication"),
-            );
-            expect(intoString(result)).toEqual(
+            expect(result).toEqual(expect.stringContaining("# Server"));
+            expect(result).toEqual(expect.stringContaining("# Replication"));
+            expect(result).toEqual(
                 expect.not.stringContaining("# Latencystats"),
             );
         },
@@ -202,6 +200,52 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "bytes decoder client test %p",
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.Bytes;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+
+            const key = uuidv4();
+            const value = uuidv4();
+            const valueEncoded = Buffer.from(value);
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            expect(await client.get(key)).toEqual(valueEncoded);
+            expect(await client.get(key, Decoder.String)).toEqual(value);
+            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "string decoder client test %p",
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.String;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+
+            const key = uuidv4();
+            const value = uuidv4();
+            const valueEncoded = Buffer.from(value);
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            expect(await client.get(key)).toEqual(value);
+            expect(await client.get(key, Decoder.String)).toEqual(value);
+            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
         async (protocol) => {
             client = await GlideClient.createClient(
@@ -211,6 +255,69 @@ describe("GlideClient", () => {
             const expectedRes = await transactionTest(
                 transaction,
                 cluster.getVersion(),
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can get Bytes decoded transactions_%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const transaction = new Transaction();
+            const expectedRes = await encodedTransactionTest(transaction);
+            transaction.select(0);
+            const result = await client.exec(transaction, Decoder.Bytes);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transaction with default string decoder_%p`,
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.String;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+            const transaction = new Transaction();
+            const expectedRes = await encodableTransactionTest(
+                transaction,
+                "value",
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transaction with default bytes decoder_%p`,
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.Bytes;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+            const transaction = new Transaction();
+            const valueEncoded = Buffer.from("value");
+            const expectedRes = await encodableTransactionTest(
+                transaction,
+                valueEncoded,
             );
             transaction.select(0);
             const result = await client.exec(transaction);
@@ -364,32 +471,22 @@ describe("GlideClient", () => {
             );
 
             const result = await client.lolwut();
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result).toEqual(expect.stringContaining("Redis ver. "));
 
             const result2 = await client.lolwut({ parameters: [] });
-            expect(intoString(result2)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result2).toEqual(expect.stringContaining("Redis ver. "));
 
             const result3 = await client.lolwut({ parameters: [50, 20] });
-            expect(intoString(result3)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result3).toEqual(expect.stringContaining("Redis ver. "));
 
             const result4 = await client.lolwut({ version: 6 });
-            expect(intoString(result4)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result4).toEqual(expect.stringContaining("Redis ver. "));
 
             const result5 = await client.lolwut({
                 version: 5,
                 parameters: [30, 4, 4],
             });
-            expect(intoString(result5)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result5).toEqual(expect.stringContaining("Redis ver. "));
 
             // transaction tests
             const transaction = new Transaction();
@@ -401,7 +498,7 @@ describe("GlideClient", () => {
 
             if (results) {
                 for (const element of results) {
-                    expect(intoString(element)).toEqual(
+                    expect(element).toEqual(
                         expect.stringContaining("Redis ver. "),
                     );
                 }
@@ -498,6 +595,46 @@ describe("GlideClient", () => {
             const results = await client.exec(transaction);
 
             expect(results).toEqual(["OK", "OK", true, value1]);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "move test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+            const value = uuidv4();
+
+            expect(await client.select(0)).toEqual("OK");
+            expect(await client.move(key1, 1)).toEqual(false);
+
+            expect(await client.set(key1, value)).toEqual("OK");
+            expect(await client.get(key1)).toEqual(value);
+            expect(await client.move(key1, 1)).toEqual(true);
+            expect(await client.get(key1)).toEqual(null);
+            expect(await client.select(1)).toEqual("OK");
+            expect(await client.get(key1)).toEqual(value);
+
+            await expect(client.move(key1, -1)).rejects.toThrow(RequestError);
+
+            //transaction tests
+            const transaction = new Transaction();
+            transaction.select(1);
+            transaction.move(key2, 0);
+            transaction.set(key2, value);
+            transaction.move(key2, 0);
+            transaction.select(0);
+            transaction.get(key2);
+            const results = await client.exec(transaction);
+
+            expect(results).toEqual(["OK", false, "OK", true, "OK", value]);
 
             client.close();
         },
