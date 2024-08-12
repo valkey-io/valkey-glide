@@ -2292,12 +2292,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the stream.
      * @param start - The starting stream ID bound for the range.
-     *     - Use `id` to specify a stream ID.
-     *     - Use `exclusive: "("` to specify an exclusive bounded stream ID.
+     *     - Use `value` to specify a stream ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
      *     - Use `-` to start with the minimum available ID.
      * @param end - The ending stream ID bound for the range.
-     *     - Use `id` to specify a stream ID.
-     *     - Use `exclusive: "("` to specify an exclusive bounded stream ID.
+     *     - Use `value` to specify a stream ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
      *     - Use `+` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
@@ -2307,8 +2307,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xrange(
         key: string,
-        start: StreamRangeBound,
-        end: StreamRangeBound,
+        start: ScoreBoundary<string>,
+        end: ScoreBoundary<string>,
         count?: number,
     ): T {
         return this.addAndReturn(createXRange(key, start, end, count));

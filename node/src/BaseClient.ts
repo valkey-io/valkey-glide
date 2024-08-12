@@ -2826,11 +2826,11 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param start - The starting stream ID bound for the range.
-     *     - Use `id` to specify a stream ID.
+     *     - Use `value` to specify a stream ID.
      *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
      *     - Use `-` to start with the minimum available ID.
      * @param end - The ending stream ID bound for the range.
-     *     - Use `id` to specify a stream ID.
+     *     - Use `value` to specify a stream ID.
      *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
      *     - Use `+` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
@@ -2852,8 +2852,8 @@ export class BaseClient {
      */
     public async xrange(
         key: string,
-        start: StreamRangeBound,
-        end: StreamRangeBound,
+        start: ScoreBoundary<string>,
+        end: ScoreBoundary<string>,
         count?: number,
     ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
