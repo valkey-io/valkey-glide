@@ -668,9 +668,9 @@ export class GlideClusterClient extends BaseClient {
      * removes the `destination` key first if it already exists, otherwise performs no action.
      *
      * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @remarks Since Valkey version 6.2.0.
      *
-     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the

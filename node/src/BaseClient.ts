@@ -296,12 +296,12 @@ class PointerResponse {
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
     /**
-     * The username that will be used for authenticating connections to the Redis servers.
+     * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
      */
     username?: string;
     /**
-     * The password that will be used for authenticating connections to the Redis servers.
+     * The password that will be used for authenticating connections to the Valkey servers.
      */
     password: string;
 };
@@ -1085,8 +1085,8 @@ export class BaseClient {
     /** Retrieve the values of multiple keys.
      *
      * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
-     *
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
      * @param keys - A list of keys to retrieve values for.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
@@ -1107,8 +1107,8 @@ export class BaseClient {
     /** Set multiple keys to multiple values in a single operation.
      *
      * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
-     *
      * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
+     *
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns always "OK".
      *
@@ -1251,8 +1251,8 @@ export class BaseClient {
      * `destination`.
      *
      * @see {@link https://valkey.io/commands/bitop/|valkey.io} for more details.
-     *
      * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     *
      * @param operation - The bitwise operation to perform.
      * @param destination - The key that will store the resulting string.
      * @param keys - The list of keys to perform the bitwise operation on.
@@ -1446,7 +1446,6 @@ export class BaseClient {
      * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
      *
      * @see {@link https://valkey.io/commands/bitfield_ro/|valkey.io} for more details.
-     *
      * @remarks Since Valkey version 6.0.0.
      *
      * @param key - The key of the string.
@@ -2086,9 +2085,8 @@ export class BaseClient {
      * `BLMOVE` is the blocking variant of {@link lmove}.
      *
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
-     * @remarks
-     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
-     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+     * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * @remarks `BLMOVE` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Valkey Glide Wiki} for more details and best practices.
      * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
@@ -3009,9 +3007,9 @@ export class BaseClient {
     }
 
     /** Invokes a Lua script with its keys and arguments.
-     * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+     * This method simplifies the process of invoking scripts on a Valkey server by using an object that represents a Lua script.
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
-     * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
+     * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
      *
      * @see {@link https://valkey.io/commands/script-load/} and {@link https://valkey.io/commands/evalsha/} for details.
      *
@@ -4788,8 +4786,8 @@ export class BaseClient {
      * If `newkey` already exists it is overwritten.
      *
      * @see {@link https://valkey.io/commands/rename/|valkey.io} for more details.
-     *
      * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
@@ -4810,8 +4808,8 @@ export class BaseClient {
      * Renames `key` to `newkey` if `newkey` does not yet exist.
      *
      * @see {@link https://valkey.io/commands/renamenx/|valkey.io} for more details.
-     *
      * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
@@ -4835,9 +4833,8 @@ export class BaseClient {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see {@link https://valkey.io/commands/brpop/|valkey.io} for more details.
-     * @remarks
-     * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -4864,9 +4861,8 @@ export class BaseClient {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see {@link https://valkey.io/commands/blpop/|valkey.io} for more details.
-     * @remarks
-     * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -4955,7 +4951,7 @@ export class BaseClient {
         return this.createWritePromise(createPfMerge(destination, sourceKeys));
     }
 
-    /** Returns the internal encoding for the Redis object stored at `key`.
+    /** Returns the internal encoding for the Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
@@ -4972,7 +4968,7 @@ export class BaseClient {
         return this.createWritePromise(createObjectEncoding(key));
     }
 
-    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+    /** Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
@@ -5392,10 +5388,8 @@ export class BaseClient {
      * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
      *
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for more details.
-     * @remarks
-     *      1. When in cluster mode, all `keys` must map to the same hash slot.
-     *      2. `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
-     *         for more details and best practices.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | Valkey Glide Wiki} for more details and best practices.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param keys - The keys of the sorted sets.

@@ -1067,11 +1067,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * `BLMOVE` is the blocking variant of {@link lmove}.
      *
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
+     * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * @remarks `BLMOVE` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Valkey Glide Wiki} for more details and best practices.
      * @remarks Since Valkey version 6.2.0.
-     *
-     * @remarks
-     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
-     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -3158,10 +3156,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
      *
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for details.
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | Valkey Glide Wiki} for more details and best practices.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
-     * for more details and best practices.
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
@@ -3387,9 +3384,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops one or more elements from the first non-empty list from the provided `keys`.
      *
      * @see {@link https://valkey.io/commands/lmpop/|valkey.io} for details.
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param count - (Optional) The maximum number of popped elements.
@@ -3554,8 +3551,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
      *
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     *
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
      * @param options - (Optional) {@link SortOptions}.
@@ -3692,8 +3689,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
      *
      * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
-     *
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
      * @param options - (Optional) {@link SortClusterOptions}.
