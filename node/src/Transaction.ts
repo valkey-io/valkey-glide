@@ -5,7 +5,7 @@
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ReadFrom,
 } from "./BaseClient";
 
 import {
@@ -383,7 +383,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      */
-    public ping(message?: string): T {
+    public ping(message?: GlideString): T {
         return this.addAndReturn(createPing(message));
     }
 

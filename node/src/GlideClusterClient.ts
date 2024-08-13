@@ -424,9 +424,14 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(message?: string, route?: Routes): Promise<string> {
-        return this.createWritePromise(createPing(message), {
-            route: toProtobufRoute(route),
+    public ping(options?: {
+        message?: GlideString;
+        route?: Routes;
+        decoder?: Decoder;
+    }): Promise<GlideString> {
+        return this.createWritePromise(createPing(options?.message), {
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 

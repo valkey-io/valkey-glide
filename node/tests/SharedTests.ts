@@ -472,8 +472,21 @@ export function runBaseTests<Context>(config: {
         `ping test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
+                const pongEncoded = Buffer.from("PONG");
+                const helloEncoded = Buffer.from("Hello");
                 expect(await client.ping()).toEqual("PONG");
-                expect(await client.ping("Hello")).toEqual("Hello");
+                expect(await client.ping({ message: "Hello" })).toEqual(
+                    "Hello",
+                );
+                expect(await client.ping({ decoder: Decoder.Bytes })).toEqual(
+                    pongEncoded,
+                );
+                expect(
+                    await client.ping({
+                        message: "Hello",
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(helloEncoded);
             }, protocol);
         },
         config.timeout,

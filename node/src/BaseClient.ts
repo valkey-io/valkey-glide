@@ -932,7 +932,10 @@ export class BaseClient {
      * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
      * ```
      */
-    public get(key: string, decoder?: Decoder): Promise<GlideString | null> {
+    public get(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(createGet(key), { decoder: decoder });
     }
 
