@@ -67,6 +67,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createExists,
     createExpire,
     createExpireAt,
@@ -136,6 +137,7 @@ import {
     createRPushX,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -1046,6 +1048,57 @@ export class BaseClient {
      */
     public del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * See https://valkey.io/commands/dump/ for details.
+     *
+     * @param key - The key of the set.
+     * @returns The serialized value of a set. If `key` does not exist, `null` will be returned.
+     *
+     * @example
+     * ```typescript
+     * let result = await client.dump("myKey");
+     * console.log(result); // Output: the serialized value of "myKey"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * result = await client.dump("nonExistingKey");
+     * console.log(result); // Output: `null`
+     * ```
+     */
+    public dump(key: GlideString): Promise<GlideString | null> {
+        return this.createWritePromise(createDump(key), {
+            decoder: Decoder.Bytes,
+        });
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * See https://valkey.io/commands/restore/ for details.
+     *
+     * @param key - The key of the set.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value.
+     * @returns Return "OK" if successfully create a `key` with a `value`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value);
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public restore(
+        key: GlideString,
+        ttl: number,
+        value: GlideString,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createRestore(key, ttl, value));
     }
 
     /** Retrieve the values of multiple keys.

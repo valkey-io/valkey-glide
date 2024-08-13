@@ -29,6 +29,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideString,
     InfScoreBoundary,
     InfoOptions,
     InsertPosition,
@@ -5278,6 +5279,92 @@ export function runBaseTests<Context>(config: {
                 expect(await client.renamenx(key2, key3)).toEqual(false);
                 // sanity check
                 expect(await client.get(key3)).toEqual("key3");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "dump and restore test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const key3 = "{key}-3" + uuidv4();
+                const key4 = "{key}-4" + uuidv4();
+                const nonExistingkey = "{key}-5" + uuidv4();
+                const value = "orange";
+                const valueEncode = Buffer.from(value);
+
+                expect(await client.set(key1, value)).toEqual("OK");
+
+                // Dump non-existing key
+                let data = await client.dump(nonExistingkey);
+                expect(data).toBeNull();
+
+                // Dump existing key
+                data = await client.dump(key1);
+                expect(data).not.toBeNull();
+
+                // Restore to a new key
+                if (data != null) {
+                    expect(await client.restore(key2, 0, data)).toEqual("OK");
+                }
+
+                expect(await client.get(key2, Decoder.String)).toEqual(value);
+                expect(await client.get(key2, Decoder.Bytes)).toEqual(
+                    valueEncode,
+                );
+
+                //transaction tests
+                let response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction().dump(key1),
+                              Decoder.Bytes,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction().dump(key1),
+                              { decoder: Decoder.Bytes },
+                          );
+                expect(response?.[0]).not.toBeNull();
+                data = response?.[0] as GlideString;
+
+                // restore with `String` exec decoder
+                response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction()
+                                  .restore(key3, 0, data)
+                                  .get(key3),
+                              Decoder.String,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction()
+                                  .restore(key3, 0, data)
+                                  .get(key3),
+                              { decoder: Decoder.String },
+                          );
+                expect(response?.[0]).toEqual("OK");
+                expect(response?.[1]).toEqual(value);
+
+                // restore with `Bytes` exec decoder
+                response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              Decoder.Bytes,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              { decoder: Decoder.Bytes },
+                          );
+                expect(response?.[0]).toEqual("OK");
+                expect(response?.[1]).toEqual(valueEncode);
             }, protocol);
         },
         config.timeout,

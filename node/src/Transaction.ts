@@ -83,6 +83,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createEcho,
     createExists,
     createExpire,
@@ -169,6 +170,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -382,6 +384,35 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public del(keys: string[]): T {
         return this.addAndReturn(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * See https://valkey.io/commands/dump/ for details.
+     *
+     * @param key - The key of the set.
+     *
+     * Command Response - The serialized value of a set. If `key` does not exist, `null` will be returned.
+     */
+    public dump(key: GlideString): T {
+        return this.addAndReturn(createDump(key));
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * See https://valkey.io/commands/restore/ for details.
+     *
+     * @param key - The key of the set.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value.
+     *
+     * Command Response - Return "OK" if successfully create a `key` with a `value`.
+     */
+    public restore(key: GlideString, ttl: number, value: GlideString): T {
+        return this.addAndReturn(createRestore(key, ttl, value));
     }
 
     /** Get the name of the connection on which the transaction is being executed.

@@ -2793,6 +2793,24 @@ export function createMove(
 }
 
 /**
+ * @internal
+ */
+export function createDump(key: GlideString): command_request.Command {
+    return createCommand(RequestType.Dump, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createRestore(
+    key: GlideString,
+    ttl: number,
+    value: GlideString,
+): command_request.Command {
+    return createCommand(RequestType.Restore, [key, ttl.toString(), value]);
+}
+
+/**
  * Optional arguments to LPOS command.
  *
  * See https://valkey.io/commands/lpos/ for more details.
