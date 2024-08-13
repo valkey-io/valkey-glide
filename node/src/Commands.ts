@@ -107,7 +107,7 @@ export function createGetDel(key: string): command_request.Command {
  * @internal
  */
 export function createGetRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -141,29 +141,29 @@ export type SetOptions = {
      * `KEEPTTL` in the Redis API.
      */
     | "keepExisting"
-        | {
-              type: /**
+    | {
+        type: /**
                * Set the specified expire time, in seconds. Equivalent to
                * `EX` in the Redis API.
                */
-              | "seconds"
-                  /**
-                   * Set the specified expire time, in milliseconds. Equivalent
-                   * to `PX` in the Redis API.
-                   */
-                  | "milliseconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in seconds. Equivalent to `EXAT` in the Redis API.
-                   */
-                  | "unixSeconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in milliseconds. Equivalent to `PXAT` in the Redis API.
-                   */
-                  | "unixMilliseconds";
-              count: number;
-          };
+        | "seconds"
+        /**
+         * Set the specified expire time, in milliseconds. Equivalent
+         * to `PX` in the Redis API.
+         */
+        | "milliseconds"
+        /**
+         * Set the specified Unix time at which the key will expire,
+         * in seconds. Equivalent to `EXAT` in the Redis API.
+         */
+        | "unixSeconds"
+        /**
+         * Set the specified Unix time at which the key will expire,
+         * in milliseconds. Equivalent to `PXAT` in the Redis API.
+         */
+        | "unixMilliseconds";
+        count: number;
+    };
 };
 
 /**
@@ -344,7 +344,7 @@ export function createConfigResetStat(): command_request.Command {
 /**
  * @internal
  */
-export function createMGet(keys: string[]): command_request.Command {
+export function createMGet(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.MGet, keys);
 }
 
@@ -426,7 +426,7 @@ export function createConfigSet(
  * @internal
  */
 export function createHGet(
-    key: string,
+    key: GlideString,
     field: string,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
@@ -1221,7 +1221,7 @@ export function createHLen(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createHVals(key: string): command_request.Command {
+export function createHVals(key: GlideString): command_request.Command {
     return createCommand(RequestType.HVals, [key]);
 }
 
@@ -1381,7 +1381,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -1565,15 +1565,15 @@ export type ScoreBoundary<T> =
      *  Represents a specific numeric score boundary in a sorted set.
      */
     | {
-          /**
-           * The score value.
-           */
-          value: T;
-          /**
-           * Whether the score value is inclusive. Defaults to True.
-           */
-          isInclusive?: boolean;
-      };
+        /**
+         * The score value.
+         */
+        value: T;
+        /**
+         * Whether the score value is inclusive. Defaults to True.
+         */
+        isInclusive?: boolean;
+    };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -1941,21 +1941,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-          /**
-           * Trim the stream according to entry ID.
-           * Equivalent to `MINID` in the Redis API.
-           */
-          method: "minid";
-          threshold: string;
-      }
+        /**
+         * Trim the stream according to entry ID.
+         * Equivalent to `MINID` in the Redis API.
+         */
+        method: "minid";
+        threshold: string;
+    }
     | {
-          /**
-           * Trim the stream according to length.
-           * Equivalent to `MAXLEN` in the Redis API.
-           */
-          method: "maxlen";
-          threshold: number;
-      }
+        /**
+         * Trim the stream according to length.
+         * Equivalent to `MAXLEN` in the Redis API.
+         */
+        method: "maxlen";
+        threshold: number;
+    }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -2401,8 +2401,8 @@ export function createXRead(
  */
 export type ReturnTypeXinfoStream = {
     [key: string]:
-        | StreamEntries
-        | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
+    | StreamEntries
+    | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
 };
 
 /**
@@ -3518,7 +3518,7 @@ export function createSetRange(
 
 /** @internal */
 export function createAppend(
-    key: string,
+    key: GlideString,
     value: string,
 ): command_request.Command {
     return createCommand(RequestType.Append, [key, value]);
