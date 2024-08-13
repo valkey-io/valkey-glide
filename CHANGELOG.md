@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
 * Node: Added XPENDING commands ([#2085](https://github.com/valkey-io/valkey-glide/pull/2085))
 * Node: Added XINFO CONSUMERS command ([#2093](https://github.com/valkey-io/valkey-glide/pull/2093))

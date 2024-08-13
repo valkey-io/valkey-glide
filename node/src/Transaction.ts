@@ -56,6 +56,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
@@ -210,6 +211,7 @@ import {
     createXLen,
     createXPending,
     createXRead,
+    createXReadGroup,
     createXTrim,
     createZAdd,
     createZCard,
@@ -2288,18 +2290,43 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads entries from the given streams.
+     *
      * See https://valkey.io/commands/xread/ for more details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
+     * @param keys_and_ids - Pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     * @param options - (Optional) Parameters detailing how to read the stream.
      *
-     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * See https://valkey.io/commands/xreadgroup/ for more details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - Pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     *     Use the special id of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream.
+     *
+     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**

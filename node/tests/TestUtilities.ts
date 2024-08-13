@@ -1040,17 +1040,9 @@ export async function transactionTest(
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.customCommand([
-        "xreadgroup",
-        "group",
-        groupName1,
-        consumer,
-        "STREAMS",
-        key9,
-        ">",
-    ]);
+    baseTransaction.xreadgroup(groupName1, consumer, { [key9]: ">" });
     responseData.push([
-        "xreadgroup(groupName1, consumer, key9, >)",
+        'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         { [key9]: { "0-2": [["field", "value2"]] } },
     ]);
     baseTransaction.xpending(key9, groupName1);

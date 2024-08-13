@@ -1628,9 +1628,7 @@ export type RangeByScore = SortedSetRange<number> & { type: "byScore" };
 export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
 /** Returns a string representation of a score boundary as a command argument. */
-function getScoreBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
-): string {
+function getScoreBoundaryArg(score: ScoreBoundary<number>): string {
     if (typeof score === "string") {
         // InfScoreBoundary
         return score + "inf";
@@ -1644,35 +1642,31 @@ function getScoreBoundaryArg(
 }
 
 /** Returns a string representation of a lex boundary as a command argument. */
-function getLexBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
-): string {
+function getLexBoundaryArg(score: ScoreBoundary<string>): string {
     if (typeof score === "string") {
         // InfScoreBoundary
         return score;
     }
 
     if (score.isInclusive == false) {
-        return "(" + score.value.toString();
+        return "(" + score.value;
     }
 
-    return "[" + score.value.toString();
+    return "[" + score.value;
 }
 
 /** Returns a string representation of a stream boundary as a command argument. */
-function getStreamBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
-): string {
+function getStreamBoundaryArg(score: ScoreBoundary<string>): string {
     if (typeof score === "string") {
         // InfScoreBoundary
         return score;
     }
 
     if (score.isInclusive == false) {
-        return "(" + score.value.toString();
+        return "(" + score.value;
     }
 
-    return score.value.toString();
+    return score.value;
 }
 
 function createZRangeArgs(
@@ -2338,6 +2332,7 @@ export enum FlushMode {
     ASYNC = "ASYNC",
 }
 
+/** Optional arguments for {@link BaseClient.xread|xread} command. */
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
@@ -2352,7 +2347,18 @@ export type StreamReadOptions = {
     count?: number;
 };
 
-function addReadOptions(options: StreamReadOptions, args: string[]) {
+/** Optional arguments for {@link BaseClient.xreadgroup|xreadgroup} command. */
+export type StreamReadGroupOptions = StreamReadOptions & {
+    /**
+     * If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+     * acknowledging the message when it is read.
+     */
+    noAck?: boolean;
+};
+
+function addReadOptions(options: StreamReadOptions): string[] {
+    const args = [];
+
     if (options.count !== undefined) {
         args.push("COUNT");
         args.push(options.count.toString());
@@ -2362,20 +2368,22 @@ function addReadOptions(options: StreamReadOptions, args: string[]) {
         args.push("BLOCK");
         args.push(options.block.toString());
     }
+
+    return args;
 }
 
-function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
-    args.push("STREAMS");
+function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
+    const args = ["STREAMS"];
 
-    const pairs = Object.entries(keys_and_ids);
-
-    for (const [key] of pairs) {
+    for (const key of Object.keys(keys_and_ids)) {
         args.push(key);
     }
 
-    for (const [, id] of pairs) {
+    for (const id of Object.values(keys_and_ids)) {
         args.push(id);
     }
+
+    return args;
 }
 
 /**
@@ -2385,15 +2393,34 @@ export function createXRead(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
 ): command_request.Command {
-    const args: string[] = [];
+    let args: string[] = [];
 
     if (options) {
-        addReadOptions(options, args);
+        args = addReadOptions(options);
     }
 
-    addStreamsArgs(keys_and_ids, args);
+    args = args.concat(addStreamsArgs(keys_and_ids));
 
     return createCommand(RequestType.XRead, args);
+}
+
+/** @internal */
+export function createXReadGroup(
+    group: string,
+    consumer: string,
+    keys_and_ids: Record<string, string>,
+    options?: StreamReadGroupOptions,
+): command_request.Command {
+    let args: string[] = ["GROUP", group, consumer];
+
+    if (options) {
+        args = args.concat(addReadOptions(options));
+        if (options.noAck) args.push("NOACK");
+    }
+
+    args = args.concat(addStreamsArgs(keys_and_ids));
+
+    return createCommand(RequestType.XReadGroup, args);
 }
 
 /**
@@ -2440,11 +2467,11 @@ export function createXLen(key: string): command_request.Command {
 
 /** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
 export type StreamPendingOptions = {
-    /** Filter pending entries by their idle time - in milliseconds */
+    /** Filter pending entries by their idle time - in milliseconds. Available since Valkey 6.2.0. */
     minIdleTime?: number;
-    /** Starting stream ID bound for range. */
+    /** Starting stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
     start: ScoreBoundary<string>;
-    /** Ending stream ID bound for range. */
+    /** Ending stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
     end: ScoreBoundary<string>;
     /** Limit the number of messages returned. */
     count: number;

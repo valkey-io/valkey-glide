@@ -49,6 +49,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     ZAddOptions,
@@ -174,6 +175,7 @@ import {
     createXLen,
     createXPending,
     createXRead,
+    createXReadGroup,
     createXTrim,
     createZAdd,
     createZCard,
@@ -3968,11 +3970,13 @@ export class BaseClient {
 
     /**
      * Reads entries from the given streams.
+     *
      * See https://valkey.io/commands/xread/ for more details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
-     * @returns A map of stream keys, to a map of stream ids, to an array of entries.
+     * @param keys_and_ids - Pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     * @param options - (Optional) Parameters detailing how to read the stream.
+     * @returns A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
+     *
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
@@ -3994,6 +3998,49 @@ export class BaseClient {
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * See https://valkey.io/commands/xreadgroup/ for more details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - Pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
+     *     Use the special id of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream.
+     * @returns A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries. Returns `null` if there is no stream that can be served.
+     *
+     * @example
+     * ```typescript
+     * const streamResults = await client.xreadgroup("my_group", "my_consumer", {"my_stream": "0-0", "writers": "0-0", "readers", ">"});
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": null,                                          // entry was deleted
+     * //     },
+     * //     "readers": {}                                                         // stream is empty
+     * // }
+     * ```
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): Promise<Record<
+        string,
+        Record<string, [string, string][] | null>
+    > | null> {
+        return this.createWritePromise(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**

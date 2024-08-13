@@ -310,7 +310,6 @@ describe("SocketConnectionInternals", () => {
                     );
                 });
                 const result = await connection.get("foo", Decoder.String);
-                console.log(result);
                 expect(result).toEqual(expected);
             });
         };
