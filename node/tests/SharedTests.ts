@@ -291,8 +291,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info([InfoOptions.Commandstats]),
-                          ).join();
+                            await client.info([InfoOptions.Commandstats]),
+                        ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -300,8 +300,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info([InfoOptions.Commandstats]),
-                          ).join();
+                            await client.info([InfoOptions.Commandstats]),
+                        ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -328,8 +328,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.exec(new Transaction().lastsave())
                         : await client.exec(
-                              new ClusterTransaction().lastsave(),
-                          );
+                            new ClusterTransaction().lastsave(),
+                        );
                 expect(response?.[0]).toBeGreaterThan(yesterday);
             }, protocol);
         },
@@ -1197,6 +1197,7 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const nonStringKey = uuidv4();
+                const valueEncoded = Buffer.from("This is a string");
 
                 expect(await client.set(key, "This is a string")).toEqual("OK");
                 expect(await client.getrange(key, 0, 3)).toEqual("This");
@@ -1204,6 +1205,10 @@ export function runBaseTests<Context>(config: {
                 expect(await client.getrange(key, 0, -1)).toEqual(
                     "This is a string",
                 );
+
+                // range of binary buffer
+                expect(await client.set(key, "This is a string")).toEqual("OK");
+                expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(valueEncoded.subarray(0, 3));
 
                 // out of range
                 expect(await client.getrange(key, 10, 100)).toEqual("string");
@@ -5946,13 +5951,13 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -5972,13 +5977,13 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
