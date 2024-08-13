@@ -6,16 +6,17 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient } from "src/BaseClient";
+import { BaseClient, Decoder } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClusterClient } from "src/GlideClusterClient";
+import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
 import RequestType = command_request.RequestType;
 
-function isLargeCommand(args: BulkString[]) {
+function isLargeCommand(args: GlideString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
@@ -29,12 +30,10 @@ function isLargeCommand(args: BulkString[]) {
     return false;
 }
 
-type BulkString = string | Uint8Array;
-
 /**
  * Convert a string array into Uint8Array[]
  */
-function toBuffersArray(args: BulkString[]) {
+function toBuffersArray(args: GlideString[]) {
     const argsBytes: Uint8Array[] = [];
 
     for (const arg of args) {
@@ -68,7 +67,7 @@ export function parseInfoResponse(response: string): Record<string, string> {
 
 function createCommand(
     requestType: command_request.RequestType,
-    args: BulkString[],
+    args: GlideString[],
 ): command_request.Command {
     const singleCommand = command_request.Command.create({
         requestType,
@@ -171,8 +170,8 @@ export type SetOptions = {
  * @internal
  */
 export function createSet(
-    key: BulkString,
-    value: BulkString,
+    key: GlideString,
+    value: GlideString,
     options?: SetOptions,
 ): command_request.Command {
     const args = [key, value];
@@ -1182,7 +1181,7 @@ export function createSRandMember(
 /**
  * @internal
  */
-export function createCustomCommand(args: string[]) {
+export function createCustomCommand(args: GlideString[]) {
     return createCommand(RequestType.CustomCommand, args);
 }
 
@@ -2514,9 +2513,6 @@ export type StreamClaimOptions = {
      * otherwise the IDs of non-existing messages are ignored.
      */
     isForce?: boolean;
-
-    /** The last ID of the entry which should be claimed. */
-    lastId?: string;
 };
 
 /** @internal */
@@ -2539,11 +2535,32 @@ export function createXClaim(
         if (options.retryCount !== undefined)
             args.push("RETRYCOUNT", options.retryCount.toString());
         if (options.isForce) args.push("FORCE");
-        if (options.lastId) args.push("LASTID", options.lastId);
     }
 
     if (justId) args.push("JUSTID");
     return createCommand(RequestType.XClaim, args);
+}
+
+/** @internal */
+export function createXAutoClaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    start: string,
+    count?: number,
+    justId?: boolean,
+): command_request.Command {
+    const args = [
+        key,
+        group,
+        consumer,
+        minIdleTime.toString(),
+        start.toString(),
+    ];
+    if (count !== undefined) args.push("COUNT", count.toString());
+    if (justId) args.push("JUSTID");
+    return createCommand(RequestType.XAutoClaim, args);
 }
 
 /**
@@ -2688,6 +2705,12 @@ export type LolwutOptions = {
      *  For version `6`, those are number of columns and number of lines.
      */
     parameters?: number[];
+    /**
+     * An optional argument specifies the type of decoding.
+     *  Use Decoder.String to get the response as a String.
+     *  Use Decoder.Bytes to get the response in a buffer.
+     */
+    decoder?: Decoder;
 };
 
 /**
@@ -3338,6 +3361,23 @@ export function createHRandField(
 /**
  * @internal
  */
+export function createHScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.HScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRandMember(
     key: string,
     count?: number,
@@ -3432,6 +3472,23 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
+    const args: string[] = [];
+
+    if (options.match) {
+        args.push("MATCH", options.match);
+    }
+
+    if (options.count !== undefined) {
+        args.push("COUNT", options.count.toString());
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
 export function createZScan(
     key: string,
     cursor: string,
@@ -3440,13 +3497,7 @@ export function createZScan(
     let args: string[] = [key, cursor];
 
     if (options) {
-        if (options.match) {
-            args = args.concat("MATCH", options.match);
-        }
-
-        if (options.count !== undefined) {
-            args = args.concat("COUNT", options.count.toString());
-        }
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
     }
 
     return createCommand(RequestType.ZScan, args);
