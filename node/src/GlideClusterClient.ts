@@ -36,6 +36,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionKill,
     createFunctionList,
     createFunctionLoad,
     createFunctionStats,
@@ -956,6 +957,28 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<FunctionStatsResponse>> {
         return this.createWritePromise(createFunctionStats(), {
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
+     * Kills a function that is currently executing.
+     * `FUNCTION KILL` terminates read-only functions only.
+     *
+     * See https://valkey.io/commands/function-kill/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to all primary nodes.
+     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @example
+     * ```typescript
+     * await client.functionKill();
+     * ```
+     */
+    public async functionKill(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createFunctionKill(), {
             route: toProtobufRoute(route),
         });
     }
