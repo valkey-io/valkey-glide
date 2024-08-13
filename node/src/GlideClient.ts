@@ -34,6 +34,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionKill,
     createFunctionList,
     createFunctionLoad,
     createFunctionStats,
@@ -632,6 +633,24 @@ export class GlideClient extends BaseClient {
      */
     public async functionStats(): Promise<FunctionStatsResponse> {
         return this.createWritePromise(createFunctionStats());
+    }
+
+    /**
+     * Kills a function that is currently executing.
+     * `FUNCTION KILL` terminates read-only functions only.
+     *
+     * See https://valkey.io/commands/function-kill/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @example
+     * ```typescript
+     * await client.functionKill();
+     * ```
+     */
+    public async functionKill(): Promise<"OK"> {
+        return this.createWritePromise(createFunctionKill());
     }
 
     /**

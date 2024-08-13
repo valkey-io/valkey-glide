@@ -323,8 +323,8 @@ public class TestUtilities {
     }
 
     /**
-     * Create a lua lib with a RO function which runs an endless loop up to timeout sec.<br>
-     * Execution takes at least 5 sec regardless of the timeout configured.<br>
+     * Create a lua lib with a function which runs an endless loop up to timeout sec.<br>
+     * Execution takes at least 5 sec regardless of the timeout configured.
      */
     public static String createLuaLibWithLongRunningFunction(
             String libName, String funcName, int timeout, boolean readOnly) {
