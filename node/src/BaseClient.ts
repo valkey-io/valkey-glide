@@ -955,7 +955,7 @@ export class BaseClient {
      */
     public async getex(
         key: string,
-        options?: "persist" | { unit: TimeUnit; duration: number },
+        options?: "persist" | { type: TimeUnit; duration: number },
     ): Promise<string | null> {
         return this.createWritePromise(createGetEx(key, options));
     }

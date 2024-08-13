@@ -20,6 +20,9 @@ function isLargeCommand(args: GlideString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
+        if (arg == undefined) {
+            console.log("came here");
+        }
         lenSum += arg.length;
 
         if (lenSum >= MAX_REQUEST_ARGS_LEN) {
@@ -142,7 +145,7 @@ export type SetOptions = {
      */
     | "keepExisting"
         | {
-              unit: TimeUnit;
+              type: TimeUnit;
               count: number;
           };
 };
@@ -168,22 +171,23 @@ export function createSet(
             args.push("GET");
         }
 
-        if (
-            options.expiry &&
-            options.expiry !== "keepExisting" &&
-            !Number.isInteger(options.expiry.count)
-        ) {
-            throw new Error(
-                `Received expiry '${JSON.stringify(
-                    options.expiry,
-                )}'. Count must be an integer`,
-            );
-        }
+        if (options.expiry) {
+            if (
+                options.expiry !== "keepExisting" &&
+                !Number.isInteger(options.expiry.count)
+            ) {
+                throw new Error(
+                    `Received expiry '${JSON.stringify(
+                        options.expiry,
+                    )}'. Count must be an integer`,
+                );
+            }
 
-        if (options.expiry === "keepExisting") {
-            args.push("KEEPTTL");
-        } else if (options.expiry !== undefined) {
-            args.push(options.expiry.unit, options.expiry.count.toString());
+            if (options.expiry === "keepExisting") {
+                args.push("KEEPTTL");
+            } else {
+                args.push(options.expiry.type, options.expiry.count.toString());
+            }
         }
     }
 
@@ -3635,7 +3639,7 @@ export enum TimeUnit {
  */
 export function createGetEx(
     key: string,
-    options?: "persist" | { unit: TimeUnit; duration: number },
+    options?: "persist" | { type: TimeUnit; duration: number },
 ): command_request.Command {
     const args = [key];
 
@@ -3651,7 +3655,7 @@ export function createGetEx(
         if (options === "persist") {
             args.push("PERSIST");
         } else {
-            args.push(options.unit, options.duration.toString());
+            args.push(options.type, options.duration.toString());
         }
     }
 

@@ -320,7 +320,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public getex(
         key: string,
-        options?: "persist" | { unit: TimeUnit; duration: number },
+        options?: "persist" | { type: TimeUnit; duration: number },
     ): T {
         return this.addAndReturn(createGetEx(key, options));
     }

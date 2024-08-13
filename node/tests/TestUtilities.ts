@@ -615,7 +615,7 @@ export async function transactionTest(
     if (gte(version, "6.2.0")) {
         baseTransaction.getex(key1);
         responseData.push(["getex(key1)", "bar"]);
-        baseTransaction.getex(key1, { unit: TimeUnit.seconds, duration: 1 });
+        baseTransaction.getex(key1, { type: TimeUnit.seconds, duration: 1 });
         responseData.push([
             'getex(key1, {expiry: { unit: "seconds", count: 1 }})',
             "bar",
