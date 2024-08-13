@@ -35,6 +35,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    ReturnType,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -8548,6 +8549,60 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.xgroupDestroy(stringKey, groupName1),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands never time out %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key1 = "{blocking}-1-" + uuidv4();
+                const key2 = "{blocking}-1-" + uuidv4();
+                const keyz = [key1, key2];
+
+                // TODO: wait, xread, xreadgroup
+                const promiseList: Promise<ReturnType>[] = [
+                    client.bzpopmax(keyz, 0),
+                    client.bzpopmin(keyz, 0),
+                    client.blpop(keyz, 0),
+                    client.brpop(keyz, 0),
+                ];
+
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    promiseList.push(
+                        client.blmove(
+                            key1,
+                            key2,
+                            ListDirection.LEFT,
+                            ListDirection.LEFT,
+                            0,
+                        ),
+                    );
+                }
+
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    promiseList.push(
+                        client.blmpop(keyz, ListDirection.LEFT, 0),
+                        client.bzmpop(keyz, ScoreFilter.MAX, 0),
+                    );
+                }
+
+                try {
+                    for (const promise of promiseList) {
+                        const timeoutPromise = new Promise((resolve) => {
+                            setTimeout(resolve, 500);
+                        });
+                        await Promise.race([promise, timeoutPromise]);
+                    }
+                } finally {
+                    for (const promise of promiseList) {
+                        await Promise.resolve([promise]);
+                    }
+
+                    client.close();
+                }
             }, protocol);
         },
         config.timeout,
