@@ -32,6 +32,7 @@ import {
     RequestError,
     ReturnType,
     SlotKeyTypes,
+    TimeUnit,
 } from "..";
 import {
     command_request,
@@ -545,7 +546,7 @@ describe("SocketConnectionInternals", () => {
             const request1 = connection.set("foo", "bar", {
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
-                expiry: { type: "seconds", count: 10 },
+                expiry: { unit: TimeUnit.seconds, count: 10 },
             });
 
             expect(await request1).toMatch("OK");

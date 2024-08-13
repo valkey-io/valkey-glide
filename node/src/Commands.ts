@@ -142,26 +142,7 @@ export type SetOptions = {
      */
     | "keepExisting"
         | {
-              type: /**
-               * Set the specified expire time, in seconds. Equivalent to
-               * `EX` in the Redis API.
-               */
-              | "seconds"
-                  /**
-                   * Set the specified expire time, in milliseconds. Equivalent
-                   * to `PX` in the Redis API.
-                   */
-                  | "milliseconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in seconds. Equivalent to `EXAT` in the Redis API.
-                   */
-                  | "unixSeconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in milliseconds. Equivalent to `PXAT` in the Redis API.
-                   */
-                  | "unixMilliseconds";
+              unit: TimeUnit;
               count: number;
           };
 };
@@ -201,14 +182,8 @@ export function createSet(
 
         if (options.expiry === "keepExisting") {
             args.push("KEEPTTL");
-        } else if (options.expiry?.type === "seconds") {
-            args.push("EX", options.expiry.count.toString());
-        } else if (options.expiry?.type === "milliseconds") {
-            args.push("PX", options.expiry.count.toString());
-        } else if (options.expiry?.type === "unixSeconds") {
-            args.push("EXAT", options.expiry.count.toString());
-        } else if (options.expiry?.type === "unixMilliseconds") {
-            args.push("PXAT", options.expiry.count.toString());
+        } else if (options.expiry !== undefined) {
+            args.push(options.expiry.unit, options.expiry.count.toString());
         }
     }
 
@@ -3630,10 +3605,11 @@ export function createBZPopMin(
 }
 
 /**
- * Optional arguments to getex command.
+ * Time unit representation which is used in optional arguments for {@link BaseClient.getex|getex} and {@link BaseClient.set|set} command.
  */
 export enum TimeUnit {
-    /* Set the specified expire time, in seconds. Equivalent to
+    /**
+     * Set the specified expire time, in seconds. Equivalent to
      * `EX` in the VALKEY API.
      */
     seconds = "EX",

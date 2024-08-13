@@ -5641,7 +5641,7 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const setResWithExpirySetMilli = await client.set(key, value, {
             expiry: {
-                type: "milliseconds",
+                unit: TimeUnit.milliseconds,
                 count: 500,
             },
         });
@@ -5651,7 +5651,7 @@ export function runBaseTests<Context>(config: {
 
         const setResWithExpirySec = await client.set(key, value, {
             expiry: {
-                type: "seconds",
+                unit: TimeUnit.seconds,
                 count: 1,
             },
         });
@@ -5661,7 +5661,7 @@ export function runBaseTests<Context>(config: {
 
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
-                type: "unixSeconds",
+                unit: TimeUnit.unixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
         });
@@ -5683,7 +5683,7 @@ export function runBaseTests<Context>(config: {
         expect(getResExpire).toEqual(null);
         const setResWithExpiryWithUmilli = await client.set(key, value, {
             expiry: {
-                type: "unixMilliseconds",
+                unit: TimeUnit.unixMilliseconds,
                 count: Date.now() + 1000,
             },
         });
@@ -5775,7 +5775,7 @@ export function runBaseTests<Context>(config: {
         // * returns the old value
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
-                type: "unixSeconds",
+                unit: TimeUnit.unixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
             conditionalSet: "onlyIfExists",
@@ -5805,11 +5805,11 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | "seconds"
-                              | "milliseconds"
-                              | "unixSeconds"
-                              | "unixMilliseconds";
+                          unit:
+                              | TimeUnit.milliseconds
+                              | TimeUnit.seconds
+                              | TimeUnit.unixMilliseconds
+                              | TimeUnit.unixSeconds;
                           count: number;
                       },
                 conditionalSet: "onlyIfDoesNotExist",
@@ -5831,11 +5831,11 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | "seconds"
-                              | "milliseconds"
-                              | "unixSeconds"
-                              | "unixMilliseconds";
+                          unit:
+                              | TimeUnit.milliseconds
+                              | TimeUnit.seconds
+                              | TimeUnit.unixMilliseconds
+                              | TimeUnit.unixSeconds;
                           count: number;
                       },
 
