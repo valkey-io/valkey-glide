@@ -2513,9 +2513,6 @@ export type StreamClaimOptions = {
      * otherwise the IDs of non-existing messages are ignored.
      */
     isForce?: boolean;
-
-    /** The last ID of the entry which should be claimed. */
-    lastId?: string;
 };
 
 /** @internal */
@@ -2538,7 +2535,6 @@ export function createXClaim(
         if (options.retryCount !== undefined)
             args.push("RETRYCOUNT", options.retryCount.toString());
         if (options.isForce) args.push("FORCE");
-        if (options.lastId) args.push("LASTID", options.lastId);
     }
 
     if (justId) args.push("JUSTID");
