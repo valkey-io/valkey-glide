@@ -1032,7 +1032,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK'
      *
      * // Example usage of set method with conditional options and expiration
-     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { unit: TimeUnit.Seconds, count: 5 }});
+     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: TimeUnit.Seconds, count: 5 }});
      * console.log(result2); // Output: 'OK' - Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
      *
      * // Example usage of set method with conditional options and returning old value
