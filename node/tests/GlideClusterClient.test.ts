@@ -37,6 +37,7 @@ import {
     checkClusterResponse,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
+    createLuaLibWithLongRunningFunction,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -47,6 +48,7 @@ import {
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
+    waitForNotBusy,
 } from "./TestUtilities";
 type Context = {
     client: GlideClusterClient;
@@ -998,17 +1000,6 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
-                },
-            );
-        },
-    );
-
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "Protocol is RESP2 = %s",
-        (protocol) => {
-            describe.each([true, false])(
-                "Single node route = %s",
-                (singleNodeRoute) => {
                     it(
                         "function flush",
                         async () => {
@@ -1095,17 +1086,6 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
-                },
-            );
-        },
-    );
-
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "Protocol is RESP2 = %s",
-        (protocol) => {
-            describe.each([true, false])(
-                "Single node route = %s",
-                (singleNodeRoute) => {
                     it(
                         "function delete",
                         async () => {
@@ -1179,7 +1159,201 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
+                    it(
+                        "function kill with route",
+                        async () => {
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const config = getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                                10000,
+                            );
+                            const client =
+                                await GlideClusterClient.createClient(config);
+                            const testClient =
+                                await GlideClusterClient.createClient(config);
+
+                            try {
+                                const libName =
+                                    "function_kill_no_write_with_route_" +
+                                    singleNodeRoute;
+                                const funcName =
+                                    "deadlock_with_route_" + singleNodeRoute;
+                                const code =
+                                    createLuaLibWithLongRunningFunction(
+                                        libName,
+                                        funcName,
+                                        6,
+                                        true,
+                                    );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
+
+                                // nothing to kill
+                                await expect(
+                                    client.functionKill(route),
+                                ).rejects.toThrow(/notbusy/i);
+
+                                // load the lib
+                                expect(
+                                    await client.functionLoad(
+                                        code,
+                                        true,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+
+                                try {
+                                    // call the function without await
+                                    const promise = testClient
+                                        .fcallWithRoute(funcName, [], route)
+                                        .catch((e) =>
+                                            expect(
+                                                (e as Error).message,
+                                            ).toContain("Script killed"),
+                                        );
+
+                                    let killed = false;
+                                    let timeout = 4000;
+                                    await new Promise((resolve) =>
+                                        setTimeout(resolve, 1000),
+                                    );
+
+                                    while (timeout >= 0) {
+                                        try {
+                                            expect(
+                                                await client.functionKill(
+                                                    route,
+                                                ),
+                                            ).toEqual("OK");
+                                            killed = true;
+                                            break;
+                                        } catch {
+                                            // do nothing
+                                        }
+
+                                        await new Promise((resolve) =>
+                                            setTimeout(resolve, 500),
+                                        );
+                                        timeout -= 500;
+                                    }
+
+                                    expect(killed).toBeTruthy();
+                                    await promise;
+                                } finally {
+                                    await waitForNotBusy(client);
+                                }
+                            } finally {
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
+                                client.close();
+                                testClient.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
                 },
+            );
+            it(
+                "function kill key based write function",
+                async () => {
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+                    const config = getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        10000,
+                    );
+                    const client =
+                        await GlideClusterClient.createClient(config);
+                    const testClient =
+                        await GlideClusterClient.createClient(config);
+
+                    try {
+                        const libName =
+                            "function_kill_key_based_write_function";
+                        const funcName =
+                            "deadlock_write_function_with_key_based_route";
+                        const key = libName;
+                        const code = createLuaLibWithLongRunningFunction(
+                            libName,
+                            funcName,
+                            6,
+                            false,
+                        );
+
+                        const route: Routes = {
+                            type: "primarySlotKey",
+                            key: key,
+                        };
+                        expect(await client.functionFlush()).toEqual("OK");
+
+                        // nothing to kill
+                        await expect(
+                            client.functionKill(route),
+                        ).rejects.toThrow(/notbusy/i);
+
+                        // load the lib
+                        expect(
+                            await client.functionLoad(code, true, route),
+                        ).toEqual(libName);
+
+                        let promise = null;
+
+                        try {
+                            // call the function without await
+                            promise = testClient.fcall(funcName, [key], []);
+
+                            let foundUnkillable = false;
+                            let timeout = 4000;
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
+                            );
+
+                            while (timeout >= 0) {
+                                try {
+                                    // valkey kills a function with 5 sec delay
+                                    // but this will always throw an error in the test
+                                    await client.functionKill(route);
+                                } catch (err) {
+                                    // looking for an error with "unkillable" in the message
+                                    // at that point we can break the loop
+                                    if (
+                                        (err as Error).message
+                                            .toLowerCase()
+                                            .includes("unkillable")
+                                    ) {
+                                        foundUnkillable = true;
+                                        break;
+                                    }
+                                }
+
+                                await new Promise((resolve) =>
+                                    setTimeout(resolve, 500),
+                                );
+                                timeout -= 500;
+                            }
+
+                            expect(foundUnkillable).toBeTruthy();
+                        } finally {
+                            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                            // test to fail. Wait for the function to complete (we cannot kill it)
+                            expect(await promise).toContain("Timed out");
+                        }
+                    } finally {
+                        expect(await client.functionFlush()).toEqual("OK");
+                        client.close();
+                        testClient.close();
+                    }
+                },
+                TIMEOUT,
             );
         },
     );
