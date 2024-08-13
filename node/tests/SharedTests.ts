@@ -28,7 +28,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    InfScoreBoundary,
+    InfBoundary,
     InfoOptions,
     InsertPosition,
     ListDirection,
@@ -3453,8 +3453,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         key1,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(3);
                 expect(
@@ -3474,7 +3474,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         key1,
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.NegativeInfinity,
                         {
                             value: 3,
                         },
@@ -3483,7 +3483,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         key1,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                         {
                             value: 3,
                         },
@@ -3492,8 +3492,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         "nonExistingKey",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -3501,8 +3501,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zcount(
                         key2,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow();
             }, protocol);
@@ -3557,14 +3557,14 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(["one", "two"]);
                 const result = await client.zrangeWithScores(key, {
-                    start: InfScoreBoundary.NegativeInfinity,
-                    stop: InfScoreBoundary.PositiveInfinity,
+                    start: InfBoundary.NegativeInfinity,
+                    stop: InfBoundary.PositiveInfinity,
                     type: "byScore",
                 });
 
@@ -3580,7 +3580,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -3589,8 +3589,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -3600,7 +3600,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrange(
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3610,7 +3610,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3620,7 +3620,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrangeWithScores(
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3630,7 +3630,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeWithScores(key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3650,7 +3650,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -3658,8 +3658,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -3670,7 +3670,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -3681,7 +3681,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrange(
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
@@ -3691,7 +3691,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -3767,7 +3767,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3785,7 +3785,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -3804,8 +3804,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -3822,7 +3822,7 @@ export function runBaseTests<Context>(config: {
                         destkey,
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3832,7 +3832,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3854,7 +3854,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -3868,8 +3868,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -3887,7 +3887,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -3909,7 +3909,7 @@ export function runBaseTests<Context>(config: {
                         destkey,
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
@@ -3919,7 +3919,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -4776,8 +4776,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.xrange(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual({
                     [streamId1]: [["f1", "v1"]],
@@ -4788,8 +4788,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.xrange(
                         key,
-                        InfScoreBoundary.PositiveInfinity,
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual({});
 
@@ -4798,14 +4798,16 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(streamId3);
 
                 // get the newest entry
-                expect(
-                    await client.xrange(
-                        key,
-                        { isInclusive: false, value: streamId2 },
-                        { value: "5" },
-                        1,
-                    ),
-                ).toEqual({ [streamId3]: [["f3", "v3"]] });
+                if (!client.checkIfServerVersionLessThan("6.2.0")) {
+                    expect(
+                        await client.xrange(
+                            key,
+                            { isInclusive: false, value: streamId2 },
+                            { value: "5" },
+                            1,
+                        ),
+                    ).toEqual({ [streamId3]: [["f3", "v3"]] });
+                }
 
                 // xrange against an emptied stream
                 expect(
@@ -4814,8 +4816,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.xrange(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                         10,
                     ),
                 ).toEqual({});
@@ -4823,8 +4825,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.xrange(
                         nonExistingKey,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual({});
 
@@ -4832,16 +4834,16 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.xrange(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                         0,
                     ),
                 ).toEqual(null);
                 expect(
                     await client.xrange(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                         -1,
                     ),
                 ).toEqual(null);
@@ -4851,8 +4853,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.xrange(
                         stringKey,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
 
@@ -4861,13 +4863,13 @@ export function runBaseTests<Context>(config: {
                     client.xrange(
                         key,
                         { value: "not_a_stream_id" },
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
 
                 // invalid end bound
                 await expect(
-                    client.xrange(key, InfScoreBoundary.NegativeInfinity, {
+                    client.xrange(key, InfBoundary.NegativeInfinity, {
                         value: "not_a_stream_id",
                     }),
                 ).rejects.toThrow(RequestError);
@@ -4897,7 +4899,7 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByLex(
                         key,
                         { value: "d" },
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(1);
 
@@ -4906,15 +4908,15 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByLex(
                         key,
                         { value: "a" },
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(
                     await client.zremRangeByLex(
                         "nonExistingKey",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -4923,8 +4925,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zremRangeByLex(
                         stringKey,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
@@ -4952,15 +4954,15 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByScore(
                         key,
                         { value: 1 },
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(
                     await client.zremRangeByScore(
                         "nonExistingKey",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
             }, protocol);
@@ -4981,8 +4983,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zlexcount(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(3);
 
@@ -4991,7 +4993,7 @@ export function runBaseTests<Context>(config: {
                     await client.zlexcount(
                         key,
                         { value: "a", isInclusive: false },
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(2);
 
@@ -4999,7 +5001,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zlexcount(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.NegativeInfinity,
                         {
                             value: "c",
                             isInclusive: true,
@@ -5011,7 +5013,7 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zlexcount(
                         key,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                         {
                             value: "c",
                             isInclusive: true,
@@ -5023,8 +5025,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zlexcount(
                         "non_existing_key",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -5033,8 +5035,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zlexcount(
                         stringKey,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
@@ -7872,8 +7874,8 @@ export function runBaseTests<Context>(config: {
                 ]);
 
                 const result = await client.xpendingWithOptions(key, group, {
-                    start: InfScoreBoundary.NegativeInfinity,
-                    end: InfScoreBoundary.PositiveInfinity,
+                    start: InfBoundary.NegativeInfinity,
+                    end: InfBoundary.PositiveInfinity,
                     count: 1,
                     minIdleTime: 42,
                 });

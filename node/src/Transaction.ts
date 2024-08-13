@@ -20,6 +20,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     FlushMode,
@@ -45,7 +46,6 @@ import {
     RangeByLex,
     RangeByScore,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -1734,8 +1734,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcount(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): T {
         return this.addAndReturn(createZCount(key, minScore, maxScore));
     }
@@ -2037,8 +2037,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByLex(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): T {
         return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
     }
@@ -2056,8 +2056,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByScore(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): T {
         return this.addAndReturn(
             createZRemRangeByScore(key, minScore, maxScore),
@@ -2079,8 +2079,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zlexcount(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): T {
         return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
@@ -2307,8 +2307,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xrange(
         key: string,
-        start: ScoreBoundary<string>,
-        end: ScoreBoundary<string>,
+        start: Boundary<string>,
+        end: Boundary<string>,
         count?: number,
     ): T {
         return this.addAndReturn(createXRange(key, start, end, count));

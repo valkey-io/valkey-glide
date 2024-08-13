@@ -22,6 +22,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -41,7 +42,6 @@ import {
     RangeByLex,
     RangeByScore,
     ReturnTypeXinfoStream,
-    ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -2852,8 +2852,8 @@ export class BaseClient {
      */
     public async xrange(
         key: string,
-        start: ScoreBoundary<string>,
-        end: ScoreBoundary<string>,
+        start: Boundary<string>,
+        end: Boundary<string>,
         count?: number,
     ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
@@ -3156,7 +3156,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
@@ -3169,8 +3169,8 @@ export class BaseClient {
      */
     public zcount(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): Promise<number> {
         return this.createWritePromise(createZCount(key, minScore, maxScore));
     }
@@ -3200,7 +3200,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -3242,7 +3242,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -3288,7 +3288,7 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
@@ -3684,14 +3684,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
-     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfScoreBoundary.NegativeInfinity, { value: "e" });
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfBoundary.NegativeInfinity, { value: "e" });
      * console.log(result); // Output: 0 - Indicates that no elements were removed.
      * ```
      */
     public zremRangeByLex(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): Promise<number> {
         return this.createWritePromise(
             createZRemRangeByLex(key, minLex, maxLex),
@@ -3711,7 +3711,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
@@ -3724,8 +3724,8 @@ export class BaseClient {
      */
     public zremRangeByScore(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): Promise<number> {
         return this.createWritePromise(
             createZRemRangeByScore(key, minScore, maxScore),
@@ -3746,7 +3746,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
      * ```
      *
@@ -3758,8 +3758,8 @@ export class BaseClient {
      */
     public async zlexcount(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): Promise<number> {
         return this.createWritePromise(createZLexCount(key, minLex, maxLex));
     }
@@ -4011,7 +4011,7 @@ export class BaseClient {
      * ```typescript
      * console.log(await client.xpending("my_stream", "my_group"), {
      *     start: { value: "0-1", isInclusive: true },
-     *     end: InfScoreBoundary.PositiveInfinity,
+     *     end: InfBoundary.PositiveInfinity,
      *     count: 2,
      *     consumer: "consumer1"
      * }); // Output:
