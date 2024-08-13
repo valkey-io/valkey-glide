@@ -8562,12 +8562,16 @@ export function runBaseTests<Context>(config: {
                 const key2 = "{blocking}-1-" + uuidv4();
                 const keyz = [key1, key2];
 
-                // TODO: wait, xread, xreadgroup
+                // TODO: wait, xreadgroup
                 const promiseList: Promise<ReturnType>[] = [
                     client.bzpopmax(keyz, 0),
                     client.bzpopmin(keyz, 0),
                     client.blpop(keyz, 0),
                     client.brpop(keyz, 0),
+                    client.xread(
+                        { [key1]: "0-0", [key2]: "0-0" },
+                        { block: 0 },
+                    ),
                 ];
 
                 if (cluster.checkIfServerVersionLessThan("6.2.0")) {
