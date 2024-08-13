@@ -48,10 +48,7 @@ public class ClusterValue<T> {
     public static <T> ClusterValue<T> of(Object data) {
         if (data instanceof Map) {
             var map = (Map<?, T>) data;
-            if (map.isEmpty()) {
-                return ofMultiValue((Map<String, T>) data);
-            }
-            if (map.keySet().toArray()[0] instanceof String) {
+            if (map.isEmpty() || map.keySet().toArray()[0] instanceof String) {
                 return ofMultiValue((Map<String, T>) data);
             } else { // GlideString
                 return ofMultiValueBinary((Map<GlideString, T>) data);
