@@ -6,6 +6,8 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Decoder,
+    GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
@@ -14,6 +16,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
+    FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
     SortOptions,
@@ -33,9 +36,11 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createInfo,
     createLastSave,
     createLolwut,
+    createMove,
     createPing,
     createPublish,
     createRandomKey,
@@ -167,14 +172,19 @@ export class GlideClient extends BaseClient {
      *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
      *
      * @param transaction - A Transaction object containing a list of commands to be executed.
+     * @param decoder - An optional parameter to decode all commands in the transaction. If not set, 'Decoder.String' will be used.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *      the list entry will be null.
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
-    public exec(transaction: Transaction): Promise<ReturnType[] | null> {
+    public exec(
+        transaction: Transaction,
+        decoder: Decoder = this.defaultDecoder,
+    ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
+            { decoder: decoder },
         ).then((result: ReturnType[] | null) => {
             return this.processResultWithSetCommands(
                 result,
@@ -186,6 +196,8 @@ export class GlideClient extends BaseClient {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
+     * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
+     *
      * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
      *
@@ -196,8 +208,13 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: string[]): Promise<ReturnType> {
-        return this.createWritePromise(createCustomCommand(args));
+    public customCommand(
+        args: GlideString[],
+        decoder?: Decoder,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(createCustomCommand(args), {
+            decoder: decoder,
+        });
     }
 
     /** Ping the Redis server.
@@ -425,6 +442,26 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Move `key` from the currently selected database to the database specified by `dbIndex`.
+     *
+     * See https://valkey.io/commands/move/ for more details.
+     *
+     * @param key - The key to move.
+     * @param dbIndex - The index of the database to move `key` to.
+     * @returns `true` if `key` was moved, or `false` if the `key` already exists in the destination
+     *     database or does not exist in the source database.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.move("key", 1);
+     * console.log(result); // Output: true
+     * ```
+     */
+    public async move(key: string, dbIndex: number): Promise<boolean> {
+        return this.createWritePromise(createMove(key, dbIndex));
+    }
+
+    /**
      * Displays a piece of generative computer art and the server version.
      *
      * See https://valkey.io/commands/lolwut/ for more details.
@@ -543,6 +580,58 @@ export class GlideClient extends BaseClient {
         options?: FunctionListOptions,
     ): Promise<FunctionListResponse> {
         return this.createWritePromise(createFunctionList(options));
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @returns A `Record` with two keys:
+     *     - `"running_script"` with information about the running script.
+     *     - `"engines"` with information about available engines and their stats.
+     *
+     * See example for more details.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.functionStats();
+     * console.log(response); // Output:
+     * // {
+     * //     "running_script":
+     * //     {
+     * //         "name": "deep_thought",
+     * //         "command": ["fcall", "deep_thought", "0"],
+     * //         "duration_ms": 5008
+     * //     },
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * // Output if no scripts running:
+     * // {
+     * //     "running_script": null
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * ```
+     */
+    public async functionStats(): Promise<FunctionStatsResponse> {
+        return this.createWritePromise(createFunctionStats());
     }
 
     /**

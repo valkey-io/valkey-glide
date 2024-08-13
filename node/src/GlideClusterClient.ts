@@ -6,6 +6,8 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Decoder,
+    GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
@@ -14,6 +16,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
+    FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
     SortClusterOptions,
@@ -35,11 +38,14 @@ import {
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createInfo,
     createLastSave,
     createLolwut,
     createPing,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRandomKey,
     createSort,
     createSortReadOnly,
@@ -337,19 +343,27 @@ export class GlideClusterClient extends BaseClient {
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
-     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
+     * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
+     *
+     * See the [Glide for Valkey Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
      * for details on the restrictions and limitations of the custom command API.
      *
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients with routing to all primary nodes
-     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], "allPrimaries");
+     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], {route: "allPrimaries", decoder: Decoder.String});
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: string[], route?: Routes): Promise<ReturnType> {
+    public customCommand(
+        args: GlideString[],
+        options?: { route?: Routes; decoder?: Decoder },
+    ): Promise<ReturnType> {
         const command = createCustomCommand(args);
-        return super.createWritePromise(command, toProtobufRoute(route));
+        return super.createWritePromise(command, {
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
+        });
     }
 
     /** Execute a transaction by processing the queued commands.
@@ -366,11 +380,17 @@ export class GlideClusterClient extends BaseClient {
      */
     public exec(
         transaction: ClusterTransaction,
-        route?: SingleNodeRoute,
+        options?: {
+            route?: SingleNodeRoute;
+            decoder?: Decoder;
+        },
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
-            toProtobufRoute(route),
+            {
+                route: toProtobufRoute(options?.route),
+                decoder: options?.decoder,
+            },
         ).then((result: ReturnType[] | null) => {
             return this.processResultWithSetCommands(
                 result,
@@ -404,10 +424,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public ping(message?: string, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createPing(message),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createPing(message), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Get information and statistics about the Redis server.
@@ -426,7 +445,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
@@ -459,7 +478,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string | null>> {
         return this.createWritePromise<ClusterResponse<string | null>>(
             createClientGetName(),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
@@ -479,10 +498,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public configRewrite(route?: Routes): Promise<"OK"> {
-        return this.createWritePromise(
-            createConfigRewrite(),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createConfigRewrite(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
@@ -501,10 +519,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public configResetStat(route?: Routes): Promise<"OK"> {
-        return this.createWritePromise(
-            createConfigResetStat(),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createConfigResetStat(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Returns the current connection id.
@@ -518,7 +535,7 @@ export class GlideClusterClient extends BaseClient {
     public clientId(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
@@ -553,7 +570,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<Record<string, string>>> {
         return this.createWritePromise<ClusterResponse<Record<string, string>>>(
             createConfigGet(parameters),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
@@ -578,10 +595,9 @@ export class GlideClusterClient extends BaseClient {
         parameters: Record<string, string>,
         route?: Routes,
     ): Promise<"OK"> {
-        return this.createWritePromise(
-            createConfigSet(parameters),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createConfigSet(parameters), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Echoes the provided `message` back.
@@ -610,10 +626,9 @@ export class GlideClusterClient extends BaseClient {
         message: string,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise(
-            createEcho(message),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createEcho(message), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Returns the server time.
@@ -643,7 +658,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
-        return this.createWritePromise(createTime(), toProtobufRoute(route));
+        return this.createWritePromise(createTime(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -697,10 +714,10 @@ export class GlideClusterClient extends BaseClient {
         options?: LolwutOptions,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise(
-            createLolwut(options),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createLolwut(options), {
+            decoder: options?.decoder,
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -727,10 +744,9 @@ export class GlideClusterClient extends BaseClient {
         args: string[],
         route?: Routes,
     ): Promise<ReturnType> {
-        return this.createWritePromise(
-            createFCall(func, [], args),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFCall(func, [], args), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -758,10 +774,9 @@ export class GlideClusterClient extends BaseClient {
         args: string[],
         route?: Routes,
     ): Promise<ReturnType> {
-        return this.createWritePromise(
-            createFCallReadOnly(func, [], args),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFCallReadOnly(func, [], args), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -786,10 +801,9 @@ export class GlideClusterClient extends BaseClient {
         libraryCode: string,
         route?: Routes,
     ): Promise<string> {
-        return this.createWritePromise(
-            createFunctionDelete(libraryCode),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFunctionDelete(libraryCode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -820,7 +834,7 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<string> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, replace),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
@@ -832,7 +846,7 @@ export class GlideClusterClient extends BaseClient {
      * since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns A simple OK response.
      *
@@ -843,10 +857,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createFunctionFlush(mode),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFunctionFlush(mode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -884,10 +897,67 @@ export class GlideClusterClient extends BaseClient {
         options?: FunctionListOptions,
         route?: Routes,
     ): Promise<ClusterResponse<FunctionListResponse>> {
-        return this.createWritePromise(
-            createFunctionList(options),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFunctionList(options), {
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * See https://valkey.io/commands/function-stats/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to all primary nodes.
+     * @returns A `Record` with two keys:
+     *     - `"running_script"` with information about the running script.
+     *     - `"engines"` with information about available engines and their stats.
+     *
+     * See example for more details.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.functionStats("randomNode");
+     * console.log(response); // Output:
+     * // {
+     * //     "running_script":
+     * //     {
+     * //         "name": "deep_thought",
+     * //         "command": ["fcall", "deep_thought", "0"],
+     * //         "duration_ms": 5008
+     * //     },
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * // Output if no scripts running:
+     * // {
+     * //     "running_script": null
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * ```
+     */
+    public async functionStats(
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionStatsResponse>> {
+        return this.createWritePromise(createFunctionStats(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -907,10 +977,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createFlushAll(mode),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFlushAll(mode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -930,10 +999,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createFlushDB(mode),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFlushDB(mode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -952,8 +1020,10 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public dbsize(route?: Routes): Promise<number> {
-        return this.createWritePromise(createDBSize(), toProtobufRoute(route));
+    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(createDBSize(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Publish a message on pubsub channel.
@@ -990,6 +1060,57 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(
             createPublish(message, channel, sharded),
         );
+    }
+
+    /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * See https://valkey.io/commands/pubsub-shardchannels for more details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * @returns A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const allChannels = await client.pubsubShardchannels();
+     * console.log(allChannels); // Output: ["channel1", "channel2"]
+     *
+     * const filteredChannels = await client.pubsubShardchannels("channel*");
+     * console.log(filteredChannels); // Output: ["channel1", "channel2"]
+     * ```
+     */
+    public async pubsubShardChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * See https://valkey.io/commands/pubsub-shardnumsub for more details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubShardnumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubShardnumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubShardNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubShardNumSub(channels));
     }
 
     /**
@@ -1097,10 +1218,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async lastsave(route?: Routes): Promise<ClusterResponse<number>> {
-        return this.createWritePromise(
-            createLastSave(),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createLastSave(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -1119,10 +1239,9 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async randomKey(route?: Routes): Promise<string | null> {
-        return this.createWritePromise(
-            createRandomKey(),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createRandomKey(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
@@ -1144,6 +1263,8 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async unwatch(route?: Routes): Promise<"OK"> {
-        return this.createWritePromise(createUnWatch(), toProtobufRoute(route));
+        return this.createWritePromise(createUnWatch(), {
+            route: toProtobufRoute(route),
+        });
     }
 }
