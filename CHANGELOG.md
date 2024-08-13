@@ -1,4 +1,5 @@
 #### Changes
+* Java: Fix docs for stream commands ([#2086](https://github.com/valkey-io/valkey-glide/pull/2086))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
 * Node: Added XPENDING commands ([#2085](https://github.com/valkey-io/valkey-glide/pull/2085))
 * Node: Added HSCAN command ([#2098](https://github.com/valkey-io/valkey-glide/pull/2098/))
