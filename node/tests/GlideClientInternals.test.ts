@@ -546,7 +546,7 @@ describe("SocketConnectionInternals", () => {
             const request1 = connection.set("foo", "bar", {
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
-                expiry: { type: TimeUnit.seconds, count: 10 },
+                expiry: { type: TimeUnit.Seconds, count: 10 },
             });
 
             expect(await request1).toMatch("OK");

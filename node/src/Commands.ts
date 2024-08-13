@@ -20,9 +20,6 @@ function isLargeCommand(args: GlideString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
-        if (arg == undefined) {
-            console.log("came here");
-        }
         lenSum += arg.length;
 
         if (lenSum >= MAX_REQUEST_ARGS_LEN) {
@@ -3616,22 +3613,22 @@ export enum TimeUnit {
      * Set the specified expire time, in seconds. Equivalent to
      * `EX` in the VALKEY API.
      */
-    seconds = "EX",
+    Seconds = "EX",
     /**
      * Set the specified expire time, in milliseconds. Equivalent
      * to `PX` in the VALKEY API.
      */
-    milliseconds = "PX",
+    Milliseconds = "PX",
     /**
      * Set the specified Unix time at which the key will expire,
      * in seconds. Equivalent to `EXAT` in the VALKEY API.
      */
-    unixSeconds = "EXAT",
+    UnixSeconds = "EXAT",
     /**
      * Set the specified Unix time at which the key will expire,
      * in milliseconds. Equivalent to `PXAT` in the VALKEY API.
      */
-    unixMilliseconds = "PXAT",
+    UnixMilliseconds = "PXAT",
 }
 
 /**

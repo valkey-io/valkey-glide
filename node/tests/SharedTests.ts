@@ -5641,7 +5641,7 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const setResWithExpirySetMilli = await client.set(key, value, {
             expiry: {
-                type: TimeUnit.milliseconds,
+                type: TimeUnit.Milliseconds,
                 count: 500,
             },
         });
@@ -5651,7 +5651,7 @@ export function runBaseTests<Context>(config: {
 
         const setResWithExpirySec = await client.set(key, value, {
             expiry: {
-                type: TimeUnit.seconds,
+                type: TimeUnit.Seconds,
                 count: 1,
             },
         });
@@ -5661,7 +5661,7 @@ export function runBaseTests<Context>(config: {
 
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
-                type: TimeUnit.unixSeconds,
+                type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
         });
@@ -5683,7 +5683,7 @@ export function runBaseTests<Context>(config: {
         expect(getResExpire).toEqual(null);
         const setResWithExpiryWithUmilli = await client.set(key, value, {
             expiry: {
-                type: TimeUnit.unixMilliseconds,
+                type: TimeUnit.UnixMilliseconds,
                 count: Date.now() + 1000,
             },
         });
@@ -5775,7 +5775,7 @@ export function runBaseTests<Context>(config: {
         // * returns the old value
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
-                type: TimeUnit.unixSeconds,
+                type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
             conditionalSet: "onlyIfExists",
@@ -5792,10 +5792,10 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const count = 2;
         const expiryCombination = [
-            { type: TimeUnit.seconds, count },
-            { type: TimeUnit.milliseconds, count },
-            { type: TimeUnit.unixSeconds, count },
-            { type: TimeUnit.unixMilliseconds, count },
+            { type: TimeUnit.Seconds, count },
+            { type: TimeUnit.Milliseconds, count },
+            { type: TimeUnit.UnixSeconds, count },
+            { type: TimeUnit.UnixMilliseconds, count },
             "keepExisting",
         ];
         let exist = false;
@@ -5806,10 +5806,10 @@ export function runBaseTests<Context>(config: {
                     | "keepExisting"
                     | {
                           type:
-                              | TimeUnit.seconds
-                              | TimeUnit.milliseconds
-                              | TimeUnit.unixSeconds
-                              | TimeUnit.unixMilliseconds;
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
                           count: number;
                       },
                 conditionalSet: "onlyIfDoesNotExist",
@@ -5832,10 +5832,10 @@ export function runBaseTests<Context>(config: {
                     | "keepExisting"
                     | {
                           type:
-                              | TimeUnit.seconds
-                              | TimeUnit.milliseconds
-                              | TimeUnit.unixSeconds
-                              | TimeUnit.unixMilliseconds;
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
                           count: number;
                       },
 
@@ -8572,7 +8572,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.getex(key1, {
-                        type: TimeUnit.seconds,
+                        type: TimeUnit.Seconds,
                         duration: 15,
                     }),
                 ).toEqual(value);
@@ -8586,7 +8586,7 @@ export function runBaseTests<Context>(config: {
                 // invalid time measurement
                 await expect(
                     client.getex(key1, {
-                        type: TimeUnit.seconds,
+                        type: TimeUnit.Seconds,
                         duration: -10,
                     }),
                 ).rejects.toThrow(RequestError);
