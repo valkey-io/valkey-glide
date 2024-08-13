@@ -688,17 +688,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                  callbackIdx,
-                  transaction: command_request.Transaction.create({
-                      commands: command,
-                  }),
-              })
+                callbackIdx,
+                transaction: command_request.Transaction.create({
+                    commands: command,
+                }),
+            })
             : command instanceof command_request.Command
-              ? command_request.CommandRequest.create({
+                ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : command_request.CommandRequest.create({
+                : command_request.CommandRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -1005,6 +1005,7 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
+     * @param decoder - Optional enum parameter for decoding the response.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1021,11 +1022,12 @@ export class BaseClient {
      * ```
      */
     public async getrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetRange(key, start, end));
+        decoder?: Decoder
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetRange(key, start, end), { decoder: decoder });
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1098,6 +1100,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
+     * @param decoder - Optional enum parameter for decoding the response.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1110,8 +1113,8 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public async mget(keys: string[]): Promise<(string | null)[]> {
-        return this.createWritePromise(createMGet(keys));
+    public async mget(keys: GlideString[], decoder?: Decoder): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createMGet(keys), { decoder: decoder });
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -1482,6 +1485,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
+     * @param decoder - Optional enum parameter for decoding the response.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1499,8 +1503,8 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async hget(key: string, field: string): Promise<string | null> {
-        return this.createWritePromise(createHGet(key, field));
+    public async hget(key: GlideString, field: string, decoder?: Decoder): Promise<GlideString | null> {
+        return this.createWritePromise(createHGet(key, field), { decoder: decoder });
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -1731,6 +1735,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
+     * @param decoder - Optional enum parameter for decoding the response.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1740,8 +1745,8 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public async hvals(key: string): Promise<string[]> {
-        return this.createWritePromise(createHVals(key));
+    public async hvals(key: GlideString, decoder?: Decoder): Promise<GlideString[]> {
+        return this.createWritePromise(createHVals(key), { decoder: decoder });
     }
 
     /**
@@ -4749,9 +4754,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-        primary: connection_request.ReadFrom.Primary,
-        preferReplica: connection_request.ReadFrom.PreferReplica,
-    };
+            primary: connection_request.ReadFrom.Primary,
+            preferReplica: connection_request.ReadFrom.PreferReplica,
+        };
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -5833,7 +5838,7 @@ export class BaseClient {
      *     // new value of "Hello world" with a length of 11.
      * ```
      */
-    public async append(key: string, value: string): Promise<number> {
+    public async append(key: GlideString, value: string): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
     }
 
@@ -5982,11 +5987,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-            "password" in options.credentials
+                "password" in options.credentials
                 ? {
-                      password: options.credentials.password,
-                      username: options.credentials.username,
-                  }
+                    password: options.credentials.password,
+                    username: options.credentials.username,
+                }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
