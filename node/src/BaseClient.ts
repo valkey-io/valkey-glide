@@ -21,9 +21,12 @@ import {
     BitOffsetMultiplier, // eslint-disable-line @typescript-eslint/no-unused-vars
     BitOffsetOptions,
     BitmapIndexType,
-    BitwiseOperation, // eslint-disable-line @typescript-eslint/no-unused-vars
+    BitwiseOperation,
+    CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
+    GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
+    GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
     GeoSearchStoreResultOptions,
@@ -32,7 +35,8 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
-    ListDirection, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ListDirection,
+    MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     RangeByIndex,
     RangeByLex,
     RangeByScore,
