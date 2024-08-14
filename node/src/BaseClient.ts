@@ -2314,7 +2314,7 @@ export class BaseClient {
      *          count: 20,
      *      });
      *   cursor = newCursor;
-     * 
+     *
      *   console.log("SSCAN iteration:");
      *   stringResults.forEach(i => i + ", ");
      * } while (!cursor.equals("0"));
