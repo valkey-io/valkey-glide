@@ -177,7 +177,8 @@ export class GlideClient extends BaseClient {
      *
      * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
      * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used
+     *     or {@link Decoder.Bytes} if there are commands which produce binary output.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
@@ -187,7 +188,7 @@ export class GlideClient extends BaseClient {
         transaction: Transaction,
         decoder?: Decoder,
     ): Promise<ReturnType[] | null> {
-        if (decoder == Decoder.String && transaction.requiresBinaryDecorer) {
+        if (decoder != Decoder.Bytes && transaction.requiresBinaryDecorer) {
             throw new RequestError(
                 "Transaction has a command which requres `Decoder.Bytes`.",
             );

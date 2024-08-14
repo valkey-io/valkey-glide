@@ -377,7 +377,8 @@ export class GlideClusterClient extends BaseClient {
      *     If no key is found, the command will be sent to a random node.
      *     If `route` is provided, the client will route the command to the nodes defined by `route`.
      * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used
+     *     or {@link Decoder.Bytes} if there are commands which produce binary output.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
@@ -391,7 +392,7 @@ export class GlideClusterClient extends BaseClient {
         },
     ): Promise<ReturnType[] | null> {
         if (
-            options?.decoder == Decoder.String &&
+            options?.decoder != Decoder.Bytes &&
             transaction.requiresBinaryDecorer
         ) {
             throw new RequestError(

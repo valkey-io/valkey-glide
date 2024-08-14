@@ -4,7 +4,6 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    Decoder, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";

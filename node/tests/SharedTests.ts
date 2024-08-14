@@ -213,15 +213,8 @@ export function runBaseTests(config: {
                 async (defaultDecoder) => {
                     await runTest(
                         async (client: BaseClient) => {
-                            // TODO use `dump` instead of mocked transaction
-                            // probably we can remove route as well if we use `dump`
-
                             const key = uuidv4();
                             const value = uuidv4();
-                            const route: SingleNodeRoute = {
-                                type: "primarySlotKey",
-                                key: key,
-                            };
 
                             // No decoder ever configured or specified, transaction forced to use binary one
                             const transaction =
@@ -237,7 +230,6 @@ export function runBaseTests(config: {
                                       )
                                     : await client.exec(
                                           transaction as ClusterTransaction,
-                                          { route: route },
                                       );
                             expect(Buffer.isBuffer(result?.[2])).toBeTruthy();
                             expect(result?.[1]).toEqual(Buffer.from(value));
@@ -253,7 +245,6 @@ export function runBaseTests(config: {
                                           transaction as ClusterTransaction,
                                           {
                                               decoder: Decoder.String,
-                                              route: route,
                                           },
                                       ),
                             ).rejects.toThrow(
