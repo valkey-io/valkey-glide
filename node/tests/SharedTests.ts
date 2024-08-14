@@ -8594,7 +8594,7 @@ export function runBaseTests<Context>(config: {
                 const key2 = "{blocking}-1-" + uuidv4();
                 const keyz = [key1, key2];
 
-                // TODO: wait, xreadgroup
+                // TODO: xreadgroup
                 const promiseList: Promise<ReturnType>[] = [
                     client.bzpopmax(keyz, 0),
                     client.bzpopmin(keyz, 0),
@@ -8604,9 +8604,10 @@ export function runBaseTests<Context>(config: {
                         { [key1]: "0-0", [key2]: "0-0" },
                         { block: 0 },
                     ),
+                    client.wait(42, 0),
                 ];
 
-                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
                     promiseList.push(
                         client.blmove(
                             key1,
@@ -8618,7 +8619,7 @@ export function runBaseTests<Context>(config: {
                     );
                 }
 
-                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                     promiseList.push(
                         client.blmpop(keyz, ListDirection.LEFT, 0),
                         client.bzmpop(keyz, ScoreFilter.MAX, 0),
