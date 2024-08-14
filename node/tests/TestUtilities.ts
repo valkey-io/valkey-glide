@@ -255,6 +255,57 @@ export function generateLuaLibCode(
 }
 
 /**
+ * Create a lua lib with a function which runs an endless loop up to timeout sec.
+ * Execution takes at least 5 sec regardless of the timeout configured.
+ */
+export function createLuaLibWithLongRunningFunction(
+    libName: string,
+    funcName: string,
+    timeout: number,
+    readOnly: boolean,
+): string {
+    const code =
+        "#!lua name=$libName\n" +
+        "local function $libName_$funcName(keys, args)\n" +
+        "  local started = tonumber(redis.pcall('time')[1])\n" +
+        // fun fact - redis does no write if 'no-writes' flag is set
+        "  redis.pcall('set', keys[1], 42)\n" +
+        "  while (true) do\n" +
+        "    local now = tonumber(redis.pcall('time')[1])\n" +
+        "    if now > started + $timeout then\n" +
+        "      return 'Timed out $timeout sec'\n" +
+        "    end\n" +
+        "  end\n" +
+        "  return 'OK'\n" +
+        "end\n" +
+        "redis.register_function{\n" +
+        "function_name='$funcName',\n" +
+        "callback=$libName_$funcName,\n" +
+        (readOnly ? "flags={ 'no-writes' }\n" : "") +
+        "}";
+    return code
+        .replaceAll("$timeout", timeout.toString())
+        .replaceAll("$funcName", funcName)
+        .replaceAll("$libName", libName);
+}
+
+export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
+    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest test to fail.
+    let isBusy = true;
+
+    do {
+        try {
+            await client.functionKill();
+        } catch (err) {
+            // should throw `notbusy` error, because the function should be killed before
+            if ((err as Error).message.toLowerCase().includes("notbusy")) {
+                isBusy = false;
+            }
+        }
+    } while (isBusy);
+}
+
+/**
  * Parses the command-line arguments passed to the Node.js process.
  *
  * @returns Parsed command-line arguments.
@@ -1467,5 +1518,7 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
     return responseData;
 }
