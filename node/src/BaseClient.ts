@@ -5504,7 +5504,7 @@ export class BaseClient {
     /**
      * Blocks the current client until all the previous write commands are successfully transferred and
      * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
-     * the number of replicas were not yet reached.
+     * the number of replicas that were not yet reached.
      *
      * See https://valkey.io/commands/wait/ for more details.
      *
