@@ -16,7 +16,6 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
-    FunctionRestorePolicy,
     FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
@@ -36,12 +35,10 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
-    createFunctionDump,
     createFunctionFlush,
     createFunctionKill,
     createFunctionList,
     createFunctionLoad,
-    createFunctionRestore,
     createFunctionStats,
     createInfo,
     createLastSave,
@@ -1002,60 +999,6 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(createFunctionKill(), {
             route: toProtobufRoute(route),
         });
-    }
-
-    /**
-     * Returns the serialized payload of all loaded libraries.
-     *
-     * See https://valkey.io/commands/function-dump/ for details.
-     *
-     * since Valkey version 7.0.0.
-     *
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed a random node.
-     * @returns The serialized payload of all loaded libraries.
-     *
-     * @example
-     * ```typescript
-     * const data = await client.functionDump();
-     * // data can be used to restore loaded functions on any Valkey instance
-     * ```
-     */
-    public async functionDump(
-        route?: Routes,
-    ): Promise<ClusterResponse<Buffer>> {
-        return this.createWritePromise(createFunctionDump(), {
-            decoder: Decoder.Bytes,
-            route: toProtobufRoute(route),
-        });
-    }
-
-    /**
-     * Restores libraries from the serialized payload returned by {@link functionDump}.
-     *
-     * See https://valkey.io/commands/function-restore/ for details.
-     *
-     * since Valkey version 7.0.0.
-     *
-     * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries.
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed all primary nodes.
-     * @returns `"OK"`.
-     *
-     * @example
-     * ```typescript
-     * await client.functionRestore(data, { policy: FunctionRestorePolicy.FLUSH, route: "allPrimaries" });
-     * ```
-     */
-    public async functionRestore(
-        payload: Buffer,
-        options?: { policy?: FunctionRestorePolicy; route?: Routes },
-    ): Promise<"OK"> {
-        return this.createWritePromise(
-            createFunctionRestore(payload, options?.policy),
-            { decoder: Decoder.String, route: toProtobufRoute(options?.route) },
-        );
     }
 
     /**

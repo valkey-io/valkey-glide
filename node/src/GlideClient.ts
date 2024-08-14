@@ -16,7 +16,6 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
-    FunctionRestorePolicy,
     FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
@@ -34,12 +33,10 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
-    createFunctionDump,
     createFunctionFlush,
     createFunctionKill,
     createFunctionList,
     createFunctionLoad,
-    createFunctionRestore,
     createFunctionStats,
     createInfo,
     createLastSave,
@@ -669,52 +666,6 @@ export class GlideClient extends BaseClient {
      */
     public async functionKill(): Promise<"OK"> {
         return this.createWritePromise(createFunctionKill());
-    }
-
-    /**
-     * Returns the serialized payload of all loaded libraries.
-     *
-     * See https://valkey.io/commands/function-dump/ for details.
-     *
-     * since Valkey version 7.0.0.
-     *
-     * @returns The serialized payload of all loaded libraries.
-     *
-     * @example
-     * ```typescript
-     * const data = await client.functionDump();
-     * // data can be used to restore loaded functions on any Valkey instance
-     * ```
-     */
-    public async functionDump(): Promise<Buffer> {
-        return this.createWritePromise(createFunctionDump(), {
-            decoder: Decoder.Bytes,
-        });
-    }
-
-    /**
-     * Restores libraries from the serialized payload returned by {@link functionDump}.
-     *
-     * See https://valkey.io/commands/function-restore/ for details.
-     *
-     * since Valkey version 7.0.0.
-     *
-     * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries.
-     * @returns `"OK"`.
-     *
-     * @example
-     * ```typescript
-     * await client.functionRestore(data, FunctionRestorePolicy.FLUSH);
-     * ```
-     */
-    public async functionRestore(
-        payload: Buffer,
-        policy?: FunctionRestorePolicy,
-    ): Promise<"OK"> {
-        return this.createWritePromise(createFunctionRestore(payload, policy), {
-            decoder: Decoder.String,
-        });
     }
 
     /**

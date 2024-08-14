@@ -189,6 +189,22 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
+    // TODO use `dump` instead and remove these classes
+    // after merging https://github.com/valkey-io/valkey-glide/pull/2126
+    class TransactionEx extends Transaction {
+        public dump(key: string): TransactionEx {
+            this.requiresBinaryDecorer = true;
+            return this.customCommand(["DUMP", key]) as TransactionEx;
+        }
+    }
+
+    class ClusterTransactionEx extends ClusterTransaction {
+        public dump(key: string): ClusterTransactionEx {
+            this.requiresBinaryDecorer = true;
+            return this.customCommand(["DUMP", key]) as ClusterTransactionEx;
+        }
+    }
+
     describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "Protocol is RESP2 = %s",
         (protocol) => {
@@ -196,11 +212,9 @@ export function runBaseTests(config: {
                 `can send transaction with command which returns bytes only when default decoder is %s`,
                 async (defaultDecoder) => {
                     await runTest(
-                        async (client: BaseClient, cluster) => {
-                            // TODO use `dump` instead of `functionDump` and remove version check.
+                        async (client: BaseClient) => {
+                            // TODO use `dump` instead of mocked transaction
                             // probably we can remove route as well if we use `dump`
-                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
-                                return;
 
                             const key = uuidv4();
                             const value = uuidv4();
@@ -210,14 +224,12 @@ export function runBaseTests(config: {
                             };
 
                             // No decoder ever configured or specified, transaction forced to use binary one
-                            const transaction = (
+                            const transaction =
                                 client instanceof GlideClient
-                                    ? new Transaction()
-                                    : new ClusterTransaction()
-                            )
-                                .set(key, value)
-                                .get(key)
-                                .functionDump();
+                                    ? new TransactionEx()
+                                    : new ClusterTransactionEx();
+                            transaction.set(key, value).get(key);
+                            transaction.dump(key);
                             const result =
                                 client instanceof GlideClient
                                     ? await client.exec(
