@@ -106,6 +106,7 @@ import {
     createGet,
     createGetBit,
     createGetDel,
+    createGetEx,
     createGetRange,
     createHDel,
     createHExists,
@@ -240,6 +241,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    TimeUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -293,6 +295,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
+     *
      * See https://valkey.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
@@ -301,6 +304,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public get(key: string): T {
         return this.addAndReturn(createGet(key));
+    }
+
+    /**
+     * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
+     * See https://valkey.io/commands/getex for more details.
+     *
+     * @param key - The key to retrieve from the database.
+     * @param options - (Optional) set expiriation to the given key.
+     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
+     */
+    public getex(
+        key: string,
+        options?: "persist" | { type: TimeUnit; duration: number },
+    ): T {
+        return this.addAndReturn(createGetEx(key, options));
     }
 
     /**
