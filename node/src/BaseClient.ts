@@ -4049,7 +4049,7 @@ export class BaseClient {
     /**
      * Reads entries from the given streams owned by a consumer group.
      *
-     * See https://valkey.io/commands/xreadgroup/ for more details.
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
      *
      * @param group - The consumer group name.
      * @param consumer - The group consumer.
