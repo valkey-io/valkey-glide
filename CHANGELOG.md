@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129))
 * Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
 * Node: Added XPENDING commands ([#2085](https://github.com/valkey-io/valkey-glide/pull/2085))
