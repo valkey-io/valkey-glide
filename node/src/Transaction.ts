@@ -1236,7 +1236,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Iterates incrementally over a set.
      *
-     * See https://valkey.io/commands/sscan for details.
+     * @see {@link https://valkey.io/commands/sscan} for details.
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
