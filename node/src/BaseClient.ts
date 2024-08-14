@@ -255,6 +255,9 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
+/**
+ * Union type that can store either a valid UTF-8 string or array of bytes.
+ */
 export type GlideString = string | Buffer;
 
 /**
@@ -919,8 +922,8 @@ export class BaseClient {
      * See https://valkey.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - Optional enum parameter for decoding the response.
-     * @returns If `key` exists, returns the value of `key` as a string. Otherwise, return null.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
      * ```typescript
@@ -971,7 +974,7 @@ export class BaseClient {
      * See https://valkey.io/commands/getdel/ for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - Optional enum parameter for decoding the response.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
