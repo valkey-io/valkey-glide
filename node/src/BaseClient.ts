@@ -3058,7 +3058,7 @@ export class BaseClient {
     /**
      * Returns stream entries matching a given range of entry IDs.
      *
-     * See https://valkey.io/commands/xrange for more details.
+     * @see {@link https://valkey.io/commands/xrange/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
      * @param start - The starting stream entry ID bound for the range.
