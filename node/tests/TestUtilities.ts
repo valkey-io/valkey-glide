@@ -131,8 +131,8 @@ export function checkSimple(left: any): Checker {
 }
 
 export type Client = {
-    set: (key: string, value: string) => Promise<string | "OK" | null>;
-    get: (key: string) => Promise<GlideString | null>;
+    set: (key: GlideString, value: GlideString) => Promise<GlideString | "OK" | null>;
+    get: (key: GlideString) => Promise<GlideString | null>;
 };
 
 export async function GetAndSetRandomValue(client: Client) {
