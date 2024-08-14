@@ -58,6 +58,7 @@ import {
     StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    TimeUnit,
     ZAddOptions,
     createAppend,
     createBLMPop,
@@ -242,7 +243,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    TimeUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -308,14 +308,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
-     * See https://valkey.io/commands/getex for more details.
+     *
+     * @see {@link https://valkey.io/commands/getex/|valkey.op} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) set expiriation to the given key.
      *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
      *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
-     *
-     * since - Valkey 6.2.0 and above.
      *
      * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      */
@@ -893,7 +893,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Iterates incrementally over a hash.
      *
-     * See https://valkey.io/commands/hscan for more details.
+     * @see {@link https://valkey.io/commands//|valkey.io} for more details.
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
@@ -2192,8 +2192,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
-     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
-     * for details on the restrictions and limitations of the custom command API.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
      *
      * Command Response - A response from Redis with an `Object`.
      */
@@ -2315,7 +2314,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns stream entries matching a given range of entry IDs.
      *
-     * See https://valkey.io/commands/xrange for more details.
+     * @see {@link https://valkey.io/commands/xrange/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
      * @param start - The starting stream entry ID bound for the range.
@@ -2479,9 +2478,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * See https://valkey.io/commands/xautoclaim/ for more details.
-     *
-     * since Valkey version 6.2.0.
+     * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -2516,9 +2514,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * See https://valkey.io/commands/xautoclaim/ for more details.
-     *
-     * since Valkey version 6.2.0.
+     * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -2643,10 +2640,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `newkey` already exists it is overwritten.
      * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     *
      * @see {@link https://valkey.io/commands/rename/|valkey.io} for details.
      *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
+     *
      * Command Response - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
      */
     public rename(key: string, newKey: string): T {
@@ -2657,6 +2656,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Renames `key` to `newkey` if `newkey` does not yet exist.
      * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
      * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     *
      * @see {@link https://valkey.io/commands/renamenx/|valkey.io} for details.
      *
      * @param key - The key to rename.
@@ -2672,12 +2672,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Pop an element from the tail of the first list that is non-empty,
      * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * Note: `BRPOP` is a blocking command.
+     *
      * @see {@link https://valkey.io/commands/brpop/|valkey.io} for details.
-     * Note: `BRPOP` is a blocking command,
-     * see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Blocking Commands} for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     *
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
@@ -2689,12 +2692,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Pop an element from the head of the first list that is non-empty,
      * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
+     *
+     * Note: `BLPOP` is a blocking command.
+     *
      * @see {@link https://valkey.io/commands/blpop/|valkey.io} for details.
-     * Note: `BLPOP` is a blocking command,
-     * see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Blocking Commands} for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     *
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
@@ -2813,7 +2819,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
      * the number of replicas that were not yet reached.
      *
-     * See https://valkey.io/commands/wait/ for more details.
+     * @see {@link https://valkey.io/commands/wait/|valkey.io} for more details.
      *
      * @param numreplicas - The number of replicas to reach.
      * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.
