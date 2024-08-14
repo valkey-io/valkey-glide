@@ -198,6 +198,7 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWait,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -2772,6 +2773,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred and
+     * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
+     * the number of replicas that were not yet reached.
+     *
+     * See https://valkey.io/commands/wait/ for more details.
+     *
+     * @param numreplicas - The number of replicas to reach.
+     * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+     *
+     * Command Response - The number of replicas reached by all the writes performed in the context of the
+     *     current connection.
+     */
+    public wait(numreplicas: number, timeout: number): T {
+        return this.addAndReturn(createWait(numreplicas, timeout));
     }
 
     /**
