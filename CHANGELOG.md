@@ -1,5 +1,5 @@
 #### Changes
-* Node: Added SSCAN command([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
+* Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
 * Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
 * Node: Added XPENDING commands ([#2085](https://github.com/valkey-io/valkey-glide/pull/2085))

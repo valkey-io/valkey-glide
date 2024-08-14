@@ -2300,9 +2300,9 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - The {@link BaseScanOptions}.
+     * @param options - The (Optional) {@link BaseScanOptions}.
      * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
-     * `"0"` will be the `cursor` returned on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
      *
      * @example
      * ```typescript
@@ -2310,15 +2310,22 @@ export class BaseClient {
      * let cursor = "0";
      * let result = [][];
      * do {
-     *   result = await client.sscan(key1, cursor, {
+     *   const [newCursor, setElements] = await client.sscan(key1, cursor, {
      *          count: 20,
      *      });
-     *   cursor = result[0];
-     *   const stringResults: string[] = result[1];
-     *
+     *   cursor = newCursor;
+     * 
      *   console.log("SSCAN iteration:");
      *   stringResults.forEach(i => i + ", ");
      * } while (!cursor.equals("0"));
+     *
+     * // The output of the code above is something similar to:
+     * // Cursor:  31
+     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
+     * // Cursor:  39
+     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
+     * // Cursor:  0
+     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
      * ```
      */
     public async sscan(
