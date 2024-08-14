@@ -21,6 +21,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     FlushMode,
@@ -46,7 +47,6 @@ import {
     RangeByLex,
     RangeByScore,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -213,6 +213,7 @@ import {
     createXInfoStream,
     createXLen,
     createXPending,
+    createXRange,
     createXRead,
     createXTrim,
     createZAdd,
@@ -1796,8 +1797,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcount(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): T {
         return this.addAndReturn(createZCount(key, minScore, maxScore));
     }
@@ -2099,8 +2100,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByLex(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): T {
         return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
     }
@@ -2118,8 +2119,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByScore(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): T {
         return this.addAndReturn(
             createZRemRangeByScore(key, minScore, maxScore),
@@ -2141,8 +2142,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zlexcount(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): T {
         return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
@@ -2345,6 +2346,34 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public time(): T {
         return this.addAndReturn(createTime());
+    }
+
+    /**
+     * Returns stream entries matching a given range of entry IDs.
+     *
+     * See https://valkey.io/commands/xrange for more details.
+     *
+     * @param key - The key of the stream.
+     * @param start - The starting stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param end - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     *
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     */
+    public xrange(
+        key: string,
+        start: Boundary<string>,
+        end: Boundary<string>,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createXRange(key, start, end, count));
     }
 
     /**

@@ -1535,35 +1535,35 @@ export function createZMScore(
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
-export enum InfScoreBoundary {
+export enum InfBoundary {
     /**
-     * Positive infinity bound for sorted set.
+     * Positive infinity bound.
      */
     PositiveInfinity = "+",
     /**
-     * Negative infinity bound for sorted set.
+     * Negative infinity bound.
      */
     NegativeInfinity = "-",
 }
 
 /**
- * Defines where to insert new elements into a list.
+ * Defines the boundaries of a range.
  */
-export type ScoreBoundary<T> =
+export type Boundary<T> =
     /**
-     *  Represents an lower/upper boundary in a sorted set.
+     *  Represents an lower/upper boundary.
      */
-    | InfScoreBoundary
+    | InfBoundary
     /**
-     *  Represents a specific numeric score boundary in a sorted set.
+     *  Represents a specific boundary.
      */
     | {
           /**
-           * The score value.
+           * The comparison value.
            */
           value: T;
           /**
-           * Whether the score value is inclusive. Defaults to True.
+           * Whether the value is inclusive. Defaults to `true`.
            */
           isInclusive?: boolean;
       };
@@ -1591,11 +1591,11 @@ type SortedSetRange<T> = {
     /**
      * The start boundary.
      */
-    start: ScoreBoundary<T>;
+    start: Boundary<T>;
     /**
      * The stop boundary.
      */
-    stop: ScoreBoundary<T>;
+    stop: Boundary<T>;
     /**
      * The limit argument for a range query.
      * Represents a limit argument for a range query in a sorted set to
@@ -1622,10 +1622,10 @@ export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
 /** Returns a string representation of a score boundary as a command argument. */
 function getScoreBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
+    score: Boundary<number> | Boundary<string>,
 ): string {
     if (typeof score === "string") {
-        // InfScoreBoundary
+        // InfBoundary
         return score + "inf";
     }
 
@@ -1637,11 +1637,9 @@ function getScoreBoundaryArg(
 }
 
 /** Returns a string representation of a lex boundary as a command argument. */
-function getLexBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
-): string {
+function getLexBoundaryArg(score: Boundary<number> | Boundary<string>): string {
     if (typeof score === "string") {
-        // InfScoreBoundary
+        // InfBoundary
         return score;
     }
 
@@ -1654,18 +1652,18 @@ function getLexBoundaryArg(
 
 /** Returns a string representation of a stream boundary as a command argument. */
 function getStreamBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
+    boundary: Boundary<number> | Boundary<string>,
 ): string {
-    if (typeof score === "string") {
-        // InfScoreBoundary
-        return score;
+    if (typeof boundary === "string") {
+        // InfBoundary
+        return boundary;
     }
 
-    if (score.isInclusive == false) {
-        return "(" + score.value.toString();
+    if (boundary.isInclusive == false) {
+        return "(" + boundary.value.toString();
     }
 
-    return score.value.toString();
+    return boundary.value.toString();
 }
 
 function createZRangeArgs(
@@ -1721,8 +1719,8 @@ function createZRangeArgs(
  */
 export function createZCount(
     key: string,
-    minScore: ScoreBoundary<number>,
-    maxScore: ScoreBoundary<number>,
+    minScore: Boundary<number>,
+    maxScore: Boundary<number>,
 ): command_request.Command {
     const args = [
         key,
@@ -1878,8 +1876,8 @@ export function createZRemRangeByRank(
  */
 export function createZRemRangeByLex(
     key: string,
-    minLex: ScoreBoundary<string>,
-    maxLex: ScoreBoundary<string>,
+    minLex: Boundary<string>,
+    maxLex: Boundary<string>,
 ): command_request.Command {
     const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZRemRangeByLex, args);
@@ -1890,8 +1888,8 @@ export function createZRemRangeByLex(
  */
 export function createZRemRangeByScore(
     key: string,
-    minScore: ScoreBoundary<number>,
-    maxScore: ScoreBoundary<number>,
+    minScore: Boundary<number>,
+    maxScore: Boundary<number>,
 ): command_request.Command {
     const args = [
         key,
@@ -1911,8 +1909,8 @@ export function createPersist(key: string): command_request.Command {
  */
 export function createZLexCount(
     key: string,
-    minLex: ScoreBoundary<string>,
-    maxLex: ScoreBoundary<string>,
+    minLex: Boundary<string>,
+    maxLex: Boundary<string>,
 ): command_request.Command {
     const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZLexCount, args);
@@ -2055,6 +2053,25 @@ export function createXTrim(
     const args = [key];
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
+}
+
+/**
+ * @internal
+ */
+export function createXRange(
+    key: string,
+    start: Boundary<string>,
+    end: Boundary<string>,
+    count?: number,
+): command_request.Command {
+    const args = [key, getStreamBoundaryArg(start), getStreamBoundaryArg(end)];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.XRange, args);
 }
 
 /**
@@ -2441,9 +2458,9 @@ export type StreamPendingOptions = {
     /** Filter pending entries by their idle time - in milliseconds */
     minIdleTime?: number;
     /** Starting stream ID bound for range. */
-    start: ScoreBoundary<string>;
+    start: Boundary<string>;
     /** Ending stream ID bound for range. */
-    end: ScoreBoundary<string>;
+    end: Boundary<string>;
     /** Limit the number of messages returned. */
     count: number;
     /** Filter pending entries by consumer. */

@@ -22,6 +22,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -41,7 +42,6 @@ import {
     RangeByLex,
     RangeByScore,
     ReturnTypeXinfoStream,
-    ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -177,6 +177,7 @@ import {
     createXInfoStream,
     createXLen,
     createXPending,
+    createXRange,
     createXRead,
     createXTrim,
     createZAdd,
@@ -771,7 +772,7 @@ export class BaseClient {
         return [null, null];
     }
 
-    public getPubSubMessage(): Promise<PubSubMsg> {
+    public async getPubSubMessage(): Promise<PubSubMsg> {
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
@@ -932,7 +933,7 @@ export class BaseClient {
      * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
      * ```
      */
-    public get(key: string, decoder?: Decoder): Promise<string | null> {
+    public async get(key: string, decoder?: Decoder): Promise<string | null> {
         return this.createWritePromise(createGet(key), { decoder: decoder });
     }
 
@@ -978,7 +979,7 @@ export class BaseClient {
      * const value = client.getdel("key");  // value is null
      * ```
      */
-    public getdel(key: string): Promise<string | null> {
+    public async getdel(key: string): Promise<string | null> {
         return this.createWritePromise(createGetDel(key));
     }
 
@@ -1046,7 +1047,7 @@ export class BaseClient {
      * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
      * ```
      */
-    public set(
+    public async set(
         key: string | Uint8Array,
         value: string | Uint8Array,
         options?: SetOptions,
@@ -1075,7 +1076,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public del(keys: string[]): Promise<number> {
+    public async del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
     }
 
@@ -1096,7 +1097,7 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public mget(keys: string[]): Promise<(string | null)[]> {
+    public async mget(keys: string[]): Promise<(string | null)[]> {
         return this.createWritePromise(createMGet(keys));
     }
 
@@ -1114,7 +1115,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
+    public async mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
     }
 
@@ -1155,7 +1156,7 @@ export class BaseClient {
      * console.log(result); // Output: 11
      * ```
      */
-    public incr(key: string): Promise<number> {
+    public async incr(key: string): Promise<number> {
         return this.createWritePromise(createIncr(key));
     }
 
@@ -1174,7 +1175,7 @@ export class BaseClient {
      * console.log(result); // Output: 15
      * ```
      */
-    public incrBy(key: string, amount: number): Promise<number> {
+    public async incrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
     }
 
@@ -1195,7 +1196,7 @@ export class BaseClient {
      * console.log(result); // Output: 13.0
      * ```
      */
-    public incrByFloat(key: string, amount: number): Promise<number> {
+    public async incrByFloat(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
@@ -1213,7 +1214,7 @@ export class BaseClient {
      * console.log(result); // Output: 9
      * ```
      */
-    public decr(key: string): Promise<number> {
+    public async decr(key: string): Promise<number> {
         return this.createWritePromise(createDecr(key));
     }
 
@@ -1232,7 +1233,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public decrBy(key: string, amount: number): Promise<number> {
+    public async decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
     }
 
@@ -1259,7 +1260,7 @@ export class BaseClient {
      * console.log(result2); // Output: "@" - "@" has binary value 01000000
      * ```
      */
-    public bitop(
+    public async bitop(
         operation: BitwiseOperation,
         destination: string,
         keys: string[],
@@ -1286,7 +1287,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
      * ```
      */
-    public getbit(key: string, offset: number): Promise<number> {
+    public async getbit(key: string, offset: number): Promise<number> {
         return this.createWritePromise(createGetBit(key, offset));
     }
 
@@ -1309,7 +1310,11 @@ export class BaseClient {
      * console.log(result); // Output: 0 - The second bit value was 0 before setting to 1.
      * ```
      */
-    public setbit(key: string, offset: number, value: number): Promise<number> {
+    public async setbit(
+        key: string,
+        offset: number,
+        value: number,
+    ): Promise<number> {
         return this.createWritePromise(createSetBit(key, offset, value));
     }
 
@@ -1475,7 +1480,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public hget(key: string, field: string): Promise<string | null> {
+    public async hget(key: string, field: string): Promise<string | null> {
         return this.createWritePromise(createHGet(key, field));
     }
 
@@ -1494,7 +1499,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
-    public hset(
+    public async hset(
         key: string,
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
@@ -1525,7 +1530,11 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
      * ```
      */
-    public hsetnx(key: string, field: string, value: string): Promise<boolean> {
+    public async hsetnx(
+        key: string,
+        field: string,
+        value: string,
+    ): Promise<boolean> {
         return this.createWritePromise(createHSetNX(key, field, value));
     }
 
@@ -1545,7 +1554,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
      * ```
      */
-    public hdel(key: string, fields: string[]): Promise<number> {
+    public async hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
@@ -1565,7 +1574,10 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2"] - A list of values associated with the specified fields.
      * ```
      */
-    public hmget(key: string, fields: string[]): Promise<(string | null)[]> {
+    public async hmget(
+        key: string,
+        fields: string[],
+    ): Promise<(string | null)[]> {
         return this.createWritePromise(createHMGet(key, fields));
     }
 
@@ -1590,7 +1602,7 @@ export class BaseClient {
      * console.log(result); // Output: false
      * ```
      */
-    public hexists(key: string, field: string): Promise<boolean> {
+    public async hexists(key: string, field: string): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
@@ -1608,7 +1620,7 @@ export class BaseClient {
      * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
      * ```
      */
-    public hgetall(key: string): Promise<Record<string, string>> {
+    public async hgetall(key: string): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
     }
 
@@ -1629,7 +1641,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public hincrBy(
+    public async hincrBy(
         key: string,
         field: string,
         amount: number,
@@ -1654,7 +1666,7 @@ export class BaseClient {
      * console.log(result); // Output: '2.5'
      * ```
      */
-    public hincrByFloat(
+    public async hincrByFloat(
         key: string,
         field: string,
         amount: number,
@@ -1682,7 +1694,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public hlen(key: string): Promise<number> {
+    public async hlen(key: string): Promise<number> {
         return this.createWritePromise(createHLen(key));
     }
 
@@ -1699,7 +1711,7 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public hvals(key: string): Promise<string[]> {
+    public async hvals(key: string): Promise<string[]> {
         return this.createWritePromise(createHVals(key));
     }
 
@@ -1719,7 +1731,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public hstrlen(key: string, field: string): Promise<number> {
+    public async hstrlen(key: string, field: string): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
     }
 
@@ -1866,7 +1878,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
-    public lpush(key: string, elements: string[]): Promise<number> {
+    public async lpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
     }
 
@@ -1885,7 +1897,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that the list has two elements.
      * ```
      */
-    public lpushx(key: string, elements: string[]): Promise<number> {
+    public async lpushx(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPushX(key, elements));
     }
 
@@ -1911,7 +1923,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public lpop(key: string): Promise<string | null> {
+    public async lpop(key: string): Promise<string | null> {
         return this.createWritePromise(createLPop(key));
     }
 
@@ -1937,7 +1949,10 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public lpopCount(key: string, count: number): Promise<string[] | null> {
+    public async lpopCount(
+        key: string,
+        count: number,
+    ): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
     }
 
@@ -1976,7 +1991,11 @@ export class BaseClient {
      * console.log(result); // Output: []
      * ```
      */
-    public lrange(key: string, start: number, end: number): Promise<string[]> {
+    public async lrange(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
     }
 
@@ -1994,7 +2013,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
      * ```
      */
-    public llen(key: string): Promise<number> {
+    public async llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
     }
 
@@ -2106,7 +2125,11 @@ export class BaseClient {
      * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
      * ```
      */
-    public lset(key: string, index: number, element: string): Promise<"OK"> {
+    public async lset(
+        key: string,
+        index: number,
+        element: string,
+    ): Promise<"OK"> {
         return this.createWritePromise(createLSet(key, index, element));
     }
 
@@ -2131,7 +2154,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
-    public ltrim(key: string, start: number, end: number): Promise<"OK"> {
+    public async ltrim(key: string, start: number, end: number): Promise<"OK"> {
         return this.createWritePromise(createLTrim(key, start, end));
     }
 
@@ -2153,7 +2176,11 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Removes the first 2 occurrences of "value" in the list.
      * ```
      */
-    public lrem(key: string, count: number, element: string): Promise<number> {
+    public async lrem(
+        key: string,
+        count: number,
+        element: string,
+    ): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
     }
 
@@ -2180,7 +2207,7 @@ export class BaseClient {
      * console.log(result); // Output: 1
      * ```
      */
-    public rpush(key: string, elements: string[]): Promise<number> {
+    public async rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
     }
 
@@ -2199,7 +2226,7 @@ export class BaseClient {
      * console.log(result);  // Output: 2 - Indicates that the list has two elements.
      * ```
      * */
-    public rpushx(key: string, elements: string[]): Promise<number> {
+    public async rpushx(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPushX(key, elements));
     }
 
@@ -2225,7 +2252,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public rpop(key: string): Promise<string | null> {
+    public async rpop(key: string): Promise<string | null> {
         return this.createWritePromise(createRPop(key));
     }
 
@@ -2251,7 +2278,10 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public rpopCount(key: string, count: number): Promise<string[] | null> {
+    public async rpopCount(
+        key: string,
+        count: number,
+    ): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
     }
 
@@ -2270,7 +2300,7 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public sadd(key: string, members: string[]): Promise<number> {
+    public async sadd(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
     }
 
@@ -2289,7 +2319,7 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public srem(key: string, members: string[]): Promise<number> {
+    public async srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
     }
 
@@ -2350,7 +2380,7 @@ export class BaseClient {
      * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public smembers(key: string): Promise<Set<string>> {
+    public async smembers(key: string): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSMembers(key)).then(
             (smembes) => new Set<string>(smembes),
         );
@@ -2373,7 +2403,7 @@ export class BaseClient {
      * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
      * ```
      */
-    public smove(
+    public async smove(
         source: string,
         destination: string,
         member: string,
@@ -2396,7 +2426,7 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public scard(key: string): Promise<number> {
+    public async scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
     }
 
@@ -2422,7 +2452,7 @@ export class BaseClient {
      * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public sinter(keys: string[]): Promise<Set<string>> {
+    public async sinter(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
         );
@@ -2451,7 +2481,7 @@ export class BaseClient {
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
-    public sintercard(keys: string[], limit?: number): Promise<number> {
+    public async sintercard(keys: string[], limit?: number): Promise<number> {
         return this.createWritePromise(createSInterCard(keys, limit));
     }
 
@@ -2471,7 +2501,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
      * ```
      */
-    public sinterstore(destination: string, keys: string[]): Promise<number> {
+    public async sinterstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createSInterStore(destination, keys));
     }
 
@@ -2493,7 +2526,7 @@ export class BaseClient {
      * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
      * ```
      */
-    public sdiff(keys: string[]): Promise<Set<string>> {
+    public async sdiff(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSDiff(keys)).then(
             (sdiff) => new Set<string>(sdiff),
         );
@@ -2517,7 +2550,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - One member was stored in "set3", and that member is the diff between "set1" and "set2".
      * ```
      */
-    public sdiffstore(destination: string, keys: string[]): Promise<number> {
+    public async sdiffstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createSDiffStore(destination, keys));
     }
 
@@ -2542,7 +2578,7 @@ export class BaseClient {
      * console.log(result2); // Output: Set {'member1', 'member2'}
      * ```
      */
-    public sunion(keys: string[]): Promise<Set<string>> {
+    public async sunion(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSUnion(keys)).then(
             (sunion) => new Set<string>(sunion),
         );
@@ -2565,7 +2601,10 @@ export class BaseClient {
      * console.log(length); // Output: 2 - Two elements were stored in "mySet", and those two members are the union of "set1" and "set2".
      * ```
      */
-    public sunionstore(destination: string, keys: string[]): Promise<number> {
+    public async sunionstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createSUnionStore(destination, keys));
     }
 
@@ -2591,7 +2630,7 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
      * ```
      */
-    public sismember(key: string, member: string): Promise<boolean> {
+    public async sismember(key: string, member: string): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
     }
 
@@ -2613,7 +2652,10 @@ export class BaseClient {
      * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
      * ```
      */
-    public smismember(key: string, members: string[]): Promise<boolean[]> {
+    public async smismember(
+        key: string,
+        members: string[],
+    ): Promise<boolean[]> {
         return this.createWritePromise(createSMIsMember(key, members));
     }
 
@@ -2639,7 +2681,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public spop(key: string): Promise<string | null> {
+    public async spop(key: string): Promise<string | null> {
         return this.createWritePromise(createSPop(key));
     }
 
@@ -2693,7 +2735,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public srandmember(key: string): Promise<string | null> {
+    public async srandmember(key: string): Promise<string | null> {
         return this.createWritePromise(createSRandMember(key));
     }
 
@@ -2743,7 +2785,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
      * ```
      */
-    public exists(keys: string[]): Promise<number> {
+    public async exists(keys: string[]): Promise<number> {
         return this.createWritePromise(createExists(keys));
     }
 
@@ -2762,7 +2804,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
      * ```
      */
-    public unlink(keys: string[]): Promise<number> {
+    public async unlink(keys: string[]): Promise<number> {
         return this.createWritePromise(createUnlink(keys));
     }
 
@@ -2792,7 +2834,7 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
      * ```
      */
-    public expire(
+    public async expire(
         key: string,
         seconds: number,
         option?: ExpireOptions,
@@ -2819,7 +2861,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
-    public expireAt(
+    public async expireAt(
         key: string,
         unixSeconds: number,
         option?: ExpireOptions,
@@ -2877,7 +2919,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
      * ```
      */
-    public pexpire(
+    public async pexpire(
         key: string,
         milliseconds: number,
         option?: ExpireOptions,
@@ -2906,7 +2948,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
-    public pexpireAt(
+    public async pexpireAt(
         key: string,
         unixMilliseconds: number,
         option?: ExpireOptions,
@@ -2971,7 +3013,7 @@ export class BaseClient {
      * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
      * ```
      */
-    public ttl(key: string): Promise<number> {
+    public async ttl(key: string): Promise<number> {
         return this.createWritePromise(createTTL(key));
     }
 
@@ -2996,7 +3038,7 @@ export class BaseClient {
      * console.log(result); // Output: ['foo', 'bar']
      * ```
      */
-    public invokeScript(
+    public async invokeScript(
         script: Script,
         option?: ScriptOptions,
     ): Promise<ReturnType> {
@@ -3024,6 +3066,45 @@ export class BaseClient {
         return this.createWritePromise(scriptInvocation);
     }
 
+    /**
+     * Returns stream entries matching a given range of entry IDs.
+     *
+     * See https://valkey.io/commands/xrange for more details.
+     *
+     * @param key - The key of the stream.
+     * @param start - The starting stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     *
+     * @example
+     * ```typescript
+     * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
+     * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
+     * console.log(await client.xrange("mystream", InfBoundary.NegativeInfinity, InfBoundary.PositiveInfinity));
+     * // Output:
+     * // {
+     * //     "0-1": [["field1", "value1"]],
+     * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * ```
+     */
+    public async xrange(
+        key: string,
+        start: Boundary<string>,
+        end: Boundary<string>,
+        count?: number,
+    ): Promise<Record<string, [string, string][]> | null> {
+        return this.createWritePromise(createXRange(key, start, end, count));
+    }
+
     /** Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
      * See https://valkey.io/commands/zadd/ for more details.
@@ -3049,7 +3130,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
-    public zadd(
+    public async zadd(
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
@@ -3085,7 +3166,7 @@ export class BaseClient {
      * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
      * ```
      */
-    public zaddIncr(
+    public async zaddIncr(
         key: string,
         member: string,
         increment: number,
@@ -3119,7 +3200,7 @@ export class BaseClient {
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
-    public zrem(key: string, members: string[]): Promise<number> {
+    public async zrem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createZRem(key, members));
     }
 
@@ -3144,7 +3225,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public zcard(key: string): Promise<number> {
+    public async zcard(key: string): Promise<number> {
         return this.createWritePromise(createZCard(key));
     }
 
@@ -3167,7 +3248,7 @@ export class BaseClient {
      * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
      * ```
      */
-    public zintercard(keys: string[], limit?: number): Promise<number> {
+    public async zintercard(keys: string[], limit?: number): Promise<number> {
         return this.createWritePromise(createZInterCard(keys, limit));
     }
 
@@ -3193,7 +3274,7 @@ export class BaseClient {
      * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
      */
-    public zdiff(keys: string[]): Promise<string[]> {
+    public async zdiff(keys: string[]): Promise<string[]> {
         return this.createWritePromise(createZDiff(keys));
     }
 
@@ -3219,7 +3300,9 @@ export class BaseClient {
      * console.log(result); // Output: {"member1": 1.0} - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
      */
-    public zdiffWithScores(keys: string[]): Promise<Record<string, number>> {
+    public async zdiffWithScores(
+        keys: string[],
+    ): Promise<Record<string, number>> {
         return this.createWritePromise(createZDiffWithScores(keys));
     }
 
@@ -3248,7 +3331,10 @@ export class BaseClient {
      * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
      * ```
      */
-    public zdiffstore(destination: string, keys: string[]): Promise<number> {
+    public async zdiffstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createZDiffStore(destination, keys));
     }
 
@@ -3282,7 +3368,7 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public zscore(key: string, member: string): Promise<number | null> {
+    public async zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZScore(key, member));
     }
 
@@ -3304,7 +3390,10 @@ export class BaseClient {
      * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
      * ```
      */
-    public zmscore(key: string, members: string[]): Promise<(number | null)[]> {
+    public async zmscore(
+        key: string,
+        members: string[],
+    ): Promise<(number | null)[]> {
         return this.createWritePromise(createZMScore(key, members));
     }
 
@@ -3321,7 +3410,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
@@ -3332,10 +3421,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
      * ```
      */
-    public zcount(
+    public async zcount(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): Promise<number> {
         return this.createWritePromise(createZCount(key, minScore, maxScore));
     }
@@ -3365,14 +3454,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: ['member2', 'member3'] - Returns members with scores within the range of negative infinity to 3, in ascending order.
      * ```
      */
-    public zrange(
+    public async zrange(
         key: string,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
@@ -3407,14 +3496,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member4': -2.0, 'member7': 1.5} - Returns members with scores within the range of negative infinity to 3, with their scores.
      * ```
      */
-    public zrangeWithScores(
+    public async zrangeWithScores(
         key: string,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
@@ -3453,14 +3542,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
      * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
      * ```
      */
-    public zrangeStore(
+    public async zrangeStore(
         destination: string,
         source: string,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
@@ -3498,7 +3587,7 @@ export class BaseClient {
      * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
-    public zinterstore(
+    public async zinterstore(
         destination: string,
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
@@ -3618,7 +3707,7 @@ export class BaseClient {
      * console.log(len2); // Output: 0
      * ```
      */
-    public strlen(key: string): Promise<number> {
+    public async strlen(key: string): Promise<number> {
         return this.createWritePromise(createStrlen(key));
     }
 
@@ -3644,7 +3733,7 @@ export class BaseClient {
      * console.log(type); // Output: 'list'
      * ```
      */
-    public type(key: string): Promise<string> {
+    public async type(key: string): Promise<string> {
         return this.createWritePromise(createType(key));
     }
 
@@ -3673,7 +3762,7 @@ export class BaseClient {
      * console.log(result); // Output: {'member3': 7.5 , 'member2': 8.0} - Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
      * ```
      */
-    public zpopmin(
+    public async zpopmin(
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
@@ -3733,7 +3822,7 @@ export class BaseClient {
      * console.log(result); // Output: {'member2': 8.0, 'member3': 7.5} - Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
      * ```
      */
-    public zpopmax(
+    public async zpopmax(
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
@@ -3795,7 +3884,7 @@ export class BaseClient {
      * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
      * ```
      */
-    public pttl(key: string): Promise<number> {
+    public async pttl(key: string): Promise<number> {
         return this.createWritePromise(createPTTL(key));
     }
 
@@ -3819,7 +3908,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that three elements have been removed from the sorted set "my_sorted_set" between ranks 0 and 2.
      * ```
      */
-    public zremRangeByRank(
+    public async zremRangeByRank(
         key: string,
         start: number,
         end: number,
@@ -3849,14 +3938,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
-     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfScoreBoundary.NegativeInfinity, { value: "e" });
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfBoundary.NegativeInfinity, { value: "e" });
      * console.log(result); // Output: 0 - Indicates that no elements were removed.
      * ```
      */
-    public zremRangeByLex(
+    public async zremRangeByLex(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): Promise<number> {
         return this.createWritePromise(
             createZRemRangeByLex(key, minLex, maxLex),
@@ -3876,7 +3965,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
@@ -3887,10 +3976,10 @@ export class BaseClient {
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
-    public zremRangeByScore(
+    public async zremRangeByScore(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): Promise<number> {
         return this.createWritePromise(
             createZRemRangeByScore(key, minScore, maxScore),
@@ -3911,7 +4000,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
      * ```
      *
@@ -3923,8 +4012,8 @@ export class BaseClient {
      */
     public async zlexcount(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): Promise<number> {
         return this.createWritePromise(createZLexCount(key, minLex, maxLex));
     }
@@ -3952,7 +4041,7 @@ export class BaseClient {
      * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
      * ```
      */
-    public zrank(key: string, member: string): Promise<number | null> {
+    public async zrank(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZRank(key, member));
     }
 
@@ -3980,7 +4069,7 @@ export class BaseClient {
      * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
      * ```
      */
-    public zrankWithScore(
+    public async zrankWithScore(
         key: string,
         member: string,
     ): Promise<number[] | null> {
@@ -4005,7 +4094,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
      * ```
      */
-    public zrevrank(key: string, member: string): Promise<number | null> {
+    public async zrevrank(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZRevRank(key, member));
     }
 
@@ -4029,7 +4118,7 @@ export class BaseClient {
      * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
      * ```
      */
-    public zrevrankWithScore(
+    public async zrevrankWithScore(
         key: string,
         member: string,
     ): Promise<(number[] | null)[]> {
@@ -4045,7 +4134,7 @@ export class BaseClient {
      * @param options - options detailing how to add to the stream.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
-    public xadd(
+    public async xadd(
         key: string,
         values: [string, string][],
         options?: StreamAddOptions,
@@ -4069,7 +4158,7 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public xdel(key: string, ids: string[]): Promise<number> {
+    public async xdel(key: string, ids: string[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 
@@ -4081,7 +4170,10 @@ export class BaseClient {
      * @param options - options detailing how to trim the stream.
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
-    public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
+    public async xtrim(
+        key: string,
+        options: StreamTrimOptions,
+    ): Promise<number> {
         return this.createWritePromise(createXTrim(key, options));
     }
 
@@ -4108,7 +4200,7 @@ export class BaseClient {
      * // }
      * ```
      */
-    public xread(
+    public async xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
@@ -4129,7 +4221,7 @@ export class BaseClient {
      * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
      * ```
      */
-    public xlen(key: string): Promise<number> {
+    public async xlen(key: string): Promise<number> {
         return this.createWritePromise(createXLen(key));
     }
 
@@ -4176,7 +4268,7 @@ export class BaseClient {
      * ```typescript
      * console.log(await client.xpending("my_stream", "my_group"), {
      *     start: { value: "0-1", isInclusive: true },
-     *     end: InfScoreBoundary.PositiveInfinity,
+     *     end: InfBoundary.PositiveInfinity,
      *     count: 2,
      *     consumer: "consumer1"
      * }); // Output:
@@ -4630,7 +4722,7 @@ export class BaseClient {
      * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
      * ```
      */
-    public lindex(key: string, index: number): Promise<string | null> {
+    public async lindex(key: string, index: number): Promise<string | null> {
         return this.createWritePromise(createLIndex(key, index));
     }
 
@@ -4654,7 +4746,7 @@ export class BaseClient {
      * console.log(length); // Output: 2 - The list has a length of 2 after performing the insert.
      * ```
      */
-    public linsert(
+    public async linsert(
         key: string,
         position: InsertPosition,
         pivot: string,
@@ -4679,7 +4771,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the timeout associated with the key "my_key" was successfully removed.
      * ```
      */
-    public persist(key: string): Promise<boolean> {
+    public async persist(key: string): Promise<boolean> {
         return this.createWritePromise(createPersist(key));
     }
 
@@ -4701,7 +4793,7 @@ export class BaseClient {
      * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public rename(key: string, newKey: string): Promise<"OK"> {
+    public async rename(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRename(key, newKey));
     }
 
@@ -4723,7 +4815,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public renamenx(key: string, newKey: string): Promise<boolean> {
+    public async renamenx(key: string, newKey: string): Promise<boolean> {
         return this.createWritePromise(createRenameNX(key, newKey));
     }
 
@@ -4748,7 +4840,7 @@ export class BaseClient {
      * console.log(result); // Output: ["list1", "element"] - Indicates an element "element" was popped from "list1".
      * ```
      */
-    public brpop(
+    public async brpop(
         keys: string[],
         timeout: number,
     ): Promise<[string, string] | null> {
@@ -4775,7 +4867,7 @@ export class BaseClient {
      * console.log(result); // Output: ['list1', 'element']
      * ```
      */
-    public blpop(
+    public async blpop(
         keys: string[],
         timeout: number,
     ): Promise<[string, string] | null> {
@@ -4800,7 +4892,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
      * ```
      */
-    public pfadd(key: string, elements: string[]): Promise<number> {
+    public async pfadd(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createPfAdd(key, elements));
     }
 
@@ -4819,7 +4911,7 @@ export class BaseClient {
      * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
      * ```
      */
-    public pfcount(keys: string[]): Promise<number> {
+    public async pfcount(keys: string[]): Promise<number> {
         return this.createWritePromise(createPfCount(keys));
     }
 
@@ -4864,7 +4956,7 @@ export class BaseClient {
      * console.log(result); // Output: "listpack"
      * ```
      */
-    public objectEncoding(key: string): Promise<string | null> {
+    public async objectEncoding(key: string): Promise<string | null> {
         return this.createWritePromise(createObjectEncoding(key));
     }
 
@@ -4881,7 +4973,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
      * ```
      */
-    public objectFreq(key: string): Promise<number | null> {
+    public async objectFreq(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectFreq(key));
     }
 
@@ -4899,7 +4991,7 @@ export class BaseClient {
      * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
      * ```
      */
-    public objectIdletime(key: string): Promise<number | null> {
+    public async objectIdletime(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectIdletime(key));
     }
 
@@ -4918,7 +5010,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
      * ```
      */
-    public objectRefcount(key: string): Promise<number | null> {
+    public async objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
     }
 
@@ -4942,7 +5034,7 @@ export class BaseClient {
      * console.log(response); // Output: Returns the function's return value.
      * ```
      */
-    public fcall(
+    public async fcall(
         func: string,
         keys: string[],
         args: string[],
@@ -4971,7 +5063,7 @@ export class BaseClient {
      * console.log(response); // Output: 42 # The return value on the function that was executed.
      * ```
      */
-    public fcallReadonly(
+    public async fcallReadonly(
         func: string,
         keys: string[],
         args: string[],
@@ -5001,7 +5093,7 @@ export class BaseClient {
      * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
      * ```
      */
-    public lpos(
+    public async lpos(
         key: string,
         element: string,
         options?: LPosOptions,
@@ -5029,7 +5121,10 @@ export class BaseClient {
      * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
      * ```
      */
-    public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
+    public async bitcount(
+        key: string,
+        options?: BitOffsetOptions,
+    ): Promise<number> {
         return this.createWritePromise(createBitCount(key, options));
     }
 
@@ -5057,7 +5152,7 @@ export class BaseClient {
      * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
      * ```
      */
-    public geoadd(
+    public async geoadd(
         key: string,
         membersToGeospatialData: Map<string, GeospatialData>,
         options?: GeoAddOptions,
@@ -5246,7 +5341,7 @@ export class BaseClient {
      * console.log(result); // Output: [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], null]
      * ```
      */
-    public geopos(
+    public async geopos(
         key: string,
         members: string[],
     ): Promise<(number[] | null)[]> {
@@ -5426,7 +5521,7 @@ export class BaseClient {
      * console.log(num); // Output: the distance between Place1 and Place2.
      * ```
      */
-    public geodist(
+    public async geodist(
         key: string,
         member1: string,
         member2: string,
@@ -5453,7 +5548,10 @@ export class BaseClient {
      * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
      * ```
      */
-    public geohash(key: string, members: string[]): Promise<(string | null)[]> {
+    public async geohash(
+        key: string,
+        members: string[],
+    ): Promise<(string | null)[]> {
         return this.createWritePromise<(string | null)[]>(
             createGeoHash(key, members),
         ).then((hashes) =>
