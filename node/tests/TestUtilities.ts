@@ -881,11 +881,11 @@ export async function transactionTest(
     baseTransaction.srem(key7, ["foo"]);
     responseData.push(['srem(key7, ["foo"])', 1]);
     baseTransaction.sscan(key7, "0");
-    responseData.push(['sscan(key7, "0")', ["0", ["foo"]]]);
+    responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
     baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
     responseData.push([
         'sscan(key7, "0", {match: "*", count: 20})',
-        ["0", ["foo"]],
+        ["0", ["bar"]],
     ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
