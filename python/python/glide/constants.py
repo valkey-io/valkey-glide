@@ -42,15 +42,21 @@ TFunctionListResponse = List[
         Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]],
     ]
 ]
-TFunctionStatsResponse = Mapping[
+TFunctionStatsSingleNodeResponse = Mapping[
     bytes,
     Union[
         None,
         Mapping[
-            bytes, Union[Mapping[bytes, Mapping[bytes, int]], bytes, int, List[bytes]]
+            bytes,
+            Union[Mapping[bytes, Mapping[bytes, int]], bytes, int, List[bytes]],
         ],
     ],
 ]
+TFunctionStatsFullResponse = Mapping[
+    bytes,
+    TFunctionStatsSingleNodeResponse,
+]
+
 
 TXInfoStreamResponse = Mapping[
     bytes, Union[bytes, int, Mapping[bytes, Optional[List[List[bytes]]]]]

@@ -18,7 +18,7 @@ from glide.constants import (
     TOK,
     TEncodable,
     TFunctionListResponse,
-    TFunctionStatsResponse,
+    TFunctionStatsFullResponse,
     TResult,
 )
 from glide.protobuf.command_request_pb2 import RequestType
@@ -390,7 +390,7 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.FunctionKill, []),
         )
 
-    async def function_stats(self) -> TFunctionStatsResponse:
+    async def function_stats(self) -> TFunctionStatsFullResponse:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -398,14 +398,14 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/function-stats/ for more details
 
         Returns:
-            TFunctionStatsResponse: A `Mapping` with two keys:
+            TFunctionStatsFullResponse: A Map where the key is the node adrress anf the value is a Map of two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.
 
         Examples:
             >>> await client.function_stats()
-                {
+                {b"addr": {
                     'running_script': {
                         'name': 'foo',
                         'command': ['FCALL', 'foo', '0', 'hello'],
@@ -417,12 +417,25 @@ class StandaloneCommands(CoreCommands):
                             'functions_count': 1,
                         }
                     }
-                }
+                },
+                b"addr2": {
+                    'running_script': {
+                        'name': 'foo',
+                        'command': ['FCALL', 'foo', '0', 'hello'],
+                        'duration_ms': 7758
+                    },
+                    'engines': {
+                        'LUA': {
+                            'libraries_count': 1,
+                            'functions_count': 1,
+                        }
+                    }
+                }}
 
         Since: Valkey version 7.0.0.
         """
         return cast(
-            TFunctionStatsResponse,
+            TFunctionStatsFullResponse,
             await self._execute_command(RequestType.FunctionStats, []),
         )
 

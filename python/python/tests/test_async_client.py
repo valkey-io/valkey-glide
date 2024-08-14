@@ -76,7 +76,7 @@ from glide.config import (
     ProtocolVersion,
     ServerCredentials,
 )
-from glide.constants import OK, TEncodable, TFunctionStatsResponse, TResult
+from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.exceptions import TimeoutError as GlideTimeoutError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
@@ -7346,6 +7346,11 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.bitop(BitwiseOperation.AND, destination, [set_key])
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_shoham(self, glide_client: GlideClusterClient):
+        print(await glide_client.function_stats(RandomNode()))
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_bitfield(self, glide_client: TGlideClient):
@@ -8222,7 +8227,10 @@ class TestCommands:
         assert await glide_client.function_load(code, True) == lib_name.encode()
 
         response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 1, 1)
+        for node_response in response.values():
+            check_function_stats_response(
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
+            )
 
         code = generate_lua_lib_code(
             lib_name + "_2",
@@ -8234,12 +8242,18 @@ class TestCommands:
         )
 
         response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 2, 3)
+        for node_response in response.values():
+            check_function_stats_response(
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
+            )
 
         assert await glide_client.function_flush(FlushMode.SYNC) == OK
 
         response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 0, 0)
+        for node_response in response.values():
+            check_function_stats_response(
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8259,7 +8273,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 1, 1
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
             )
 
         code = generate_lua_lib_code(
@@ -8274,7 +8288,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 2, 3
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
             )
 
         assert await glide_client.function_flush(FlushMode.SYNC) == OK
@@ -8282,7 +8296,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 0, 0
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
             )
 
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -8311,12 +8325,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 1, 1
+                cast(TFunctionStatsSingleNodeResponse, response), [], 1, 1
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 1, 1
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
                 )
 
         code = generate_lua_lib_code(
@@ -8332,12 +8346,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 2, 3
+                cast(TFunctionStatsSingleNodeResponse, response), [], 2, 3
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 2, 3
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
                 )
 
         assert await glide_client.function_flush(FlushMode.SYNC, route) == OK
@@ -8345,12 +8359,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 0, 0
+                cast(TFunctionStatsSingleNodeResponse, response), [], 0, 0
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 0, 0
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -10233,4 +10247,5 @@ class TestScripts:
             await glide_client.invoke_script(script, keys=[key], args=[arg])
             == key.encode()
         )
+        await glide_client.close()
         await glide_client.close()

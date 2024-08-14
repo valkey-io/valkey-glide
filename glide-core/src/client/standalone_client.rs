@@ -312,7 +312,23 @@ impl StandaloneClient {
             Some(ResponsePolicy::CombineMaps) => future::try_join_all(requests)
                 .await
                 .and_then(cluster_routing::combine_map_results),
-            Some(ResponsePolicy::Special) | None => {
+            Some(ResponsePolicy::Special) => {
+                // Await all futures and collect results
+                let results = future::try_join_all(requests).await?;
+                let map_entries = self
+                    .inner
+                    .nodes
+                    .iter()
+                    .zip(results)
+                    .map(|(node, result)| {
+                        (redis::Value::BulkString(node.node_address().into()), result)
+                    })
+                    .collect();
+
+                Ok(Value::Map(map_entries))
+            }
+
+            None => {
                 // This is our assumption - if there's no coherent way to aggregate the responses, we just collect them in an array, and pass it to the user.
                 // TODO - once Value::Error is merged, we can use join_all and report separate errors and also pass successes.
                 future::try_join_all(requests).await.map(Value::Array)
