@@ -2799,6 +2799,26 @@ export function createDump(key: GlideString): command_request.Command {
     return createCommand(RequestType.Dump, [key]);
 }
 
+/** Optional arguments for `RESTORE` command. */
+export type RestoreOptions = {
+    /**
+     * If set, existing key will be replaced.
+     */
+    replace?: boolean;
+    /**
+     * If set, the absolute timestamp (in milliseconds) for TTL will be used.
+     */
+    absttl?: boolean;
+    /**
+     * Set the object idletime.
+     */
+    idletime?: number;
+    /**
+     * Set the object frequency.
+     */
+    frequency?: number;
+};
+
 /**
  * @internal
  */
@@ -2806,8 +2826,29 @@ export function createRestore(
     key: GlideString,
     ttl: number,
     value: GlideString,
+    options?: RestoreOptions,
 ): command_request.Command {
-    return createCommand(RequestType.Restore, [key, ttl.toString(), value]);
+    const args: GlideString[] = [key, ttl.toString(), value];
+
+    if (options) {
+        if (options.replace) {
+            args.push("REPLACE");
+        }
+
+        if (options.absttl) {
+            args.push("ABSTTL");
+        }
+
+        if (options.idletime !== undefined) {
+            args.push("IDLETIME", options.idletime.toString());
+        }
+
+        if (options.frequency !== undefined) {
+            args.push("FREQ", options.frequency.toString());
+        }
+    }
+
+    return createCommand(RequestType.Restore, args);
 }
 
 /**

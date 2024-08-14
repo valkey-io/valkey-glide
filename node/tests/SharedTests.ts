@@ -5292,31 +5292,131 @@ export function runBaseTests<Context>(config: {
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
                 const key4 = "{key}-4" + uuidv4();
-                const nonExistingkey = "{key}-5" + uuidv4();
+                const key5 = "{key}-5" + uuidv4();
+                const nonExistingkey = "{nonExistingkey}-" + uuidv4();
                 const value = "orange";
                 const valueEncode = Buffer.from(value);
 
                 expect(await client.set(key1, value)).toEqual("OK");
 
                 // Dump non-existing key
-                let data = await client.dump(nonExistingkey);
-                expect(data).toBeNull();
+                expect(await client.dump(nonExistingkey)).toBeNull();
 
                 // Dump existing key
-                data = await client.dump(key1);
+                let data = await client.dump(key1);
                 expect(data).not.toBeNull();
 
-                // Restore to a new key
                 if (data != null) {
+                    // Restore to a new key without option
                     expect(await client.restore(key2, 0, data)).toEqual("OK");
+                    expect(await client.get(key2, Decoder.String)).toEqual(
+                        value,
+                    );
+                    expect(await client.get(key2, Decoder.Bytes)).toEqual(
+                        valueEncode,
+                    );
+
+                    // Restore to an existing key
+                    try {
+                        expect(await client.restore(key2, 0, data)).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "BUSYKEY: Target key name already exists.",
+                        );
+                    }
+
+                    // Restore with `REPLACE` and existing key holding different value
+                    expect(await client.sadd(key3, ["a"])).toEqual(1);
+                    expect(
+                        await client.restore(key3, 0, data, { replace: true }),
+                    ).toEqual("OK");
+
+                    // Restore with `REPLACE` option
+                    expect(
+                        await client.restore(key2, 0, data, { replace: true }),
+                    ).toEqual("OK");
+
+                    // Restore with `REPLACE`, `ABSTTL`, and positive TTL
+                    expect(
+                        await client.restore(key2, 1000, data, {
+                            replace: true,
+                            absttl: true,
+                        }),
+                    ).toEqual("OK");
+
+                    // Restore with `REPLACE`, `ABSTTL`, and negative TTL
+                    try {
+                        expect(
+                            await client.restore(key2, -10, data, {
+                                replace: true,
+                                absttl: true,
+                            }),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "ResponseError: Invalid TTL value",
+                        );
+                    }
+
+                    // Restore with REPLACE and positive idletime
+                    expect(
+                        await client.restore(key2, 0, data, {
+                            replace: true,
+                            idletime: 10,
+                        }),
+                    ).toEqual("OK");
+
+                    // Restore with REPLACE and negative idletime
+                    try {
+                        expect(
+                            await client.restore(key2, 0, data, {
+                                replace: true,
+                                idletime: -10,
+                            }),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "ResponseError: Invalid IDLETIME value",
+                        );
+                    }
+
+                    // Restore with REPLACE and positive frequency
+                    expect(
+                        await client.restore(key2, 0, data, {
+                            replace: true,
+                            frequency: 10,
+                        }),
+                    ).toEqual("OK");
+
+                    // Restore with REPLACE and negative frequency
+                    try {
+                        expect(
+                            await client.restore(key2, 0, data, {
+                                replace: true,
+                                frequency: -10,
+                            }),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "ResponseError: Invalid FREQ value",
+                        );
+                    }
                 }
 
-                expect(await client.get(key2, Decoder.String)).toEqual(value);
-                expect(await client.get(key2, Decoder.Bytes)).toEqual(
-                    valueEncode,
-                );
+                // Restore with checksumto error
+                try {
+                    expect(
+                        await client.restore(key2, 0, valueEncode, {
+                            replace: true,
+                        }),
+                    ).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "ResponseError: DUMP payload version or checksum are wrong",
+                    );
+                }
 
-                //transaction tests
+                // Transaction tests
                 let response =
                     client instanceof GlideClient
                         ? await client.exec(
@@ -5330,37 +5430,37 @@ export function runBaseTests<Context>(config: {
                 expect(response?.[0]).not.toBeNull();
                 data = response?.[0] as GlideString;
 
-                // restore with `String` exec decoder
+                // Restore with `String` exec decoder
                 response =
                     client instanceof GlideClient
                         ? await client.exec(
                               new Transaction()
-                                  .restore(key3, 0, data)
-                                  .get(key3),
+                                  .restore(key4, 0, data)
+                                  .get(key4),
                               Decoder.String,
                           )
                         : await client.exec(
                               new ClusterTransaction()
-                                  .restore(key3, 0, data)
-                                  .get(key3),
+                                  .restore(key4, 0, data)
+                                  .get(key4),
                               { decoder: Decoder.String },
                           );
                 expect(response?.[0]).toEqual("OK");
                 expect(response?.[1]).toEqual(value);
 
-                // restore with `Bytes` exec decoder
+                // Restore with `Bytes` exec decoder
                 response =
                     client instanceof GlideClient
                         ? await client.exec(
                               new Transaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
+                                  .restore(key5, 0, data)
+                                  .get(key5),
                               Decoder.Bytes,
                           )
                         : await client.exec(
                               new ClusterTransaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
+                                  .restore(key5, 0, data)
+                                  .get(key5),
                               { decoder: Decoder.Bytes },
                           );
                 expect(response?.[0]).toEqual("OK");

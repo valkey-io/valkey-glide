@@ -40,6 +40,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream,
     ScoreBoundary,
     ScoreFilter,
@@ -1085,6 +1086,7 @@ export class BaseClient {
      * @param key - The key of the set.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
      * @param value - The serialized value.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
      * @returns Return "OK" if successfully create a `key` with a `value`.
      *
      * @example
@@ -1097,8 +1099,9 @@ export class BaseClient {
         key: GlideString,
         ttl: number,
         value: GlideString,
+        options?: RestoreOptions,
     ): Promise<"OK"> {
-        return this.createWritePromise(createRestore(key, ttl, value));
+        return this.createWritePromise(createRestore(key, ttl, value, options));
     }
 
     /** Retrieve the values of multiple keys.

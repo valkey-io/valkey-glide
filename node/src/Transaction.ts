@@ -45,6 +45,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreBoundary,
     ScoreFilter,
@@ -408,11 +409,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the set.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
      * @param value - The serialized value.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
      *
      * Command Response - Return "OK" if successfully create a `key` with a `value`.
      */
-    public restore(key: GlideString, ttl: number, value: GlideString): T {
-        return this.addAndReturn(createRestore(key, ttl, value));
+    public restore(
+        key: GlideString,
+        ttl: number,
+        value: GlideString,
+        options?: RestoreOptions,
+    ): T {
+        return this.addAndReturn(createRestore(key, ttl, value, options));
     }
 
     /** Get the name of the connection on which the transaction is being executed.
