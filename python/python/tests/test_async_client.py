@@ -8211,53 +8211,9 @@ class TestCommands:
             await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats(self, glide_client: GlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        lib_name = "functionStats"
-        func_name = lib_name
-        assert await glide_client.function_flush(FlushMode.SYNC) == OK
-
-        # function $funcName returns first argument
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
-        assert await glide_client.function_load(code, True) == lib_name.encode()
-
-        response = await glide_client.function_stats()
-        for node_response in response.values():
-            check_function_stats_response(
-                cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
-            )
-
-        code = generate_lua_lib_code(
-            lib_name + "_2",
-            {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
-            False,
-        )
-        assert (
-            await glide_client.function_load(code, True) == (lib_name + "_2").encode()
-        )
-
-        response = await glide_client.function_stats()
-        for node_response in response.values():
-            check_function_stats_response(
-                cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
-            )
-
-        assert await glide_client.function_flush(FlushMode.SYNC) == OK
-
-        response = await glide_client.function_stats()
-        for node_response in response.values():
-            check_function_stats_response(
-                cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
-            )
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats_cluster(self, glide_client: GlideClusterClient):
+    async def test_function_stats(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
