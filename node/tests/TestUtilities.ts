@@ -1518,5 +1518,7 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
     return responseData;
 }

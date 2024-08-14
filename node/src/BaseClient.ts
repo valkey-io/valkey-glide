@@ -161,6 +161,7 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWait,
     createWatch,
     createXAdd,
     createXAutoClaim,
@@ -5544,6 +5545,28 @@ export class BaseClient {
      */
     public async watch(keys: string[]): Promise<"OK"> {
         return this.createWritePromise(createWatch(keys));
+    }
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred and
+     * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
+     * the number of replicas that were not yet reached.
+     *
+     * See https://valkey.io/commands/wait/ for more details.
+     *
+     * @param numreplicas - The number of replicas to reach.
+     * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+     * @returns The number of replicas reached by all the writes performed in the context of the current connection.
+     *
+     * @example
+     * ```typescript
+     * await client.set(key, value);
+     * let response = await client.wait(1, 1000);
+     * console.log(response); // Output: return 1 when a replica is reached or 0 if 1000ms is reached.
+     * ```
+     */
+    public async wait(numreplicas: number, timeout: number): Promise<number> {
+        return this.createWritePromise(createWait(numreplicas, timeout));
     }
 
     /**
