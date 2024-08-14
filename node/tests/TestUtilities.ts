@@ -845,11 +845,7 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(
-        key8,
-        { value: 2 },
-        InfBoundary.PositiveInfinity,
-    );
+    baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
         "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
         4,

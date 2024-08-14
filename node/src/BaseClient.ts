@@ -2820,23 +2820,22 @@ export class BaseClient {
     }
 
     /**
-     * Returns stream entries matching a given range of IDs.
+     * Returns stream entries matching a given range of entry IDs.
      *
      * See https://valkey.io/commands/xrange for more details.
      *
      * @param key - The key of the stream.
-     * @param start - The starting stream ID bound for the range.
-     *     - Use `value` to specify a stream ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
-     *     - Use `-` to start with the minimum available ID.
-     * @param end - The ending stream ID bound for the range.
-     *     - Use `value` to specify a stream ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
-     *     - Use `+` to end with the maximum available ID.
+     * @param start - The starting stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * @returns A mapping of stream IDs to stream entry data, where entry data is a
-     *     list of pairings with format `[[field, entry], [field, entry], ...]`.
+     * @returns A map of stream entry ids, to an array of entries.
      *
      * @example
      * ```typescript
@@ -2847,7 +2846,7 @@ export class BaseClient {
      * // {
      * //     "0-1": [["field1", "value1"]],
      * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
-     * // } // Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
      * ```
      */
     public async xrange(

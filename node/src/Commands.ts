@@ -1645,9 +1645,7 @@ function getScoreBoundaryArg(
 }
 
 /** Returns a string representation of a lex boundary as a command argument. */
-function getLexBoundaryArg(
-    score: Boundary<number> | Boundary<string>,
-): string {
+function getLexBoundaryArg(score: Boundary<number> | Boundary<string>): string {
     if (typeof score === "string") {
         // InfBoundary
         return score;

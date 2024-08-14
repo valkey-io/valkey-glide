@@ -2286,24 +2286,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns stream entries matching a given range of IDs.
+     * Returns stream entries matching a given range of entry IDs.
      *
      * See https://valkey.io/commands/xrange for more details.
      *
      * @param key - The key of the stream.
-     * @param start - The starting stream ID bound for the range.
-     *     - Use `value` to specify a stream ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
-     *     - Use `-` to start with the minimum available ID.
+     * @param start - The starting stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
      * @param end - The ending stream ID bound for the range.
-     *     - Use `value` to specify a stream ID.
-     *     - Use `isInclusive: false` to specify an exclusive bounded stream ID.
-     *     - Use `+` to end with the maximum available ID.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
      *
-     * Command Response - A mapping of stream IDs to stream entry data, where entry data is a
-     *     list of pairings with format `[[field, entry], [field, entry], ...]`.
+     * Command Response - A map of stream entry ids, to an array of entries.
      */
     public xrange(
         key: string,

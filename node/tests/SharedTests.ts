@@ -3472,22 +3472,14 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zcount(
-                        key1,
-                        InfBoundary.NegativeInfinity,
-                        {
-                            value: 3,
-                        },
-                    ),
+                    await client.zcount(key1, InfBoundary.NegativeInfinity, {
+                        value: 3,
+                    }),
                 ).toEqual(3);
                 expect(
-                    await client.zcount(
-                        key1,
-                        InfBoundary.PositiveInfinity,
-                        {
-                            value: 3,
-                        },
-                    ),
+                    await client.zcount(key1, InfBoundary.PositiveInfinity, {
+                        value: 3,
+                    }),
                 ).toEqual(0);
                 expect(
                     await client.zcount(
@@ -4756,7 +4748,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xrange test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const nonExistingKey = uuidv4();
                 const stringKey = uuidv4();
@@ -4798,7 +4790,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual(streamId3);
 
                 // get the newest entry
-                if (!client.checkIfServerVersionLessThan("6.2.0")) {
+                if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
                     expect(
                         await client.xrange(
                             key,
@@ -4999,26 +4991,18 @@ export function runBaseTests<Context>(config: {
 
                 // In range negative infinity to c (inclusive)
                 expect(
-                    await client.zlexcount(
-                        key,
-                        InfBoundary.NegativeInfinity,
-                        {
-                            value: "c",
-                            isInclusive: true,
-                        },
-                    ),
+                    await client.zlexcount(key, InfBoundary.NegativeInfinity, {
+                        value: "c",
+                        isInclusive: true,
+                    }),
                 ).toEqual(3);
 
                 // Incorrect range start > end
                 expect(
-                    await client.zlexcount(
-                        key,
-                        InfBoundary.PositiveInfinity,
-                        {
-                            value: "c",
-                            isInclusive: true,
-                        },
-                    ),
+                    await client.zlexcount(key, InfBoundary.PositiveInfinity, {
+                        value: "c",
+                        isInclusive: true,
+                    }),
                 ).toEqual(0);
 
                 // Non-existing key
