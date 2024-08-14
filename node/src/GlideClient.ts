@@ -289,7 +289,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Rewrite the configuration file with the current configuration.
-     * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io}for details.
+     * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
      *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
      *
@@ -305,6 +305,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+     * 
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
      * @returns always "OK".
