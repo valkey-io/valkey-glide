@@ -1053,13 +1053,7 @@ export function createSScan(
     let args: string[] = [key, cursor];
 
     if (options) {
-        if (options.match) {
-            args = args.concat("MATCH", options.match);
-        }
-
-        if (options.count !== undefined) {
-            args = args.concat("COUNT", options.count.toString());
-        }
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
     }
 
     return createCommand(RequestType.SScan, args);
