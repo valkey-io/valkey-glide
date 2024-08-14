@@ -24,7 +24,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    InfScoreBoundary,
+    InfBoundary,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
@@ -987,22 +987,18 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(
-        key8,
-        { value: 2 },
-        InfScoreBoundary.PositiveInfinity,
-    );
+    baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
-        "zcount(key8, { value: 2 }, InfScoreBoundary.PositiveInfinity)",
+        "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
         4,
     ]);
     baseTransaction.zlexcount(
         key8,
         { value: "a" },
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push([
-        'zlexcount(key8, { value: "a" }, InfScoreBoundary.PositiveInfinity)',
+        'zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity)',
         4,
     ]);
     baseTransaction.zpopmin(key8);
@@ -1021,14 +1017,14 @@ export async function transactionTest(
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
-        InfScoreBoundary.NegativeInfinity,
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.NegativeInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
     baseTransaction.zremRangeByLex(
         key8,
-        InfScoreBoundary.NegativeInfinity,
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.NegativeInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
@@ -1074,6 +1070,8 @@ export async function transactionTest(
     ]);
     baseTransaction.xlen(key9);
     responseData.push(["xlen(key9)", 3]);
+    baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
+    responseData.push(["xrange(key9)", { "0-1": [["field", "value1"]] }]);
     baseTransaction.xread({ [key9]: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
@@ -1131,8 +1129,8 @@ export async function transactionTest(
         [1, "0-2", "0-2", [[consumer, "1"]]],
     ]);
     baseTransaction.xpendingWithOptions(key9, groupName1, {
-        start: InfScoreBoundary.NegativeInfinity,
-        end: InfScoreBoundary.PositiveInfinity,
+        start: InfBoundary.NegativeInfinity,
+        end: InfBoundary.PositiveInfinity,
         count: 10,
     });
     responseData.push([
