@@ -33,6 +33,7 @@ import {
     ScoreFilter,
     SignedEncoding,
     SortOrder,
+    TimeUnit,
     Transaction,
     UnsignedEncoding,
 } from "..";
@@ -659,8 +660,21 @@ export async function transactionTest(
     responseData.push(["flushdb(FlushMode.SYNC)", "OK"]);
     baseTransaction.dbsize();
     responseData.push(["dbsize()", 0]);
-    baseTransaction.set(key1, "bar");
+    baseTransaction.set(key1, "foo");
     responseData.push(['set(key1, "bar")', "OK"]);
+    baseTransaction.set(key1, "bar", { returnOldValue: true });
+    responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
+
+    if (gte(version, "6.2.0")) {
+        baseTransaction.getex(key1);
+        responseData.push(["getex(key1)", "bar"]);
+        baseTransaction.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
+        responseData.push([
+            'getex(key1, {expiry: { type: "seconds", count: 1 }})',
+            "bar",
+        ]);
+    }
+
     baseTransaction.randomKey();
     responseData.push(["randomKey()", key1]);
     baseTransaction.getrange(key1, 0, -1);

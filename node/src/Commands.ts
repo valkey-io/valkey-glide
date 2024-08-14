@@ -142,26 +142,7 @@ export type SetOptions = {
      */
     | "keepExisting"
         | {
-              type: /**
-               * Set the specified expire time, in seconds. Equivalent to
-               * `EX` in the Redis API.
-               */
-              | "seconds"
-                  /**
-                   * Set the specified expire time, in milliseconds. Equivalent
-                   * to `PX` in the Redis API.
-                   */
-                  | "milliseconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in seconds. Equivalent to `EXAT` in the Redis API.
-                   */
-                  | "unixSeconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in milliseconds. Equivalent to `PXAT` in the Redis API.
-                   */
-                  | "unixMilliseconds";
+              type: TimeUnit;
               count: number;
           };
 };
@@ -187,28 +168,23 @@ export function createSet(
             args.push("GET");
         }
 
-        if (
-            options.expiry &&
-            options.expiry !== "keepExisting" &&
-            !Number.isInteger(options.expiry.count)
-        ) {
-            throw new Error(
-                `Received expiry '${JSON.stringify(
-                    options.expiry,
-                )}'. Count must be an integer`,
-            );
-        }
+        if (options.expiry) {
+            if (
+                options.expiry !== "keepExisting" &&
+                !Number.isInteger(options.expiry.count)
+            ) {
+                throw new Error(
+                    `Received expiry '${JSON.stringify(
+                        options.expiry,
+                    )}'. Count must be an integer`,
+                );
+            }
 
-        if (options.expiry === "keepExisting") {
-            args.push("KEEPTTL");
-        } else if (options.expiry?.type === "seconds") {
-            args.push("EX", options.expiry.count.toString());
-        } else if (options.expiry?.type === "milliseconds") {
-            args.push("PX", options.expiry.count.toString());
-        } else if (options.expiry?.type === "unixSeconds") {
-            args.push("EXAT", options.expiry.count.toString());
-        } else if (options.expiry?.type === "unixMilliseconds") {
-            args.push("PXAT", options.expiry.count.toString());
+            if (options.expiry === "keepExisting") {
+                args.push("KEEPTTL");
+            } else {
+                args.push(options.expiry.type, options.expiry.count.toString());
+            }
         }
     }
 
@@ -3656,4 +3632,58 @@ export function createBZPopMin(
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
+}
+
+/**
+ * Time unit representation which is used in optional arguments for {@link BaseClient.getex|getex} and {@link BaseClient.set|set} command.
+ */
+export enum TimeUnit {
+    /**
+     * Set the specified expire time, in seconds. Equivalent to
+     * `EX` in the VALKEY API.
+     */
+    Seconds = "EX",
+    /**
+     * Set the specified expire time, in milliseconds. Equivalent
+     * to `PX` in the VALKEY API.
+     */
+    Milliseconds = "PX",
+    /**
+     * Set the specified Unix time at which the key will expire,
+     * in seconds. Equivalent to `EXAT` in the VALKEY API.
+     */
+    UnixSeconds = "EXAT",
+    /**
+     * Set the specified Unix time at which the key will expire,
+     * in milliseconds. Equivalent to `PXAT` in the VALKEY API.
+     */
+    UnixMilliseconds = "PXAT",
+}
+
+/**
+ * @internal
+ */
+export function createGetEx(
+    key: string,
+    options?: "persist" | { type: TimeUnit; duration: number },
+): command_request.Command {
+    const args = [key];
+
+    if (options) {
+        if (options !== "persist" && !Number.isInteger(options.duration)) {
+            throw new Error(
+                `Received expiry '${JSON.stringify(
+                    options.duration,
+                )}'. Count must be an integer`,
+            );
+        }
+
+        if (options === "persist") {
+            args.push("PERSIST");
+        } else {
+            args.push(options.type, options.duration.toString());
+        }
+    }
+
+    return createCommand(RequestType.GetEx, args);
 }

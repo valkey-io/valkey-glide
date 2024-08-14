@@ -39,6 +39,7 @@ import {
     Script,
     SignedEncoding,
     SortOrder,
+    TimeUnit,
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
@@ -5809,7 +5810,7 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const setResWithExpirySetMilli = await client.set(key, value, {
             expiry: {
-                type: "milliseconds",
+                type: TimeUnit.Milliseconds,
                 count: 500,
             },
         });
@@ -5819,7 +5820,7 @@ export function runBaseTests<Context>(config: {
 
         const setResWithExpirySec = await client.set(key, value, {
             expiry: {
-                type: "seconds",
+                type: TimeUnit.Seconds,
                 count: 1,
             },
         });
@@ -5829,7 +5830,7 @@ export function runBaseTests<Context>(config: {
 
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
-                type: "unixSeconds",
+                type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
         });
@@ -5851,7 +5852,7 @@ export function runBaseTests<Context>(config: {
         expect(getResExpire).toEqual(null);
         const setResWithExpiryWithUmilli = await client.set(key, value, {
             expiry: {
-                type: "unixMilliseconds",
+                type: TimeUnit.UnixMilliseconds,
                 count: Date.now() + 1000,
             },
         });
@@ -5943,7 +5944,7 @@ export function runBaseTests<Context>(config: {
         // * returns the old value
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
-                type: "unixSeconds",
+                type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
             conditionalSet: "onlyIfExists",
@@ -5960,10 +5961,10 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const count = 2;
         const expiryCombination = [
-            { type: "seconds", count },
-            { type: "unixSeconds", count },
-            { type: "unixMilliseconds", count },
-            { type: "milliseconds", count },
+            { type: TimeUnit.Seconds, count },
+            { type: TimeUnit.Milliseconds, count },
+            { type: TimeUnit.UnixSeconds, count },
+            { type: TimeUnit.UnixMilliseconds, count },
             "keepExisting",
         ];
         let exist = false;
@@ -5974,10 +5975,10 @@ export function runBaseTests<Context>(config: {
                     | "keepExisting"
                     | {
                           type:
-                              | "seconds"
-                              | "milliseconds"
-                              | "unixSeconds"
-                              | "unixMilliseconds";
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
                           count: number;
                       },
                 conditionalSet: "onlyIfDoesNotExist",
@@ -6000,10 +6001,10 @@ export function runBaseTests<Context>(config: {
                     | "keepExisting"
                     | {
                           type:
-                              | "seconds"
-                              | "milliseconds"
-                              | "unixSeconds"
-                              | "unixMilliseconds";
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
                           count: number;
                       },
 
@@ -8717,6 +8718,51 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.xgroupDestroy(stringKey, groupName1),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getex test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const value = uuidv4();
+
+                expect(await client.set(key1, value)).toBe("OK");
+                expect(await client.getex(key1)).toEqual(value);
+                expect(await client.ttl(key1)).toBe(-1);
+
+                expect(
+                    await client.getex(key1, {
+                        type: TimeUnit.Seconds,
+                        duration: 15,
+                    }),
+                ).toEqual(value);
+                expect(await client.ttl(key1)).toBeGreaterThan(0);
+                expect(await client.getex(key1, "persist")).toEqual(value);
+                expect(await client.ttl(key1)).toBe(-1);
+
+                // non existent key
+                expect(await client.getex(key2)).toBeNull();
+
+                // invalid time measurement
+                await expect(
+                    client.getex(key1, {
+                        type: TimeUnit.Seconds,
+                        duration: -10,
+                    }),
+                ).rejects.toThrow(RequestError);
+
+                // Key exists, but is not a string
+                expect(await client.sadd(key2, ["a"])).toBe(1);
+                await expect(client.getex(key2)).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,

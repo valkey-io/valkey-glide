@@ -82,6 +82,7 @@ import {
     createGet,
     createGetBit,
     createGetDel,
+    createGetEx,
     createGetRange,
     createHDel,
     createHExists,
@@ -205,6 +206,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    TimeUnit,
 } from "./Commands";
 import {
     ClosingError,
@@ -935,6 +937,32 @@ export class BaseClient {
     }
 
     /**
+     * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
+     *
+     * See https://valkey.io/commands/getex for more details.
+     *
+     * @param key - The key to retrieve from the database.
+     * @param options - (Optional) Set expiriation to the given key.
+     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.getex("key", {expiry: { type: TimeUnit.Seconds, count: 5 }});
+     * console.log(result); // Output: 'value'
+     * ```
+     */
+    public async getex(
+        key: string,
+        options?: "persist" | { type: TimeUnit; duration: number },
+    ): Promise<string | null> {
+        return this.createWritePromise(createGetEx(key, options));
+    }
+
+    /**
      * Gets a string value associated with the given `key`and deletes the key.
      *
      * See https://valkey.io/commands/getdel/ for details.
@@ -1006,7 +1034,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK'
      *
      * // Example usage of set method with conditional options and expiration
-     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: "seconds", count: 5 }});
+     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: TimeUnit.Seconds, count: 5 }});
      * console.log(result2); // Output: 'OK' - Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
      *
      * // Example usage of set method with conditional options and returning old value
