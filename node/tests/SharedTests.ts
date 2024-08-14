@@ -290,8 +290,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info([InfoOptions.Commandstats]),
-                        ).join();
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -299,8 +299,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info([InfoOptions.Commandstats]),
-                        ).join();
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -327,8 +327,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.exec(new Transaction().lastsave())
                         : await client.exec(
-                            new ClusterTransaction().lastsave(),
-                        );
+                              new ClusterTransaction().lastsave(),
+                          );
                 expect(response?.[0]).toBeGreaterThan(yesterday);
             }, protocol);
         },
@@ -1207,8 +1207,12 @@ export function runBaseTests<Context>(config: {
 
                 // range of binary buffer
                 expect(await client.set(key, "This is a string")).toEqual("OK");
-                expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(valueEncoded.subarray(0, 3));
-                expect(await client.getrange(key, -3, -1, Decoder.Bytes)).toEqual(valueEncoded.subarray(-3, -1));
+                expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(
+                    valueEncoded.subarray(0, 3),
+                );
+                expect(
+                    await client.getrange(key, -3, -1, Decoder.Bytes),
+                ).toEqual(valueEncoded.subarray(-3, -1));
 
                 // out of range
                 expect(await client.getrange(key, 10, 100)).toEqual("string");
@@ -5842,13 +5846,13 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | "seconds"
-                        | "milliseconds"
-                        | "unixSeconds"
-                        | "unixMilliseconds";
-                        count: number;
-                    },
+                          type:
+                              | "seconds"
+                              | "milliseconds"
+                              | "unixSeconds"
+                              | "unixMilliseconds";
+                          count: number;
+                      },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -5868,13 +5872,13 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | "seconds"
-                        | "milliseconds"
-                        | "unixSeconds"
-                        | "unixMilliseconds";
-                        count: number;
-                    },
+                          type:
+                              | "seconds"
+                              | "milliseconds"
+                              | "unixSeconds"
+                              | "unixMilliseconds";
+                          count: number;
+                      },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,

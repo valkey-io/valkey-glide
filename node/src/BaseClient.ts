@@ -681,17 +681,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                callbackIdx,
-                transaction: command_request.Transaction.create({
-                    commands: command,
-                }),
-            })
+                  callbackIdx,
+                  transaction: command_request.Transaction.create({
+                      commands: command,
+                  }),
+              })
             : command instanceof command_request.Command
-                ? command_request.CommandRequest.create({
+              ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-                : command_request.CommandRequest.create({
+              : command_request.CommandRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -985,9 +985,11 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder
+        decoder?: Decoder,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetRange(key, start, end), { decoder: decoder });
+        return this.createWritePromise(createGetRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1070,7 +1072,10 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public mget(keys: GlideString[], decoder?: Decoder): Promise<(GlideString | null)[]> {
+    public mget(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<(GlideString | null)[]> {
         return this.createWritePromise(createMGet(keys), { decoder: decoder });
     }
 
@@ -1450,8 +1455,14 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public hget(key: GlideString, field: string, decoder?: Decoder): Promise<GlideString | null> {
-        return this.createWritePromise(createHGet(key, field), { decoder: decoder });
+    public hget(
+        key: GlideString,
+        field: string,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHGet(key, field), {
+            decoder: decoder,
+        });
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -4534,9 +4545,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-            primary: connection_request.ReadFrom.Primary,
-            preferReplica: connection_request.ReadFrom.PreferReplica,
-        };
+        primary: connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
+    };
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -5775,11 +5786,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-                "password" in options.credentials
+            "password" in options.credentials
                 ? {
-                    password: options.credentials.password,
-                    username: options.credentials.username,
-                }
+                      password: options.credentials.password,
+                      username: options.credentials.username,
+                  }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
