@@ -2302,7 +2302,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
      *
-     * Command Response - A map of stream entry ids, to an array of entries.
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
      */
     public xrange(
         key: string,

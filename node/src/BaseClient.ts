@@ -2835,13 +2835,13 @@ export class BaseClient {
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * @returns A map of stream entry ids, to an array of entries.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
      *
      * @example
      * ```typescript
      * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
      * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
-     * console.log(await client.xrange("mystream", "-", "+"));
+     * console.log(await client.xrange("mystream", InfBoundary.NegativeInfinity, InfBoundary.PositiveInfinity));
      * // Output:
      * // {
      * //     "0-1": [["field1", "value1"]],
