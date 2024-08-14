@@ -51,6 +51,7 @@ import {
     StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    TimeUnit,
     ZAddOptions,
     createAppend,
     createBLMPop,
@@ -206,7 +207,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    TimeUnit,
 } from "./Commands";
 import {
     ClosingError,
@@ -940,15 +940,14 @@ export class BaseClient {
     /**
      * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
      *
-     * See https://valkey.io/commands/getex for more details.
+     * @see {@link https://valkey.io/commands/getex/|valkey.op} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
      * @param options - (Optional) Set expiriation to the given key.
      *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
      *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
      * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
-     *
-     * since - Valkey 6.2.0 and above.
      *
      * @example
      * ```typescript
@@ -1776,7 +1775,7 @@ export class BaseClient {
     /**
      * Iterates incrementally over a hash.
      *
-     * See https://valkey.io/commands/hscan for more details.
+     * @see {@link https://valkey.io/commands//|valkey.io} for more details.
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
@@ -4369,9 +4368,8 @@ export class BaseClient {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * See https://valkey.io/commands/xautoclaim/ for more details.
-     *
-     * since Valkey version 6.2.0.
+     * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -4425,9 +4423,8 @@ export class BaseClient {
     /**
      * Transfers ownership of pending stream entries that match the specified criteria.
      *
-     * See https://valkey.io/commands/xautoclaim/ for more details.
-     *
-     * since Valkey version 6.2.0.
+     * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
@@ -5714,7 +5711,7 @@ export class BaseClient {
      * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
      * the number of replicas that were not yet reached.
      *
-     * See https://valkey.io/commands/wait/ for more details.
+     * @see {@link https://valkey.io/commands/wait/|valkey.io} for more details.
      *
      * @param numreplicas - The number of replicas to reach.
      * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.

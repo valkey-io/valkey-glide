@@ -305,7 +305,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
-     * 
+     *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
      * @returns always "OK".
