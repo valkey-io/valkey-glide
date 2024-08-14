@@ -2273,8 +2273,14 @@ export enum FunctionRestorePolicy {
 }
 
 /** @internal */
-export function createFunctionRestore(data: Buffer, policy?: FunctionRestorePolicy): command_request.Command {
-    return createCommand(RequestType.FunctionRestore, policy ? [data, policy] : [data]);
+export function createFunctionRestore(
+    data: Buffer,
+    policy?: FunctionRestorePolicy,
+): command_request.Command {
+    return createCommand(
+        RequestType.FunctionRestore,
+        policy ? [data, policy] : [data],
+    );
 }
 
 /**

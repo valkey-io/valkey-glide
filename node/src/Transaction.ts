@@ -27,8 +27,8 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionRestorePolicy, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionStatsResponse,
+    FunctionRestorePolicy,
+    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -2902,9 +2902,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the serialized payload of all loaded libraries.
      *
      * See https://valkey.io/commands/function-dump/ for details.
-     * 
+     *
      * since Valkey version 7.0.0.
-     * 
+     *
+     * @remarks This function requires {@link Decoder.Bytes} to be used in `exec` call for the current transaction.
+     *
      * @return The serialized payload of all loaded libraries.
      *
      * @example
@@ -2920,15 +2922,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Restores libraries from the serialized payload returned by {@link functionDump()}.
-     * 
+     *
      * See https://valkey.io/commands/function-restore/ for details.
-     * 
+     *
      * since Valkey version 7.0.0.
-     * 
+     *
      * @param payload - The serialized data from {@link functionDump()}.
      * @param policy - (Optional) A policy for handling existing libraries.
      * @returns `"OK"`.
-     * 
+     *
      * @example
      * ```typescript
      * await client.functionRestore(data, FunctionRestorePolicy.FLUSH);

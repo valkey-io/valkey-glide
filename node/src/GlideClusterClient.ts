@@ -373,7 +373,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Execute a transaction by processing the queued commands.
      *
-     * See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+     * @see {@link https://valkey.io/topics/transactions/} for details on Valkey Transactions.
      *
      * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
      * @param route - (Optional) If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
@@ -384,7 +384,7 @@ export class GlideClusterClient extends BaseClient {
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *     the list entry will be `null`.
-     *     If the transaction failed due to a WATCH command, `exec` will return `null`.
+     *     If the transaction failed due to a `WATCH` command, `exec` will return `null`.
      */
     public async exec(
         transaction: ClusterTransaction,
@@ -393,21 +393,29 @@ export class GlideClusterClient extends BaseClient {
             decoder?: Decoder;
         },
     ): Promise<ReturnType[] | null> {
-        if (options?.decoder == Decoder.String && transaction.requiresBinaryDecorer) {
-            throw new RequestError("Transaction has a command which requres `Decoder.Bytes`.");
+        if (
+            options?.decoder == Decoder.String &&
+            transaction.requiresBinaryDecorer
+        ) {
+            throw new RequestError(
+                "Transaction has a command which requres `Decoder.Bytes`.",
+            );
         }
-        const decoder = options?.decoder ?? transaction.requiresBinaryDecorer ? Decoder.Bytes : this.defaultDecoder;
+        const decoder =
+            (options?.decoder ?? transaction.requiresBinaryDecorer)
+                ? Decoder.Bytes
+                : this.defaultDecoder;
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             {
                 route: toProtobufRoute(options?.route),
                 decoder: decoder,
             },
-        ).then(result => 
+        ).then((result) =>
             this.processResultWithSetCommands(
                 result,
                 transaction.setCommandsIndexes,
-            )
+            ),
         );
     }
 
@@ -998,9 +1006,9 @@ export class GlideClusterClient extends BaseClient {
      * Returns the serialized payload of all loaded libraries.
      *
      * See https://valkey.io/commands/function-dump/ for details.
-     * 
+     *
      * since Valkey version 7.0.0.
-     * 
+     *
      * @return The serialized payload of all loaded libraries.
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed a random node.
@@ -1011,30 +1019,41 @@ export class GlideClusterClient extends BaseClient {
      * // data can be used to restore loaded functions on any Valkey instance
      * ```
      */
-    public async functionDump(route?: Routes): Promise<ClusterResponse<Buffer>> {
-        return this.createWritePromise(createFunctionDump(), { decoder: Decoder.Bytes, route: toProtobufRoute(route) });
+    public async functionDump(
+        route?: Routes,
+    ): Promise<ClusterResponse<Buffer>> {
+        return this.createWritePromise(createFunctionDump(), {
+            decoder: Decoder.Bytes,
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Restores libraries from the serialized payload returned by {@link functionDump()}.
-     * 
+     *
      * See https://valkey.io/commands/function-restore/ for details.
-     * 
+     *
      * since Valkey version 7.0.0.
-     * 
+     *
      * @param payload - The serialized data from {@link functionDump()}.
      * @param policy - (Optional) A policy for handling existing libraries.
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed all primary nodes.
      * @returns `"OK"`.
-     * 
+     *
      * @example
      * ```typescript
      * await client.functionRestore(data, { policy: FunctionRestorePolicy.FLUSH, route: "allPrimaries" });
      * ```
      */
-    public async functionRestore(payload: Buffer, options?: { policy?: FunctionRestorePolicy, route?: Routes }): Promise<"OK"> {
-        return this.createWritePromise(createFunctionRestore(payload, options?.policy), { decoder: Decoder.String, route: toProtobufRoute(options?.route) });
+    public async functionRestore(
+        payload: Buffer,
+        options?: { policy?: FunctionRestorePolicy; route?: Routes },
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createFunctionRestore(payload, options?.policy),
+            { decoder: Decoder.String, route: toProtobufRoute(options?.route) },
+        );
     }
 
     /**

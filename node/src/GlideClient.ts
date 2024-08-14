@@ -175,8 +175,8 @@ export class GlideClient extends BaseClient {
 
     /**
      * Execute a transaction by processing the queued commands.
-     * 
-     * See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+     *
+     * @see {@link https://valkey.io/topics/transactions/} for details on Valkey Transactions.
      *
      * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
      * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
@@ -191,17 +191,22 @@ export class GlideClient extends BaseClient {
         decoder?: Decoder,
     ): Promise<ReturnType[] | null> {
         if (decoder == Decoder.String && transaction.requiresBinaryDecorer) {
-            throw new RequestError("Transaction has a command which requres `Decoder.Bytes`.");
+            throw new RequestError(
+                "Transaction has a command which requres `Decoder.Bytes`.",
+            );
         }
-        decoder = decoder ?? transaction.requiresBinaryDecorer ? Decoder.Bytes : this.defaultDecoder;
+        decoder =
+            (decoder ?? transaction.requiresBinaryDecorer)
+                ? Decoder.Bytes
+                : this.defaultDecoder;
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             { decoder: decoder },
-        ).then(result =>
+        ).then((result) =>
             this.processResultWithSetCommands(
                 result,
                 transaction.setCommandsIndexes,
-            )
+            ),
         );
     }
 
@@ -668,9 +673,9 @@ export class GlideClient extends BaseClient {
      * Returns the serialized payload of all loaded libraries.
      *
      * See https://valkey.io/commands/function-dump/ for details.
-     * 
+     *
      * since Valkey version 7.0.0.
-     * 
+     *
      * @return The serialized payload of all loaded libraries.
      *
      * @example
@@ -680,27 +685,34 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionDump(): Promise<Buffer> {
-        return this.createWritePromise(createFunctionDump(), { decoder: Decoder.Bytes });
+        return this.createWritePromise(createFunctionDump(), {
+            decoder: Decoder.Bytes,
+        });
     }
 
     /**
      * Restores libraries from the serialized payload returned by {@link functionDump()}.
-     * 
+     *
      * See https://valkey.io/commands/function-restore/ for details.
-     * 
+     *
      * since Valkey version 7.0.0.
-     * 
+     *
      * @param payload - The serialized data from {@link functionDump()}.
      * @param policy - (Optional) A policy for handling existing libraries.
      * @returns `"OK"`.
-     * 
+     *
      * @example
      * ```typescript
      * await client.functionRestore(data, FunctionRestorePolicy.FLUSH);
      * ```
      */
-    public async functionRestore(payload: Buffer, policy?: FunctionRestorePolicy): Promise<"OK"> {
-        return this.createWritePromise(createFunctionRestore(payload, policy), { decoder: Decoder.String });
+    public async functionRestore(
+        payload: Buffer,
+        policy?: FunctionRestorePolicy,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createFunctionRestore(payload, policy), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
