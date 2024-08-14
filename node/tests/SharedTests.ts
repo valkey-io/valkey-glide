@@ -216,7 +216,7 @@ export function runBaseTests(config: {
                             const key = uuidv4();
                             const value = uuidv4();
 
-                            // No decoder ever configured or specified, transaction forced to use binary one
+                            // Regardless of decoder configured, transaction forced to use the binary one
                             const transaction =
                                 client instanceof GlideClient
                                     ? new TransactionEx()

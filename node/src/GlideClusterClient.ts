@@ -392,6 +392,7 @@ export class GlideClusterClient extends BaseClient {
         },
     ): Promise<ReturnType[] | null> {
         if (
+            options &&
             options?.decoder != Decoder.Bytes &&
             transaction.requiresBinaryDecorer
         ) {
