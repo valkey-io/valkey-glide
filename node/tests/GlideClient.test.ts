@@ -13,6 +13,7 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BaseClientConfiguration,
     Decoder,
     GlideClient,
     ListDirection,
@@ -40,12 +41,6 @@ import {
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
-
-/* eslint-disable @typescript-eslint/no-var-requires */
-
-type Context = {
-    client: GlideClient;
-};
 
 const TIMEOUT = 50000;
 
@@ -198,6 +193,7 @@ describe("GlideClient", () => {
             expect(await client.dbsize()).toBeGreaterThan(0);
             expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
+            client.close();
         },
     );
 
@@ -221,6 +217,7 @@ describe("GlideClient", () => {
             expect(await client.get(key)).toEqual(valueEncoded);
             expect(await client.get(key, Decoder.String)).toEqual(value);
             expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            client.close();
         },
     );
 
@@ -244,6 +241,7 @@ describe("GlideClient", () => {
             expect(await client.get(key)).toEqual(value);
             expect(await client.get(key, Decoder.String)).toEqual(value);
             expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            client.close();
         },
     );
 
@@ -263,6 +261,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -279,6 +278,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -302,6 +302,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -326,6 +327,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -1396,19 +1398,23 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    runBaseTests<Context>({
-        init: async (protocol, clientName?) => {
-            const options = getClientConfigurationOption(
+    runBaseTests({
+        init: async (protocol, configOverrides) => {
+            const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
             );
-            options.protocol = protocol;
-            options.clientName = clientName;
+
+            for (const key of Object.keys(configOverrides ?? {})) {
+                const param = key as keyof BaseClientConfiguration;
+                config[param] = configOverrides?.[param] as never;
+            }
+
             testsFailed += 1;
-            client = await GlideClient.createClient(options);
-            return { client, context: { client }, cluster };
+            client = await GlideClient.createClient(config);
+            return { client, cluster };
         },
-        close: (context: Context, testSucceeded: boolean) => {
+        close: (testSucceeded: boolean) => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }

@@ -401,10 +401,12 @@ export class GlideClusterClient extends BaseClient {
                 "Transaction has a command which requres `Decoder.Bytes`.",
             );
         }
+
         const decoder =
-            (options?.decoder ?? transaction.requiresBinaryDecorer)
+            options?.decoder ??
+            (transaction.requiresBinaryDecorer
                 ? Decoder.Bytes
-                : this.defaultDecoder;
+                : this.defaultDecoder);
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             {
@@ -1009,9 +1011,9 @@ export class GlideClusterClient extends BaseClient {
      *
      * since Valkey version 7.0.0.
      *
-     * @return The serialized payload of all loaded libraries.
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed a random node.
+     * @returns The serialized payload of all loaded libraries.
      *
      * @example
      * ```typescript
@@ -1029,13 +1031,13 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Restores libraries from the serialized payload returned by {@link functionDump()}.
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
      * See https://valkey.io/commands/function-restore/ for details.
      *
      * since Valkey version 7.0.0.
      *
-     * @param payload - The serialized data from {@link functionDump()}.
+     * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries.
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed all primary nodes.

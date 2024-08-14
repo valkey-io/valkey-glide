@@ -195,10 +195,12 @@ export class GlideClient extends BaseClient {
                 "Transaction has a command which requres `Decoder.Bytes`.",
             );
         }
+
         decoder =
-            (decoder ?? transaction.requiresBinaryDecorer)
+            decoder ??
+            (transaction.requiresBinaryDecorer
                 ? Decoder.Bytes
-                : this.defaultDecoder;
+                : this.defaultDecoder);
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             { decoder: decoder },
@@ -676,7 +678,7 @@ export class GlideClient extends BaseClient {
      *
      * since Valkey version 7.0.0.
      *
-     * @return The serialized payload of all loaded libraries.
+     * @returns The serialized payload of all loaded libraries.
      *
      * @example
      * ```typescript
@@ -691,13 +693,13 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Restores libraries from the serialized payload returned by {@link functionDump()}.
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
      * See https://valkey.io/commands/function-restore/ for details.
      *
      * since Valkey version 7.0.0.
      *
-     * @param payload - The serialized data from {@link functionDump()}.
+     * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries.
      * @returns `"OK"`.
      *

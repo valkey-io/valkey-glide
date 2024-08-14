@@ -10,6 +10,7 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BaseClientConfiguration,
     BitFieldGet,
     BitFieldIncrBy,
     BitFieldOverflow,
@@ -55,16 +56,18 @@ import {
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
-export function runBaseTests<Context>(config: {
+// Same as `BaseClientConfiguration`, but all fields are optional
+export type ClientConfig = Partial<BaseClientConfiguration>;
+
+export function runBaseTests(config: {
     init: (
         protocol: ProtocolVersion,
-        clientName?: string,
+        configOverrides?: ClientConfig,
     ) => Promise<{
-        context: Context;
         client: BaseClient;
         cluster: RedisCluster;
     }>;
-    close: (context: Context, testSucceeded: boolean) => void;
+    close: (testSucceeded: boolean) => void;
     timeout?: number;
 }) {
     runCommonTests({
@@ -76,11 +79,11 @@ export function runBaseTests<Context>(config: {
     const runTest = async (
         test: (client: BaseClient, cluster: RedisCluster) => Promise<void>,
         protocol: ProtocolVersion,
-        clientName?: string,
+        configOverrides?: ClientConfig,
     ) => {
-        const { context, client, cluster } = await config.init(
+        const { client, cluster } = await config.init(
             protocol,
-            clientName,
+            configOverrides,
         );
         let testSucceeded = false;
 
@@ -88,7 +91,7 @@ export function runBaseTests<Context>(config: {
             await test(client, cluster);
             testSucceeded = true;
         } finally {
-            config.close(context, testSucceeded);
+            config.close(testSucceeded);
         }
     };
 
@@ -160,7 +163,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.clientGetName()).toBe("TEST_CLIENT");
                 },
                 protocol,
-                "TEST_CLIENT",
+                { clientName: "TEST_CLIENT" },
             );
         },
         config.timeout,
@@ -184,6 +187,73 @@ export function runBaseTests<Context>(config: {
             }, protocol);
         },
         config.timeout,
+    );
+
+    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Protocol is RESP2 = %s",
+        (protocol) => {
+            it.each([Decoder.Bytes, Decoder.String, undefined])(
+                `can send transaction with command which returns bytes only when default decoder is %s`,
+                async (defaultDecoder) => {
+                    await runTest(
+                        async (client: BaseClient, cluster) => {
+                            // TODO use `dump` instead of `functionDump` and remove version check.
+                            // probably we can remove route as well if we use `dump`
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const key = uuidv4();
+                            const value = uuidv4();
+                            const route: SingleNodeRoute = {
+                                type: "primarySlotKey",
+                                key: key,
+                            };
+
+                            // No decoder ever configured or specified, transaction forced to use binary one
+                            const transaction = (
+                                client instanceof GlideClient
+                                    ? new Transaction()
+                                    : new ClusterTransaction()
+                            )
+                                .set(key, value)
+                                .get(key)
+                                .functionDump();
+                            const result =
+                                client instanceof GlideClient
+                                    ? await client.exec(
+                                          transaction as Transaction,
+                                      )
+                                    : await client.exec(
+                                          transaction as ClusterTransaction,
+                                          { route: route },
+                                      );
+                            expect(Buffer.isBuffer(result?.[2])).toBeTruthy();
+                            expect(result?.[1]).toEqual(Buffer.from(value));
+
+                            // Asking for string decoder causes an error
+                            await expect(
+                                client instanceof GlideClient
+                                    ? client.exec(
+                                          transaction as Transaction,
+                                          Decoder.String,
+                                      )
+                                    : client.exec(
+                                          transaction as ClusterTransaction,
+                                          {
+                                              decoder: Decoder.String,
+                                              route: route,
+                                          },
+                                      ),
+                            ).rejects.toThrow(
+                                "Transaction has a command which requres `Decoder.Bytes`.",
+                            );
+                        },
+                        protocol,
+                        { defaultDecoder: defaultDecoder },
+                    );
+                },
+            );
+        },
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -8554,20 +8624,20 @@ export function runBaseTests<Context>(config: {
     );
 }
 
-export function runCommonTests<Context>(config: {
-    init: () => Promise<{ context: Context; client: Client }>;
-    close: (context: Context, testSucceeded: boolean) => void;
+export function runCommonTests(config: {
+    init: () => Promise<{ client: Client }>;
+    close: (testSucceeded: boolean) => void;
     timeout?: number;
 }) {
     const runTest = async (test: (client: Client) => Promise<void>) => {
-        const { context, client } = await config.init();
+        const { client } = await config.init();
         let testSucceeded = false;
 
         try {
             await test(client);
             testSucceeded = true;
         } finally {
-            config.close(context, testSucceeded);
+            config.close(testSucceeded);
         }
     };
 

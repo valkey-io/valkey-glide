@@ -13,6 +13,7 @@ import {
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BaseClientConfiguration,
     BitwiseOperation,
     ClusterTransaction,
     Decoder,
@@ -50,9 +51,6 @@ import {
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
-type Context = {
-    client: GlideClusterClient;
-};
 
 const TIMEOUT = 50000;
 
@@ -81,25 +79,26 @@ describe("GlideClusterClient", () => {
         }
     });
 
-    runBaseTests<Context>({
-        init: async (protocol, clientName?) => {
-            const options = getClientConfigurationOption(
+    runBaseTests({
+        init: async (protocol, configOverrides) => {
+            const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
             );
-            options.protocol = protocol;
-            options.clientName = clientName;
+
+            for (const key of Object.keys(configOverrides ?? {})) {
+                const param = key as keyof BaseClientConfiguration;
+                config[param] = configOverrides?.[param] as never;
+            }
+
             testsFailed += 1;
-            client = await GlideClusterClient.createClient(options);
+            client = await GlideClusterClient.createClient(config);
             return {
-                context: {
-                    client,
-                },
                 client,
                 cluster,
             };
         },
-        close: (context: Context, testSucceeded: boolean) => {
+        close: (testSucceeded: boolean) => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }

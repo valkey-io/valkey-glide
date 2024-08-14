@@ -2907,7 +2907,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @remarks This function requires {@link Decoder.Bytes} to be used in `exec` call for the current transaction.
      *
-     * @return The serialized payload of all loaded libraries.
+     * Command Response - The serialized payload of all loaded libraries.
      *
      * @example
      * ```typescript
@@ -2921,15 +2921,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Restores libraries from the serialized payload returned by {@link functionDump()}.
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
      * See https://valkey.io/commands/function-restore/ for details.
      *
      * since Valkey version 7.0.0.
      *
-     * @param payload - The serialized data from {@link functionDump()}.
+     * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries.
-     * @returns `"OK"`.
+     *
+     * Command Response - `"OK"`.
      *
      * @example
      * ```typescript

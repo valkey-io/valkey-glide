@@ -12,8 +12,6 @@ const FreePort = require("find-free-port");
 
 const PORT_NUMBER = 4000;
 
-type EmptyObject = Record<string, never>;
-
 describe("AsyncClient", () => {
     let server: RedisServer;
     let port: number;
@@ -41,7 +39,7 @@ describe("AsyncClient", () => {
         server.close();
     });
 
-    runCommonTests<EmptyObject>({
+    runCommonTests({
         init: async () => {
             const client = await AsyncClient.CreateConnection(
                 "redis://localhost:" + port,
