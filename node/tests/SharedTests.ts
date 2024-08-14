@@ -1229,6 +1229,7 @@ export function runBaseTests<Context>(config: {
                 // range of binary buffer
                 expect(await client.set(key, "This is a string")).toEqual("OK");
                 expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(valueEncoded.subarray(0, 3));
+                expect(await client.getrange(key, -3, -1, Decoder.Bytes)).toEqual(valueEncoded.subarray(-3, -1));
 
                 // out of range
                 expect(await client.getrange(key, 10, 100)).toEqual("string");
