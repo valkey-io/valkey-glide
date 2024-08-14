@@ -5634,6 +5634,38 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "wait test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const value1 = uuidv4();
+                const value2 = uuidv4();
+
+                // assert that wait returns 0 under standalone and 1 under cluster mode.
+                expect(await client.set(key, value1)).toEqual("OK");
+
+                if (client instanceof GlideClusterClient) {
+                    expect(await client.wait(1, 1000)).toBeGreaterThanOrEqual(
+                        1,
+                    );
+                } else {
+                    expect(await client.wait(1, 1000)).toBeGreaterThanOrEqual(
+                        0,
+                    );
+                }
+
+                // command should fail on a negative timeout value
+                await expect(client.wait(1, -1)).rejects.toThrow(RequestError);
+
+                // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+                expect(await client.set(key, value2)).toEqual("OK");
+                expect(await client.wait(100, 500)).toBeGreaterThanOrEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {

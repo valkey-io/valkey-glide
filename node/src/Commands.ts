@@ -2240,6 +2240,11 @@ export function createFunctionStats(): command_request.Command {
     return createCommand(RequestType.FunctionStats, []);
 }
 
+/** @internal */
+export function createFunctionKill(): command_request.Command {
+    return createCommand(RequestType.FunctionKill, []);
+}
+
 /**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.
@@ -3445,6 +3450,17 @@ export function createWatch(keys: string[]): command_request.Command {
 /** @internal */
 export function createUnWatch(): command_request.Command {
     return createCommand(RequestType.UnWatch, []);
+}
+
+/** @internal */
+export function createWait(
+    numreplicas: number,
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.Wait, [
+        numreplicas.toString(),
+        timeout.toString(),
+    ]);
 }
 
 /**
