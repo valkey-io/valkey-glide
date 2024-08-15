@@ -5290,8 +5290,6 @@ export function runBaseTests<Context>(config: {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
-                const key4 = "{key}-4" + uuidv4();
-                const key5 = "{key}-5" + uuidv4();
                 const nonExistingkey = "{nonExistingkey}-" + uuidv4();
                 const value = "orange";
                 const valueEncode = Buffer.from(value);
@@ -5302,7 +5300,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.dump(nonExistingkey)).toBeNull();
 
                 // Dump existing key
-                let data = await client.dump(key1);
+                const data = await client.dump(key1);
                 expect(data).not.toBeNull();
 
                 if (data != null) {
