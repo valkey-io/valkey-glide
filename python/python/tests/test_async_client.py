@@ -8250,8 +8250,8 @@ class TestCommands:
                 cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
             )
 
-    """@pytest.mark.parametrize("cluster_mode", [False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_stats_running_script(
         self, request, cluster_mode, protocol, glide_client: TGlideClient
     ):
@@ -8261,7 +8261,7 @@ class TestCommands:
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
-        code = create_lua_lib_with_long_running_function(lib_name, func_name, 20, True)
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
 
         # load the library
         assert await glide_client.function_load(code, replace=True) == lib_name.encode()
@@ -8271,36 +8271,40 @@ class TestCommands:
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
         )
 
+        test_client2 = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
         async def endless_fcall_route_call():
             await test_client.fcall_ro(func_name, arguments=[])
 
         async def wait_and_function_stats():
             # it can take a few seconds for FCALL to register as running
-            await asyncio.sleep(5)
-            result = await test_client.function_stats()
+            await asyncio.sleep(3)
+            result = await test_client2.function_stats()
             running_scripts = False
-            print(result)
-            for _, res in result.items():
-                if res.get(b"running_scripts"):
+            for res in result.values():
+                if res.get(b"running_script"):
                     if running_scripts:
                         raise Exception("Already running script on a different node")
                     running_scripts = True
-                    assert (
-                        res.get(b"running_scripts").get(b"name") == func_name.encode()
-                    )
-                    assert res.get(b"running_scripts").get(b"command") == [
+                    assert res.get(b"running_script").get(b"name") == func_name.encode()
+                    assert res.get(b"running_script").get(b"command") == [
                         b"FCALL_RO",
                         func_name.encode(),
                         b"0",
                     ]
-                    assert res.get("running_scripts").get("duration_ms") > 0
+                    assert res.get(b"running_script").get(b"duration_ms") > 0
 
             assert running_scripts
 
         await asyncio.gather(
             endless_fcall_route_call(),
             wait_and_function_stats(),
-        )"""
+        )
+
+        await test_client.close()
+        await test_client2.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
