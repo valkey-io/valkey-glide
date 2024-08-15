@@ -92,14 +92,14 @@ function createCommand(
 /**
  * @internal
  */
-export function createGet(key: string): command_request.Command {
+export function createGet(key: GlideString): command_request.Command {
     return createCommand(RequestType.Get, [key]);
 }
 
 /**
  * @internal
  */
-export function createGetDel(key: string): command_request.Command {
+export function createGetDel(key: GlideString): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 
@@ -269,8 +269,8 @@ export enum InfoOptions {
 /**
  * @internal
  */
-export function createPing(str?: string): command_request.Command {
-    const args: string[] = str == undefined ? [] : [str];
+export function createPing(str?: GlideString): command_request.Command {
+    const args: GlideString[] = str == undefined ? [] : [str];
     return createCommand(RequestType.Ping, args);
 }
 

@@ -76,7 +76,7 @@ impl AsyncClient {
         })
     }
 
-    #[napi(ts_return_type = "Promise<string | null>")]
+    #[napi(ts_return_type = "Promise<string | Buffer | null>")]
     #[allow(dead_code)]
     pub fn get(&self, env: Env, key: String) -> Result<JsObject> {
         let (deferred, promise) = env.create_deferred()?;
@@ -93,7 +93,7 @@ impl AsyncClient {
         Ok(promise)
     }
 
-    #[napi(ts_return_type = "Promise<string | \"OK\" | null>")]
+    #[napi(ts_return_type = "Promise<string | Buffer | \"OK\" | null>")]
     #[allow(dead_code)]
     pub fn set(&self, env: Env, key: String, value: String) -> Result<JsObject> {
         let (deferred, promise) = env.create_deferred()?;
@@ -263,7 +263,7 @@ fn redis_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<Js
 }
 
 #[napi(
-    ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[]"
+    ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[] | Buffer"
 )]
 pub fn value_from_split_pointer(
     js_env: Env,

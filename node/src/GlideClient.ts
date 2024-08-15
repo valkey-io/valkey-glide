@@ -173,7 +173,7 @@ export class GlideClient extends BaseClient {
      *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
      *
      * @param transaction - A Transaction object containing a list of commands to be executed.
-     * @param decoder - An optional parameter to decode all commands in the transaction. If not set, 'Decoder.String' will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *      the list entry will be null.
@@ -224,6 +224,7 @@ export class GlideClient extends BaseClient {
      * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
@@ -240,8 +241,13 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(message?: string): Promise<string> {
-        return this.createWritePromise(createPing(message));
+    public async ping(options?: {
+        message?: GlideString;
+        decoder?: Decoder;
+    }): Promise<GlideString> {
+        return this.createWritePromise(createPing(options?.message), {
+            decoder: options?.decoder,
+        });
     }
 
     /** Get information and statistics about the Redis server.

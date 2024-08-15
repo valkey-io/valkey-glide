@@ -8,7 +8,12 @@ import { parse } from "path";
 import percentile from "percentile";
 import { RedisClientType, createClient, createCluster } from "redis";
 import { stdev } from "stats-lite";
-import { GlideClient, GlideClusterClient, Logger } from "valkey-glide";
+import {
+    GlideClient,
+    GlideClusterClient,
+    GlideString,
+    Logger,
+} from "valkey-glide";
 import {
     generateKeyGet,
     generateKeySet,
@@ -34,8 +39,8 @@ const runningTasks: Promise<void>[] = [];
 const benchJsonResults: object[] = [];
 
 interface IAsyncClient {
-    set: (key: string, value: string) => Promise<string | "OK" | null>;
-    get: (key: string) => Promise<string | null>;
+    set: (key: string, value: string) => Promise<GlideString | "OK" | null>;
+    get: (key: string) => Promise<GlideString | null>;
 }
 
 function chooseAction(): ChosenAction {
