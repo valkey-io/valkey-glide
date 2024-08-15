@@ -309,7 +309,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
      *
-     * @see {@link https://valkey.io/commands/getex/|valkey.op} for more details.
+     * @see {@link https://valkey.io/commands/getex/|valkey.io} for more details.
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
@@ -2673,10 +2673,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
-     * Note: `BRPOP` is a blocking command.
-     *
      * @see {@link https://valkey.io/commands/brpop/|valkey.io} for details.
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Blocking Commands} for more details and best practices.
+     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -2693,10 +2691,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
-     * Note: `BLPOP` is a blocking command.
-     *
      * @see {@link https://valkey.io/commands/blpop/|valkey.io} for details.
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Blocking Commands} for more details and best practices.
+     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -3390,7 +3386,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Pops one or more elements from the first non-empty list from the provided `keys`.
      *
      * @see {@link https://valkey.io/commands/lmpop/|valkey.io} for details.
-     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param keys - An array of keys to lists.
@@ -3557,7 +3552,6 @@ export class Transaction extends BaseTransaction<Transaction> {
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
      *
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
@@ -3695,7 +3689,6 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
      *
      * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
-     * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.

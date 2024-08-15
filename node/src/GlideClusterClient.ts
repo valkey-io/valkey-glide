@@ -285,7 +285,8 @@ function toProtobufRoute(
 
 /**
  * Client used for connection to cluster Redis servers.
- * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki} for full documentation.
+ *
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
  */
 export class GlideClusterClient extends BaseClient {
     /**

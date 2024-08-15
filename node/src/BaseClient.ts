@@ -3010,7 +3010,7 @@ export class BaseClient {
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
      * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
      *
-     * @see {@link https://valkey.io/commands/script-load/} and {@link https://valkey.io/commands/evalsha/} for details.
+     * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.

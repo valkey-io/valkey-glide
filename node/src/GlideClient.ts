@@ -131,8 +131,8 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 
 /**
  * Client used for connection to standalone Redis servers.
- * For full documentation,
- * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}
+ *
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */
 export class GlideClient extends BaseClient {
     /**
@@ -171,6 +171,7 @@ export class GlideClient extends BaseClient {
 
     /**
      * Execute a transaction by processing the queued commands.
+     *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A Transaction object containing a list of commands to be executed.
@@ -200,7 +201,7 @@ export class GlideClient extends BaseClient {
      *
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.     *
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
      *
      * @example
      * ```typescript
