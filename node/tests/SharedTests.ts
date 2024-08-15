@@ -5266,7 +5266,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `streams read xread test_%p`,
+        `streams xread test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{xread}-1-" + uuidv4();
