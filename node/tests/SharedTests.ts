@@ -349,10 +349,19 @@ export function runBaseTests<Context>(config: {
                     [key2]: value,
                     [key3]: value,
                 };
+                const valueEncoded = Buffer.from(value);
+
                 expect(await client.mset(keyValueList)).toEqual("OK");
                 expect(
                     await client.mget([key1, key2, "nonExistingKey", key3]),
                 ).toEqual([value, value, null, value]);
+
+                //mget with binary buffers
+                expect(await client.mset(keyValueList)).toEqual("OK");
+                expect(
+                    await client.mget([key1, key2, "nonExistingKey", key3], Decoder.Bytes),
+                ).toEqual([valueEncoded, valueEncoded, null, valueEncoded]);
+
             }, protocol);
         },
         config.timeout,
@@ -1208,8 +1217,15 @@ export function runBaseTests<Context>(config: {
 
                 // range of binary buffer
                 expect(await client.set(key, "This is a string")).toEqual("OK");
-                expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(valueEncoded.subarray(0, 3));
-                expect(await client.getrange(key, -3, -1, Decoder.Bytes)).toEqual(valueEncoded.subarray(-3, -1));
+                expect(await client.getrange(key, 0, 3, Decoder.Bytes)).toEqual(
+                    valueEncoded.subarray(0, 4),
+                );
+                expect(
+                    await client.getrange(key, -3, -1, Decoder.Bytes),
+                ).toEqual(valueEncoded.subarray(-3, valueEncoded.length));
+                expect(
+                    await client.getrange(key, 0, -1, Decoder.Bytes),
+                ).toEqual(valueEncoded.subarray(0, valueEncoded.length));
 
                 // out of range
                 expect(await client.getrange(key, 10, 100)).toEqual("string");
@@ -1253,12 +1269,23 @@ export function runBaseTests<Context>(config: {
                     [field1]: value,
                     [field2]: value,
                 };
+                const valueEncoded = Buffer.from(value);
+
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(await client.hget(key, field1)).toEqual(value);
                 expect(await client.hget(key, field2)).toEqual(value);
                 expect(await client.hget(key, "nonExistingField")).toEqual(
                     null,
                 );
+
+                //hget with binary buffer
+                expect(await client.hget(key, field1, Decoder.Bytes)).toEqual(valueEncoded);
+                expect(await client.hget(key, field2, Decoder.Bytes)).toEqual(valueEncoded);
+                expect(await client.hget(key, "nonExistingField", Decoder.Bytes)).toEqual(
+                    null,
+                );
+
+
             }, protocol);
         },
         config.timeout,
@@ -1693,6 +1720,7 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
+                const key2 = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const fieldValueMap = {
@@ -1700,11 +1728,21 @@ export function runBaseTests<Context>(config: {
                     [field2]: "value2",
                 };
 
+                const value1Encoded = Buffer.from("value1");
+                const value2Encoded = Buffer.from("value2");
+
                 expect(await client.hset(key1, fieldValueMap)).toEqual(2);
                 expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hvals(key1)).toEqual(["value2"]);
                 expect(await client.hvals("nonExistingHash")).toEqual([]);
+
+                //hvals with binary buffers
+                expect(await client.hset(key2, fieldValueMap)).toEqual(2);
+                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([value1Encoded, value2Encoded]);
+                expect(await client.hdel(key2, [field1])).toEqual(1);
+                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([value2Encoded]);
+
             }, protocol);
         },
         config.timeout,
@@ -5732,7 +5770,9 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
+                const key3 = uuidv4();
                 const value = uuidv4();
+                const valueEncoded = Buffer.from(value);
 
                 // Append on non-existing string(similar to SET)
                 expect(await client.append(key1, value)).toBe(value.length);
@@ -5744,6 +5784,11 @@ export function runBaseTests<Context>(config: {
                 await expect(client.append(key2, "_")).rejects.toThrow(
                     RequestError,
                 );
+
+                // Key and value as buffers 
+                expect(await client.append(key3, valueEncoded)).toBe(value.length);
+                expect(await client.append(key3, valueEncoded)).toBe(valueEncoded.length * 2);
+                expect(await client.get(key3, Decoder.Bytes)).toEqual(Buffer.concat([valueEncoded, valueEncoded]));
             }, protocol);
         },
         config.timeout,
