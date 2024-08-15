@@ -343,11 +343,14 @@ public interface ScriptingAndFunctionsCommands {
 
     /**
      * Returns information about the function that's currently running and information about the
-     * available execution engines.
+     * available execution engines.<br>
+     * <code>FUNCTION STATS</code> runs on all nodes of the server, including primary and replicas.
+     * The response includes a mapping from node address to the command response for that node.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
-     * @return A <code>Map</code> with two keys:
+     * @return A <code>Map</code> from node address to the command response for that node, where the
+     *     command contains a <code>Map</code> with two keys:
      *     <ul>
      *       <li><code>running_script</code> with information about the running script.
      *       <li><code>engines</code> with information about available engines and their stats.
@@ -355,30 +358,35 @@ public interface ScriptingAndFunctionsCommands {
      *     See example for more details.
      * @example
      *     <pre>{@code
-     * Map<String, Map<String, Object>> response = client.functionStats().get();
-     * Map<String, Object> runningScriptInfo = response.get("running_script");
-     * if (runningScriptInfo != null) {
-     *   String[] commandLine = (String[]) runningScriptInfo.get("command");
-     *   System.out.printf("Server is currently running function '%s' with command line '%s', which has been running for %d ms%n",
-     *       runningScriptInfo.get("name"), String.join(" ", commandLine), (long)runningScriptInfo.get("duration_ms"));
-     * }
-     * Map<String, Object> enginesInfo = response.get("engines");
-     * for (String engineName : enginesInfo.keySet()) {
-     *   Map<String, Long> engine = (Map<String, Long>) enginesInfo.get(engineName);
-     *   System.out.printf("Server supports engine '%s', which has %d libraries and %d functions in total%n",
-     *       engineName, engine.get("libraries_count"), engine.get("functions_count"));
+     * Map<String, Map<String, Map<String, Object>>> response = client.functionStats().get();
+     * for (String node : response.keySet()) {
+     *   Map<String, Object> runningScriptInfo = response.get(node).get("running_script");
+     *   if (runningScriptInfo != null) {
+     *     String[] commandLine = (String[]) runningScriptInfo.get("command");
+     *     System.out.printf("Node '%s' is currently running function '%s' with command line '%s', which has been running for %d ms%n",
+     *         node, runningScriptInfo.get("name"), String.join(" ", commandLine), (long)runningScriptInfo.get("duration_ms"));
+     *   }
+     *   Map<String, Object> enginesInfo = response.get(node).get("engines");
+     *   for (String engineName : enginesInfo.keySet()) {
+     *     Map<String, Long> engine = (Map<String, Long>) enginesInfo.get(engineName);
+     *     System.out.printf("Node '%s' supports engine '%s', which has %d libraries and %d functions in total%n",
+     *         node, engineName, engine.get("libraries_count"), engine.get("functions_count"));
+     *   }
      * }
      * }</pre>
      */
-    CompletableFuture<Map<String, Map<String, Object>>> functionStats();
+    CompletableFuture<Map<String, Map<String, Map<String, Object>>>> functionStats();
 
     /**
      * Returns information about the function that's currently running and information about the
-     * available execution engines.
+     * available execution engines.<br>
+     * <code>FUNCTION STATS</code> runs on all nodes of the server, including primary and replicas.
+     * The response includes a mapping from node address to the command response for that node.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
-     * @return A <code>Map</code> with two keys:
+     * @return A <code>Map</code> from node address to the command response for that node, where the
+     *     command contains a <code>Map</code> with two keys:
      *     <ul>
      *       <li><code>running_script</code> with information about the running script.
      *       <li><code>engines</code> with information about available engines and their stats.
@@ -386,20 +394,22 @@ public interface ScriptingAndFunctionsCommands {
      *     See example for more details.
      * @example
      *     <pre>{@code
-     * Map<GlideString, Map<GlideString, Object>> response = client.functionStats().get();
-     * Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
-     * if (runningScriptInfo != null) {
-     *   GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
-     *   System.out.printf("Server is currently running function '%s' with command line '%s', which has been running for %d ms%n",
-     *       runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long)runningScriptInfo.get(gs("duration_ms")));
-     * }
-     * Map<GlideString, Object> enginesInfo = response.get(gs("engines"));
-     * for (GlideString engineName : enginesInfo.keySet()) {
-     *   Map<GlideString, Long> engine = (Map<GlideString, Long>) enginesInfo.get(gs(engineName));
-     *   System.out.printf("Server supports engine '%s', which has %d libraries and %d functions in total%n",
-     *       engineName, engine.get(gs("libraries_count")), engine.get(gs("functions_count")));
+     * Map<GlideString, Map<GlideString, Map<GlideString, Object>>> response = client.functionStats().get();
+     * for (String node : response.keySet()) {
+     *   Map<GlideString, Object> runningScriptInfo = response.get(gs(node)).get(gs("running_script"));
+     *   if (runningScriptInfo != null) {
+     *     GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
+     *     System.out.printf("Node '%s' is currently running function '%s' with command line '%s', which has been running for %d ms%n",
+     *         node, runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long)runningScriptInfo.get(gs("duration_ms")));
+     *   }
+     *   Map<GlideString, Object> enginesInfo = response.get(gs(node)).get(gs("engines"));
+     *   for (GlideString engineName : enginesInfo.keySet()) {
+     *     Map<GlideString, Long> engine = (Map<GlideString, Long>) enginesInfo.get(gs(engineName));
+     *     System.out.printf("Node '%s' supports engine '%s', which has %d libraries and %d functions in total%n",
+     *         node, engineName, engine.get(gs("libraries_count")), engine.get(gs("functions_count")));
+     *   }
      * }
      * }</pre>
      */
-    CompletableFuture<Map<GlideString, Map<GlideString, Object>>> functionStatsBinary();
+    CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>> functionStatsBinary();
 }
