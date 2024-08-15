@@ -1726,7 +1726,10 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public async hvals(key: GlideString, decoder?: Decoder): Promise<GlideString[]> {
+    public async hvals(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
         return this.createWritePromise(createHVals(key), { decoder: decoder });
     }
 
@@ -5761,8 +5764,7 @@ export class BaseClient {
      *     // new value of "Hello world" with a length of 11.
      * ```
      */
-    public async append(key: GlideString, value: GlideString
-    ): Promise<number> {
+    public async append(key: GlideString, value: GlideString): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
     }
 
