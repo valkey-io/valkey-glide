@@ -30,7 +30,7 @@ import { RedisCluster } from "../../utils/TestUtils.js";
 import {
     FlushMode,
     FunctionRestorePolicy,
-    FunctionStatsResponse,
+    FunctionStatsSingleResponse,
     GeoUnit,
     SortOrder,
 } from "../build-ts/src/Commands";
@@ -833,7 +833,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             0,
                                             0,
@@ -875,7 +875,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             1,
                                             1,
@@ -966,7 +966,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             1,
                                             2,

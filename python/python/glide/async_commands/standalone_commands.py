@@ -420,8 +420,8 @@ class StandaloneCommands(CoreCommands):
                         }
                     }
                 },
-                b"addr2": {
-                    b'running_script': None,        # Response from a replica
+                b"addr2": {                         # Response from a replica
+                    b'running_script': None,
                     b"engines": {
                         b'LUA': {
                             b'libraries_count': 1,
