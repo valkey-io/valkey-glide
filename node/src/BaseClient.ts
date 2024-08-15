@@ -51,6 +51,7 @@ import {
     StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    TimeUnit,
     ZAddOptions,
     createAppend,
     createBLMPop,
@@ -206,7 +207,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    TimeUnit,
 } from "./Commands";
 import {
     ClosingError,
@@ -255,7 +255,10 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
-export type GlideString = string | Uint8Array;
+/**
+ * Union type that can store either a valid UTF-8 string or array of bytes.
+ */
+export type GlideString = string | Buffer;
 
 /**
  * Enum representing the different types of decoders.
@@ -919,8 +922,8 @@ export class BaseClient {
      * See https://valkey.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - Optional enum parameter for decoding the response.
-     * @returns If `key` exists, returns the value of `key` as a string. Otherwise, return null.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
      * ```typescript
@@ -932,7 +935,10 @@ export class BaseClient {
      * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
      * ```
      */
-    public async get(key: string, decoder?: Decoder): Promise<string | null> {
+    public async get(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(createGet(key), { decoder: decoder });
     }
 
@@ -968,6 +974,7 @@ export class BaseClient {
      * See https://valkey.io/commands/getdel/ for details.
      *
      * @param key - The key to retrieve from the database.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
@@ -978,8 +985,11 @@ export class BaseClient {
      * const value = client.getdel("key");  // value is null
      * ```
      */
-    public async getdel(key: string): Promise<string | null> {
-        return this.createWritePromise(createGetDel(key));
+    public async getdel(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetDel(key), { decoder: decoder });
     }
 
     /**
