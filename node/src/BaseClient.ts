@@ -2337,17 +2337,18 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Assume key contains a set with 200 members
-     * let cursor = "0";
-     * let result = [][];
-     * do {
-     *   const [newCursor, setElements] = await client.sscan(key1, cursor, {
-     *          count: 20,
-     *      });
-     *   cursor = newCursor;
+     * let newCursor = "0";
+     * let result = [];
      *
-     *   console.log("SSCAN iteration:");
-     *   stringResults.forEach(i => i + ", ");
-     * } while (!cursor.equals("0"));
+     * do {
+     *      result = await client.sscan(key1, newCursor, {
+     *      match: "*",
+     *      count: 5,
+     * });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
      *
      * // The output of the code above is something similar to:
      * // Cursor:  8, Match: "f*"

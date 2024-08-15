@@ -1259,6 +1259,49 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sscan testing`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // let cursor = "0";
+                // let setElements = [][];
+
+                // do {
+                //     const [newCursor, setElements] = await client.sscan(
+                //         key1,
+                //         cursor,
+                //         {
+                //             count: 20,
+                //         },
+                //     );
+                //     cursor = newCursor;
+                //     console.log();
+                //     console.log();
+                // } while (!cursor.equals("0"));
+
+                const key1 = "e";
+                await client.sadd(key1, ['a', 'aa', 'ab', 'ac']);
+
+                let newCursor = "0";
+                let result = [];
+
+                do {
+                    result = await client.sscan(key1, newCursor, {
+                        match: "*",
+                        count: 5,
+                    });
+                    newCursor = result[0];
+                    console.log("Cursor: ", newCursor);
+                    console.log("Members: ", result[1]);
+                } while (newCursor !== "0");
+
+
+
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
