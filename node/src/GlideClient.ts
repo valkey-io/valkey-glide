@@ -188,7 +188,11 @@ export class GlideClient extends BaseClient {
         transaction: Transaction,
         decoder?: Decoder,
     ): Promise<ReturnType[] | null> {
-        if (decoder != Decoder.Bytes && transaction.requiresBinaryDecorer) {
+        if (
+            decoder &&
+            decoder != Decoder.Bytes &&
+            transaction.requiresBinaryDecorer
+        ) {
             throw new RequestError(
                 "Transaction has a command which requres `Decoder.Bytes`.",
             );
