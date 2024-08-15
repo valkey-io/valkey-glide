@@ -22,6 +22,7 @@ import {
     InfoOptions,
     ListDirection,
     ProtocolVersion,
+    ReturnType,
     RequestError,
     Routes,
     ScoreFilter,
@@ -29,6 +30,7 @@ import {
 import { RedisCluster } from "../../utils/TestUtils.js";
 import {
     FlushMode,
+    FunctionRestorePolicy,
     FunctionStatsResponse,
     GeoUnit,
     SortOrder,
@@ -1258,6 +1260,226 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
+
+                    it("function dump function restore %p", async () => {
+                        if (cluster.checkIfServerVersionLessThan("7.0.0"))
+                            return;
+
+                        const config = getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        );
+                        const client =
+                            await GlideClusterClient.createClient(config);
+                        const route: Routes = singleNodeRoute
+                            ? { type: "primarySlotKey", key: "1" }
+                            : "allPrimaries";
+                        expect(
+                            await client.functionFlush(FlushMode.SYNC, route),
+                        ).toEqual("OK");
+
+                        try {
+                            // dumping an empty lib
+                            let response = await client.functionDump(route);
+
+                            if (singleNodeRoute) {
+                                expect(response.byteLength).toBeGreaterThan(0);
+                            } else {
+                                Object.values(response).forEach((d: Buffer) =>
+                                    expect(d.byteLength).toBeGreaterThan(0),
+                                );
+                            }
+
+                            const name1 = "Foster";
+                            const name2 = "Dogster";
+                            // function $name1 returns first argument
+                            // function $name2 returns argument array len
+                            let code = generateLuaLibCode(
+                                name1,
+                                new Map([
+                                    [name1, "return args[1]"],
+                                    [name2, "return #args"],
+                                ]),
+                                false,
+                            );
+                            expect(
+                                await client.functionLoad(
+                                    code,
+                                    undefined,
+                                    route,
+                                ),
+                            ).toEqual(name1);
+
+                            const flist = await client.functionList(
+                                { withCode: true },
+                                route,
+                            );
+                            response = await client.functionDump(route);
+                            const dump = (
+                                singleNodeRoute
+                                    ? response
+                                    : Object.values(response)[0]
+                            ) as Buffer;
+
+                            // restore without cleaning the lib and/or overwrite option causes an error
+                            await expect(
+                                client.functionRestore(dump, { route: route }),
+                            ).rejects.toThrow(
+                                `Library ${name1} already exists`,
+                            );
+
+                            // APPEND policy also fails for the same reason (name collision)
+                            await expect(
+                                client.functionRestore(dump, {
+                                    policy: FunctionRestorePolicy.APPEND,
+                                    route: route,
+                                }),
+                            ).rejects.toThrow(
+                                `Library ${name1} already exists`,
+                            );
+
+                            // REPLACE policy succeeds
+                            expect(
+                                await client.functionRestore(dump, {
+                                    policy: FunctionRestorePolicy.REPLACE,
+                                    route: route,
+                                }),
+                            ).toEqual("OK");
+                            // but nothing changed - all code overwritten
+                            expect(
+                                await client.functionList(
+                                    { withCode: true },
+                                    route,
+                                ),
+                            ).toEqual(flist);
+
+                            // create lib with another name, but with the same function names
+                            expect(
+                                await client.functionFlush(
+                                    FlushMode.SYNC,
+                                    route,
+                                ),
+                            ).toEqual("OK");
+                            code = generateLuaLibCode(
+                                name2,
+                                new Map([
+                                    [name1, "return args[1]"],
+                                    [name2, "return #args"],
+                                ]),
+                                false,
+                            );
+                            expect(
+                                await client.functionLoad(
+                                    code,
+                                    undefined,
+                                    route,
+                                ),
+                            ).toEqual(name2);
+
+                            // REPLACE policy now fails due to a name collision
+                            await expect(
+                                client.functionRestore(dump, { route: route }),
+                            ).rejects.toThrow(
+                                new RegExp(
+                                    `Function ${name1}|${name2} already exists`,
+                                ),
+                            );
+
+                            // FLUSH policy succeeds, but deletes the second lib
+                            expect(
+                                await client.functionRestore(dump, {
+                                    policy: FunctionRestorePolicy.FLUSH,
+                                    route: route,
+                                }),
+                            ).toEqual("OK");
+                            expect(
+                                await client.functionList(
+                                    { withCode: true },
+                                    route,
+                                ),
+                            ).toEqual(flist);
+
+                            // call restored functions
+                            let res = await client.fcallWithRoute(
+                                name1,
+                                ["meow", "woem"],
+                                route,
+                            );
+
+                            if (singleNodeRoute) {
+                                expect(res).toEqual("meow");
+                            } else {
+                                Object.values(
+                                    res as Record<string, ReturnType>,
+                                ).forEach((r) => expect(r).toEqual("meow"));
+                            }
+
+                            res = await client.fcallWithRoute(
+                                name2,
+                                ["meow", "woem"],
+                                route,
+                            );
+
+                            if (singleNodeRoute) {
+                                expect(res).toEqual(2);
+                            } else {
+                                Object.values(
+                                    res as Record<string, ReturnType>,
+                                ).forEach((r) => expect(r).toEqual(2));
+                            }
+                        } finally {
+                            expect(await client.functionFlush()).toEqual("OK");
+                            client.close();
+                        }
+                    });
+
+                    it("function dump function restore in transaction %p", async () => {
+                        if (cluster.checkIfServerVersionLessThan("7.0.0"))
+                            return;
+
+                        const config = getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        );
+                        const client =
+                            await GlideClusterClient.createClient(config);
+                        expect(await client.functionFlush()).toEqual("OK");
+
+                        try {
+                            const name1 = "Foster";
+                            const name2 = "Dogster";
+                            // function returns first argument
+                            const code = generateLuaLibCode(
+                                name1,
+                                new Map([[name2, "return args[1]"]]),
+                                false,
+                            );
+                            expect(await client.functionLoad(code)).toEqual(
+                                name1,
+                            );
+
+                            // Verify functionDump
+                            let transaction =
+                                new ClusterTransaction().functionDump();
+                            const result = await client.exec(transaction);
+                            const data = result?.[0] as Buffer;
+
+                            // Verify functionRestore
+                            transaction = new ClusterTransaction()
+                                .functionRestore(
+                                    data,
+                                    FunctionRestorePolicy.REPLACE,
+                                )
+                                .fcall(name2, [], ["meow"]);
+                            expect(await client.exec(transaction)).toEqual([
+                                "OK",
+                                "meow",
+                            ]);
+                        } finally {
+                            expect(await client.functionFlush()).toEqual("OK");
+                            client.close();
+                        }
+                    });
                 },
             );
             it(

@@ -765,7 +765,7 @@ export class GlideClusterClient extends BaseClient {
         func: string,
         args: string[],
         route?: Routes,
-    ): Promise<ReturnType> {
+    ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCall(func, [], args), {
             route: toProtobufRoute(route),
         });
@@ -795,7 +795,7 @@ export class GlideClusterClient extends BaseClient {
         func: string,
         args: string[],
         route?: Routes,
-    ): Promise<ReturnType> {
+    ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCallReadOnly(func, [], args), {
             route: toProtobufRoute(route),
         });
@@ -893,7 +893,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param options - Parameters to filter and request additional info.
      * @param route - The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to a random route.
+     *     If not defined, the command will be routed to a random node.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -1007,9 +1007,8 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns the serialized payload of all loaded libraries.
      *
-     * See https://valkey.io/commands/function-dump/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed a random node.
@@ -1033,9 +1032,8 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
-     * See https://valkey.io/commands/function-restore/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries.

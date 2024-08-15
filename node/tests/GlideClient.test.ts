@@ -22,7 +22,11 @@ import {
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode, SortOrder } from "../build-ts/src/Commands";
+import {
+    FlushMode,
+    FunctionRestorePolicy,
+    SortOrder,
+} from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -978,6 +982,147 @@ describe("GlideClient", () => {
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 testClient.close();
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function dump function restore %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            const client = await GlideClient.createClient(config);
+            expect(await client.functionFlush()).toEqual("OK");
+
+            try {
+                // dumping an empty lib
+                expect(
+                    (await client.functionDump()).byteLength,
+                ).toBeGreaterThan(0);
+
+                const name1 = "Foster";
+                const name2 = "Dogster";
+                // function $name1 returns first argument
+                // function $name2 returns argument array len
+                let code = generateLuaLibCode(
+                    name1,
+                    new Map([
+                        [name1, "return args[1]"],
+                        [name2, "return #args"],
+                    ]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name1);
+
+                const flist = await client.functionList({ withCode: true });
+                const dump = await client.functionDump();
+
+                // restore without cleaning the lib and/or overwrite option causes an error
+                await expect(client.functionRestore(dump)).rejects.toThrow(
+                    `Library ${name1} already exists`,
+                );
+
+                // APPEND policy also fails for the same reason (name collision)
+                await expect(
+                    client.functionRestore(dump, FunctionRestorePolicy.APPEND),
+                ).rejects.toThrow(`Library ${name1} already exists`);
+
+                // REPLACE policy succeeds
+                expect(
+                    await client.functionRestore(
+                        dump,
+                        FunctionRestorePolicy.REPLACE,
+                    ),
+                ).toEqual("OK");
+                // but nothing changed - all code overwritten
+                expect(await client.functionList({ withCode: true })).toEqual(
+                    flist,
+                );
+
+                // create lib with another name, but with the same function names
+                expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
+                    "OK",
+                );
+                code = generateLuaLibCode(
+                    name2,
+                    new Map([
+                        [name1, "return args[1]"],
+                        [name2, "return #args"],
+                    ]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name2);
+
+                // REPLACE policy now fails due to a name collision
+                await expect(client.functionRestore(dump)).rejects.toThrow(
+                    new RegExp(`Function ${name1}|${name2} already exists`),
+                );
+
+                // FLUSH policy succeeds, but deletes the second lib
+                expect(
+                    await client.functionRestore(
+                        dump,
+                        FunctionRestorePolicy.FLUSH,
+                    ),
+                ).toEqual("OK");
+                expect(await client.functionList({ withCode: true })).toEqual(
+                    flist,
+                );
+
+                // call restored functions
+                expect(await client.fcall(name1, [], ["meow", "woem"])).toEqual(
+                    "meow",
+                );
+                expect(await client.fcall(name2, [], ["meow", "woem"])).toEqual(
+                    2,
+                );
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function dump function restore in transaction %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            const client = await GlideClient.createClient(config);
+            expect(await client.functionFlush()).toEqual("OK");
+
+            try {
+                const name1 = "Foster";
+                const name2 = "Dogster";
+                // function returns first argument
+                const code = generateLuaLibCode(
+                    name1,
+                    new Map([[name2, "return args[1]"]]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name1);
+
+                // Verify functionDump
+                let transaction = new Transaction().functionDump();
+                const result = await client.exec(transaction);
+                const data = result?.[0] as Buffer;
+
+                // Verify functionRestore
+                transaction = new Transaction()
+                    .functionRestore(data, FunctionRestorePolicy.REPLACE)
+                    .fcall(name2, [], ["meow"]);
+                expect(await client.exec(transaction)).toEqual(["OK", "meow"]);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
                 client.close();
             }
         },
