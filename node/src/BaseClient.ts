@@ -2350,12 +2350,12 @@ export class BaseClient {
      * } while (!cursor.equals("0"));
      *
      * // The output of the code above is something similar to:
-     * // Cursor:  31
-     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
-     * // Cursor:  39
-     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
+     * // Cursor:  8, Match: "f*"
+     * // Members:  ['field', 'fur', 'fun', 'fame']
+     * // Cursor:  20, Count: 3
+     * // Members:  ['1', '2', '3', '4', '5', '6']
      * // Cursor:  0
-     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * // Members:  ['1', '2', '3', '4', '5', '6']
      * ```
      */
     public async sscan(
