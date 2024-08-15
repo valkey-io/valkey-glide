@@ -1279,6 +1279,40 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `testing hkeys with exiting, an non exising key and error request key_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const key2 = uuidv4();
+                const field1 = uuidv4();
+                const field2 = uuidv4();
+                const value = uuidv4();
+                const value2 = uuidv4();
+                const fieldValueMap = {
+                    [field1]: value,
+                    [field2]: value2,
+                };
+
+                // set up hash with two keys/values
+                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(await client.hkeys(key)).toEqual([field1, field2]);
+
+                // remove one key
+                expect(await client.hdel(key, [field1])).toEqual(1);
+                expect(await client.hkeys(key)).toEqual([field2]);
+
+                // non-existing key returns an empty list
+                expect(await client.hkeys("nonExistingKey")).toEqual([]);
+
+                // Key exists, but it is not a hash
+                expect(await client.set(key2, value)).toEqual("OK");
+                await expect(client.hkeys(key2)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
