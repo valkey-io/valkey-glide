@@ -92,14 +92,14 @@ function createCommand(
 /**
  * @internal
  */
-export function createGet(key: string): command_request.Command {
+export function createGet(key: GlideString): command_request.Command {
     return createCommand(RequestType.Get, [key]);
 }
 
 /**
  * @internal
  */
-export function createGetDel(key: string): command_request.Command {
+export function createGetDel(key: GlideString): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 
@@ -269,8 +269,8 @@ export enum InfoOptions {
 /**
  * @internal
  */
-export function createPing(str?: string): command_request.Command {
-    const args: string[] = str == undefined ? [] : [str];
+export function createPing(str?: GlideString): command_request.Command {
+    const args: GlideString[] = str == undefined ? [] : [str];
     return createCommand(RequestType.Ping, args);
 }
 
@@ -1016,6 +1016,23 @@ export function createSRem(
     members: string[],
 ): command_request.Command {
     return createCommand(RequestType.SRem, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
+export function createSScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.SScan, args);
 }
 
 /**

@@ -58,7 +58,7 @@ import { Transaction } from "./Transaction";
 export namespace GlideClientConfiguration {
     /**
      * Enum representing pubsub subscription modes.
-     * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
+     * @see {@link  https://valkey.io/docs/topics/pubsub/|Valkey PubSub Documentation} for more details.
      */
     export enum PubSubChannelModes {
         /**
@@ -131,8 +131,8 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
 
 /**
  * Client used for connection to standalone Redis servers.
- * For full documentation, see
- * https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone
+ *
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone|Valkey Glide Wiki}.
  */
 export class GlideClient extends BaseClient {
     /**
@@ -169,11 +169,13 @@ export class GlideClient extends BaseClient {
         );
     }
 
-    /** Execute a transaction by processing the queued commands.
-     *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+    /**
+     * Execute a transaction by processing the queued commands.
+     *
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A Transaction object containing a list of commands to be executed.
-     * @param decoder - An optional parameter to decode all commands in the transaction. If not set, 'Decoder.String' will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
      * @returns A list of results corresponding to the execution of each command in the transaction.
      *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
      *      the list entry will be null.
@@ -199,8 +201,7 @@ export class GlideClient extends BaseClient {
      *
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
-     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
-     * for details on the restrictions and limitations of the custom command API.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
      *
      * @example
      * ```typescript
@@ -219,11 +220,12 @@ export class GlideClient extends BaseClient {
     }
 
     /** Ping the Redis server.
-     * See https://valkey.io/commands/ping/ for details.
+     * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
      * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
@@ -240,12 +242,17 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(message?: string): Promise<string> {
-        return this.createWritePromise(createPing(message));
+    public async ping(options?: {
+        message?: GlideString;
+        decoder?: Decoder;
+    }): Promise<GlideString> {
+        return this.createWritePromise(createPing(options?.message), {
+            decoder: options?.decoder,
+        });
     }
 
     /** Get information and statistics about the Redis server.
-     *  See https://valkey.io/commands/info/ for details.
+     * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
@@ -256,7 +263,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Change the currently selected Redis database.
-     * See https://valkey.io/commands/select/ for details.
+     * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
      * @returns A simple OK response.
@@ -273,7 +280,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Get the name of the primary's connection.
-     *  See https://valkey.io/commands/client-getname/ for more details.
+     * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for more details.
      *
      * @returns the name of the client connection as a string if a name is set, or null if no name is assigned.
      *
@@ -289,7 +296,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Rewrite the configuration file with the current configuration.
-     * See https://valkey.io/commands/config-rewrite/ for details.
+     * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
      *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
      *
@@ -305,7 +312,8 @@ export class GlideClient extends BaseClient {
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
-     * See https://valkey.io/commands/config-resetstat/ for details.
+     *
+     * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
      * @returns always "OK".
      *
@@ -321,7 +329,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Returns the current connection id.
-     * See https://valkey.io/commands/client-id/ for details.
+     * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
      * @returns the id of the client.
      */
@@ -330,7 +338,8 @@ export class GlideClient extends BaseClient {
     }
 
     /** Reads the configuration parameters of a running Redis server.
-     *  See https://valkey.io/commands/config-get/ for details.
+     *
+     * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      *
@@ -349,11 +358,11 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createConfigGet(parameters));
     }
 
-    /** Set configuration parameters to the specified values.
-     *   See https://valkey.io/commands/config-set/ for details.
+    /**
+     * Set configuration parameters to the specified values.
      *
+     * @see {@link  https://valkey.io/commands/config-set/|valkey.io} for details.
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
-     *
      * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
@@ -368,7 +377,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Echoes the provided `message` back.
-     * See https://valkey.io/commands/echo for more details.
+     * @see {@link https://valkey.io/commands/echo|valkey.io} for more details.
      *
      * @param message - The message to be echoed back.
      * @returns The provided `message`.
@@ -385,7 +394,7 @@ export class GlideClient extends BaseClient {
     }
 
     /** Returns the server time
-     * See https://valkey.io/commands/time/ for details.
+     * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
      * @returns - The current server time as a two items `array`:
      * A Unix timestamp and the amount of microseconds already elapsed in the current second.
@@ -408,7 +417,8 @@ export class GlideClient extends BaseClient {
      * When `replace` is true, removes the `destination` key first if it already exists, otherwise performs
      * no action.
      *
-     * See https://valkey.io/commands/copy/ for more details.
+     * @see {@link https://valkey.io/commands/copy/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
@@ -417,8 +427,6 @@ export class GlideClient extends BaseClient {
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -447,7 +455,7 @@ export class GlideClient extends BaseClient {
     /**
      * Move `key` from the currently selected database to the database specified by `dbIndex`.
      *
-     * See https://valkey.io/commands/move/ for more details.
+     * @see {@link https://valkey.io/commands/move/|valkey.io} for more details.
      *
      * @param key - The key to move.
      * @param dbIndex - The index of the database to move `key` to.
@@ -467,7 +475,7 @@ export class GlideClient extends BaseClient {
     /**
      * Displays a piece of generative computer art and the server version.
      *
-     * See https://valkey.io/commands/lolwut/ for more details.
+     * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for more details.
      *
      * @param options - The LOLWUT options
      * @returns A piece of generative computer art along with the current server version.
@@ -485,9 +493,8 @@ export class GlideClient extends BaseClient {
     /**
      * Deletes a library and all its functions.
      *
-     * See https://valkey.io/commands/function-delete/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-delete/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      * @returns A simple OK response.
@@ -505,9 +512,8 @@ export class GlideClient extends BaseClient {
     /**
      * Loads a library to Valkey.
      *
-     * See https://valkey.io/commands/function-load/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-load/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param replace - Whether the given library should overwrite a library with the same name if it
@@ -533,9 +539,8 @@ export class GlideClient extends BaseClient {
     /**
      * Deletes all function libraries.
      *
-     * See https://valkey.io/commands/function-flush/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns A simple OK response.
@@ -553,9 +558,8 @@ export class GlideClient extends BaseClient {
     /**
      * Returns information about the functions and libraries.
      *
-     * See https://valkey.io/commands/function-list/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param options - Parameters to filter and request additional info.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
@@ -589,15 +593,13 @@ export class GlideClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * See https://valkey.io/commands/function-stats/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @returns A `Record` with two keys:
      *     - `"running_script"` with information about the running script.
      *     - `"engines"` with information about available engines and their stats.
-     *
-     * See example for more details.
+     *     - see example for more details.
      *
      * @example
      * ```typescript
@@ -658,7 +660,7 @@ export class GlideClient extends BaseClient {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * See https://valkey.io/commands/flushall/ for more details.
+     * @see {@link https://valkey.io/commands/flushall/|valkey.io} for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns `OK`.
@@ -676,7 +678,7 @@ export class GlideClient extends BaseClient {
     /**
      * Deletes all the keys of the currently selected database. This command never fails.
      *
-     * See https://valkey.io/commands/flushdb/ for more details.
+     * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for more details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns `OK`.
@@ -694,7 +696,7 @@ export class GlideClient extends BaseClient {
     /**
      * Returns the number of keys in the currently selected database.
      *
-     * See https://valkey.io/commands/dbsize/ for more details.
+     * @see {@link https://valkey.io/commands/dbsize/|valkey.io} for more details.
      *
      * @returns The number of keys in the currently selected database.
      *
@@ -710,7 +712,7 @@ export class GlideClient extends BaseClient {
 
     /** Publish a message on pubsub channel.
      *
-     * See https://valkey.io/commands/publish for more details.
+     * @see {@link https://valkey.io/commands/publish/|valkey.io} for more details.
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
@@ -736,7 +738,7 @@ export class GlideClient extends BaseClient {
      *
      * To store the result into a new key, see {@link sortStore}.
      *
-     * See https://valkey.io/commands/sort for more details.
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - The {@link SortOptions}.
@@ -766,7 +768,8 @@ export class GlideClient extends BaseClient {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - The {@link SortOptions}.
@@ -797,9 +800,9 @@ export class GlideClient extends BaseClient {
      *
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
      *
-     * See https://valkey.io/commands/sort for more details.
-     *
+     * @see {@link https://valkey.io/commands/sort|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
      * @param options - The {@link SortOptions}.
@@ -827,7 +830,7 @@ export class GlideClient extends BaseClient {
      * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
      * was made since then.
      *
-     * See https://valkey.io/commands/lastsave/ for more details.
+     * @see {@link https://valkey.io/commands/lastsave/|valkey.io} for more details.
      *
      * @returns `UNIX TIME` of the last DB save executed with success.
      * @example
@@ -843,7 +846,7 @@ export class GlideClient extends BaseClient {
     /**
      * Returns a random existing key name from the currently selected database.
      *
-     * See https://valkey.io/commands/randomkey/ for more details.
+     * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for more details.
      *
      * @returns A random existing key name from the currently selected database.
      *
@@ -861,7 +864,7 @@ export class GlideClient extends BaseClient {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * See https://valkey.io/commands/unwatch/ and https://valkey.io/topics/transactions/#cas for more details.
+     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
      *
      * @returns A simple "OK" response.
      *
