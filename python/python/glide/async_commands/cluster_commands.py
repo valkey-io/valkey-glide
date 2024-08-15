@@ -596,7 +596,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/function-stats/ for more details
 
         Args:
-            route (Optional[Route]):The command will be routed automatically to all nodes, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:

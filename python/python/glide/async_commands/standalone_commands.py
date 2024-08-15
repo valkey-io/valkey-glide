@@ -398,14 +398,14 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/function-stats/ for more details
 
         Returns:
-            TFunctionStatsFullResponse: A Map where the key is the node adrress anf the value is a Map of two keys:
+            TFunctionStatsFullResponse: A Map where the key is the node address and the value is a Map of two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.
 
         Examples:
             >>> await client.function_stats()
-                {b"addr": {
+                {b"addr": {                         # Response from the master node
                     'running_script': {
                         'name': 'foo',
                         'command': ['FCALL', 'foo', '0', 'hello'],
@@ -419,12 +419,8 @@ class StandaloneCommands(CoreCommands):
                     }
                 },
                 b"addr2": {
-                    'running_script': {
-                        'name': 'foo',
-                        'command': ['FCALL', 'foo', '0', 'hello'],
-                        'duration_ms': 7758
-                    },
-                    'engines': {
+                    'running_script': None,
+                    b"engines": {
                         'LUA': {
                             'libraries_count': 1,
                             'functions_count': 1,

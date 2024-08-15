@@ -321,7 +321,7 @@ impl StandaloneClient {
                     .iter()
                     .zip(results)
                     .map(|(node, result)| {
-                        (redis::Value::BulkString(node.node_address().into()), result)
+                        (Value::BulkString(node.node_address().into()), result)
                     })
                     .collect();
 
