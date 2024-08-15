@@ -8,7 +8,7 @@ import {
     valueFromSplitPointer,
 } from "glide-rs";
 import * as net from "net";
-import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
+import { Buffer, BufferWriter, Long, Reader, Writer } from "protobufjs";
 import {
     AggregationType,
     BaseScanOptions,
@@ -22,6 +22,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     GeoAddOptions,
@@ -29,6 +30,7 @@ import {
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoSearchResultOptions,
     GeoSearchShape,
+    GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
     InsertPosition,
@@ -39,29 +41,37 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
-    ScoreBoundary,
+    ReturnTypeXinfoStream,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
     StreamAddOptions,
+    StreamClaimOptions,
+    StreamGroupOptions,
+    StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    TimeUnit,
     ZAddOptions,
+    createAppend,
+    createBLMPop,
     createBLMove,
     createBLPop,
     createBRPop,
     createBZMPop,
+    createBZPopMax,
+    createBZPopMin,
     createBitCount,
     createBitField,
     createBitOp,
     createBitPos,
-    createBLMPop,
     createDecr,
     createDecrBy,
     createDel,
     createExists,
     createExpire,
     createExpireAt,
+    createExpireTime,
     createFCall,
     createFCallReadOnly,
     createGeoAdd,
@@ -69,9 +79,12 @@ import {
     createGeoHash,
     createGeoPos,
     createGeoSearch,
+    createGeoSearchStore,
     createGet,
     createGetBit,
     createGetDel,
+    createGetEx,
+    createGetRange,
     createHDel,
     createHExists,
     createHGet,
@@ -80,6 +93,8 @@ import {
     createHIncrByFloat,
     createHLen,
     createHMGet,
+    createHRandField,
+    createHScan,
     createHSet,
     createHSetNX,
     createHStrlen,
@@ -91,8 +106,8 @@ import {
     createLIndex,
     createLInsert,
     createLLen,
-    createLMove,
     createLMPop,
+    createLMove,
     createLPop,
     createLPos,
     createLPush,
@@ -110,11 +125,15 @@ import {
     createObjectRefcount,
     createPExpire,
     createPExpireAt,
+    createPExpireTime,
     createPTTL,
     createPersist,
     createPfAdd,
     createPfCount,
     createPfMerge,
+    createPubSubChannels,
+    createPubSubNumPat,
+    createPubSubNumSub,
     createRPop,
     createRPush,
     createRPushX,
@@ -132,7 +151,9 @@ import {
     createSMembers,
     createSMove,
     createSPop,
+    createSRandMember,
     createSRem,
+    createSScan,
     createSUnion,
     createSUnionStore,
     createSet,
@@ -143,9 +164,21 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWait,
+    createWatch,
     createXAdd,
+    createXAutoClaim,
+    createXClaim,
     createXDel,
+    createXGroupCreate,
+    createXGroupCreateConsumer,
+    createXGroupDelConsumer,
+    createXGroupDestroy,
+    createXInfoConsumers,
+    createXInfoStream,
     createXLen,
+    createXPending,
+    createXRange,
     createXRead,
     createXTrim,
     createZAdd,
@@ -164,6 +197,7 @@ import {
     createZPopMin,
     createZRandMember,
     createZRange,
+    createZRangeStore,
     createZRangeWithScores,
     createZRank,
     createZRem,
@@ -172,8 +206,8 @@ import {
     createZRemRangeByScore,
     createZRevRank,
     createZRevRankWithScore,
-    createZScore,
     createZScan,
+    createZScore,
 } from "./Commands";
 import {
     ClosingError,
@@ -222,15 +256,56 @@ export type ReturnType =
     | ReturnTypeAttribute
     | ReturnType[];
 
+/**
+ * Union type that can store either a valid UTF-8 string or array of bytes.
+ */
+export type GlideString = string | Buffer;
+
+/**
+ * Enum representing the different types of decoders.
+ */
+export const enum Decoder {
+    /**
+     * Decodes the response into a buffer array.
+     */
+    Bytes,
+    /**
+     * Decodes the response into a string.
+     */
+    String,
+}
+
+/**
+ * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
+ * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
+ */
+class PointerResponse {
+    pointer: number | Long | null;
+    // As Javascript does not support 64-bit integers,
+    // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
+    high: number | undefined;
+    low: number | undefined;
+
+    constructor(
+        pointer: number | Long | null,
+        high?: number | undefined,
+        low?: number | undefined,
+    ) {
+        this.pointer = pointer;
+        this.high = high;
+        this.low = low;
+    }
+}
+
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
     /**
-     * The username that will be used for authenticating connections to the Redis servers.
+     * The username that will be used for authenticating connections to the Valkey servers.
      * If not supplied, "default" will be used.
      */
     username?: string;
     /**
-     * The password that will be used for authenticating connections to the Redis servers.
+     * The password that will be used for authenticating connections to the Valkey servers.
      */
     password: string;
 };
@@ -302,6 +377,11 @@ export type BaseClientConfiguration = {
      * Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
      */
     clientName?: string;
+    /**
+     * Default decoder when decoder is not set per command.
+     * If not set, 'Decoder.String' will be used.
+     */
+    defaultDecoder?: Decoder;
 };
 
 export type ScriptOptions = {
@@ -342,6 +422,11 @@ export type PubSubMsg = {
     channel: string;
     pattern?: string | null;
 };
+
+export type WritePromiseOptions = {
+    decoder?: Decoder;
+    route?: command_request.Routes;
+};
 export class BaseClient {
     private socket: net.Socket;
     private readonly promiseCallbackFunctions: [
@@ -354,6 +439,7 @@ export class BaseClient {
     private remainingReadData: Uint8Array | undefined;
     private readonly requestTimeout: number; // Timeout in milliseconds
     private isClosed = false;
+    protected defaultDecoder = Decoder.String;
     private readonly pubsubFutures: [PromiseFunction, ErrorFunction][] = [];
     private pendingPushNotification: response.Response[] = [];
     private config: BaseClientConfiguration | undefined;
@@ -453,15 +539,21 @@ export class BaseClient {
             const errorType = getRequestErrorClass(message.requestError.type);
             reject(new errorType(message.requestError.message ?? undefined));
         } else if (message.respPointer != null) {
-            const pointer = message.respPointer;
+            let pointer;
 
-            if (typeof pointer === "number") {
-                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
-                resolve(valueFromSplitPointer(0, pointer, true));
+            if (typeof message.respPointer === "number") {
+                // Response from type number
+                pointer = new PointerResponse(message.respPointer);
             } else {
-                // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
-                resolve(valueFromSplitPointer(pointer.high, pointer.low, true));
+                // Response from type long
+                pointer = new PointerResponse(
+                    message.respPointer,
+                    message.respPointer.high,
+                    message.respPointer.low,
+                );
             }
+
+            resolve(pointer);
         } else if (message.constantResponse === response.ConstantResponse.OK) {
             resolve("OK");
         } else {
@@ -515,6 +607,7 @@ export class BaseClient {
                 console.error(`Server closed: ${err}`);
                 this.close();
             });
+        this.defaultDecoder = options?.defaultDecoder ?? Decoder.String;
     }
 
     private getCallbackIndex(): number {
@@ -546,8 +639,11 @@ export class BaseClient {
             | command_request.Command
             | command_request.Command[]
             | command_request.ScriptInvocation,
-        route?: command_request.Routes,
+        options: WritePromiseOptions = {},
     ): Promise<T> {
+        const { decoder = this.defaultDecoder, route } = options;
+        const stringDecoder = decoder === Decoder.String ? true : false;
+
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
@@ -556,7 +652,28 @@ export class BaseClient {
 
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
-            this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
+            this.promiseCallbackFunctions[callbackIndex] = [
+                (resolveAns: T) => {
+                    if (resolveAns instanceof PointerResponse) {
+                        if (typeof resolveAns === "number") {
+                            resolveAns = valueFromSplitPointer(
+                                0,
+                                resolveAns,
+                                stringDecoder,
+                            ) as T;
+                        } else {
+                            resolveAns = valueFromSplitPointer(
+                                resolveAns.high!,
+                                resolveAns.low!,
+                                stringDecoder,
+                            ) as T;
+                        }
+                    }
+
+                    resolve(resolveAns);
+                },
+                reject,
+            ];
             this.writeOrBufferCommandRequest(callbackIndex, command, route);
         });
     }
@@ -658,7 +775,7 @@ export class BaseClient {
         return [null, null];
     }
 
-    public getPubSubMessage(): Promise<PubSubMsg> {
+    public async getPubSubMessage(): Promise<PubSubMsg> {
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
@@ -683,7 +800,7 @@ export class BaseClient {
         });
     }
 
-    public tryGetPubSubMessage(): PubSubMsg | null {
+    public tryGetPubSubMessage(decoder?: Decoder): PubSubMsg | null {
         if (this.isClosed) {
             throw new ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client.",
@@ -707,13 +824,17 @@ export class BaseClient {
 
         while (this.pendingPushNotification.length > 0 && !msg) {
             const pushNotification = this.pendingPushNotification.shift()!;
-            msg = this.notificationToPubSubMessageSafe(pushNotification);
+            msg = this.notificationToPubSubMessageSafe(
+                pushNotification,
+                decoder,
+            );
         }
 
         return msg;
     }
     notificationToPubSubMessageSafe(
         pushNotification: response.Response,
+        decoder?: Decoder,
     ): PubSubMsg | null {
         let msg: PubSubMsg | null = null;
         const responsePointer = pushNotification.respPointer;
@@ -724,15 +845,13 @@ export class BaseClient {
                 nextPushNotificationValue = valueFromSplitPointer(
                     responsePointer.high,
                     responsePointer.low,
-                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
-                    true,
+                    decoder === Decoder.String,
                 ) as Record<string, unknown>;
             } else {
                 nextPushNotificationValue = valueFromSplitPointer(
                     0,
                     responsePointer,
-                    // TODO: change according to https://github.com/valkey-io/valkey-glide/pull/2052
-                    true,
+                    decoder === Decoder.String,
                 ) as Record<string, unknown>;
             }
 
@@ -801,28 +920,62 @@ export class BaseClient {
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
-     * See https://valkey.io/commands/get/ for details.
+     *
+     * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @returns If `key` exists, returns the value of `key` as a string. Otherwise, return null.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
      * ```typescript
      * // Example usage of get method to retrieve the value of a key
      * const result = await client.get("key");
      * console.log(result); // Output: 'value'
+     * // Example usage of get method to retrieve the value of a key with Bytes decoder
+     * const result = await client.get("key", Decoder.Bytes);
+     * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
      * ```
      */
-    public get(key: string): Promise<string | null> {
-        return this.createWritePromise(createGet(key));
+    public async get(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGet(key), { decoder: decoder });
+    }
+
+    /**
+     * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
+     *
+     * @see {@link https://valkey.io/commands/getex/|valkey.op} for more details.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param key - The key to retrieve from the database.
+     * @param options - (Optional) Set expiriation to the given key.
+     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.getex("key", {expiry: { type: TimeUnit.Seconds, count: 5 }});
+     * console.log(result); // Output: 'value'
+     * ```
+     */
+    public async getex(
+        key: string,
+        options?: "persist" | { type: TimeUnit; duration: number },
+    ): Promise<string | null> {
+        return this.createWritePromise(createGetEx(key, options));
     }
 
     /**
      * Gets a string value associated with the given `key`and deletes the key.
      *
-     * See https://valkey.io/commands/getdel/ for details.
+     * @see {@link https://valkey.io/commands/getdel/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
@@ -833,12 +986,51 @@ export class BaseClient {
      * const value = client.getdel("key");  // value is null
      * ```
      */
-    public getdel(key: string): Promise<string | null> {
-        return this.createWritePromise(createGetDel(key));
+    public async getdel(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetDel(key), { decoder: decoder });
+    }
+
+    /**
+     * Returns the substring of the string value stored at `key`, determined by the offsets
+     * `start` and `end` (both are inclusive). Negative offsets can be used in order to provide
+     * an offset starting from the end of the string. So `-1` means the last character, `-2` the
+     * penultimate and so forth. If `key` does not exist, an empty string is returned. If `start`
+     * or `end` are out of range, returns the substring within the valid range of the string.
+     *
+     * @see {@link https://valkey.io/commands/getrange/|valkey.io} for details.
+     *
+     * @param key - The key of the string.
+     * @param start - The starting offset.
+     * @param end - The ending offset.
+     * @returns A substring extracted from the value stored at `key`.
+     *
+     * @example
+     * ```typescript
+     * await client.set("mykey", "This is a string")
+     * let result = await client.getrange("mykey", 0, 3)
+     * console.log(result); // Output: "This"
+     * result = await client.getrange("mykey", -3, -1)
+     * console.log(result); // Output: "ing" - extracted last 3 characters of a string
+     * result = await client.getrange("mykey", 0, 100)
+     * console.log(result); // Output: "This is a string"
+     * result = await client.getrange("mykey", 5, 6)
+     * console.log(result); // Output: ""
+     * ```
+     */
+    public async getrange(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<string | null> {
+        return this.createWritePromise(createGetRange(key, start, end));
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
-     * See https://valkey.io/commands/set/ for details.
+     *
+     * @see {@link https://valkey.io/commands/set/|valkey.io} for details.
      *
      * @param key - The key to store.
      * @param value - The value to store with the given key.
@@ -854,7 +1046,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK'
      *
      * // Example usage of set method with conditional options and expiration
-     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: "seconds", count: 5 }});
+     * const result2 = await client.set("key", "new_value", {conditionalSet: "onlyIfExists", expiry: { type: TimeUnit.Seconds, count: 5 }});
      * console.log(result2); // Output: 'OK' - Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
      *
      * // Example usage of set method with conditional options and returning old value
@@ -866,7 +1058,7 @@ export class BaseClient {
      * console.log(result4); // Output: 'new_value' - Value wasn't modified back to being "value" because of "NX" flag.
      * ```
      */
-    public set(
+    public async set(
         key: string | Uint8Array,
         value: string | Uint8Array,
         options?: SetOptions,
@@ -875,7 +1067,8 @@ export class BaseClient {
     }
 
     /** Removes the specified keys. A key is ignored if it does not exist.
-     * See https://valkey.io/commands/del/ for details.
+     *
+     * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
      * @param keys - the keys we wanted to remove.
      * @returns the number of keys that were removed.
@@ -895,14 +1088,15 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public del(keys: string[]): Promise<number> {
+    public async del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
     }
 
     /** Retrieve the values of multiple keys.
-     * See https://valkey.io/commands/mget/ for details.
      *
+     * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
      * @param keys - A list of keys to retrieve values for.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
@@ -916,14 +1110,15 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public mget(keys: string[]): Promise<(string | null)[]> {
+    public async mget(keys: string[]): Promise<(string | null)[]> {
         return this.createWritePromise(createMGet(keys));
     }
 
     /** Set multiple keys to multiple values in a single operation.
-     * See https://valkey.io/commands/mset/ for details.
      *
+     * @see {@link https://valkey.io/commands/mset/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when keys in `keyValueMap` map to different hash slots.
+     *
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns always "OK".
      *
@@ -934,7 +1129,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public mset(keyValueMap: Record<string, string>): Promise<"OK"> {
+    public async mset(keyValueMap: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createMSet(keyValueMap));
     }
 
@@ -942,9 +1137,9 @@ export class BaseClient {
      * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
      * more keys already exist, the entire operation fails.
      *
-     * See https://valkey.io/commands/msetnx/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/msetnx/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keyValueMap` must map to the same hash slot.
+     *
      * @param keyValueMap - A key-value map consisting of keys and their respective values to set.
      * @returns `true` if all keys were set. `false` if no key was set.
      *
@@ -962,7 +1157,8 @@ export class BaseClient {
     }
 
     /** Increments the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/incr/ for details.
+     *
+     * @see {@link https://valkey.io/commands/incr/|valkey.io} for details.
      *
      * @param key - The key to increment its value.
      * @returns the value of `key` after the increment.
@@ -975,12 +1171,13 @@ export class BaseClient {
      * console.log(result); // Output: 11
      * ```
      */
-    public incr(key: string): Promise<number> {
+    public async incr(key: string): Promise<number> {
         return this.createWritePromise(createIncr(key));
     }
 
     /** Increments the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/incrby/ for details.
+     *
+     * @see {@link https://valkey.io/commands/incrby/|valkey.io} for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
@@ -994,14 +1191,15 @@ export class BaseClient {
      * console.log(result); // Output: 15
      * ```
      */
-    public incrBy(key: string, amount: number): Promise<number> {
+    public async incrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrBy(key, amount));
     }
 
     /** Increment the string representing a floating point number stored at `key` by `amount`.
      * By using a negative increment value, the result is that the value stored at `key` is decremented.
      * If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/incrbyfloat/ for details.
+     *
+     * @see {@link https://valkey.io/commands/incrbyfloat/|valkey.io} for details.
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
@@ -1015,12 +1213,13 @@ export class BaseClient {
      * console.log(result); // Output: 13.0
      * ```
      */
-    public incrByFloat(key: string, amount: number): Promise<number> {
+    public async incrByFloat(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createIncrByFloat(key, amount));
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/decr/ for details.
+     *
+     * @see {@link https://valkey.io/commands/decr/|valkey.io} for details.
      *
      * @param key - The key to decrement its value.
      * @returns the value of `key` after the decrement.
@@ -1033,12 +1232,13 @@ export class BaseClient {
      * console.log(result); // Output: 9
      * ```
      */
-    public decr(key: string): Promise<number> {
+    public async decr(key: string): Promise<number> {
         return this.createWritePromise(createDecr(key));
     }
 
     /** Decrements the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/decrby/ for details.
+     *
+     * @see {@link https://valkey.io/commands/decrby/|valkey.io} for details.
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
@@ -1052,7 +1252,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public decrBy(key: string, amount: number): Promise<number> {
+    public async decrBy(key: string, amount: number): Promise<number> {
         return this.createWritePromise(createDecrBy(key, amount));
     }
 
@@ -1060,9 +1260,9 @@ export class BaseClient {
      * Perform a bitwise operation between multiple keys (containing string values) and store the result in the
      * `destination`.
      *
-     * See https://valkey.io/commands/bitop/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/bitop/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     *
      * @param operation - The bitwise operation to perform.
      * @param destination - The key that will store the resulting string.
      * @param keys - The list of keys to perform the bitwise operation on.
@@ -1079,7 +1279,7 @@ export class BaseClient {
      * console.log(result2); // Output: "@" - "@" has binary value 01000000
      * ```
      */
-    public bitop(
+    public async bitop(
         operation: BitwiseOperation,
         destination: string,
         keys: string[],
@@ -1093,7 +1293,7 @@ export class BaseClient {
      * Returns the bit value at `offset` in the string value stored at `key`. `offset` must be greater than or equal
      * to zero.
      *
-     * See https://valkey.io/commands/getbit/ for more details.
+     * @see {@link https://valkey.io/commands/getbit/|valkey.io} for more details.
      *
      * @param key - The key of the string.
      * @param offset - The index of the bit to return.
@@ -1106,7 +1306,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
      * ```
      */
-    public getbit(key: string, offset: number): Promise<number> {
+    public async getbit(key: string, offset: number): Promise<number> {
         return this.createWritePromise(createGetBit(key, offset));
     }
 
@@ -1116,7 +1316,7 @@ export class BaseClient {
      * `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to `value` and
      * the preceding bits are set to `0`.
      *
-     * See https://valkey.io/commands/setbit/ for more details.
+     * @see {@link https://valkey.io/commands/setbit/|valkey.io} for more details.
      *
      * @param key - The key of the string.
      * @param offset - The index of the bit to be set.
@@ -1129,7 +1329,11 @@ export class BaseClient {
      * console.log(result); // Output: 0 - The second bit value was 0 before setting to 1.
      * ```
      */
-    public setbit(key: string, offset: number, value: number): Promise<number> {
+    public async setbit(
+        key: string,
+        offset: number,
+        value: number,
+    ): Promise<number> {
         return this.createWritePromise(createSetBit(key, offset, value));
     }
 
@@ -1139,7 +1343,7 @@ export class BaseClient {
      * The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
      * the last byte of the list, `-2` being the penultimate, and so on.
      *
-     * See https://valkey.io/commands/bitpos/ for more details.
+     * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for more details.
      *
      * @param key - The key of the string.
      * @param bit - The bit value to match. Must be `0` or `1`.
@@ -1176,7 +1380,7 @@ export class BaseClient {
      * are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
      * specified, `start=0` and `end=2` means to look at the first three bytes.
      *
-     * See https://valkey.io/commands/bitpos/ for more details.
+     * @see {@link https://valkey.io/commands/bitpos/|valkey.io} for more details.
      *
      * @param key - The key of the string.
      * @param bit - The bit value to match. Must be `0` or `1`.
@@ -1214,7 +1418,7 @@ export class BaseClient {
      * Reads or modifies the array of bits representing the string that is held at `key` based on the specified
      * `subcommands`.
      *
-     * See https://valkey.io/commands/bitfield/ for more details.
+     * @see {@link https://valkey.io/commands/bitfield/|valkey.io} for more details.
      *
      * @param key - The key of the string.
      * @param subcommands - The subcommands to be performed on the binary value of the string at `key`, which could be
@@ -1251,13 +1455,12 @@ export class BaseClient {
     /**
      * Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
      *
-     * See https://valkey.io/commands/bitfield_ro/ for more details.
+     * @see {@link https://valkey.io/commands/bitfield_ro/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.0.0.
      *
      * @param key - The key of the string.
      * @param subcommands - The {@link BitFieldGet} subcommands to be performed.
      * @returns An array of results from the {@link BitFieldGet} subcommands.
-     *
-     * since Valkey version 6.0.0.
      *
      * @example
      * ```typescript
@@ -1274,7 +1477,8 @@ export class BaseClient {
     }
 
     /** Retrieve the value associated with `field` in the hash stored at `key`.
-     * See https://valkey.io/commands/hget/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hget/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
@@ -1295,12 +1499,13 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public hget(key: string, field: string): Promise<string | null> {
+    public async hget(key: string, field: string): Promise<string | null> {
         return this.createWritePromise(createHGet(key, field));
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
-     * See https://valkey.io/commands/hset/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
@@ -1314,7 +1519,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
-    public hset(
+    public async hset(
         key: string,
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
@@ -1324,7 +1529,8 @@ export class BaseClient {
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
      * If `key` does not exist, a new key holding a hash is created.
      * If `field` already exists, this operation has no effect.
-     * See https://valkey.io/commands/hsetnx/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/hsetnx/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
      * @param field - The field to set the value for.
@@ -1345,13 +1551,18 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that the field "field" already existed in the hash "my_hash" and was not set again.
      * ```
      */
-    public hsetnx(key: string, field: string, value: string): Promise<boolean> {
+    public async hsetnx(
+        key: string,
+        field: string,
+        value: string,
+    ): Promise<boolean> {
         return this.createWritePromise(createHSetNX(key, field, value));
     }
 
     /** Removes the specified fields from the hash stored at `key`.
      * Specified fields that do not exist within this hash are ignored.
-     * See https://valkey.io/commands/hdel/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hdel/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param fields - The fields to remove from the hash stored at `key`.
@@ -1365,12 +1576,13 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
      * ```
      */
-    public hdel(key: string, fields: string[]): Promise<number> {
+    public async hdel(key: string, fields: string[]): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
     /** Returns the values associated with the specified fields in the hash stored at `key`.
-     * See https://valkey.io/commands/hmget/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hmget/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param fields - The fields in the hash stored at `key` to retrieve from the database.
@@ -1385,12 +1597,16 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2"] - A list of values associated with the specified fields.
      * ```
      */
-    public hmget(key: string, fields: string[]): Promise<(string | null)[]> {
+    public async hmget(
+        key: string,
+        fields: string[],
+    ): Promise<(string | null)[]> {
         return this.createWritePromise(createHMGet(key, fields));
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
-     * See https://valkey.io/commands/hexists/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hexists/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param field - The field to check in the hash stored at `key`.
@@ -1410,12 +1626,13 @@ export class BaseClient {
      * console.log(result); // Output: false
      * ```
      */
-    public hexists(key: string, field: string): Promise<boolean> {
+    public async hexists(key: string, field: string): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
     /** Returns all fields and values of the hash stored at `key`.
-     * See https://valkey.io/commands/hgetall/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hgetall/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @returns a list of fields and their values stored in the hash. Every field name in the list is followed by its value.
@@ -1428,14 +1645,15 @@ export class BaseClient {
      * console.log(result); // Output: {"field1": "value1", "field2": "value2"}
      * ```
      */
-    public hgetall(key: string): Promise<Record<string, string>> {
+    public async hgetall(key: string): Promise<Record<string, string>> {
         return this.createWritePromise(createHGetAll(key));
     }
 
     /** Increments the number stored at `field` in the hash stored at `key` by increment.
      * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
      * If `field` or `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/hincrby/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hincrby/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
@@ -1449,7 +1667,7 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public hincrBy(
+    public async hincrBy(
         key: string,
         field: string,
         amount: number,
@@ -1460,7 +1678,8 @@ export class BaseClient {
     /** Increment the string representing a floating point number stored at `field` in the hash stored at `key` by increment.
      * By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
      * If `field` or `key` does not exist, it is set to 0 before performing the operation.
-     * See https://valkey.io/commands/hincrbyfloat/ for details.
+     *
+     * @see {@link https://valkey.io/commands/hincrbyfloat/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param amount - The amount to increment.
@@ -1474,7 +1693,7 @@ export class BaseClient {
      * console.log(result); // Output: '2.5'
      * ```
      */
-    public hincrByFloat(
+    public async hincrByFloat(
         key: string,
         field: string,
         amount: number,
@@ -1483,7 +1702,8 @@ export class BaseClient {
     }
 
     /** Returns the number of fields contained in the hash stored at `key`.
-     * See https://valkey.io/commands/hlen/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/hlen/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
      * @returns The number of fields in the hash, or 0 when the key does not exist.
@@ -1502,12 +1722,13 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public hlen(key: string): Promise<number> {
+    public async hlen(key: string): Promise<number> {
         return this.createWritePromise(createHLen(key));
     }
 
     /** Returns all values in the hash stored at key.
-     * See https://valkey.io/commands/hvals/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
@@ -1519,14 +1740,14 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public hvals(key: string): Promise<string[]> {
+    public async hvals(key: string): Promise<string[]> {
         return this.createWritePromise(createHVals(key));
     }
 
     /**
      * Returns the string length of the value associated with `field` in the hash stored at `key`.
      *
-     * See https://valkey.io/commands/hstrlen/ for details.
+     * @see {@link https://valkey.io/commands/hstrlen/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash.
@@ -1539,14 +1760,132 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public hstrlen(key: string, field: string): Promise<number> {
+    public async hstrlen(key: string, field: string): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
+    }
+
+    /**
+     * Returns a random field name from the hash value stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @returns A random field name from the hash stored at `key`, or `null` when
+     *     the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.hrandfield("myHash")); // Output: 'field'
+     * ```
+     */
+    public async hrandfield(key: string): Promise<string | null> {
+        return this.createWritePromise(createHRandField(key));
+    }
+
+    /**
+     * Iterates incrementally over a hash.
+     *
+     * @see {@link https://valkey.io/commands/hscan/|valkey.io} for more details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - (Optional) The {@link BaseScanOptions}.
+     * @returns An array of the `cursor` and the subset of the hash held by `key`.
+     * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
+     * returned on the last iteration of the hash. The second element is always an array of the subset of the
+     * hash held in `key`. The array in the second element is always a flattened series of string pairs,
+     * where the value is at even indices and the value is at odd indices.
+     *
+     * @example
+     * ```typescript
+     * // Assume "key" contains a hash with multiple members
+     * let newCursor = "0";
+     * let result = [];
+     * do {
+     *      result = await client.hscan(key1, newCursor, {
+     *          match: "*",
+     *          count: 3,
+     *      });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     * // The output of the code above is something similar to:
+     * // Cursor:  31
+     * // Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
+     * // Cursor:  39
+     * // Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
+     * // Cursor:  0
+     * // Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+     * ```
+     */
+    public async hscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createHScan(key, cursor, options));
+    }
+
+    /**
+     * Retrieves up to `count` random field names from the hash value stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     * @returns An `array` of random field names from the hash stored at `key`,
+     *     or an `empty array` when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.hrandfieldCount("myHash", 2)); // Output: ['field1', 'field2']
+     * ```
+     */
+    public async hrandfieldCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createHRandField(key, count));
+    }
+
+    /**
+     * Retrieves up to `count` random field names along with their values from the hash
+     * value stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hrandfield/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param key - The key of the hash.
+     * @param count - The number of field names to return.
+     *
+     *     If `count` is positive, returns unique elements. If negative, allows for duplicates.
+     * @returns A 2D `array` of `[fieldName, value]` `arrays`, where `fieldName` is a random
+     *     field name from the hash and `value` is the associated value of the field name.
+     *     If the hash does not exist or is empty, the response will be an empty `array`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.hrandfieldCountWithValues("myHash", 2);
+     * console.log(result); // Output: [['field1', 'value1'], ['field2', 'value2']]
+     * ```
+     */
+    public async hrandfieldWithValues(
+        key: string,
+        count: number,
+    ): Promise<[string, string][]> {
+        return this.createWritePromise(createHRandField(key, count, true));
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
      * `elements` are inserted one after the other to the head of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
-     * See https://valkey.io/commands/lpush/ for details.
+     *
+     * @see {@link https://valkey.io/commands/lpush/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
@@ -1566,7 +1905,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
-    public lpush(key: string, elements: string[]): Promise<number> {
+    public async lpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
     }
 
@@ -1574,7 +1913,7 @@ export class BaseClient {
      * Inserts specified values at the head of the `list`, only if `key` already
      * exists and holds a list.
      *
-     * See https://valkey.io/commands/lpushx/ for details.
+     * @see {@link https://valkey.io/commands/lpushx/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the head of the list stored at `key`.
@@ -1585,13 +1924,14 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that the list has two elements.
      * ```
      */
-    public lpushx(key: string, elements: string[]): Promise<number> {
+    public async lpushx(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createLPushX(key, elements));
     }
 
     /** Removes and returns the first elements of the list stored at `key`.
      * The command pops a single element from the beginning of the list.
-     * See https://valkey.io/commands/lpop/ for details.
+     *
+     * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @returns The value of the first element.
@@ -1611,12 +1951,13 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public lpop(key: string): Promise<string | null> {
+    public async lpop(key: string): Promise<string | null> {
         return this.createWritePromise(createLPop(key));
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
-     * See https://valkey.io/commands/lpop/ for details.
+     *
+     * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
@@ -1637,7 +1978,10 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public lpopCount(key: string, count: number): Promise<string[] | null> {
+    public async lpopCount(
+        key: string,
+        count: number,
+    ): Promise<string[] | null> {
         return this.createWritePromise(createLPop(key, count));
     }
 
@@ -1645,7 +1989,8 @@ export class BaseClient {
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
-     * See https://valkey.io/commands/lrange/ for details.
+     *
+     * @see {@link https://valkey.io/commands/lrange/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param start - The starting point of the range.
@@ -1676,12 +2021,17 @@ export class BaseClient {
      * console.log(result); // Output: []
      * ```
      */
-    public lrange(key: string, start: number, end: number): Promise<string[]> {
+    public async lrange(
+        key: string,
+        start: number,
+        end: number,
+    ): Promise<string[]> {
         return this.createWritePromise(createLRange(key, start, end));
     }
 
     /** Returns the length of the list stored at `key`.
-     * See https://valkey.io/commands/llen/ for details.
+     *
+     * @see {@link https://valkey.io/commands/llen/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @returns the length of the list at `key`.
@@ -1694,7 +2044,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
      * ```
      */
-    public llen(key: string): Promise<number> {
+    public async llen(key: string): Promise<number> {
         return this.createWritePromise(createLLen(key));
     }
 
@@ -1703,15 +2053,14 @@ export class BaseClient {
      * depending on `whereTo`, and pushes the element at the first/last element of the list
      * stored at `destination` depending on `whereFrom`, see {@link ListDirection}.
      *
-     * See https://valkey.io/commands/lmove/ for details.
+     * @see {@link https://valkey.io/commands/lmove/|valkey.io} for details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @returns The popped element, or `null` if `source` does not exist.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -1745,11 +2094,10 @@ export class BaseClient {
      * of the list stored at `destination` depending on `whereTo`.
      * `BLMOVE` is the blocking variant of {@link lmove}.
      *
-     * @remarks
-     * 1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
-     * 2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
-     *
-     * See https://valkey.io/commands/blmove/ for details.
+     * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
+     * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
+     * @remarks `BLMOVE` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Valkey Glide Wiki} for more details and best practices.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
      * @param destination - The key to the destination list.
@@ -1757,8 +2105,6 @@ export class BaseClient {
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -1792,7 +2138,7 @@ export class BaseClient {
      * Negative indices can be used to designate elements starting at the tail of
      * the list. Here, `-1` means the last element, `-2` means the penultimate and so forth.
      *
-     * See https://valkey.io/commands/lset/ for details.
+     * @see {@link https://valkey.io/commands/lset/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param index - The index of the element in the list to be set.
@@ -1806,7 +2152,11 @@ export class BaseClient {
      * console.log(response); // Output: 'OK' - Indicates that the second index of the list has been set to "two".
      * ```
      */
-    public lset(key: string, index: number, element: string): Promise<"OK"> {
+    public async lset(
+        key: string,
+        index: number,
+        element: string,
+    ): Promise<"OK"> {
         return this.createWritePromise(createLSet(key, index, element));
     }
 
@@ -1814,7 +2164,8 @@ export class BaseClient {
      * The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next element and so on.
      * These offsets can also be negative numbers indicating offsets starting at the end of the list,
      * with -1 being the last element of the list, -2 being the penultimate, and so on.
-     * See https://valkey.io/commands/ltrim/ for details.
+     *
+     * @see {@link https://valkey.io/commands/ltrim/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param start - The starting point of the range.
@@ -1831,7 +2182,7 @@ export class BaseClient {
      * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
-    public ltrim(key: string, start: number, end: number): Promise<"OK"> {
+    public async ltrim(key: string, start: number, end: number): Promise<"OK"> {
         return this.createWritePromise(createLTrim(key, start, end));
     }
 
@@ -1853,14 +2204,19 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Removes the first 2 occurrences of "value" in the list.
      * ```
      */
-    public lrem(key: string, count: number, element: string): Promise<number> {
+    public async lrem(
+        key: string,
+        count: number,
+        element: string,
+    ): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
     }
 
     /** Inserts all the specified values at the tail of the list stored at `key`.
      * `elements` are inserted one after the other to the tail of the list, from the leftmost element to the rightmost element.
      * If `key` does not exist, it is created as empty list before performing the push operations.
-     * See https://valkey.io/commands/rpush/ for details.
+     *
+     * @see {@link https://valkey.io/commands/rpush/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
@@ -1880,7 +2236,7 @@ export class BaseClient {
      * console.log(result); // Output: 1
      * ```
      */
-    public rpush(key: string, elements: string[]): Promise<number> {
+    public async rpush(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
     }
 
@@ -1888,7 +2244,7 @@ export class BaseClient {
      * Inserts specified values at the tail of the `list`, only if `key` already
      * exists and holds a list.
      *
-     * See https://valkey.io/commands/rpushx/ for details.
+     * @see {@link https://valkey.io/commands/rpushx/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param elements - The elements to insert at the tail of the list stored at `key`.
@@ -1899,13 +2255,14 @@ export class BaseClient {
      * console.log(result);  // Output: 2 - Indicates that the list has two elements.
      * ```
      * */
-    public rpushx(key: string, elements: string[]): Promise<number> {
+    public async rpushx(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createRPushX(key, elements));
     }
 
     /** Removes and returns the last elements of the list stored at `key`.
      * The command pops a single element from the end of the list.
-     * See https://valkey.io/commands/rpop/ for details.
+     *
+     * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @returns The value of the last element.
@@ -1925,12 +2282,13 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public rpop(key: string): Promise<string | null> {
+    public async rpop(key: string): Promise<string | null> {
         return this.createWritePromise(createRPop(key));
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
-     * See https://valkey.io/commands/rpop/ for details.
+     *
+     * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
@@ -1951,13 +2309,17 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public rpopCount(key: string, count: number): Promise<string[] | null> {
+    public async rpopCount(
+        key: string,
+        count: number,
+    ): Promise<string[] | null> {
         return this.createWritePromise(createRPop(key, count));
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
      * If `key` does not exist, a new set is created before adding `members`.
-     * See https://valkey.io/commands/sadd/ for details.
+     *
+     * @see {@link https://valkey.io/commands/sadd/|valkey.io} for details.
      *
      * @param key - The key to store the members to its set.
      * @param members - A list of members to add to the set stored at `key`.
@@ -1970,12 +2332,13 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public sadd(key: string, members: string[]): Promise<number> {
+    public async sadd(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
     }
 
     /** Removes the specified members from the set stored at `key`. Specified members that are not a member of this set are ignored.
-     * See https://valkey.io/commands/srem/ for details.
+     *
+     * @see {@link https://valkey.io/commands/srem/|valkey.io} for details.
      *
      * @param key - The key to remove the members from its set.
      * @param members - A list of members to remove from the set stored at `key`.
@@ -1989,12 +2352,57 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public srem(key: string, members: string[]): Promise<number> {
+    public async srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
     }
 
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see {@link https://valkey.io/commands/sscan} for details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - The (Optional) {@link BaseScanOptions}.
+     * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
+     * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     *
+     * @example
+     * ```typescript
+     * // Assume key contains a set with 200 members
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.sscan(key1, newCursor, {
+     *      match: "*",
+     *      count: 5,
+     * });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     *
+     * // The output of the code above is something similar to:
+     * // Cursor:  8, Match: "f*"
+     * // Members:  ['field', 'fur', 'fun', 'fame']
+     * // Cursor:  20, Count: 3
+     * // Members:  ['1', '2', '3', '4', '5', '6']
+     * // Cursor:  0
+     * // Members:  ['1', '2', '3', '4', '5', '6']
+     * ```
+     */
+    public async sscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createSScan(key, cursor, options));
+    }
+
     /** Returns all the members of the set value stored at `key`.
-     * See https://valkey.io/commands/smembers/ for details.
+     *
+     * @see {@link https://valkey.io/commands/smembers/|valkey.io} for details.
      *
      * @param key - The key to return its members.
      * @returns A `Set` containing all members of the set.
@@ -2007,7 +2415,7 @@ export class BaseClient {
      * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public smembers(key: string): Promise<Set<string>> {
+    public async smembers(key: string): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSMembers(key)).then(
             (smembes) => new Set<string>(smembes),
         );
@@ -2015,8 +2423,8 @@ export class BaseClient {
 
     /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
      * Creates a new destination set if needed. The operation is atomic.
-     * See https://valkey.io/commands/smove for more details.
      *
+     * @see {@link https://valkey.io/commands/smove/|valkey.io} for more details.
      * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      *
      * @param source - The key of the set to remove the element from.
@@ -2030,7 +2438,7 @@ export class BaseClient {
      * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
      * ```
      */
-    public smove(
+    public async smove(
         source: string,
         destination: string,
         member: string,
@@ -2041,7 +2449,8 @@ export class BaseClient {
     }
 
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
-     * See https://valkey.io/commands/scard/ for details.
+     *
+     * @see {@link https://valkey.io/commands/scard/|valkey.io} for details.
      *
      * @param key - The key to return the number of its members.
      * @returns The cardinality (number of elements) of the set, or 0 if key does not exist.
@@ -2053,14 +2462,15 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public scard(key: string): Promise<number> {
+    public async scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
     }
 
     /** Gets the intersection of all the given sets.
-     * See https://valkey.io/docs/latest/commands/sinter/ for more details.
      *
+     * @see {@link https://valkey.io/docs/latest/commands/sinter/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     *
      * @param keys - The `keys` of the sets to get the intersection.
      * @returns - A set of members which are present in all given sets.
      * If one or more sets do not exist, an empty set will be returned.
@@ -2079,7 +2489,7 @@ export class BaseClient {
      * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public sinter(keys: string[]): Promise<Set<string>> {
+    public async sinter(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
         );
@@ -2088,14 +2498,13 @@ export class BaseClient {
     /**
      * Gets the cardinality of the intersection of all the given sets.
      *
-     * See https://valkey.io/commands/sintercard/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/sintercard/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param keys - The keys of the sets.
      * @param limit - The limit for the intersection cardinality value. If not specified, or set to `0`, no limit is used.
      * @returns The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -2108,16 +2517,16 @@ export class BaseClient {
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
-    public sintercard(keys: string[], limit?: number): Promise<number> {
+    public async sintercard(keys: string[], limit?: number): Promise<number> {
         return this.createWritePromise(createSInterCard(keys, limit));
     }
 
     /**
      * Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
      *
-     * See https://valkey.io/commands/sinterstore/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/sinterstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     *
      * @param destination - The key of the destination set.
      * @param keys - The keys from which to retrieve the set members.
      * @returns The number of elements in the resulting set.
@@ -2128,16 +2537,19 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Two elements were stored at "my_set", and those elements are the intersection of "set1" and "set2".
      * ```
      */
-    public sinterstore(destination: string, keys: string[]): Promise<number> {
+    public async sinterstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createSInterStore(destination, keys));
     }
 
     /**
      * Computes the difference between the first set and all the successive sets in `keys`.
      *
-     * See https://valkey.io/commands/sdiff/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/sdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     *
      * @param keys - The keys of the sets to diff.
      * @returns A `Set` of elements representing the difference between the sets.
      * If a key in `keys` does not exist, it is treated as an empty set.
@@ -2150,7 +2562,7 @@ export class BaseClient {
      * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
      * ```
      */
-    public sdiff(keys: string[]): Promise<Set<string>> {
+    public async sdiff(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSDiff(keys)).then(
             (sdiff) => new Set<string>(sdiff),
         );
@@ -2159,9 +2571,9 @@ export class BaseClient {
     /**
      * Stores the difference between the first set and all the successive sets in `keys` into a new set at `destination`.
      *
-     * See https://valkey.io/commands/sdiffstore/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/sdiffstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     *
      * @param destination - The key of the destination set.
      * @param keys - The keys of the sets to diff.
      * @returns The number of elements in the resulting set.
@@ -2174,16 +2586,19 @@ export class BaseClient {
      * console.log(result); // Output: 1 - One member was stored in "set3", and that member is the diff between "set1" and "set2".
      * ```
      */
-    public sdiffstore(destination: string, keys: string[]): Promise<number> {
+    public async sdiffstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createSDiffStore(destination, keys));
     }
 
     /**
      * Gets the union of all the given sets.
      *
-     * See https://valkey.io/commands/sunion/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/sunion/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     *
      * @param keys - The keys of the sets.
      * @returns A `Set` of members which are present in at least one of the given sets.
      * If none of the sets exist, an empty `Set` will be returned.
@@ -2199,7 +2614,7 @@ export class BaseClient {
      * console.log(result2); // Output: Set {'member1', 'member2'}
      * ```
      */
-    public sunion(keys: string[]): Promise<Set<string>> {
+    public async sunion(keys: string[]): Promise<Set<string>> {
         return this.createWritePromise<string[]>(createSUnion(keys)).then(
             (sunion) => new Set<string>(sunion),
         );
@@ -2209,9 +2624,9 @@ export class BaseClient {
      * Stores the members of the union of all given sets specified by `keys` into a new set
      * at `destination`.
      *
-     * See https://valkey.io/commands/sunionstore/ for details.
-     *
+     * @see {@link https://valkey.io/commands/sunionstore/|valkey.io} for details.
      * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     *
      * @param destination - The key of the destination set.
      * @param keys - The keys from which to retrieve the set members.
      * @returns The number of elements in the resulting set.
@@ -2222,12 +2637,16 @@ export class BaseClient {
      * console.log(length); // Output: 2 - Two elements were stored in "mySet", and those two members are the union of "set1" and "set2".
      * ```
      */
-    public sunionstore(destination: string, keys: string[]): Promise<number> {
+    public async sunionstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createSUnionStore(destination, keys));
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
-     * See https://valkey.io/commands/sismember/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/sismember/|valkey.io} for more details.
      *
      * @param key - The key of the set.
      * @param member - The member to check for existence in the set.
@@ -2248,20 +2667,19 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
      * ```
      */
-    public sismember(key: string, member: string): Promise<boolean> {
+    public async sismember(key: string, member: string): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
     }
 
     /**
      * Checks whether each member is contained in the members of the set stored at `key`.
      *
-     * See https://valkey.io/commands/smismember/ for more details.
+     * @see {@link https://valkey.io/commands/smismember/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the set to check.
      * @param members - A list of members to check for existence in the set.
      * @returns An `array` of `boolean` values, each indicating if the respective member exists in the set.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2270,13 +2688,17 @@ export class BaseClient {
      * console.log(result); // Output: [true, true, false] - "b" and "c" are members of "set1", but "d" is not.
      * ```
      */
-    public smismember(key: string, members: string[]): Promise<boolean[]> {
+    public async smismember(
+        key: string,
+        members: string[],
+    ): Promise<boolean[]> {
         return this.createWritePromise(createSMIsMember(key, members));
     }
 
     /** Removes and returns one random member from the set value store at `key`.
-     * See https://valkey.io/commands/spop/ for details.
-     * To pop multiple members, see `spopCount`.
+     * To pop multiple members, see {@link spopCount}.
+     *
+     * @see {@link https://valkey.io/commands/spop/|valkey.io} for details.
      *
      * @param key - The key of the set.
      * @returns the value of the popped member.
@@ -2296,12 +2718,13 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public spop(key: string): Promise<string | null> {
+    public async spop(key: string): Promise<string | null> {
         return this.createWritePromise(createSPop(key));
     }
 
     /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
-     * See https://valkey.io/commands/spop/ for details.
+     *
+     * @see {@link https://valkey.io/commands/spop/|valkey.io} for details.
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
@@ -2328,8 +2751,67 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Returns a random element from the set value stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/srandmember/|valkey.io} for more details.
+     *
+     * @param key - The key from which to retrieve the set member.
+     * @returns A random element from the set, or null if `key` does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmember method to return a random member from a set
+     * const result = await client.srandmember("my_set");
+     * console.log(result); // Output: 'member1' - A random member of "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmember method with non-existing key
+     * const result = await client.srandmember("non_existing_set");
+     * console.log(result); // Output: null
+     * ```
+     */
+    public async srandmember(key: string): Promise<string | null> {
+        return this.createWritePromise(createSRandMember(key));
+    }
+
+    /**
+     * Returns one or more random elements from the set value stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/srandmember/|valkey.io} for more details.
+     *
+     * @param key - The key of the sorted set.
+     * @param count - The number of members to return.
+     *                If `count` is positive, returns unique members.
+     *                If `count` is negative, allows for duplicates members.
+     * @returns a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmemberCount method to return multiple random members from a set
+     * const result = await client.srandmemberCount("my_set", -3);
+     * console.log(result); // Output: ['member1', 'member1', 'member2'] - Random members of "my_set".
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of srandmemberCount method with non-existing key
+     * const result = await client.srandmemberCount("non_existing_set", 3);
+     * console.log(result); // Output: [] - An empty list since the key does not exist.
+     * ```
+     */
+    public async srandmemberCount(
+        key: string,
+        count: number,
+    ): Promise<string[]> {
+        return this.createWritePromise(createSRandMember(key, count));
+    }
+
     /** Returns the number of keys in `keys` that exist in the database.
-     * See https://valkey.io/commands/exists/ for details.
+     *
+     * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
      * @param keys - The keys list to check.
      * @returns The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
@@ -2342,14 +2824,15 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
      * ```
      */
-    public exists(keys: string[]): Promise<number> {
+    public async exists(keys: string[]): Promise<number> {
         return this.createWritePromise(createExists(keys));
     }
 
     /** Removes the specified keys. A key is ignored if it does not exist.
      * This command, similar to DEL, removes specified keys and ignores non-existent ones.
      * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
-     * See https://valkey.io/commands/unlink/ for details.
+     *
+     * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
      * @param keys - The keys we wanted to unlink.
      * @returns The number of keys that were unlinked.
@@ -2361,7 +2844,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
      * ```
      */
-    public unlink(keys: string[]): Promise<number> {
+    public async unlink(keys: string[]): Promise<number> {
         return this.createWritePromise(createUnlink(keys));
     }
 
@@ -2369,7 +2852,8 @@ export class BaseClient {
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://valkey.io/commands/expire/ for details.
+     *
+     * @see {@link https://valkey.io/commands/expire/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
@@ -2391,7 +2875,7 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that "my_key" has an existing expiry.
      * ```
      */
-    public expire(
+    public async expire(
         key: string,
         seconds: number,
         option?: ExpireOptions,
@@ -2403,7 +2887,8 @@ export class BaseClient {
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://valkey.io/commands/expireat/ for details.
+     *
+     * @see {@link https://valkey.io/commands/expireat/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
@@ -2418,7 +2903,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
-    public expireAt(
+    public async expireAt(
         key: string,
         unixSeconds: number,
         option?: ExpireOptions,
@@ -2428,11 +2913,40 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in seconds.
+     * To get the expiration with millisecond precision, use {@link pexpiretime}.
+     *
+     * @see {@link https://valkey.io/commands/expiretime/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.expiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = await client.set(myKey, "value");
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = await client.expireTime(myKey);
+     * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
+     * ```
+     */
+    public async expiretime(key: string): Promise<number> {
+        return this.createWritePromise(createExpireTime(key));
+    }
+
     /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://valkey.io/commands/pexpire/ for details.
+     *
+     * @see {@link https://valkey.io/commands/pexpire/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
@@ -2447,7 +2961,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that a timeout of 60,000 milliseconds has been set for "my_key".
      * ```
      */
-    public pexpire(
+    public async pexpire(
         key: string,
         milliseconds: number,
         option?: ExpireOptions,
@@ -2461,7 +2975,8 @@ export class BaseClient {
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
-     * See https://valkey.io/commands/pexpireat/ for details.
+     *
+     * @see {@link https://valkey.io/commands/pexpireat/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
@@ -2476,7 +2991,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the expiration time for "my_key" was successfully set.
      * ```
      */
-    public pexpireAt(
+    public async pexpireAt(
         key: string,
         unixMilliseconds: number,
         option?: ExpireOptions,
@@ -2486,8 +3001,36 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given `key` will expire, in milliseconds.
+     *
+     * @see {@link https://valkey.io/commands/pexpiretime/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param key - The `key` to determine the expiration value of.
+     * @returns The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
+     *
+     * @example
+     * ```typescript
+     * const result1 = client.pexpiretime("myKey");
+     * console.log(result1); // Output: -2 - myKey doesn't exist.
+     *
+     * const result2 = client.set(myKey, "value");
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result2); // Output: -1 - myKey has no associated expiration.
+     *
+     * client.expire(myKey, 60);
+     * const result3 = client.pexpireTime(myKey);
+     * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
+     * ```
+     */
+    public async pexpiretime(key: string): Promise<number> {
+        return this.createWritePromise(createPExpireTime(key));
+    }
+
     /** Returns the remaining time to live of `key` that has a timeout.
-     * See https://valkey.io/commands/ttl/ for details.
+     *
+     * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
      * @param key - The key to return its timeout.
      * @returns TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
@@ -2513,15 +3056,16 @@ export class BaseClient {
      * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
      * ```
      */
-    public ttl(key: string): Promise<number> {
+    public async ttl(key: string): Promise<number> {
         return this.createWritePromise(createTTL(key));
     }
 
     /** Invokes a Lua script with its keys and arguments.
-     * This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+     * This method simplifies the process of invoking scripts on a Valkey server by using an object that represents a Lua script.
      * The script loading, argument preparation, and execution will all be handled internally. If the script has not already been loaded,
-     * it will be loaded automatically using the Redis `SCRIPT LOAD` command. After that, it will be invoked using the Redis `EVALSHA` command
-     * See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for details.
+     * it will be loaded automatically using the `SCRIPT LOAD` command. After that, it will be invoked using the `EVALSHA` command.
+     *
+     * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
      *
      * @param script - The Lua script to execute.
      * @param options - The script option that contains keys and arguments for the script.
@@ -2538,7 +3082,7 @@ export class BaseClient {
      * console.log(result); // Output: ['foo', 'bar']
      * ```
      */
-    public invokeScript(
+    public async invokeScript(
         script: Script,
         option?: ScriptOptions,
     ): Promise<ReturnType> {
@@ -2566,9 +3110,49 @@ export class BaseClient {
         return this.createWritePromise(scriptInvocation);
     }
 
+    /**
+     * Returns stream entries matching a given range of entry IDs.
+     *
+     * @see {@link https://valkey.io/commands/xrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param start - The starting stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     *
+     * @example
+     * ```typescript
+     * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
+     * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
+     * console.log(await client.xrange("mystream", InfBoundary.NegativeInfinity, InfBoundary.PositiveInfinity));
+     * // Output:
+     * // {
+     * //     "0-1": [["field1", "value1"]],
+     * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * ```
+     */
+    public async xrange(
+        key: string,
+        start: Boundary<string>,
+        end: Boundary<string>,
+        count?: number,
+    ): Promise<Record<string, [string, string][]> | null> {
+        return this.createWritePromise(createXRange(key, start, end, count));
+    }
+
     /** Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
-     * See https://valkey.io/commands/zadd/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zadd/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
@@ -2591,7 +3175,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Updates the scores of two existing members in the sorted set "existing_sorted_set."
      * ```
      */
-    public zadd(
+    public async zadd(
         key: string,
         membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
@@ -2604,7 +3188,8 @@ export class BaseClient {
     /** Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
-     * See https://valkey.io/commands/zadd/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zadd/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
@@ -2627,7 +3212,7 @@ export class BaseClient {
      * console.log(result); // Output: null - Indicates that the member in the sorted set haven't been updated.
      * ```
      */
-    public zaddIncr(
+    public async zaddIncr(
         key: string,
         member: string,
         increment: number,
@@ -2640,7 +3225,8 @@ export class BaseClient {
 
     /** Removes the specified members from the sorted set stored at `key`.
      * Specified members that are not a member of this set are ignored.
-     * See https://valkey.io/commands/zrem/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zrem/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members to remove from the sorted set.
@@ -2661,12 +3247,13 @@ export class BaseClient {
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
-    public zrem(key: string, members: string[]): Promise<number> {
+    public async zrem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createZRem(key, members));
     }
 
     /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
-     * See https://valkey.io/commands/zcard/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zcard/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
@@ -2686,22 +3273,21 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public zcard(key: string): Promise<number> {
+    public async zcard(key: string): Promise<number> {
         return this.createWritePromise(createZCard(key));
     }
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
      *
-     * See https://valkey.io/commands/zintercard/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/zintercard/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param keys - The keys of the sorted sets to intersect.
      * @param limit - An optional argument that can be used to specify a maximum number for the
      * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
      * @returns The cardinality of the intersection of the given sorted sets.
-     *
-     * since - Redis version 7.0.0.
      *
      * @example
      * ```typescript
@@ -2709,7 +3295,7 @@ export class BaseClient {
      * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
      * ```
      */
-    public zintercard(keys: string[], limit?: number): Promise<number> {
+    public async zintercard(keys: string[], limit?: number): Promise<number> {
         return this.createWritePromise(createZInterCard(keys, limit));
     }
 
@@ -2717,14 +3303,13 @@ export class BaseClient {
      * Returns the difference between the first sorted set and all the successive sorted sets.
      * To get the elements with their scores, see {@link zdiffWithScores}.
      *
-     * See https://valkey.io/commands/zdiff/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param keys - The keys of the sorted sets.
      * @returns An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2735,7 +3320,7 @@ export class BaseClient {
      * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
      */
-    public zdiff(keys: string[]): Promise<string[]> {
+    public async zdiff(keys: string[]): Promise<string[]> {
         return this.createWritePromise(createZDiff(keys));
     }
 
@@ -2743,14 +3328,13 @@ export class BaseClient {
      * Returns the difference between the first sorted set and all the successive sorted sets, with the associated
      * scores.
      *
-     * See https://valkey.io/commands/zdiff/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/zdiff/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param keys - The keys of the sorted sets.
      * @returns A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2761,7 +3345,9 @@ export class BaseClient {
      * console.log(result); // Output: {"member1": 1.0} - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
      */
-    public zdiffWithScores(keys: string[]): Promise<Record<string, number>> {
+    public async zdiffWithScores(
+        keys: string[],
+    ): Promise<Record<string, number>> {
         return this.createWritePromise(createZDiffWithScores(keys));
     }
 
@@ -2770,14 +3356,13 @@ export class BaseClient {
      * the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
      * treated as empty sets.
      *
-     * See https://valkey.io/commands/zdiffstore/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/zdiffstore/|valkey.io} for more details.
      * @remarks When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param destination - The key for the resulting sorted set.
      * @param keys - The keys of the sorted sets to compare.
      * @returns The number of members in the resulting sorted set stored at `destination`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2790,12 +3375,16 @@ export class BaseClient {
      * console.log(result2); // Output: ["member2"] - "member2" is now stored in "my_sorted_set".
      * ```
      */
-    public zdiffstore(destination: string, keys: string[]): Promise<number> {
+    public async zdiffstore(
+        destination: string,
+        keys: string[],
+    ): Promise<number> {
         return this.createWritePromise(createZDiffStore(destination, keys));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
-     * See https://valkey.io/commands/zscore/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zscore/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose score is to be retrieved.
@@ -2824,21 +3413,20 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public zscore(key: string, member: string): Promise<number | null> {
+    public async zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZScore(key, member));
     }
 
     /**
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
-     * See https://valkey.io/commands/zmscore/ for more details.
+     * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param members - A list of members in the sorted set.
      * @returns An `array` of scores corresponding to `members`.
      * If a member does not exist in the sorted set, the corresponding value in the list will be `null`.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -2846,12 +3434,16 @@ export class BaseClient {
      * console.log(result); // Output: [1.0, null, 2.0] - "member1" has a score of 1.0, "non_existent_member" does not exist in the sorted set, and "member2" has a score of 2.0.
      * ```
      */
-    public zmscore(key: string, members: string[]): Promise<(number | null)[]> {
+    public async zmscore(
+        key: string,
+        members: string[],
+    ): Promise<(number | null)[]> {
         return this.createWritePromise(createZMScore(key, members));
     }
 
     /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
-     * See https://valkey.io/commands/zcount/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zcount/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
@@ -2863,7 +3455,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the zcount method to count members in a sorted set within a score range
-     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zcount("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with scores between 5.0 (inclusive) and +inf in the sorted set "my_sorted_set".
      * ```
      *
@@ -2874,10 +3466,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that there is one member with score between 5.0 (inclusive) and 10.0 (exclusive) in the sorted set "my_sorted_set".
      * ```
      */
-    public zcount(
+    public async zcount(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): Promise<number> {
         return this.createWritePromise(createZCount(key, minScore, maxScore));
     }
@@ -2885,15 +3477,16 @@ export class BaseClient {
     /** Returns the specified range of elements in the sorted set stored at `key`.
      * ZRANGE can perform different types of range queries: by index (rank), by the score, or by lexicographical order.
      *
-     * See https://valkey.io/commands/zrange/ for more details.
-     * To get the elements with their scores, see `zrangeWithScores`.
+     * To get the elements with their scores, see {@link zrangeWithScores}.
+     *
+     * @see {@link https://valkey.io/commands/zrange/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns A list of elements within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
      *
@@ -2907,14 +3500,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrange method to retrieve members within a score range in ascending order
      * const result = await client.zrange("my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: ['member2', 'member3'] - Returns members with scores within the range of negative infinity to 3, in ascending order.
      * ```
      */
-    public zrange(
+    public async zrange(
         key: string,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
@@ -2924,14 +3517,15 @@ export class BaseClient {
 
     /** Returns the specified range of elements with their scores in the sorted set stored at `key`.
      * Similar to ZRANGE but with a WITHSCORE flag.
-     * See https://valkey.io/commands/zrange/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zrange/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param rangeQuery - The range query object representing the type of range query to perform.
-     * For range queries by index (rank), use RangeByIndex.
-     * For range queries by lexicographical order, use RangeByLex.
-     * For range queries by score, use RangeByScore.
-     * @param reverse - If true, reverses the sorted set, with index 0 as the element with the highest score.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
      * @returns A map of elements and their scores within the specified range.
      * If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
      *
@@ -2949,14 +3543,14 @@ export class BaseClient {
      * ```typescript
      * // Example usage of zrangeWithScores method to retrieve members within a score range with their scores
      * const result = await client.zrangeWithScores("my_sorted_set", {
-     *              start: InfScoreBoundary.NegativeInfinity,
+     *              start: InfBoundary.NegativeInfinity,
      *              stop: { value: 3, isInclusive: false },
      *              type: "byScore",
      *           });
      * console.log(result); // Output: {'member4': -2.0, 'member7': 1.5} - Returns members with scores within the range of negative infinity to 3, with their scores.
      * ```
      */
-    public zrangeWithScores(
+    public async zrangeWithScores(
         key: string,
         rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
         reverse: boolean = false,
@@ -2967,13 +3561,58 @@ export class BaseClient {
     }
 
     /**
+     * Stores a specified range of elements from the sorted set at `source`, into a new
+     * sorted set at `destination`. If `destination` doesn't exist, a new sorted
+     * set is created; if it exists, it's overwritten.
+     *
+     * @see {@link https://valkey.io/commands/zrangestore/|valkey.io} for more details.
+     * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param destination - The key for the destination sorted set.
+     * @param source - The key of the source sorted set.
+     * @param rangeQuery - The range query object representing the type of range query to perform.
+     * - For range queries by index (rank), use {@link RangeByIndex}.
+     * - For range queries by lexicographical order, use {@link RangeByLex}.
+     * - For range queries by score, use {@link RangeByScore}.
+     * @param reverse - If `true`, reverses the sorted set, with index `0` as the element with the highest score.
+     * @returns The number of elements in the resulting sorted set.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zrangeStore to retrieve and store all members of a sorted set in ascending order.
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", { start: 0, stop: -1 });
+     * console.log(result); // Output: 7 - "destination_key" contains a sorted set with the 7 members from "my_sorted_set".
+     * ```
+     * @example
+     * ```typescript
+     * // Example usage of zrangeStore method to retrieve members within a score range in ascending order and store in "destination_key"
+     * const result = await client.zrangeStore("destination_key", "my_sorted_set", {
+     *              start: InfBoundary.NegativeInfinity,
+     *              stop: { value: 3, isInclusive: false },
+     *              type: "byScore",
+     *           });
+     * console.log(result); // Output: 5 - Stores 5 members with scores within the range of negative infinity to 3, in ascending order, in "destination_key".
+     * ```
+     */
+    public async zrangeStore(
+        destination: string,
+        source: string,
+        rangeQuery: RangeByScore | RangeByLex | RangeByIndex,
+        reverse: boolean = false,
+    ): Promise<string[]> {
+        return this.createWritePromise(
+            createZRangeStore(destination, source, rangeQuery, reverse),
+        );
+    }
+
+    /**
      * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
      * To get the result directly, see `zinter_withscores`.
      *
-     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/zinterstore/ for more details.
+     * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for more details.
+     * @remarks When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
      *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
@@ -2993,7 +3632,7 @@ export class BaseClient {
      * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
-    public zinterstore(
+    public async zinterstore(
         destination: string,
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
@@ -3006,7 +3645,7 @@ export class BaseClient {
     /**
      * Returns a random member from the sorted set stored at `key`.
      *
-     * See https://valkey.io/commands/zrandmember/ for more details.
+     * @see {@link https://valkey.io/commands/zrandmember/|valkey.io} for more details.
      *
      * @param keys - The key of the sorted set.
      * @returns A string representing a random member from the sorted set.
@@ -3031,7 +3670,7 @@ export class BaseClient {
     /**
      * Returns random members from the sorted set stored at `key`.
      *
-     * See https://valkey.io/commands/zrandmember/ for more details.
+     * @see {@link https://valkey.io/commands/zrandmember/|valkey.io} for more details.
      *
      * @param keys - The key of the sorted set.
      * @param count - The number of members to return.
@@ -3062,7 +3701,7 @@ export class BaseClient {
     /**
      * Returns random members with scores from the sorted set stored at `key`.
      *
-     * See https://valkey.io/commands/zrandmember/ for more details.
+     * @see {@link https://valkey.io/commands/zrandmember/|valkey.io} for more details.
      *
      * @param keys - The key of the sorted set.
      * @param count - The number of members to return.
@@ -3092,7 +3731,8 @@ export class BaseClient {
     }
 
     /** Returns the length of the string value stored at `key`.
-     * See https://valkey.io/commands/strlen/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/strlen/|valkey.io} for more details.
      *
      * @param key - The key to check its length.
      * @returns - The length of the string value stored at key
@@ -3113,12 +3753,13 @@ export class BaseClient {
      * console.log(len2); // Output: 0
      * ```
      */
-    public strlen(key: string): Promise<number> {
+    public async strlen(key: string): Promise<number> {
         return this.createWritePromise(createStrlen(key));
     }
 
     /** Returns the string representation of the type of the value stored at `key`.
-     * See https://valkey.io/commands/type/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/type/|valkey.io} for more details.
      *
      * @param key - The `key` to check its data type.
      * @returns If the `key` exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
@@ -3139,14 +3780,15 @@ export class BaseClient {
      * console.log(type); // Output: 'list'
      * ```
      */
-    public type(key: string): Promise<string> {
+    public async type(key: string): Promise<string> {
         return this.createWritePromise(createType(key));
     }
 
     /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the lowest scores are removed and returned.
      * Otherwise, only one member with the lowest score is removed and returned.
-     * See https://valkey.io/commands/zpopmin for more details.
+     *
+     * @see {@link https://valkey.io/commands/zpopmin/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
@@ -3168,17 +3810,46 @@ export class BaseClient {
      * console.log(result); // Output: {'member3': 7.5 , 'member2': 8.0} - Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
      * ```
      */
-    public zpopmin(
+    public async zpopmin(
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZPopMin(key, count));
     }
 
+    /**
+     * Blocks the connection until it removes and returns a member with the lowest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMIN` is the blocking variant of {@link zpopmin}.
+     *
+     * @see {@link https://valkey.io/commands/bzpopmin/|valkey.io} for more details.
+     * @remarks When in cluster mode, `keys` must map to the same hash slot.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.bzpopmin(["zset1", "zset2"], 0.5);
+     * console.log(data); // Output: ["zset1", "a", 2];
+     * ```
+     */
+    public async bzpopmin(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string, number] | null> {
+        return this.createWritePromise(createBZPopMin(keys, timeout));
+    }
+
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
      * If `count` is provided, up to `count` members with the highest scores are removed and returned.
      * Otherwise, only one member with the highest score is removed and returned.
-     * See https://valkey.io/commands/zpopmax for more details.
+     *
+     * @see {@link https://valkey.io/commands/zpopmax/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param count - Specifies the quantity of members to pop. If not specified, pops one member.
@@ -3200,15 +3871,44 @@ export class BaseClient {
      * console.log(result); // Output: {'member2': 8.0, 'member3': 7.5} - Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
      * ```
      */
-    public zpopmax(
+    public async zpopmax(
         key: string,
         count?: number,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(createZPopMax(key, count));
     }
 
+    /**
+     * Blocks the connection until it removes and returns a member with the highest score from the
+     * first non-empty sorted set, with the given `key` being checked in the order they
+     * are provided.
+     * `BZPOPMAX` is the blocking variant of {@link zpopmax}.
+     *
+     * @see {@link https://valkey.io/commands/zpopmax/|valkey.io} for more details.
+     * @remarks When in cluster mode, `keys` must map to the same hash slot.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
+     *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
+     *     If no member could be popped and the `timeout` expired, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.bzpopmax(["zset1", "zset2"], 0.5);
+     * console.log(data); // Output: ["zset1", "c", 2];
+     * ```
+     */
+    public async bzpopmax(
+        keys: string[],
+        timeout: number,
+    ): Promise<[string, string, number] | null> {
+        return this.createWritePromise(createBZPopMax(keys, timeout));
+    }
+
     /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
-     * See https://valkey.io/commands/pttl for more details.
+     *
+     * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
      * @param key - The key to return its timeout.
      * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
@@ -3234,14 +3934,15 @@ export class BaseClient {
      * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
      * ```
      */
-    public pttl(key: string): Promise<number> {
+    public async pttl(key: string): Promise<number> {
         return this.createWritePromise(createPTTL(key));
     }
 
     /** Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
      * Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
      * These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
-     * See https://valkey.io/commands/zremrangebyrank/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zremrangebyrank/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param start - The starting point of the range.
@@ -3258,7 +3959,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that three elements have been removed from the sorted set "my_sorted_set" between ranks 0 and 2.
      * ```
      */
-    public zremRangeByRank(
+    public async zremRangeByRank(
         key: string,
         start: number,
         end: number,
@@ -3269,7 +3970,7 @@ export class BaseClient {
     /**
      * Removes all elements in the sorted set stored at `key` with lexicographical order between `minLex` and `maxLex`.
      *
-     * See https://valkey.io/commands/zremrangebylex/ for more details.
+     * @see {@link https://valkey.io/commands/zremrangebylex/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
@@ -3288,14 +3989,14 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByLex method when the sorted set does not exist
-     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfScoreBoundary.NegativeInfinity, { value: "e" });
+     * const result = await client.zremRangeByLex("non_existing_sorted_set", InfBoundary.NegativeInfinity, { value: "e" });
      * console.log(result); // Output: 0 - Indicates that no elements were removed.
      * ```
      */
-    public zremRangeByLex(
+    public async zremRangeByLex(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): Promise<number> {
         return this.createWritePromise(
             createZRemRangeByLex(key, minLex, maxLex),
@@ -3303,7 +4004,8 @@ export class BaseClient {
     }
 
     /** Removes all elements in the sorted set stored at `key` with a score between `minScore` and `maxScore`.
-     * See https://valkey.io/commands/zremrangebyscore/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/zremrangebyscore/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param minScore - The minimum score to remove from. Can be positive/negative infinity, or specific score and inclusivity.
@@ -3315,7 +4017,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of zremRangeByScore method to remove members from a sorted set based on score range
-     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zremRangeByScore("my_sorted_set", { value: 5.0, isInclusive: true }, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that 2 members with scores between 5.0 (inclusive) and +inf have been removed from the sorted set "my_sorted_set".
      * ```
      *
@@ -3326,10 +4028,10 @@ export class BaseClient {
      * console.log(result); // Output: 0 - Indicates that no members were removed as the sorted set "non_existing_sorted_set" does not exist.
      * ```
      */
-    public zremRangeByScore(
+    public async zremRangeByScore(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): Promise<number> {
         return this.createWritePromise(
             createZRemRangeByScore(key, minScore, maxScore),
@@ -3339,7 +4041,7 @@ export class BaseClient {
     /**
      * Returns the number of members in the sorted set stored at 'key' with scores between 'minLex' and 'maxLex'.
      *
-     * See https://valkey.io/commands/zlexcount/ for more details.
+     * @see {@link https://valkey.io/commands/zlexcount/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param minLex - The minimum lex to count from. Can be positive/negative infinity, or a specific lex and inclusivity.
@@ -3350,7 +4052,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfScoreBoundary.PositiveInfinity);
+     * const result = await client.zlexcount("my_sorted_set", {value: "c"}, InfBoundary.PositiveInfinity);
      * console.log(result); // Output: 2 - Indicates that there are 2 members with lex scores between "c" (inclusive) and positive infinity in the sorted set "my_sorted_set".
      * ```
      *
@@ -3362,15 +4064,16 @@ export class BaseClient {
      */
     public async zlexcount(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): Promise<number> {
         return this.createWritePromise(createZLexCount(key, minLex, maxLex));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
-     * See https://valkey.io/commands/zrank for more details.
-     * To get the rank of `member` with its score, see `zrankWithScore`.
+     * To get the rank of `member` with its score, see {@link zrankWithScore}.
+     *
+     * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -3391,19 +4094,19 @@ export class BaseClient {
      * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
      * ```
      */
-    public zrank(key: string, member: string): Promise<number | null> {
+    public async zrank(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZRank(key, member));
     }
 
     /** Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
-     * See https://valkey.io/commands/zrank for more details.
+     *
+     * @see {@link https://valkey.io/commands/zrank/|valkey.io} for more details.
+     * @remarks Since Valkey version 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
      * @returns A list containing the rank and score of `member` in the sorted set.
      * If `key` doesn't exist, or if `member` is not present in the set, null will be returned.
-     *
-     * since - Redis version 7.2.0.
      *
      * @example
      * ```typescript
@@ -3419,7 +4122,7 @@ export class BaseClient {
      * console.log(result); // Output: null - Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
      * ```
      */
-    public zrankWithScore(
+    public async zrankWithScore(
         key: string,
         member: string,
     ): Promise<number[] | null> {
@@ -3431,7 +4134,7 @@ export class BaseClient {
      * scores are ordered from the highest to lowest, starting from 0.
      * To get the rank of `member` with its score, see {@link zrevrankWithScore}.
      *
-     * See https://valkey.io/commands/zrevrank/ for more details.
+     * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -3444,7 +4147,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that "member2" has the second-highest score in the sorted set "my_sorted_set".
      * ```
      */
-    public zrevrank(key: string, member: string): Promise<number | null> {
+    public async zrevrank(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZRevRank(key, member));
     }
 
@@ -3452,7 +4155,8 @@ export class BaseClient {
      * Returns the rank of `member` in the sorted set stored at `key` with its
      * score, where scores are ordered from the highest to lowest, starting from 0.
      *
-     * See https://valkey.io/commands/zrevrank/ for more details.
+     * @see {@link https://valkey.io/commands/zrevrank/|valkey.io} for more details.
+     * @remarks Since Valkey version 7.2.0.
      *
      * @param key - The key of the sorted set.
      * @param member - The member whose rank is to be retrieved.
@@ -3460,15 +4164,13 @@ export class BaseClient {
      *     are ordered from high to low based on scores.
      *     If `key` doesn't exist, or if `member` is not present in the set, `null` will be returned.
      *
-     * since - Valkey version 7.2.0.
-     *
      * @example
      * ```typescript
      * const result = await client.zrevankWithScore("my_sorted_set", "member2");
      * console.log(result); // Output: [1, 6.0] - Indicates that "member2" with score 6.0 has the second-highest score in the sorted set "my_sorted_set".
      * ```
      */
-    public zrevrankWithScore(
+    public async zrevrankWithScore(
         key: string,
         member: string,
     ): Promise<(number[] | null)[]> {
@@ -3477,14 +4179,15 @@ export class BaseClient {
 
     /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
-     * See https://valkey.io/commands/xadd/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/xadd/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
      * @param options - options detailing how to add to the stream.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
-    public xadd(
+    public async xadd(
         key: string,
         values: [string, string][],
         options?: StreamAddOptions,
@@ -3495,7 +4198,7 @@ export class BaseClient {
     /**
      * Removes the specified entries by id from a stream, and returns the number of entries deleted.
      *
-     * See https://valkey.io/commands/xdel for more details.
+     * @see {@link https://valkey.io/commands/xdel/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
      * @param ids - An array of entry ids.
@@ -3508,25 +4211,30 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public xdel(key: string, ids: string[]): Promise<number> {
+    public async xdel(key: string, ids: string[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 
     /**
      * Trims the stream stored at `key` by evicting older entries.
-     * See https://valkey.io/commands/xtrim/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/xtrim/|valkey.io} for more details.
      *
      * @param key - the key of the stream
      * @param options - options detailing how to trim the stream.
      * @returns The number of entries deleted from the stream. If `key` doesn't exist, 0 is returned.
      */
-    public xtrim(key: string, options: StreamTrimOptions): Promise<number> {
+    public async xtrim(
+        key: string,
+        options: StreamTrimOptions,
+    ): Promise<number> {
         return this.createWritePromise(createXTrim(key, options));
     }
 
     /**
      * Reads entries from the given streams.
-     * See https://valkey.io/commands/xread/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/xread/|valkey.io} for more details.
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
@@ -3534,28 +4242,30 @@ export class BaseClient {
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
-     * console.log(result); // Output: {
-     *                      //     "my_stream": {
-     *                      //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
-     *                      //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
-     *                      //     }, "writers": {
-     *                      //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
-     *                      //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
-     *                      //     }
-     *                      // }
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
+     * //     }
+     * // }
      * ```
      */
-    public xread(
+    public async xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
-    ): Promise<Record<string, Record<string, string[][]>>> {
+    ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
     /**
      * Returns the number of entries in the stream stored at `key`.
      *
-     * See https://valkey.io/commands/xlen/ for more details.
+     * @see {@link https://valkey.io/commands/xlen/|valkey.io} for more details.
      *
      * @param key - The key of the stream.
      * @returns The number of entries in the stream. If `key` does not exist, returns `0`.
@@ -3566,8 +4276,473 @@ export class BaseClient {
      * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
      * ```
      */
-    public xlen(key: string): Promise<number> {
+    public async xlen(key: string): Promise<number> {
         return this.createWritePromise(createXLen(key));
+    }
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * @see {@link https://valkey.io/commands/xpending/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @returns An `array` that includes the summary of the pending messages. See example for more details.
+     * @example
+     * ```typescript
+     * console.log(await client.xpending("my_stream", "my_group")); // Output:
+     * // [
+     * //     42,                            // The total number of pending messages
+     * //     "1722643465939-0",             // The smallest ID among the pending messages
+     * //     "1722643484626-0",             // The greatest ID among the pending messages
+     * //     [                              // A 2D-`array` of every consumer in the group
+     * //         [ "consumer1", "10" ],     // with at least one pending message, and the
+     * //         [ "consumer2", "32" ],     // number of pending messages it has
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xpending(
+        key: string,
+        group: string,
+    ): Promise<[number, string, string, [string, number][]]> {
+        return this.createWritePromise(createXPending(key, group));
+    }
+
+    /**
+     * Returns an extended form of stream message information for pending messages matching a given range of IDs.
+     *
+     * @see {@link https://valkey.io/commands/xpending/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param options - Additional options to filter entries, see {@link StreamPendingOptions}.
+     * @returns A 2D-`array` of 4-tuples containing extended message information. See example for more details.
+     *
+     * @example
+     * ```typescript
+     * console.log(await client.xpending("my_stream", "my_group"), {
+     *     start: { value: "0-1", isInclusive: true },
+     *     end: InfBoundary.PositiveInfinity,
+     *     count: 2,
+     *     consumer: "consumer1"
+     * }); // Output:
+     * // [
+     * //     [
+     * //         "1722643465939-0",  // The ID of the message
+     * //         "consumer1",        // The name of the consumer that fetched the message and has still to acknowledge it
+     * //         174431,             // The number of milliseconds that elapsed since the last time this message was delivered to this consumer
+     * //         1                   // The number of times this message was delivered
+     * //     ],
+     * //     [
+     * //         "1722643484626-0",
+     * //         "consumer1",
+     * //         202231,
+     * //         1
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xpendingWithOptions(
+        key: string,
+        group: string,
+        options: StreamPendingOptions,
+    ): Promise<[string, string, number, number][]> {
+        return this.createWritePromise(createXPending(key, group, options));
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xinfo-consumers/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @returns An `Array` of `Records`, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at `key`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xinfoConsumers("my_stream", "my_group");
+     * console.log(result); // Output:
+     * // [
+     * //     {
+     * //         "name": "Alice",
+     * //         "pending": 1,
+     * //         "idle": 9104628,
+     * //         "inactive": 18104698   // Added in 7.2.0
+     * //     },
+     * //     ...
+     * // ]
+     * ```
+     */
+    public async xinfoConsumers(
+        key: string,
+        group: string,
+    ): Promise<Record<string, string | number>[]> {
+        return this.createWritePromise(createXInfoConsumers(key, group));
+    }
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * @see {@link https://valkey.io/commands/xclaim/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @returns A `Record` of message entries that are claimed by the consumer.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xclaim("myStream", "myGroup", "myConsumer", 42,
+     *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
+     * console.log(result); // Output:
+     * // {
+     * //     "2-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]]
+     * // }
+     * ```
+     */
+    public async xclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): Promise<Record<string, [string, string][]>> {
+        return this.createWritePromise(
+            createXClaim(key, group, consumer, minIdleTime, ids, options),
+        );
+    }
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param start - Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count - (Optional) Limits the number of claimed entries to the specified value.
+     * @returns A `tuple` containing the following elements:
+     *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+     *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+     *     the entire stream was scanned.
+     *   - A `Record` of the claimed entries.
+     *   - If you are using Valkey 7.0.0 or above, the response list will also include a list containing
+     *     the message IDs that were in the Pending Entries List but no longer exist in the stream.
+     *     These IDs are deleted from the Pending Entries List.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * console.log(result); // Output:
+     * // [
+     * //     "1609338788321-0",                // value to be used as `start` argument
+     * //                                       // for the next `xautoclaim` call
+     * //     {
+     * //         "1609338752495-0": [          // claimed entries
+     * //             ["field 1", "value 1"],
+     * //             ["field 2", "value 2"]
+     * //         ]
+     * //     },
+     * //     [
+     * //         "1594324506465-0",            // array of IDs of deleted messages,
+     * //         "1594568784150-0"             // included in the response only on valkey 7.0.0 and above
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xautoclaim(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        start: string,
+        count?: number,
+    ): Promise<[string, Record<string, [string, string][]>, string[]?]> {
+        return this.createWritePromise(
+            createXAutoClaim(key, group, consumer, minIdleTime, start, count),
+        );
+    }
+
+    /**
+     * Transfers ownership of pending stream entries that match the specified criteria.
+     *
+     * @see {@link https://valkey.io/commands/xautoclaim/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param start - Filters the claimed entries to those that have an ID equal or greater than the
+     *     specified value.
+     * @param count - (Optional) Limits the number of claimed entries to the specified value.
+     * @returns An `array` containing the following elements:
+     *   - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is
+     *     equivalent to the next ID in the stream after the entries that were scanned, or "0-0" if
+     *     the entire stream was scanned.
+     *   - A list of the IDs for the claimed entries.
+     *   - If you are using Valkey 7.0.0 or above, the response list will also include a list containing
+     *     the message IDs that were in the Pending Entries List but no longer exist in the stream.
+     *     These IDs are deleted from the Pending Entries List.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xautoclaim("myStream", "myGroup", "myConsumer", 42, "0-0", 25);
+     * console.log(result); // Output:
+     * // [
+     * //     "1609338788321-0",                // value to be used as `start` argument
+     * //                                       // for the next `xautoclaim` call
+     * //     [
+     * //         "1609338752495-0",            // claimed entries
+     * //         "1609338752495-1",
+     * //     ],
+     * //     [
+     * //         "1594324506465-0",            // array of IDs of deleted messages,
+     * //         "1594568784150-0"             // included in the response only on valkey 7.0.0 and above
+     * //     ]
+     * // ]
+     * ```
+     */
+    public async xautoclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        start: string,
+        count?: number,
+    ): Promise<[string, string[], string[]?]> {
+        return this.createWritePromise(
+            createXAutoClaim(
+                key,
+                group,
+                consumer,
+                minIdleTime,
+                start,
+                count,
+                true,
+            ),
+        );
+    }
+
+    /**
+     * Changes the ownership of a pending message. This function returns an `array` with
+     * only the message/entry IDs, and is equivalent to using `JUSTID` in the Valkey API.
+     *
+     * @see {@link https://valkey.io/commands/xclaim/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param minIdleTime - The minimum idle time for the message to be claimed.
+     * @param ids - An array of entry ids.
+     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @returns An `array` of message ids claimed by the consumer.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.xclaimJustId("my_stream", "my_group", "my_consumer", 42,
+     *     ["1-0", "2-0", "3-0"], { idle: 500, retryCount: 3, isForce: true });
+     * console.log(result); // Output: [ "2-0", "3-0" ]
+     * ```
+     */
+    public async xclaimJustId(
+        key: string,
+        group: string,
+        consumer: string,
+        minIdleTime: number,
+        ids: string[],
+        options?: StreamClaimOptions,
+    ): Promise<string[]> {
+        return this.createWritePromise(
+            createXClaim(key, group, consumer, minIdleTime, ids, options, true),
+        );
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by `groupname` for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-create/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The newly created consumer group name.
+     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * // Create the consumer group "mygroup", using zero as the starting ID:
+     * console.log(await client.xgroupCreate("mystream", "mygroup", "0-0")); // Output is "OK"
+     * ```
+     */
+    public async xgroupCreate(
+        key: string,
+        groupName: string,
+        id: string,
+        options?: StreamGroupOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createXGroupCreate(key, groupName, id, options),
+        );
+    }
+
+    /**
+     * Destroys the consumer group `groupname` for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-destroy/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupname - The newly created consumer group name.
+     * @returns `true` if the consumer group is destroyed. Otherwise, `false`.
+     *
+     * @example
+     * ```typescript
+     * // Destroys the consumer group "mygroup"
+     * console.log(await client.xgroupDestroy("mystream", "mygroup")); // Output is true
+     * ```
+     */
+    public async xgroupDestroy(
+        key: string,
+        groupName: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(createXGroupDestroy(key, groupName));
+    }
+
+    /**
+     * Returns information about the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xinfo-stream/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param fullOptions - If `true`, returns verbose information with a limit of the first 10 PEL entries.
+     * If `number` is specified, returns verbose information limiting the returned PEL entries.
+     * If `0` is specified, returns verbose information with no limit.
+     * @returns A {@link ReturnTypeXinfoStream} of detailed stream information for the given `key`. See
+     *     the example for a sample response.
+     *
+     * @example
+     * ```typescript
+     * const infoResult = await client.xinfoStream("my_stream");
+     * console.log(infoResult);
+     * // Output: {
+     * //   length: 2,
+     * //   'radix-tree-keys': 1,
+     * //   'radix-tree-nodes': 2,
+     * //   'last-generated-id': '1719877599564-1',
+     * //   'max-deleted-entry-id': '0-0',
+     * //   'entries-added': 2,
+     * //   'recorded-first-entry-id': '1719877599564-0',
+     * //   'first-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   'last-entry': [ '1719877599564-0', ['some_field", "some_value', ...] ],
+     * //   groups: 1,
+     * // }
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const infoResult = await client.xinfoStream("my_stream", true); // default limit of 10 entries
+     * const infoResult = await client.xinfoStream("my_stream", 15); // limit of 15 entries
+     * console.log(infoResult);
+     * // Output: {
+     * //   length: 2,
+     * //   'radix-tree-keys': 1,
+     * //   'radix-tree-nodes': 2,
+     * //   'last-generated-id': '1719877599564-1',
+     * //   'max-deleted-entry-id': '0-0',
+     * //   'entries-added': 2,
+     * //   'recorded-first-entry-id': '1719877599564-0',
+     * //   entries: [ [ '1719877599564-0', ['some_field", "some_value', ...] ] ],
+     * //   groups: [ {
+     * //     name: 'group',
+     * //     'last-delivered-id': '1719877599564-0',
+     * //     'entries-read': 1,
+     * //     lag: 1,
+     * //     'pel-count': 1,
+     * //     pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //     consumers: [ {
+     * //         name: 'consumer',
+     * //         'seen-time': 1722624726802,
+     * //         'active-time': 1722624726802,
+     * //         'pel-count': 1,
+     * //         pending: [ [ '1719877599564-0', 'consumer', 1722624726802, 1 ] ],
+     * //         }
+     * //       ]
+     * //     }
+     * //   ]
+     * // }
+     * ```
+     */
+    public async xinfoStream(
+        key: string,
+        fullOptions?: boolean | number,
+    ): Promise<ReturnTypeXinfoStream> {
+        return this.createWritePromise(
+            createXInfoStream(key, fullOptions ?? false),
+        );
+    }
+
+    /**
+     * Creates a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-createconsumer/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The newly created consumer.
+     * @returns `true` if the consumer is created. Otherwise, returns `false`.
+     *
+     * @example
+     * ```typescript
+     * // The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
+     * console.log(await client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer")); // Output is true
+     * ```
+     */
+    public async xgroupCreateConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createXGroupCreateConsumer(key, groupName, consumerName),
+        );
+    }
+
+    /**
+     * Deletes a consumer named `consumerName` in the consumer group `groupName` for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-delconsumer/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param consumerName - The consumer to delete.
+     * @returns The number of pending messages the `consumer` had before it was deleted.
+     *
+     * * @example
+     * ```typescript
+     * // Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
+     * console.log(await client.xgroupDelConsumer("mystream", "mygroup", "myconsumer")); // Output is 5
+     * ```
+     */
+    public async xgroupDelConsumer(
+        key: string,
+        groupName: string,
+        consumerName: string,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createXGroupDelConsumer(key, groupName, consumerName),
+        );
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<
@@ -3582,7 +4757,8 @@ export class BaseClient {
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of the list.
      * Here, -1 means the last element, -2 means the penultimate and so forth.
-     * See https://valkey.io/commands/lindex/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/lindex/|valkey.io} for more details.
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
@@ -3603,14 +4779,14 @@ export class BaseClient {
      * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
      * ```
      */
-    public lindex(key: string, index: number): Promise<string | null> {
+    public async lindex(key: string, index: number): Promise<string | null> {
         return this.createWritePromise(createLIndex(key, index));
     }
 
     /**
      * Inserts `element` in the list at `key` either before or after the `pivot`.
      *
-     * See https://valkey.io/commands/linsert/ for more details.
+     * @see {@link https://valkey.io/commands/linsert/|valkey.io} for more details.
      *
      * @param key - The key of the list.
      * @param position - The relative position to insert into - either `InsertPosition.Before` or
@@ -3627,7 +4803,7 @@ export class BaseClient {
      * console.log(length); // Output: 2 - The list has a length of 2 after performing the insert.
      * ```
      */
-    public linsert(
+    public async linsert(
         key: string,
         position: InsertPosition,
         pivot: string,
@@ -3640,7 +4816,8 @@ export class BaseClient {
 
     /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
-     * See https://valkey.io/commands/persist/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/persist/|valkey.io} for more details.
      *
      * @param key - The key to remove the existing timeout on.
      * @returns `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
@@ -3652,16 +4829,17 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the timeout associated with the key "my_key" was successfully removed.
      * ```
      */
-    public persist(key: string): Promise<boolean> {
+    public async persist(key: string): Promise<boolean> {
         return this.createWritePromise(createPersist(key));
     }
 
     /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
-     * See https://valkey.io/commands/rename/ for more details.
      *
+     * @see {@link https://valkey.io/commands/rename/|valkey.io} for more details.
      * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
@@ -3674,15 +4852,16 @@ export class BaseClient {
      * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public rename(key: string, newKey: string): Promise<"OK"> {
+    public async rename(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRename(key, newKey));
     }
 
     /**
      * Renames `key` to `newkey` if `newkey` does not yet exist.
-     * See https://valkey.io/commands/renamenx/ for more details.
      *
+     * @see {@link https://valkey.io/commands/renamenx/|valkey.io} for more details.
      * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
      * @returns - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
@@ -3696,7 +4875,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public renamenx(key: string, newKey: string): Promise<boolean> {
+    public async renamenx(key: string, newKey: string): Promise<boolean> {
         return this.createWritePromise(createRenameNX(key, newKey));
     }
 
@@ -3704,11 +4883,11 @@ export class BaseClient {
      * Pop an element from the tail of the first list that is non-empty,
      * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
-     * See https://valkey.io/commands/brpop/ for more details.
      *
-     * @remarks
-     * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @see {@link https://valkey.io/commands/brpop/|valkey.io} for more details.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
@@ -3721,7 +4900,7 @@ export class BaseClient {
      * console.log(result); // Output: ["list1", "element"] - Indicates an element "element" was popped from "list1".
      * ```
      */
-    public brpop(
+    public async brpop(
         keys: string[],
         timeout: number,
     ): Promise<[string, string] | null> {
@@ -3732,11 +4911,11 @@ export class BaseClient {
      * Pop an element from the head of the first list that is non-empty,
      * with the given `keys` being checked in the order that they are given.
      * Blocks the connection when there are no elements to pop from any of the given lists.
-     * See https://valkey.io/commands/blpop/ for more details.
      *
-     * @remarks
-     * 1. When in cluster mode, all `keys` must map to the same hash slot.
-     * 2. `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @see {@link https://valkey.io/commands/blpop/|valkey.io} for more details.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
@@ -3748,7 +4927,7 @@ export class BaseClient {
      * console.log(result); // Output: ['list1', 'element']
      * ```
      */
-    public blpop(
+    public async blpop(
         keys: string[],
         timeout: number,
     ): Promise<[string, string] | null> {
@@ -3759,7 +4938,7 @@ export class BaseClient {
      * Creates a new structure if the `key` does not exist.
      * When no elements are provided, and `key` exists and is a HyperLogLog, then no operation is performed.
      *
-     * See https://valkey.io/commands/pfadd/ for more details.
+     * @see {@link https://valkey.io/commands/pfadd/|valkey.io} for more details.
      *
      * @param key - The key of the HyperLogLog data structure to add elements into.
      * @param elements - An array of members to add to the HyperLogLog stored at `key`.
@@ -3773,16 +4952,16 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
      * ```
      */
-    public pfadd(key: string, elements: string[]): Promise<number> {
+    public async pfadd(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createPfAdd(key, elements));
     }
 
     /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
      * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
      *
-     * See https://valkey.io/commands/pfcount/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/pfcount/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     *
      * @param keys - The keys of the HyperLogLog data structures to be analyzed.
      * @returns - The approximated cardinality of given HyperLogLog data structures.
      *     The cardinality of a key that does not exist is `0`.
@@ -3792,7 +4971,7 @@ export class BaseClient {
      * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
      * ```
      */
-    public pfcount(keys: string[]): Promise<number> {
+    public async pfcount(keys: string[]): Promise<number> {
         return this.createWritePromise(createPfCount(keys));
     }
 
@@ -3800,9 +4979,9 @@ export class BaseClient {
      * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is
      * treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
      *
-     * See https://valkey.io/commands/pfmerge/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/pfmerge/|valkey.io} for more details.
      * @remarks When in Cluster mode, all keys in `sourceKeys` and `destination` must map to the same hash slot.
+     *
      * @param destination - The key of the destination HyperLogLog where the merged data sets will be stored.
      * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
      * @returns A simple "OK" response.
@@ -3824,9 +5003,9 @@ export class BaseClient {
         return this.createWritePromise(createPfMerge(destination, sourceKeys));
     }
 
-    /** Returns the internal encoding for the Redis object stored at `key`.
+    /** Returns the internal encoding for the Valkey object stored at `key`.
      *
-     * See https://valkey.io/commands/object-encoding for more details.
+     * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the internal encoding of.
      * @returns - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
@@ -3837,13 +5016,13 @@ export class BaseClient {
      * console.log(result); // Output: "listpack"
      * ```
      */
-    public objectEncoding(key: string): Promise<string | null> {
+    public async objectEncoding(key: string): Promise<string | null> {
         return this.createWritePromise(createObjectEncoding(key));
     }
 
-    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+    /** Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
      *
-     * See https://valkey.io/commands/object-freq for more details.
+     * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
      * @returns - If `key` exists, returns the logarithmic access frequency counter of the object
@@ -3854,14 +5033,14 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
      * ```
      */
-    public objectFreq(key: string): Promise<number | null> {
+    public async objectFreq(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectFreq(key));
     }
 
     /**
      * Returns the time in seconds since the last access to the value stored at `key`.
      *
-     * See https://valkey.io/commands/object-idletime/ for more details.
+     * @see {@link https://valkey.io/commands/object-idletime/|valkey.io} for more details.
      *
      * @param key - The key of the object to get the idle time of.
      * @returns If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
@@ -3872,14 +5051,14 @@ export class BaseClient {
      * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
      * ```
      */
-    public objectIdletime(key: string): Promise<number | null> {
+    public async objectIdletime(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectIdletime(key));
     }
 
     /**
      * Returns the reference count of the object stored at `key`.
      *
-     * See https://valkey.io/commands/object-refcount/ for more details.
+     * @see {@link https://valkey.io/commands/object-refcount/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the reference count of.
      * @returns If `key` exists, returns the reference count of the object stored at `key` as a `number`.
@@ -3891,18 +5070,17 @@ export class BaseClient {
      * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
      * ```
      */
-    public objectRefcount(key: string): Promise<number | null> {
+    public async objectRefcount(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
     }
 
     /**
      * Invokes a previously loaded function.
      *
-     * See https://valkey.io/commands/fcall/ for more details.
-     *
-     * since Valkey version 7.0.0.
-     *
+     * @see {@link https://valkey.io/commands/fcall/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
@@ -3915,7 +5093,7 @@ export class BaseClient {
      * console.log(response); // Output: Returns the function's return value.
      * ```
      */
-    public fcall(
+    public async fcall(
         func: string,
         keys: string[],
         args: string[],
@@ -3926,11 +5104,10 @@ export class BaseClient {
     /**
      * Invokes a previously loaded read-only function.
      *
-     * See https://valkey.io/commands/fcall/ for more details.
-     *
-     * since Valkey version 7.0.0.
-     *
+     * @see {@link https://valkey.io/commands/fcall/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param func - The function name.
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
@@ -3944,7 +5121,7 @@ export class BaseClient {
      * console.log(response); // Output: 42 # The return value on the function that was executed.
      * ```
      */
-    public fcallReadonly(
+    public async fcallReadonly(
         func: string,
         keys: string[],
         args: string[],
@@ -3957,15 +5134,14 @@ export class BaseClient {
      * match is found, `null` is returned. If the `count` option is specified, then the function returns
      * an `array` of indices of matching elements within the list.
      *
-     * See https://valkey.io/commands/lpos/ for more details.
+     * @see {@link https://valkey.io/commands/lpos/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.0.6.
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
      * @param options - The LPOS options.
      * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
      * is specified, then the function returns an `array` of indices of matching elements within the list.
-     *
-     * since - Valkey version 6.0.6.
      *
      * @example
      * ```typescript
@@ -3974,7 +5150,7 @@ export class BaseClient {
      * console.log(await client.lpos("myList", "e", { count: 3 })); // Output: [ 4, 5 ] - indices for the occurrences of "e" in list "myList".
      * ```
      */
-    public lpos(
+    public async lpos(
         key: string,
         element: string,
         options?: LPosOptions,
@@ -3986,7 +5162,7 @@ export class BaseClient {
      * Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
      * optionally be provided to count the number of bits in a specific string interval.
      *
-     * See https://valkey.io/commands/bitcount for more details.
+     * @see {@link https://valkey.io/commands/bitcount/|valkey.io} for more details.
      *
      * @param key - The key for the string to count the set bits of.
      * @param options - The offset options.
@@ -4002,7 +5178,10 @@ export class BaseClient {
      * console.log(await client.bitcount("my_key3", { start: -1, end: -1, indexType: BitmapIndexType.BIT })); // Output: 1 - Indicates that the last bit of the string stored at "my_key3" is set.
      * ```
      */
-    public bitcount(key: string, options?: BitOffsetOptions): Promise<number> {
+    public async bitcount(
+        key: string,
+        options?: BitOffsetOptions,
+    ): Promise<number> {
         return this.createWritePromise(createBitCount(key, options));
     }
 
@@ -4010,7 +5189,7 @@ export class BaseClient {
      * Adds geospatial members with their positions to the specified sorted set stored at `key`.
      * If a member is already a part of the sorted set, its position is updated.
      *
-     * See https://valkey.io/commands/geoadd/ for more details.
+     * @see {@link https://valkey.io/commands/geoadd/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param membersToGeospatialData - A mapping of member names to their corresponding positions - see
@@ -4030,7 +5209,7 @@ export class BaseClient {
      * console.log(num); // Output: 1 - Indicates that the position of an existing member in the sorted set "mySortedSet" has been updated.
      * ```
      */
-    public geoadd(
+    public async geoadd(
         key: string,
         membersToGeospatialData: Map<string, GeospatialData>,
         options?: GeoAddOptions,
@@ -4044,28 +5223,20 @@ export class BaseClient {
      * Returns the members of a sorted set populated with geospatial information using {@link geoadd},
      * which are within the borders of the area specified by a given shape.
      *
-     * See https://valkey.io/commands/geosearch/ for more details.
-     *
-     * since - Valkey 6.2.0 and above.
+     * @see {@link https://valkey.io/commands/geosearch/|valkey.io} for more details.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key of the sorted set.
      * @param searchFrom - The query's center point options, could be one of:
-     *
      * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
-     *
      * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
-     *
      * @param searchBy - The query's shape options, could be one of:
-     *
      * - {@link GeoCircleShape} to search inside circular area according to given radius.
-     *
      * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
-     *
-     * @param resultOptions - The optional inputs to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
      * @returns By default, returns an `Array` of members (locations) names.
      *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
      *     where each sub-array represents a single item in the following order:
-     *
      * - The member (location) name.
      * - The distance from the center as a floating point `number`, in the same unit specified for `searchBy`, if `withDist` is set to `true`.
      * - The geohash of the location as a integer `number`, if `withHash` is set to `true`.
@@ -4119,9 +5290,86 @@ export class BaseClient {
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchResultOptions,
-    ): Promise<(Buffer | (number | number[])[])[]> {
+    ): Promise<(string | (number | number[])[])[]> {
         return this.createWritePromise(
             createGeoSearch(key, searchFrom, searchBy, resultOptions),
+        );
+    }
+
+    /**
+     * Searches for members in a sorted set stored at `source` representing geospatial data
+     * within a circular or rectangular area and stores the result in `destination`.
+     *
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * To get the result directly, see {@link geosearch}.
+     *
+     * @see {@link https://valkey.io/commands/geosearchstore/|valkey.io} for more details.
+     * @remarks When in cluster mode, `destination` and `source` must map to the same hash slot.
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param source - The key of the sorted set.
+     * @param searchFrom - The query's center point options, could be one of:
+     * - {@link MemberOrigin} to use the position of the given existing member in the sorted set.
+     * - {@link CoordOrigin} to use the given longitude and latitude coordinates.
+     * @param searchBy - The query's shape options, could be one of:
+     * - {@link GeoCircleShape} to search inside circular area according to given radius.
+     * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
+     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * await client.geoadd("mySortedSet", data);
+     * // search for locations within 200 km circle around stored member named 'Palermo' and store in `destination`:
+     * await client.geosearchstore("destination", "mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
+     * // query the stored results
+     * const result1 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * console.log(result1); // Output:
+     * // {
+     * //     Palermo: 3479099956230698,   // geohash of the location is stored as element's score
+     * //     Catania: 3479447370796909
+     * // }
+     *
+     * // search for locations in 200x300 mi rectangle centered at coordinate (15, 37), requesting to store distance instead of geohashes,
+     * // limiting results by 2 best matches, ordered by ascending distance from the search area center
+     * await client.geosearchstore(
+     *     "destination",
+     *     "mySortedSet",
+     *     { position: { longitude: 15, latitude: 37 } },
+     *     { width: 200, height: 300, unit: GeoUnit.MILES },
+     *     {
+     *         sortOrder: SortOrder.ASC,
+     *         count: 2,
+     *         storeDist: true,
+     *     },
+     * );
+     * // query the stored results
+     * const result2 = await client.zrangeWithScores("destination", { start: 0, stop: -1 });
+     * console.log(result2); // Output:
+     * // {
+     * //     Palermo: 190.4424,   // distance from the search area center is stored as element's score
+     * //     Catania: 56.4413,    // the distance is measured in units used for the search query (miles)
+     * // }
+     * ```
+     */
+    public async geosearchstore(
+        destination: string,
+        source: string,
+        searchFrom: SearchOrigin,
+        searchBy: GeoSearchShape,
+        resultOptions?: GeoSearchStoreResultOptions,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createGeoSearchStore(
+                destination,
+                source,
+                searchFrom,
+                searchBy,
+                resultOptions,
+            ),
         );
     }
 
@@ -4129,7 +5377,7 @@ export class BaseClient {
      * Returns the positions (longitude, latitude) of all the specified `members` of the
      * geospatial index represented by the sorted set at `key`.
      *
-     * See https://valkey.io/commands/geopos for more details.
+     * @see {@link https://valkey.io/commands/geopos/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param members - The members for which to get the positions.
@@ -4147,7 +5395,7 @@ export class BaseClient {
      * console.log(result); // Output: [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], null]
      * ```
      */
-    public geopos(
+    public async geopos(
         key: string,
         members: string[],
     ): Promise<(number[] | null)[]> {
@@ -4158,9 +5406,10 @@ export class BaseClient {
      * Pops a member-score pair from the first non-empty sorted set, with the given `keys`
      * being checked in the order they are provided.
      *
-     * See https://valkey.io/commands/zmpop/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/zmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
@@ -4168,8 +5417,6 @@ export class BaseClient {
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -4192,12 +5439,11 @@ export class BaseClient {
      * checked in the order they are provided. Blocks the connection when there are no members
      * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
      *
-     * See https://valkey.io/commands/bzmpop/ for more details.
+     * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for more details.
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | Valkey Glide Wiki} for more details and best practices.
+     * @remarks Since Valkey version 7.0.0.
      *
-     * @remarks
-     *      1. When in cluster mode, all `keys` must map to the same hash slot.
-     *      2. `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | the wiki}
-     *         for more details and best practices.
      * @param keys - The keys of the sorted sets.
      * @param modifier - The element pop criteria - either {@link ScoreFilter.MIN} or
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
@@ -4207,8 +5453,6 @@ export class BaseClient {
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -4234,7 +5478,7 @@ export class BaseClient {
      * If `member` does not exist in the sorted set, it is added with `increment` as its score.
      * If `key` does not exist, a new sorted set is created with the specified member as its sole member.
      *
-     * See https://valkey.io/commands/zincrby/ for details.
+     * @see {@link https://valkey.io/commands/zincrby/|valkey.io} for details.
      *
      * @param key - The key of the sorted set.
      * @param increment - The score increment.
@@ -4265,7 +5509,7 @@ export class BaseClient {
     /**
      * Iterates incrementally over a sorted set.
      *
-     * See https://valkey.io/commands/zscan for more details.
+     * @see {@link https://valkey.io/commands/zscan/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
@@ -4312,7 +5556,7 @@ export class BaseClient {
     /**
      * Returns the distance between `member1` and `member2` saved in the geospatial index stored at `key`.
      *
-     * See https://valkey.io/commands/geodist/ for more details.
+     * @see {@link https://valkey.io/commands/geodist/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param member1 - The name of the first member.
@@ -4327,7 +5571,7 @@ export class BaseClient {
      * console.log(num); // Output: the distance between Place1 and Place2.
      * ```
      */
-    public geodist(
+    public async geodist(
         key: string,
         member1: string,
         member2: string,
@@ -4341,7 +5585,7 @@ export class BaseClient {
     /**
      * Returns the `GeoHash` strings representing the positions of all the specified `members` in the sorted set stored at `key`.
      *
-     * See https://valkey.io/commands/geohash/ for more details.
+     * @see {@link https://valkey.io/commands/geohash/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param members - The array of members whose `GeoHash` strings are to be retrieved.
@@ -4354,7 +5598,10 @@ export class BaseClient {
      * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
      * ```
      */
-    public geohash(key: string, members: string[]): Promise<(string | null)[]> {
+    public async geohash(
+        key: string,
+        members: string[],
+    ): Promise<(string | null)[]> {
         return this.createWritePromise<(string | null)[]>(
             createGeoHash(key, members),
         ).then((hashes) =>
@@ -4365,11 +5612,9 @@ export class BaseClient {
     /**
      * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
-     *
+     * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/lcs/ for more details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -4390,11 +5635,9 @@ export class BaseClient {
     /**
      * Returns the total length of all the longest common subsequences between strings stored at `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
-     *
+     * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/lcs/ for more details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -4415,11 +5658,9 @@ export class BaseClient {
      * Returns the indices and lengths of the longest common subsequences between strings stored at
      * `key1` and `key2`.
      *
-     * since Valkey version 7.0.0.
-     *
+     * @see {@link https://valkey.io/commands/lcs/|valkey.io} for more details.
      * @remarks When in cluster mode, `key1` and `key2` must map to the same hash slot.
-     *
-     * See https://valkey.io/commands/lcs/ for more details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
@@ -4472,9 +5713,9 @@ export class BaseClient {
     /**
      * Updates the last access time of the specified keys.
      *
-     * See https://valkey.io/commands/touch/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/touch/|valkey.io} for more details.
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
      * @param keys - The keys to update the last access time of.
      * @returns The number of keys that were updated. A key is ignored if it doesn't exist.
      *
@@ -4486,8 +5727,62 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public touch(keys: string[]): Promise<number> {
+    public async touch(keys: string[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction. Executing a transaction will automatically flush all previously watched keys.
+     *
+     * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
+     * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+     *
+     * @param keys - The keys to watch.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: "OK" - Executes successfully and keys are unwatched.
+     * ```
+     * ```typescript
+     * const response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * const transaction = new Transaction().set("SampleKey", "foobar");
+     * await client.set("sampleKey", "hello world");
+     * const result = await client.exec(transaction);
+     * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
+     * ```
+     */
+    public async watch(keys: string[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys));
+    }
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred and
+     * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
+     * the number of replicas that were not yet reached.
+     *
+     * @see {@link https://valkey.io/commands/wait/|valkey.io} for more details.
+     *
+     * @param numreplicas - The number of replicas to reach.
+     * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+     * @returns The number of replicas reached by all the writes performed in the context of the current connection.
+     *
+     * @example
+     * ```typescript
+     * await client.set(key, value);
+     * let response = await client.wait(1, 1000);
+     * console.log(response); // Output: return 1 when a replica is reached or 0 if 1000ms is reached.
+     * ```
+     */
+    public async wait(numreplicas: number, timeout: number): Promise<number> {
+        return this.createWritePromise(createWait(numreplicas, timeout));
     }
 
     /**
@@ -4495,7 +5790,7 @@ export class BaseClient {
      * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
      * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
      *
-     * See https://valkey.io/commands/setrange/ for more details.
+     * @see {@link https://valkey.io/commands/setrange/|valkey.io} for more details.
      *
      * @param key - The key of the string to update.
      * @param offset - The position in the string where `value` should be written.
@@ -4519,17 +5814,42 @@ export class BaseClient {
     }
 
     /**
+     * Appends a `value` to a `key`. If `key` does not exist it is created and set as an empty string,
+     * so `APPEND` will be similar to {@link set} in this special case.
+     *
+     * @see {@link https://valkey.io/commands/append/|valkey.io} for more details.
+     *
+     * @param key - The key of the string.
+     * @param value - The key of the string.
+     * @returns The length of the string after appending the value.
+     *
+     * @example
+     * ```typescript
+     * const len = await client.append("key", "Hello");
+     * console.log(len);
+     *     // Output: 5 - Indicates that "Hello" has been appended to the value of "key", which was initially
+     *     // empty, resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
+     * len = await client.append("key", " world");
+     * console.log(result);
+     *     // Output: 11 - Indicates that " world" has been appended to the value of "key", resulting in a
+     *     // new value of "Hello world" with a length of 11.
+     * ```
+     */
+    public async append(key: string, value: string): Promise<number> {
+        return this.createWritePromise(createAppend(key, value));
+    }
+
+    /**
      * Pops one or more elements from the first non-empty list from the provided `keys`.
      *
-     * See https://valkey.io/commands/lmpop/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/lmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param count - (Optional) The maximum number of popped elements.
      * @returns A `Record` of key-name mapped array of popped elements.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -4551,17 +5871,16 @@ export class BaseClient {
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
      * provided `key`. `BLMPOP` is the blocking variant of {@link lmpop}.
      *
-     * See https://valkey.io/commands/blmpop/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/blmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `key`s must map to the same hash slot.
+     * @remarks Since Valkey version 7.0.0.
+     *
      * @param keys - An array of keys to lists.
      * @param direction - The direction based on which elements are popped from - see {@link ListDirection}.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
      * @param count - (Optional) The maximum number of popped elements.
      * @returns - A `Record` of `key` name mapped array of popped elements.
      *     If no member could be popped and the timeout expired, returns `null`.
-     *
-     * since Valkey version 7.0.0.
      *
      * @example
      * ```typescript
@@ -4580,6 +5899,78 @@ export class BaseClient {
         return this.createWritePromise(
             createBLMPop(timeout, keys, direction, count),
         );
+    }
+
+    /**
+     * Lists the currently active channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * @see {@link https://valkey.io/commands/pubsub-channels/|valkey.io} for more details.
+     *
+     * @param pattern - A glob-style pattern to match active channels.
+     *                  If not provided, all active channels are returned.
+     * @returns A list of currently active channels matching the given pattern.
+     *          If no pattern is specified, all active channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const channels = await client.pubsubChannels();
+     * console.log(channels); // Output: ["channel1", "channel2"]
+     *
+     * const newsChannels = await client.pubsubChannels("news.*");
+     * console.log(newsChannels); // Output: ["news.sports", "news.weather"]
+     * ```
+     */
+    public async pubsubChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubSubChannels(pattern));
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * Note: This is the total number of unique patterns all the clients are subscribed to,
+     * not the count of clients subscribed to patterns.
+     * The command is routed to all nodes, and aggregates the response to the sum of all pattern subscriptions.
+     *
+     * @see {@link https://valkey.io/commands/pubsub-numpat/|valkey.io} for more details.
+     *
+     * @returns The number of unique patterns.
+     *
+     * @example
+     * ```typescript
+     * const patternCount = await client.pubsubNumpat();
+     * console.log(patternCount); // Output: 3
+     * ```
+     */
+    public async pubsubNumPat(): Promise<number> {
+        return this.createWritePromise(createPubSubNumPat());
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * @see {@link https://valkey.io/commands/pubsub-numsub/|valkey.io} for more details.
+     *
+     * @param channels - The list of channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubNumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubNumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubNumSub(channels));
     }
 
     /**

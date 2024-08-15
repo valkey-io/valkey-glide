@@ -6,6 +6,8 @@ import * as net from "net";
 import {
     BaseClient,
     BaseClientConfiguration,
+    Decoder,
+    GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
@@ -14,6 +16,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
+    FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
     SortClusterOptions,
@@ -33,17 +36,22 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionKill,
     createFunctionList,
     createFunctionLoad,
+    createFunctionStats,
     createInfo,
     createLastSave,
     createLolwut,
     createPing,
+    createPubSubShardNumSub,
     createPublish,
+    createPubsubShardChannels,
     createRandomKey,
     createSort,
     createSortReadOnly,
     createTime,
+    createUnWatch,
 } from "./Commands";
 import { RequestError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
@@ -80,7 +88,7 @@ export type PeriodicChecks =
 export namespace GlideClusterClientConfiguration {
     /**
      * Enum representing pubsub subscription modes.
-     * See [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
+     * @see {@link https://valkey.io/docs/topics/pubsub/|Valkey PubSub Documentation} for more details.
      */
     export enum PubSubChannelModes {
         /**
@@ -277,8 +285,8 @@ function toProtobufRoute(
 
 /**
  * Client used for connection to cluster Redis servers.
- * For full documentation, see
- * https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster
+ *
+ * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster|Valkey Glide Wiki}.
  */
 export class GlideClusterClient extends BaseClient {
     /**
@@ -336,23 +344,31 @@ export class GlideClusterClient extends BaseClient {
      *  The command will be routed automatically based on the passed command's default request policy, unless `route` is provided,
      *  in which case the client will route the command to the nodes defined by `route`.
      *
-     * See the [Glide for Redis Wiki](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command)
-     * for details on the restrictions and limitations of the custom command API.
+     * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
+     *
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
      *
      * @example
      * ```typescript
      * // Example usage of customCommand method to retrieve pub/sub clients with routing to all primary nodes
-     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], "allPrimaries");
+     * const result = await client.customCommand(["CLIENT", "LIST", "TYPE", "PUBSUB"], {route: "allPrimaries", decoder: Decoder.String});
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(args: string[], route?: Routes): Promise<ReturnType> {
+    public async customCommand(
+        args: GlideString[],
+        options?: { route?: Routes; decoder?: Decoder },
+    ): Promise<ClusterResponse<ReturnType>> {
         const command = createCustomCommand(args);
-        return super.createWritePromise(command, toProtobufRoute(route));
+        return super.createWritePromise(command, {
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
+        });
     }
 
-    /** Execute a transaction by processing the queued commands.
-     *   See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+    /**
+     * Execute a transaction by processing the queued commands.
+     * @see {@link https://redis.io/topics/Transactions/|Valkey Glide Wiki} for details on Redis Transactions.
      *
      * @param transaction - A ClusterTransaction object containing a list of commands to be executed.
      * @param route - If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
@@ -363,13 +379,19 @@ export class GlideClusterClient extends BaseClient {
      *      the list entry will be null.
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
-    public exec(
+    public async exec(
         transaction: ClusterTransaction,
-        route?: SingleNodeRoute,
+        options?: {
+            route?: SingleNodeRoute;
+            decoder?: Decoder;
+        },
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
-            toProtobufRoute(route),
+            {
+                route: toProtobufRoute(options?.route),
+                decoder: options?.decoder,
+            },
         ).then((result: ReturnType[] | null) => {
             return this.processResultWithSetCommands(
                 result,
@@ -379,13 +401,15 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /** Ping the Redis server.
-     * See https://valkey.io/commands/ping/ for details.
+     *
+     * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
      * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
@@ -402,15 +426,19 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public ping(message?: string, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createPing(message),
-            toProtobufRoute(route),
-        );
+    public async ping(options?: {
+        message?: GlideString;
+        route?: Routes;
+        decoder?: Decoder;
+    }): Promise<GlideString> {
+        return this.createWritePromise(createPing(options?.message), {
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
+        });
     }
 
     /** Get information and statistics about the Redis server.
-     *  See https://valkey.io/commands/info/ for details.
+     * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param options - A list of InfoSection values specifying which sections of information to retrieve.
      *  When no parameter is provided, the default option is assumed.
@@ -419,18 +447,18 @@ export class GlideClusterClient extends BaseClient {
      * @returns a string containing the information for the sections requested. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
-    public info(
+    public async info(
         options?: InfoOptions[],
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
     /** Get the name of the connection to which the request is routed.
-     *  See https://valkey.io/commands/client-getname/ for more details.
+     * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
      *
      * @param route - The command will be routed a random node, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
@@ -453,21 +481,20 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
      * ```
      */
-    public clientGetName(
+    public async clientGetName(
         route?: Routes,
     ): Promise<ClusterResponse<string | null>> {
         return this.createWritePromise<ClusterResponse<string | null>>(
             createClientGetName(),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
     /** Rewrite the configuration file with the current configuration.
-     * See https://valkey.io/commands/config-rewrite/ for details.
+     * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
      *
      * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
-     *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
      *
      * @example
@@ -477,19 +504,17 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configRewrite(route?: Routes): Promise<"OK"> {
-        return this.createWritePromise(
-            createConfigRewrite(),
-            toProtobufRoute(route),
-        );
+    public async configRewrite(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createConfigRewrite(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
-     * See https://valkey.io/commands/config-resetstat/ for details.
+     * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
      * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
-     *
      * @returns always "OK".
      *
      * @example
@@ -499,30 +524,29 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configResetStat(route?: Routes): Promise<"OK"> {
-        return this.createWritePromise(
-            createConfigResetStat(),
-            toProtobufRoute(route),
-        );
+    public async configResetStat(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createConfigResetStat(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Returns the current connection id.
-     * See https://valkey.io/commands/client-id/ for details.
+     * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns the id of the client. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
-    public clientId(route?: Routes): Promise<ClusterResponse<number>> {
+    public async clientId(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
     /** Reads the configuration parameters of a running Redis server.
-     *  See https://valkey.io/commands/config-get/ for details.
+     * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
@@ -546,24 +570,23 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
      * ```
      */
-    public configGet(
+    public async configGet(
         parameters: string[],
         route?: Routes,
     ): Promise<ClusterResponse<Record<string, string>>> {
         return this.createWritePromise<ClusterResponse<Record<string, string>>>(
             createConfigGet(parameters),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
     /** Set configuration parameters to the specified values.
-     *   See https://valkey.io/commands/config-set/ for details.
+     * @see {@link https://valkey.io/commands/config-set/|valkey.io} for details.
      *
      * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
      * @param route - The command will be routed to all nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      *   If `route` is not provided, the command will be sent to the all nodes.
-     *
      * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
@@ -573,18 +596,17 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configSet(
+    public async configSet(
         parameters: Record<string, string>,
         route?: Routes,
     ): Promise<"OK"> {
-        return this.createWritePromise(
-            createConfigSet(parameters),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createConfigSet(parameters), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Echoes the provided `message` back.
-     * See https://valkey.io/commands/echo for more details.
+     * @see {@link https://valkey.io/commands/echo/|valkey.io} for details.
      *
      * @param message - The message to be echoed back.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
@@ -605,18 +627,17 @@ export class GlideClusterClient extends BaseClient {
      * console.log(echoedMessage); // Output: {'addr': 'valkey-glide', 'addr2': 'valkey-glide', 'addr3': 'valkey-glide'}
      * ```
      */
-    public echo(
+    public async echo(
         message: string,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise(
-            createEcho(message),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createEcho(message), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Returns the server time.
-     * See https://valkey.io/commands/time/ for details.
+     * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
      *  case the client will route the command to the nodes defined by `route`.
@@ -641,24 +662,27 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
      * ```
      */
-    public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
-        return this.createWritePromise(createTime(), toProtobufRoute(route));
+    public async time(
+        route?: Routes,
+    ): Promise<ClusterResponse<[string, string]>> {
+        return this.createWritePromise(createTime(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Copies the value stored at the `source` to the `destination` key. When `replace` is `true`,
      * removes the `destination` key first if it already exists, otherwise performs no action.
      *
-     * See https://valkey.io/commands/copy/ for more details.
-     *
+     * @see {@link https://valkey.io/commands/copy/|valkey.io} for details.
      * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param source - The key to the source value.
      * @param destination - The key where the value should be copied to.
      * @param replace - (Optional) If `true`, the `destination` key should be removed before copying the
      *     value to it. If not provided, no action will be performed if the key already exists.
      * @returns `true` if `source` was copied, `false` if the `source` was not copied.
-     *
-     * since Valkey version 6.2.0.
      *
      * @example
      * ```typescript
@@ -679,7 +703,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Displays a piece of generative computer art and the server version.
      *
-     * See https://valkey.io/commands/lolwut/ for more details.
+     * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for details.
      *
      * @param options - The LOLWUT options.
      * @param route - The command will be routed to a random node, unless `route` is provided, in which
@@ -692,22 +716,21 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
      * ```
      */
-    public lolwut(
+    public async lolwut(
         options?: LolwutOptions,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
-        return this.createWritePromise(
-            createLolwut(options),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createLolwut(options), {
+            decoder: options?.decoder,
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Invokes a previously loaded function.
      *
-     * See https://valkey.io/commands/fcall/ for more details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
@@ -721,23 +744,21 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: Returns the function's return value.
      * ```
      */
-    public fcallWithRoute(
+    public async fcallWithRoute(
         func: string,
         args: string[],
         route?: Routes,
     ): Promise<ReturnType> {
-        return this.createWritePromise(
-            createFCall(func, [], args),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFCall(func, [], args), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Invokes a previously loaded read-only function.
      *
-     * See https://valkey.io/commands/fcall/ for more details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
@@ -752,23 +773,21 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: 42 # The return value on the function that was execute.
      * ```
      */
-    public fcallReadonlyWithRoute(
+    public async fcallReadonlyWithRoute(
         func: string,
         args: string[],
         route?: Routes,
     ): Promise<ReturnType> {
-        return this.createWritePromise(
-            createFCallReadOnly(func, [], args),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFCallReadOnly(func, [], args), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Deletes a library and all its functions.
      *
-     * See https://valkey.io/commands/function-delete/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-delete/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
      * @param route - The command will be routed to all primary node, unless `route` is provided, in which
@@ -781,22 +800,20 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public functionDelete(
+    public async functionDelete(
         libraryCode: string,
         route?: Routes,
     ): Promise<string> {
-        return this.createWritePromise(
-            createFunctionDelete(libraryCode),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFunctionDelete(libraryCode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Loads a library to Valkey.
      *
-     * See https://valkey.io/commands/function-load/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-load/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
      * @param replace - Whether the given library should overwrite a library with the same name if it
@@ -812,26 +829,25 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'mylib'
      * ```
      */
-    public functionLoad(
+    public async functionLoad(
         libraryCode: string,
         replace?: boolean,
         route?: Routes,
     ): Promise<string> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, replace),
-            toProtobufRoute(route),
+            { route: toProtobufRoute(route) },
         );
     }
 
     /**
      * Deletes all function libraries.
      *
-     * See https://valkey.io/commands/function-flush/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - The command will be routed to all primary node, unless `route` is provided, in which
+     * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
      * @returns A simple OK response.
      *
@@ -841,19 +857,20 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createFunctionFlush(mode),
-            toProtobufRoute(route),
-        );
+    public async functionFlush(
+        mode?: FlushMode,
+        route?: Routes,
+    ): Promise<string> {
+        return this.createWritePromise(createFunctionFlush(mode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Returns information about the functions and libraries.
      *
-     * See https://valkey.io/commands/function-list/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param options - Parameters to filter and request additional info.
      * @param route - The client will route the command to the nodes defined by `route`.
@@ -883,16 +900,93 @@ export class GlideClusterClient extends BaseClient {
         options?: FunctionListOptions,
         route?: Routes,
     ): Promise<ClusterResponse<FunctionListResponse>> {
-        return this.createWritePromise(
-            createFunctionList(options),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createFunctionList(options), {
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param route - The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to all primary nodes.
+     * @returns A `Record` with two keys:
+     *     - `"running_script"` with information about the running script.
+     *     - `"engines"` with information about available engines and their stats.
+     *     - See example for more details.
+     *
+     * @example
+     * ```typescript
+     * const response = await client.functionStats("randomNode");
+     * console.log(response); // Output:
+     * // {
+     * //     "running_script":
+     * //     {
+     * //         "name": "deep_thought",
+     * //         "command": ["fcall", "deep_thought", "0"],
+     * //         "duration_ms": 5008
+     * //     },
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * // Output if no scripts running:
+     * // {
+     * //     "running_script": null
+     * //     "engines":
+     * //     {
+     * //         "LUA":
+     * //         {
+     * //             "libraries_count": 2,
+     * //             "functions_count": 3
+     * //         }
+     * //     }
+     * // }
+     * ```
+     */
+    public async functionStats(
+        route?: Routes,
+    ): Promise<ClusterResponse<FunctionStatsResponse>> {
+        return this.createWritePromise(createFunctionStats(), {
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
+     * Kills a function that is currently executing.
+     * `FUNCTION KILL` terminates read-only functions only.
+     *
+     * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to all primary nodes.
+     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     *
+     * @example
+     * ```typescript
+     * await client.functionKill();
+     * ```
+     */
+    public async functionKill(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createFunctionKill(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
-     * See https://valkey.io/commands/flushall/ for more details.
+     * @see {@link https://valkey.io/commands/flushall/|valkey.io} for details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
@@ -905,17 +999,16 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createFlushAll(mode),
-            toProtobufRoute(route),
-        );
+    public async flushall(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(createFlushAll(mode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Deletes all the keys of the currently selected database. This command never fails.
      *
-     * See https://valkey.io/commands/flushdb/ for more details.
+     * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for details.
      *
      * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
@@ -928,17 +1021,16 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
-        return this.createWritePromise(
-            createFlushDB(mode),
-            toProtobufRoute(route),
-        );
+    public async flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
+        return this.createWritePromise(createFlushDB(mode), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Returns the number of keys in the database.
      *
-     * See https://valkey.io/commands/dbsize/ for more details.
+     * @see {@link https://valkey.io/commands/dbsize/|valkey.io} for details.
 
      * @param route - The command will be routed to all primary nodes, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
@@ -951,8 +1043,10 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public dbsize(route?: Routes): Promise<number> {
-        return this.createWritePromise(createDBSize(), toProtobufRoute(route));
+    public async dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+        return this.createWritePromise(createDBSize(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /** Publish a message on pubsub channel.
@@ -960,7 +1054,7 @@ export class GlideClusterClient extends BaseClient {
      * The mode is selected using the 'sharded' parameter.
      * For both sharded and non-sharded mode, request is routed using hashed channel as key.
      *
-     * See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+     * @see {@link https://valkey.io/commands/publish} and {@link https://valkey.io/commands/spublish} for more details.
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
@@ -981,7 +1075,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 2 - Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
      * ```
      */
-    public publish(
+    public async publish(
         message: string,
         channel: string,
         sharded: boolean = false,
@@ -992,6 +1086,57 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Lists the currently active shard channels.
+     * The command is routed to all nodes, and aggregates the response to a single array.
+     *
+     * @see {@link https://valkey.io/commands/pubsub-shardchannels/|valkey.io} for details.
+     *
+     * @param pattern - A glob-style pattern to match active shard channels.
+     *                  If not provided, all active shard channels are returned.
+     * @returns A list of currently active shard channels matching the given pattern.
+     *          If no pattern is specified, all active shard channels are returned.
+     *
+     * @example
+     * ```typescript
+     * const allChannels = await client.pubsubShardchannels();
+     * console.log(allChannels); // Output: ["channel1", "channel2"]
+     *
+     * const filteredChannels = await client.pubsubShardchannels("channel*");
+     * console.log(filteredChannels); // Output: ["channel1", "channel2"]
+     * ```
+     */
+    public async pubsubShardChannels(pattern?: string): Promise<string[]> {
+        return this.createWritePromise(createPubsubShardChannels(pattern));
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
+     *
+     * Note that it is valid to call this command without channels. In this case, it will just return an empty map.
+     * The command is routed to all nodes, and aggregates the response to a single map of the channels and their number of subscriptions.
+     *
+     * @see {@link https://valkey.io/commands/pubsub-shardnumsub/|valkey.io} for details.
+     *
+     * @param channels - The list of shard channels to query for the number of subscribers.
+     *                   If not provided, returns an empty map.
+     * @returns A map where keys are the shard channel names and values are the number of subscribers.
+     *
+     * @example
+     * ```typescript
+     * const result1 = await client.pubsubShardnumsub(["channel1", "channel2"]);
+     * console.log(result1); // Output: { "channel1": 3, "channel2": 5 }
+     *
+     * const result2 = await client.pubsubShardnumsub();
+     * console.log(result2); // Output: {}
+     * ```
+     */
+    public async pubsubShardNumSub(
+        channels?: string[],
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(createPubSubShardNumSub(channels));
+    }
+
+    /**
      * Sorts the elements in the list, set, or sorted set at `key` and returns the result.
      *
      * The `sort` command can be used to sort elements based on different criteria and
@@ -999,7 +1144,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * To store the result into a new key, see {@link sortStore}.
      *
-     * See https://valkey.io/commands/sort for more details.
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortClusterOptions}.
@@ -1027,7 +1172,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
-     * since Valkey version 7.0.0.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param options - (Optional) {@link SortClusterOptions}.
@@ -1056,9 +1201,9 @@ export class GlideClusterClient extends BaseClient {
      *
      * To get the sort result without storing it into a key, see {@link sort} or {@link sortReadOnly}.
      *
-     * See https://valkey.io/commands/sort for more details.
-     *
+     * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
      * @remarks When in cluster mode, `destination` and `key` must map to the same hash slot.
+     *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
      * @param options - (Optional) {@link SortClusterOptions}.
@@ -1084,7 +1229,7 @@ export class GlideClusterClient extends BaseClient {
      * Returns `UNIX TIME` of the last DB save timestamp or startup timestamp if no save
      * was made since then.
      *
-     * See https://valkey.io/commands/lastsave/ for more details.
+     * @see {@link https://valkey.io/commands/lastsave/|valkey.io} for details.
      *
      * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
@@ -1096,16 +1241,15 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async lastsave(route?: Routes): Promise<ClusterResponse<number>> {
-        return this.createWritePromise(
-            createLastSave(),
-            toProtobufRoute(route),
-        );
+        return this.createWritePromise(createLastSave(), {
+            route: toProtobufRoute(route),
+        });
     }
 
     /**
      * Returns a random existing key name.
      *
-     * See https://valkey.io/commands/randomkey/ for more details.
+     * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for details.
      *
      * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
      *      in which case the client will route the command to the nodes defined by `route`.
@@ -1117,10 +1261,33 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name.
      * ```
      */
-    public randomKey(route?: Routes): Promise<string | null> {
-        return this.createWritePromise(
-            createRandomKey(),
-            toProtobufRoute(route),
-        );
+    public async randomKey(route?: Routes): Promise<string | null> {
+        return this.createWritePromise(createRandomKey(), {
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction. Executing a transaction will
+     * automatically flush all previously watched keys.
+     *
+     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
+     *
+     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
+     *      in which case the client will route the command to the nodes defined by `route`.
+     * @returns A simple "OK" response.
+     *
+     * @example
+     * ```typescript
+     * let response = await client.watch(["sampleKey"]);
+     * console.log(response); // Output: "OK"
+     * response = await client.unwatch();
+     * console.log(response); // Output: "OK"
+     * ```
+     */
+    public async unwatch(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createUnWatch(), {
+            route: toProtobufRoute(route),
+        });
     }
 }

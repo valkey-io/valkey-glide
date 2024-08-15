@@ -30,10 +30,10 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 public class TestUtilities {
     /** Extract integer parameter value from INFO command output */
-    public static int getValueFromInfo(String data, String value) {
+    public static long getValueFromInfo(String data, String value) {
         for (var line : data.split("\r\n")) {
             if (line.contains(value)) {
-                return Integer.parseInt(line.split(":")[1]);
+                return Long.parseLong(line.split(":")[1]);
             }
         }
         fail();
@@ -323,8 +323,8 @@ public class TestUtilities {
     }
 
     /**
-     * Create a lua lib with a RO function which runs an endless loop up to timeout sec.<br>
-     * Execution takes at least 5 sec regardless of the timeout configured.<br>
+     * Create a lua lib with a function which runs an endless loop up to timeout sec.<br>
+     * Execution takes at least 5 sec regardless of the timeout configured.
      */
     public static String createLuaLibWithLongRunningFunction(
             String libName, String funcName, int timeout, boolean readOnly) {

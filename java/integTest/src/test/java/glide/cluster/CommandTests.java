@@ -176,9 +176,42 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void custom_command_info_binary() {
+        ClusterValue<Object> data = clusterClient.customCommand(new GlideString[] {gs("info")}).get();
+        assertTrue(data.hasMultiData());
+        for (Object info : data.getMultiValue().values()) {
+            assertInstanceOf(GlideString.class, info);
+            assertTrue(info.toString().contains("# Stats"));
+        }
+    }
+
+    @Test
+    @SneakyThrows
     public void custom_command_ping() {
         ClusterValue<Object> data = clusterClient.customCommand(new String[] {"ping"}).get();
         assertEquals("PONG", data.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_ping_binary() {
+        ClusterValue<Object> data = clusterClient.customCommand(new GlideString[] {gs("ping")}).get();
+        assertEquals(gs("PONG"), data.getSingleValue());
+    }
+
+    @Test
+    @SneakyThrows
+    public void custom_command_binary_with_route() {
+        ClusterValue<Object> data =
+                clusterClient.customCommand(new GlideString[] {gs("info")}, ALL_NODES).get();
+        for (Object info : data.getMultiValue().values()) {
+            assertInstanceOf(GlideString.class, info);
+            assertTrue(info.toString().contains("# Stats"));
+        }
+
+        data = clusterClient.customCommand(new GlideString[] {gs("info")}, RANDOM).get();
+        assertInstanceOf(GlideString.class, data.getSingleValue());
+        assertTrue(data.getSingleValue().toString().contains("# Stats"));
     }
 
     @Test
@@ -416,14 +449,14 @@ public class CommandTests {
     public void config_reset_stat() {
         var data = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
         String firstNodeInfo = getFirstEntryFromMultiValue(data);
-        int value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long value_before = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
 
         var result = clusterClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = clusterClient.info(InfoOptions.builder().section(STATS).build()).get();
         firstNodeInfo = getFirstEntryFromMultiValue(data);
-        int value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
+        long value_after = getValueFromInfo(firstNodeInfo, "total_net_input_bytes");
         assertTrue(value_after < value_before);
     }
 
