@@ -5661,7 +5661,7 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
      * const result = await client.lcs("testKey1", "testKey2");
-     * console.log(result); // Output: 'cd'
+     * console.log(result); // Output: 'acd'
      * ```
      */
     public async lcs(key1: string, key2: string): Promise<string> {
@@ -5683,7 +5683,7 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
      * const result = await client.lcsLen("testKey1", "testKey2");
-     * console.log(result); // Output: 2
+     * console.log(result); // Output: 3
      * ```
      */
     public async lcsLen(key1: string, key2: string): Promise<number> {
@@ -5710,6 +5710,8 @@ export class BaseClient {
      *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by `key1` and `key2`.
+     *
+     *     See example for more details.
      *
      * @example
      * ```typescript
