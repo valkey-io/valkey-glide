@@ -3424,6 +3424,7 @@ export class BaseClient {
      * To get the result directly, see {@link zunionWithScores}.
      *
      * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
      *         string[] - for keys only.
