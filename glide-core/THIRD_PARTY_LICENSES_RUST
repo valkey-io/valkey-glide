@@ -4240,7 +4240,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: core-foundation-sys:0.8.6
+Package: core-foundation-sys:0.8.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -11903,7 +11903,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.69
+Package: js-sys:0.3.70
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -13582,7 +13582,7 @@ the following restrictions:
 
 ----
 
-Package: mio:1.0.1
+Package: mio:1.0.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -14802,7 +14802,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: object:0.36.2
+Package: object:0.36.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21689,7 +21689,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.204
+Package: serde:1.0.207
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21918,7 +21918,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.204
+Package: serde_derive:1.0.207
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23021,7 +23021,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.72
+Package: syn:2.0.74
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27070,7 +27070,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.92
+Package: wasm-bindgen:0.2.93
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27299,7 +27299,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-backend:0.2.92
+Package: wasm-bindgen-backend:0.2.93
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27528,7 +27528,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.92
+Package: wasm-bindgen-macro:0.2.93
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27757,7 +27757,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.92
+Package: wasm-bindgen-macro-support:0.2.93
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -27986,7 +27986,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.92
+Package: wasm-bindgen-shared:0.2.93
 
 The following copyrights and licenses were found in the source code of this package:
 
