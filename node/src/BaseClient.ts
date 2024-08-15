@@ -1488,7 +1488,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hget method on an-existing field
-     * await client.hset("my_hash", \{"field": "value"\});
+     * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hget("my_hash", "field");
      * console.log(result); // Output: "value"
      * ```
@@ -1516,7 +1516,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hset method
-     * const result = await client.hset("my_hash", \{"field": "value", "field2": "value2"\});
+     * const result = await client.hset("my_hash", {"field": "value", "field2": "value2"});
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
@@ -1538,7 +1538,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hkeys method:
-     * await client.hset("my_hash", \{"field1": "value1", "field2": "value2", "field3": "value3"\});
+     * await client.hset("my_hash", {"field1": "value1", "field2": "value2", "field3": "value3"});
      * const result = await client.hkeys("my_hash");
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
