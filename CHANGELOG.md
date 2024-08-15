@@ -1,4 +1,5 @@
 #### Changes
+* Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
 * Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
 * Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
 * Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
