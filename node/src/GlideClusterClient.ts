@@ -425,7 +425,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public ping(options?: {
+    public async ping(options?: {
         message?: GlideString;
         route?: Routes;
         decoder?: Decoder;

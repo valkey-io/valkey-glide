@@ -935,7 +935,7 @@ export class BaseClient {
      * console.log(result); // Output: {"data": [118, 97, 108, 117, 101], "type": "Buffer"}
      * ```
      */
-    public get(
+    public async get(
         key: GlideString,
         decoder?: Decoder,
     ): Promise<GlideString | null> {
@@ -985,7 +985,7 @@ export class BaseClient {
      * const value = client.getdel("key");  // value is null
      * ```
      */
-    public getdel(
+    public async getdel(
         key: GlideString,
         decoder?: Decoder,
     ): Promise<GlideString | null> {

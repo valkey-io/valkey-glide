@@ -241,7 +241,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public ping(options?: {
+    public async ping(options?: {
         message?: GlideString;
         decoder?: Decoder;
     }): Promise<GlideString> {
