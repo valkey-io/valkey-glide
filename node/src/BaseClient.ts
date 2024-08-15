@@ -91,6 +91,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHKeys,
     createHLen,
     createHMGet,
     createHRandField,
@@ -1488,7 +1489,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hget method on an-existing field
-     * await client.hset("my_hash", "field");
+     * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hget("my_hash", "field");
      * console.log(result); // Output: "value"
      * ```
@@ -1516,7 +1517,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hset method
-     * const result = await client.hset("my_hash", \{"field": "value", "field2": "value2"\});
+     * const result = await client.hset("my_hash", {"field": "value", "field2": "value2"});
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
@@ -1525,6 +1526,26 @@ export class BaseClient {
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
+    }
+
+    /**
+     * Returns all field names in the hash stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @returns A list of field names for the hash, or an empty list when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hkeys method:
+     * await client.hset("my_hash", {"field1": "value1", "field2": "value2", "field3": "value3"});
+     * const result = await client.hkeys("my_hash");
+     * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
+     * ```
+     */
+    public hkeys(key: string): Promise<string[]> {
+        return this.createWritePromise(createHKeys(key));
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.

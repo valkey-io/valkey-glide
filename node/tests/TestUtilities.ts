@@ -744,6 +744,8 @@ export async function transactionTest(
     responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
     responseData.push(["hvals(key4)", [value]]);
+    baseTransaction.hkeys(key4);
+    responseData.push(["hkeys(key4)", [field]]);
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
