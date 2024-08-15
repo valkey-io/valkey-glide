@@ -893,7 +893,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Iterates incrementally over a hash.
      *
-     * @see {@link https://valkey.io/commands//|valkey.io} for more details.
+     * @see {@link https://valkey.io/commands/hscan/|valkey.io} for more details.
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
