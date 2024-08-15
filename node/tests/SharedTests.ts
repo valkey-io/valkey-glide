@@ -8862,20 +8862,24 @@ export function runBaseTests<Context>(config: {
                 const keyz = [key1, key2];
 
                 // TODO: xreadgroup
-                const promiseList: Promise<ReturnType>[] = [
-                    client.bzpopmax(keyz, 0),
-                    client.bzpopmin(keyz, 0),
-                    client.blpop(keyz, 0),
-                    client.brpop(keyz, 0),
-                    client.xread(
-                        { [key1]: "0-0", [key2]: "0-0" },
-                        { block: 0 },
-                    ),
-                    client.wait(42, 0),
+                const promiseList: [string, Promise<ReturnType>][] = [
+                    ["bzpopmax", client.bzpopmax(keyz, 0)],
+                    ["bzpopmin", client.bzpopmin(keyz, 0)],
+                    ["blpop", client.blpop(keyz, 0)],
+                    ["brpop", client.brpop(keyz, 0)],
+                    [
+                        "xread",
+                        client.xread(
+                            { [key1]: "0-0", [key2]: "0-0" },
+                            { block: 0 },
+                        ),
+                    ],
+                    ["wait", client.wait(42, 0)],
                 ];
 
                 if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
-                    promiseList.push(
+                    promiseList.push([
+                        "blmove",
                         client.blmove(
                             key1,
                             key2,
@@ -8883,18 +8887,18 @@ export function runBaseTests<Context>(config: {
                             ListDirection.LEFT,
                             0,
                         ),
-                    );
+                    ]);
                 }
 
                 if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                     promiseList.push(
-                        client.blmpop(keyz, ListDirection.LEFT, 0),
-                        client.bzmpop(keyz, ScoreFilter.MAX, 0),
+                        ["blmpop", client.blmpop(keyz, ListDirection.LEFT, 0)],
+                        ["bzmpop", client.bzmpop(keyz, ScoreFilter.MAX, 0)],
                     );
                 }
 
                 try {
-                    for (const promise of promiseList) {
+                    for (const [name, promise] of promiseList) {
                         const timeoutPromise = new Promise((resolve) => {
                             setTimeout(resolve, 500, "timeOutPromiseWins");
                         });
@@ -8902,7 +8906,9 @@ export function runBaseTests<Context>(config: {
                         // we expect that all commands will still await for the response even after 500 ms
                         expect(
                             await Promise.race([
-                                promise.finally(() => fail()),
+                                promise.finally(() =>
+                                    fail(`${name} didn't block infintely`),
+                                ),
                                 timeoutPromise,
                             ]),
                         ).toEqual("timeOutPromiseWins");
