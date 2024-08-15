@@ -2813,19 +2813,19 @@ export function createDump(key: GlideString): command_request.Command {
 /** Optional arguments for `RESTORE` command. */
 export type RestoreOptions = {
     /**
-     * If set, existing key will be replaced.
+     * Set to `True` to replace the key if it exists.
      */
     replace?: boolean;
     /**
-     * If set, the absolute timestamp (in milliseconds) for TTL will be used.
+     * Set to `True` to specify that `ttl` represents an absolute Unix timestamp (in milliseconds).
      */
     absttl?: boolean;
     /**
-     * Set the object idletime.
+     * Set the `IDLETIME` option with object idletime to the given key.
      */
     idletime?: number;
     /**
-     * Set the object frequency.
+     * Set the `FREQ` option with object frequency to the given key.
      */
     frequency?: number;
 };

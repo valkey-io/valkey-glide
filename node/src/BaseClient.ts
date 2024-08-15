@@ -1100,8 +1100,8 @@ export class BaseClient {
      *
      * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
      *
-     * @param key - The key of the set.
-     * @returns The serialized value of a set. If `key` does not exist, `null` will be returned.
+     * @param key - The `key` to serialize.
+     * @returns The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
      *
      * @example
      * ```typescript
@@ -1127,11 +1127,11 @@ export class BaseClient {
      *
      * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
      *
-     * @param key - The key of the set.
+     * @param key - The `key` to create.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
-     * @param value - The serialized value.
+     * @param value - The serialized value to deserialize and assign to `key`
      * @param options - (Optional) Restore options {@link RestoreOptions}.
-     * @returns Return "OK" if successfully create a `key` with a `value`.
+     * @returns Return "OK" if the `key` was successfully restored with a `value`.
      *
      * @example
      * ```typescript
