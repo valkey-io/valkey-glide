@@ -745,7 +745,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns all field names in the hash stored at `key`.
-     * See https://valkey.io/commands/hkeys/ for more details.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
      *
      * @param key - The key of the hash.
      *

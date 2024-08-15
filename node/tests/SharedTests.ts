@@ -1293,14 +1293,19 @@ export function runBaseTests<Context>(config: {
                     [field2]: value2,
                 };
 
+                // set up hash with two keys/values
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(await client.hkeys(key)).toEqual([field1, field2]);
+
+                // remove one key
                 expect(await client.hdel(key, [field1])).toEqual(1);
                 expect(await client.hkeys(key)).toEqual([field2]);
+
+                // non-existing key returns an empty list
                 expect(await client.hkeys("nonExistingKey")).toEqual([]);
 
+                // Key exists, but it is not a hash
                 expect(await client.set(key2, value)).toEqual("OK");
-
                 await expect(client.hkeys(key2)).rejects.toThrow();
             }, protocol);
         },
