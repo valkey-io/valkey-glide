@@ -115,6 +115,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHKeys,
     createHLen,
     createHMGet,
     createHRandField,
@@ -740,6 +741,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hset(key: string, fieldValueMap: Record<string, string>): T {
         return this.addAndReturn(createHSet(key, fieldValueMap));
+    }
+
+    /**
+     * Returns all field names in the hash stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
+     */
+    public hkeys(key: string): T {
+        return this.addAndReturn(createHKeys(key));
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
