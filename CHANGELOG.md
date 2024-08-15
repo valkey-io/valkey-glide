@@ -1,6 +1,12 @@
 #### Changes
 * Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
+* Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
+* Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
+* Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
+* Node: Update all commands to use `async` ([#2110](https://github.com/valkey-io/valkey-glide/pull/2110))
+* Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
 * Node: Added XPENDING commands ([#2085](https://github.com/valkey-io/valkey-glide/pull/2085))
+* Node: Added HSCAN command ([#2098](https://github.com/valkey-io/valkey-glide/pull/2098/))
 * Node: Added XINFO CONSUMERS command ([#2093](https://github.com/valkey-io/valkey-glide/pull/2093))
 * Node: Added HRANDFIELD command ([#2096](https://github.com/valkey-io/valkey-glide/pull/2096))
 * Node: Added FUNCTION STATS commands ([#2082](https://github.com/valkey-io/valkey-glide/pull/2082))
@@ -52,8 +58,10 @@
 * Node: Added ZMPOP command ([#1994](https://github.com/valkey-io/valkey-glide/pull/1994))
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
+* Node: Added XRANGE command ([#2069](https://github.com/valkey-io/valkey-glide/pull/2069))
 * Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
 * Node: Added WATCH and UNWATCH commands ([#2076](https://github.com/valkey-io/valkey-glide/pull/2076))
+* Node: Added WAIT command ([#2113](https://github.com/valkey-io/valkey-glide/pull/2113))
 * Node: Added ZLEXCOUNT command ([#2022](https://github.com/valkey-io/valkey-glide/pull/2022))
 * Node: Added ZREMRANGEBYLEX command ([#2025](https://github.com/valkey-io/valkey-glide/pull/2025))
 * Node: Added ZRANGESTORE command ([#2068](https://github.com/valkey-io/valkey-glide/pull/2068))
@@ -70,6 +78,7 @@
 * Node: Added XGROUP CREATE & XGROUP DESTROY commands ([#2084](https://github.com/valkey-io/valkey-glide/pull/2084))
 * Node: Added BZPOPMAX & BZPOPMIN command ([#2077]((https://github.com/valkey-io/valkey-glide/pull/2077))
 * Node: Added XGROUP CREATECONSUMER & XGROUP DELCONSUMER commands ([#2088](https://github.com/valkey-io/valkey-glide/pull/2088))
+* Node: Added GETEX command ([#2107]((https://github.com/valkey-io/valkey-glide/pull/2107))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))

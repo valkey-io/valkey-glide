@@ -13,6 +13,7 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
+    Decoder,
     GlideClient,
     ListDirection,
     ProtocolVersion,
@@ -27,14 +28,17 @@ import {
     checkFunctionListResponse,
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
+    createLuaLibWithLongRunningFunction,
+    encodableTransactionTest,
+    encodedTransactionTest,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
-    intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
+    waitForNotBusy,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -120,13 +124,9 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info();
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Server"),
-            );
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Replication"),
-            );
-            expect(intoString(result)).toEqual(
+            expect(result).toEqual(expect.stringContaining("# Server"));
+            expect(result).toEqual(expect.stringContaining("# Replication"));
+            expect(result).toEqual(
                 expect.not.stringContaining("# Latencystats"),
             );
         },
@@ -202,6 +202,52 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "bytes decoder client test %p",
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.Bytes;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+
+            const key = uuidv4();
+            const value = uuidv4();
+            const valueEncoded = Buffer.from(value);
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            expect(await client.get(key)).toEqual(valueEncoded);
+            expect(await client.get(key, Decoder.String)).toEqual(value);
+            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "string decoder client test %p",
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.String;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+
+            const key = uuidv4();
+            const value = uuidv4();
+            const valueEncoded = Buffer.from(value);
+            const result = await client.set(key, value);
+            expect(result).toEqual("OK");
+
+            expect(await client.get(key)).toEqual(value);
+            expect(await client.get(key, Decoder.String)).toEqual(value);
+            expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
         async (protocol) => {
             client = await GlideClient.createClient(
@@ -211,6 +257,69 @@ describe("GlideClient", () => {
             const expectedRes = await transactionTest(
                 transaction,
                 cluster.getVersion(),
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can get Bytes decoded transactions_%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const transaction = new Transaction();
+            const expectedRes = await encodedTransactionTest(transaction);
+            transaction.select(0);
+            const result = await client.exec(transaction, Decoder.Bytes);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transaction with default string decoder_%p`,
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.String;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+            const transaction = new Transaction();
+            const expectedRes = await encodableTransactionTest(
+                transaction,
+                "value",
+            );
+            transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedRes);
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `can send transaction with default bytes decoder_%p`,
+        async (protocol) => {
+            const clientConfig = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            clientConfig.defaultDecoder = Decoder.Bytes;
+            client = await GlideClient.createClient(clientConfig);
+            expect(await client.select(0)).toEqual("OK");
+            const transaction = new Transaction();
+            const valueEncoded = Buffer.from("value");
+            const expectedRes = await encodableTransactionTest(
+                transaction,
+                valueEncoded,
             );
             transaction.select(0);
             const result = await client.exec(transaction);
@@ -364,32 +473,22 @@ describe("GlideClient", () => {
             );
 
             const result = await client.lolwut();
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result).toEqual(expect.stringContaining("Redis ver. "));
 
             const result2 = await client.lolwut({ parameters: [] });
-            expect(intoString(result2)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result2).toEqual(expect.stringContaining("Redis ver. "));
 
             const result3 = await client.lolwut({ parameters: [50, 20] });
-            expect(intoString(result3)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result3).toEqual(expect.stringContaining("Redis ver. "));
 
             const result4 = await client.lolwut({ version: 6 });
-            expect(intoString(result4)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result4).toEqual(expect.stringContaining("Redis ver. "));
 
             const result5 = await client.lolwut({
                 version: 5,
                 parameters: [30, 4, 4],
             });
-            expect(intoString(result5)).toEqual(
-                expect.stringContaining("Redis ver. "),
-            );
+            expect(result5).toEqual(expect.stringContaining("Redis ver. "));
 
             // transaction tests
             const transaction = new Transaction();
@@ -401,7 +500,7 @@ describe("GlideClient", () => {
 
             if (results) {
                 for (const element of results) {
-                    expect(intoString(element)).toEqual(
+                    expect(element).toEqual(
                         expect.stringContaining("Redis ver. "),
                     );
                 }
@@ -728,6 +827,155 @@ describe("GlideClient", () => {
                 );
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function kill RO func %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                10000,
+            );
+            const client = await GlideClient.createClient(config);
+            const testClient = await GlideClient.createClient(config);
+
+            try {
+                const libName = "function_kill_no_write";
+                const funcName = "deadlock_no_write";
+                const code = createLuaLibWithLongRunningFunction(
+                    libName,
+                    funcName,
+                    6,
+                    true,
+                );
+                expect(await client.functionFlush()).toEqual("OK");
+                // nothing to kill
+                await expect(client.functionKill()).rejects.toThrow(/notbusy/i);
+
+                // load the lib
+                expect(await client.functionLoad(code, true)).toEqual(libName);
+
+                try {
+                    // call the function without await
+                    const promise = testClient
+                        .fcall(funcName, [], [])
+                        .catch((e) =>
+                            expect((e as Error).message).toContain(
+                                "Script killed",
+                            ),
+                        );
+
+                    let killed = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            expect(await client.functionKill()).toEqual("OK");
+                            killed = true;
+                            break;
+                        } catch {
+                            // do nothing
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(killed).toBeTruthy();
+                    await promise;
+                } finally {
+                    await waitForNotBusy(client);
+                }
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                testClient.close();
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function kill RW func %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+                10000,
+            );
+            const client = await GlideClient.createClient(config);
+            const testClient = await GlideClient.createClient(config);
+
+            try {
+                const libName = "function_kill_write";
+                const key = libName;
+                const funcName = "deadlock_write";
+                const code = createLuaLibWithLongRunningFunction(
+                    libName,
+                    funcName,
+                    6,
+                    false,
+                );
+                expect(await client.functionFlush()).toEqual("OK");
+                // nothing to kill
+                await expect(client.functionKill()).rejects.toThrow(/notbusy/i);
+
+                // load the lib
+                expect(await client.functionLoad(code, true)).toEqual(libName);
+
+                let promise = null;
+
+                try {
+                    // call the function without await
+                    promise = testClient.fcall(funcName, [key], []);
+
+                    let foundUnkillable = false;
+                    let timeout = 4000;
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                    while (timeout >= 0) {
+                        try {
+                            // valkey kills a function with 5 sec delay
+                            // but this will always throw an error in the test
+                            await client.functionKill();
+                        } catch (err) {
+                            // looking for an error with "unkillable" in the message
+                            // at that point we can break the loop
+                            if (
+                                (err as Error).message
+                                    .toLowerCase()
+                                    .includes("unkillable")
+                            ) {
+                                foundUnkillable = true;
+                                break;
+                            }
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 500),
+                        );
+                        timeout -= 500;
+                    }
+
+                    expect(foundUnkillable).toBeTruthy();
+                } finally {
+                    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                    // test to fail. Wait for the function to complete (we cannot kill it)
+                    expect(await promise).toContain("Timed out");
+                }
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                testClient.close();
                 client.close();
             }
         },

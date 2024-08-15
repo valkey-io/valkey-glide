@@ -22,6 +22,7 @@ import {
     BaseClientConfiguration,
     ClosingError,
     ClusterTransaction,
+    Decoder,
     GlideClient,
     GlideClientConfiguration,
     GlideClusterClient,
@@ -31,13 +32,14 @@ import {
     RequestError,
     ReturnType,
     SlotKeyTypes,
+    TimeUnit,
 } from "..";
 import {
     command_request,
     connection_request,
     response,
 } from "../src/ProtobufMessage";
-import { convertStringArrayToBuffer, intoString } from "./TestUtilities";
+import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 
 beforeAll(() => {
@@ -308,8 +310,9 @@ describe("SocketConnectionInternals", () => {
                         },
                     );
                 });
-                const result = await connection.get("foo");
-                expect(intoString(result)).toEqual(intoString(expected));
+                const result = await connection.get("foo", Decoder.String);
+                console.log(result);
+                expect(result).toEqual(expected);
             });
         };
 
@@ -384,7 +387,9 @@ describe("SocketConnectionInternals", () => {
                 type: "primarySlotKey",
                 key: "key",
             };
-            const result = await connection.exec(transaction, slotKey);
+            const result = await connection.exec(transaction, {
+                route: slotKey,
+            });
             expect(result).toBe("OK");
         });
     });
@@ -412,10 +417,10 @@ describe("SocketConnectionInternals", () => {
             });
             const transaction = new ClusterTransaction();
             transaction.info([InfoOptions.Server]);
-            const result = await connection.exec(transaction, "randomNode");
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Server"),
-            );
+            const result = await connection.exec(transaction, {
+                route: "randomNode",
+            });
+            expect(result).toEqual(expect.stringContaining("# Server"));
         });
     });
 
@@ -541,7 +546,7 @@ describe("SocketConnectionInternals", () => {
             const request1 = connection.set("foo", "bar", {
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
-                expiry: { type: "seconds", count: 10 },
+                expiry: { type: TimeUnit.Seconds, count: 10 },
             });
 
             expect(await request1).toMatch("OK");
@@ -701,14 +706,13 @@ describe("SocketConnectionInternals", () => {
             });
             const result1 = await connection.customCommand(
                 ["SET", "foo", "bar"],
-                route1,
+                { route: route1 },
             );
             expect(result1).toBeNull();
 
-            const result2 = await connection.customCommand(
-                ["GET", "foo"],
-                route2,
-            );
+            const result2 = await connection.customCommand(["GET", "foo"], {
+                route: route2,
+            });
             expect(result2).toBeNull();
         });
     });

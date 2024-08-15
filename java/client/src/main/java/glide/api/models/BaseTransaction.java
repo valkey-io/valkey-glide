@@ -342,7 +342,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Glide
      *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
-     * @return Command Response - A response from the server with an <code>Object</code>.
+     * @return Command Response - The returned value for the custom command.
      */
     public <ArgType> T customCommand(ArgType[] args) {
         checkTypeOrThrow(args);

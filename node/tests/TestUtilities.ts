@@ -24,7 +24,8 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    InfScoreBoundary,
+    GlideString,
+    InfBoundary,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
@@ -33,6 +34,7 @@ import {
     ScoreFilter,
     SignedEncoding,
     SortOrder,
+    TimeUnit,
     Transaction,
     UnsignedEncoding,
 } from "..";
@@ -129,8 +131,8 @@ export function checkSimple(left: any): Checker {
 }
 
 export type Client = {
-    set: (key: string, value: string) => Promise<string | "OK" | null>;
-    get: (key: string) => Promise<string | null>;
+    set: (key: string, value: string) => Promise<GlideString | "OK" | null>;
+    get: (key: string) => Promise<GlideString | null>;
 };
 
 export async function GetAndSetRandomValue(client: Client) {
@@ -252,6 +254,57 @@ export function generateLuaLibCode(
     }
 
     return code;
+}
+
+/**
+ * Create a lua lib with a function which runs an endless loop up to timeout sec.
+ * Execution takes at least 5 sec regardless of the timeout configured.
+ */
+export function createLuaLibWithLongRunningFunction(
+    libName: string,
+    funcName: string,
+    timeout: number,
+    readOnly: boolean,
+): string {
+    const code =
+        "#!lua name=$libName\n" +
+        "local function $libName_$funcName(keys, args)\n" +
+        "  local started = tonumber(redis.pcall('time')[1])\n" +
+        // fun fact - redis does no write if 'no-writes' flag is set
+        "  redis.pcall('set', keys[1], 42)\n" +
+        "  while (true) do\n" +
+        "    local now = tonumber(redis.pcall('time')[1])\n" +
+        "    if now > started + $timeout then\n" +
+        "      return 'Timed out $timeout sec'\n" +
+        "    end\n" +
+        "  end\n" +
+        "  return 'OK'\n" +
+        "end\n" +
+        "redis.register_function{\n" +
+        "function_name='$funcName',\n" +
+        "callback=$libName_$funcName,\n" +
+        (readOnly ? "flags={ 'no-writes' }\n" : "") +
+        "}";
+    return code
+        .replaceAll("$timeout", timeout.toString())
+        .replaceAll("$funcName", funcName)
+        .replaceAll("$libName", libName);
+}
+
+export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
+    // If function wasn't killed, and it didn't time out - it blocks the server and cause rest test to fail.
+    let isBusy = true;
+
+    do {
+        try {
+            await client.functionKill();
+        } catch (err) {
+            // should throw `notbusy` error, because the function should be killed before
+            if ((err as Error).message.toLowerCase().includes("notbusy")) {
+                isBusy = false;
+            }
+        }
+    } while (isBusy);
 }
 
 /**
@@ -478,6 +531,76 @@ export function validateTransactionResponse(
 }
 
 /**
+ * Populates a transaction with commands to test the decodable commands with various default decoders.
+ * @param baseTransaction - A transaction.
+ * @param valueEncodedResponse - Represents the encoded response of "value" to compare
+ * @returns Array of tuples, where first element is a test name/description, second - expected return value.
+ */
+export async function encodableTransactionTest(
+    baseTransaction: Transaction | ClusterTransaction,
+    valueEncodedResponse: ReturnType,
+): Promise<[string, ReturnType][]> {
+    const key = "{key}" + uuidv4(); // string
+    const value = "value";
+    // array of tuples - first element is test name/description, second - expected return value
+    const responseData: [string, ReturnType][] = [];
+
+    baseTransaction.set(key, value);
+    responseData.push(["set(key, value)", "OK"]);
+    baseTransaction.get(key);
+    responseData.push(["get(key)", valueEncodedResponse]);
+
+    return responseData;
+}
+
+/**
+ * Populates a transaction with commands to test the decoded response.
+ * @param baseTransaction - A transaction.
+ * @returns Array of tuples, where first element is a test name/description, second - expected return value.
+ */
+export async function encodedTransactionTest(
+    baseTransaction: Transaction | ClusterTransaction,
+): Promise<[string, ReturnType][]> {
+    const key1 = "{key}" + uuidv4(); // string
+    const key2 = "{key}" + uuidv4(); // string
+    const key = "dumpKey";
+    const dumpResult = Buffer.from([
+        0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
+    ]);
+    const value = "value";
+    const valueEncoded = Buffer.from(value);
+    // array of tuples - first element is test name/description, second - expected return value
+    const responseData: [string, ReturnType][] = [];
+
+    baseTransaction.set(key1, value);
+    responseData.push(["set(key1, value)", "OK"]);
+    baseTransaction.set(key2, value);
+    responseData.push(["set(key2, value)", "OK"]);
+    baseTransaction.get(key1);
+    responseData.push(["get(key1)", valueEncoded]);
+    baseTransaction.get(key2);
+    responseData.push(["get(key2)", valueEncoded]);
+
+    baseTransaction.set(key, value);
+    responseData.push(["set(key, value)", "OK"]);
+    baseTransaction.customCommand(["DUMP", key]);
+    responseData.push(['customCommand(["DUMP", key])', dumpResult]);
+    baseTransaction.del([key]);
+    responseData.push(["del(key)", 1]);
+    baseTransaction.get(key);
+    responseData.push(["get(key)", null]);
+    baseTransaction.customCommand(["RESTORE", key, "0", dumpResult]);
+    responseData.push([
+        'customCommand(["RESTORE", key, "0", dumpResult])',
+        "OK",
+    ]);
+    baseTransaction.get(key);
+    responseData.push(["get(key)", valueEncoded]);
+
+    return responseData;
+}
+
+/**
  * Populates a transaction with commands to test.
  * @param baseTransaction - A transaction.
  * @returns Array of tuples, where first element is a test name/description, second - expected return value.
@@ -538,8 +661,21 @@ export async function transactionTest(
     responseData.push(["flushdb(FlushMode.SYNC)", "OK"]);
     baseTransaction.dbsize();
     responseData.push(["dbsize()", 0]);
-    baseTransaction.set(key1, "bar");
+    baseTransaction.set(key1, "foo");
     responseData.push(['set(key1, "bar")', "OK"]);
+    baseTransaction.set(key1, "bar", { returnOldValue: true });
+    responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
+
+    if (gte(version, "6.2.0")) {
+        baseTransaction.getex(key1);
+        responseData.push(["getex(key1)", "bar"]);
+        baseTransaction.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
+        responseData.push([
+            'getex(key1, {expiry: { type: "seconds", count: 1 }})',
+            "bar",
+        ]);
+    }
+
     baseTransaction.randomKey();
     responseData.push(["randomKey()", key1]);
     baseTransaction.getrange(key1, 0, -1);
@@ -587,6 +723,13 @@ export async function transactionTest(
     responseData.push(["del([key1])", 1]);
     baseTransaction.hset(key4, { [field]: value });
     responseData.push(["hset(key4, { [field]: value })", 1]);
+    baseTransaction.hscan(key4, "0");
+    responseData.push(['hscan(key4, "0")', ["0", [field, value]]]);
+    baseTransaction.hscan(key4, "0", { match: "*", count: 20 });
+    responseData.push([
+        'hscan(key4, "0", {match: "*", count: 20})',
+        ["0", [field, value]],
+    ]);
     baseTransaction.hstrlen(key4, field);
     responseData.push(["hstrlen(key4, field)", value.length]);
     baseTransaction.hlen(key4);
@@ -738,6 +881,13 @@ export async function transactionTest(
     responseData.push(["sdiffstore(key7, [key7])", 2]);
     baseTransaction.srem(key7, ["foo"]);
     responseData.push(['srem(key7, ["foo"])', 1]);
+    baseTransaction.sscan(key7, "0");
+    responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
+    baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
+    responseData.push([
+        'sscan(key7, "0", {match: "*", count: 20})',
+        ["0", ["bar"]],
+    ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
     baseTransaction.sismember(key7, "bar");
@@ -845,22 +995,18 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(
-        key8,
-        { value: 2 },
-        InfScoreBoundary.PositiveInfinity,
-    );
+    baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
-        "zcount(key8, { value: 2 }, InfScoreBoundary.PositiveInfinity)",
+        "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
         4,
     ]);
     baseTransaction.zlexcount(
         key8,
         { value: "a" },
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push([
-        'zlexcount(key8, { value: "a" }, InfScoreBoundary.PositiveInfinity)',
+        'zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity)',
         4,
     ]);
     baseTransaction.zpopmin(key8);
@@ -879,14 +1025,14 @@ export async function transactionTest(
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
-        InfScoreBoundary.NegativeInfinity,
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.NegativeInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
     baseTransaction.zremRangeByLex(
         key8,
-        InfScoreBoundary.NegativeInfinity,
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.NegativeInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
@@ -932,6 +1078,8 @@ export async function transactionTest(
     ]);
     baseTransaction.xlen(key9);
     responseData.push(["xlen(key9)", 3]);
+    baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
+    responseData.push(["xrange(key9)", { "0-1": [["field", "value1"]] }]);
     baseTransaction.xread({ [key9]: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
@@ -965,73 +1113,84 @@ export async function transactionTest(
 
     // key9 has one entry here: {"0-2":[["field","value2"]]}
 
-    baseTransaction.xgroupCreateConsumer(key9, groupName1, "consumer1");
+    baseTransaction.xgroupCreateConsumer(key9, groupName1, consumer);
     responseData.push([
-        "xgroupCreateConsumer(key9, groupName1, consumer1)",
+        "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
     baseTransaction.customCommand([
         "xreadgroup",
         "group",
         groupName1,
-        "consumer1",
+        consumer,
         "STREAMS",
         key9,
         ">",
     ]);
     responseData.push([
-        'xreadgroup(groupName1, "consumer1", key9, >)',
+        "xreadgroup(groupName1, consumer, key9, >)",
         { [key9]: { "0-2": [["field", "value2"]] } },
     ]);
     baseTransaction.xpending(key9, groupName1);
     responseData.push([
         "xpending(key9, groupName1)",
-        [1, "0-2", "0-2", [["consumer1", "1"]]],
+        [1, "0-2", "0-2", [[consumer, "1"]]],
     ]);
     baseTransaction.xpendingWithOptions(key9, groupName1, {
-        start: InfScoreBoundary.NegativeInfinity,
-        end: InfScoreBoundary.PositiveInfinity,
+        start: InfBoundary.NegativeInfinity,
+        end: InfBoundary.PositiveInfinity,
         count: 10,
     });
     responseData.push([
-        "xpending(key9, groupName1, -, +, 10)",
-        [["0-2", "consumer1", 0, 1]],
+        "xpendingWithOptions(key9, groupName1, -, +, 10)",
+        [["0-2", consumer, 0, 1]],
     ]);
-    baseTransaction.xclaim(key9, groupName1, "consumer1", 0, ["0-2"]);
+    baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
-        'xclaim(key9, groupName1, "consumer1", 0, ["0-2"])',
+        'xclaim(key9, groupName1, consumer, 0, ["0-2"])',
         { "0-2": [["field", "value2"]] },
     ]);
-    baseTransaction.xclaim(key9, groupName1, "consumer1", 0, ["0-2"], {
+    baseTransaction.xclaim(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
         retryCount: 0,
         idle: 0,
     });
     responseData.push([
-        'xclaim(key9, groupName1, "consumer1", 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
+        'xclaim(key9, groupName1, consumer, 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
         { "0-2": [["field", "value2"]] },
     ]);
-    baseTransaction.xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"]);
+    baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"]);
     responseData.push([
-        'xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"])',
+        'xclaimJustId(key9, groupName1, consumer, 0, ["0-2"])',
         ["0-2"],
     ]);
-    baseTransaction.xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"], {
+    baseTransaction.xclaimJustId(key9, groupName1, consumer, 0, ["0-2"], {
         isForce: true,
         retryCount: 0,
         idle: 0,
     });
     responseData.push([
-        'xclaimJustId(key9, groupName1, "consumer1", 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
+        'xclaimJustId(key9, groupName1, consumer, 0, ["0-2"], { isForce: true, retryCount: 0, idle: 0})',
         ["0-2"],
     ]);
-    baseTransaction.xgroupCreateConsumer(key9, groupName1, consumer);
-    responseData.push([
-        "xgroupCreateConsumer(key9, groupName1, consumer)",
-        true,
-    ]);
+
+    if (gte(version, "6.2.0")) {
+        baseTransaction.xautoclaim(key9, groupName1, consumer, 0, "0-0", 1);
+        responseData.push([
+            'xautoclaim(key9, groupName1, consumer, 0, "0-0", 1)',
+            gte(version, "7.0.0")
+                ? ["0-0", { "0-2": [["field", "value2"]] }, []]
+                : ["0-0", { "0-2": [["field", "value2"]] }],
+        ]);
+        baseTransaction.xautoclaimJustId(key9, groupName1, consumer, 0, "0-0");
+        responseData.push([
+            'xautoclaimJustId(key9, groupName1, consumer, 0, "0-0")',
+            gte(version, "7.0.0") ? ["0-0", ["0-2"], []] : ["0-0", ["0-2"]],
+        ]);
+    }
+
     baseTransaction.xgroupDelConsumer(key9, groupName1, consumer);
-    responseData.push(["xgroupDelConsumer(key9, groupName1, consumer)", 0]);
+    responseData.push(["xgroupDelConsumer(key9, groupName1, consumer)", 1]);
     baseTransaction.xgroupDestroy(key9, groupName1);
     responseData.push(["xgroupDestroy(key9, groupName1)", true]);
     baseTransaction.xgroupDestroy(key9, groupName2);
@@ -1070,7 +1229,7 @@ export async function transactionTest(
     baseTransaction.bitpos(key17, 1);
     responseData.push(["bitpos(key17, 1)", 1]);
 
-    if (gte("6.0.0", version)) {
+    if (gte(version, "6.0.0")) {
         baseTransaction.bitfieldReadOnly(key17, [
             new BitFieldGet(new SignedEncoding(5), new BitOffset(3)),
         ]);
@@ -1379,5 +1538,7 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
     return responseData;
 }
