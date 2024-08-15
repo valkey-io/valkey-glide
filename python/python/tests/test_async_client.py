@@ -8400,20 +8400,10 @@ class TestCommands:
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
         )
 
-        # call fcall to run the function
-        # make sure that fcall routes to a primary node, and not a replica
-        # if this happens, function_kill and function_stats won't find the function and will fail
-        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
-
         async def endless_fcall_route_call():
             # fcall is supposed to be killed, and will return a RequestError
             with pytest.raises(RequestError) as e:
-                if cluster_mode:
-                    await test_client.fcall_ro_route(
-                        func_name, arguments=[], route=primaryRoute
-                    )
-                else:
-                    await test_client.fcall_ro(func_name, arguments=[])
+                await test_client.fcall_ro(func_name, arguments=[])
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
