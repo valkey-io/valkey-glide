@@ -141,10 +141,10 @@ export type SetOptions = {
      * `KEEPTTL` in the Redis API.
      */
     | "keepExisting"
-    | {
-        type: TimeUnit;
-        count: number;
-    };
+        | {
+              type: TimeUnit;
+              count: number;
+          };
 };
 
 /**
@@ -1381,7 +1381,7 @@ export function createZAdd(
         if (options.conditionalChange) {
             if (
                 options.conditionalChange ===
-                ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
+                    ConditionalChange.ONLY_IF_DOES_NOT_EXIST &&
                 options.updateOptions
             ) {
                 throw new Error(
@@ -1565,15 +1565,15 @@ export type Boundary<T> =
      *  Represents a specific boundary.
      */
     | {
-        /**
-         * The comparison value.
-         */
-        value: T;
-        /**
-         * Whether the value is inclusive. Defaults to `true`.
-         */
-        isInclusive?: boolean;
-    };
+          /**
+           * The comparison value.
+           */
+          value: T;
+          /**
+           * Whether the value is inclusive. Defaults to `true`.
+           */
+          isInclusive?: boolean;
+      };
 
 /**
  * Represents a range by index (rank) in a sorted set.
@@ -1939,21 +1939,21 @@ export function createZRank(
 
 export type StreamTrimOptions = (
     | {
-        /**
-         * Trim the stream according to entry ID.
-         * Equivalent to `MINID` in the Redis API.
-         */
-        method: "minid";
-        threshold: string;
-    }
+          /**
+           * Trim the stream according to entry ID.
+           * Equivalent to `MINID` in the Redis API.
+           */
+          method: "minid";
+          threshold: string;
+      }
     | {
-        /**
-         * Trim the stream according to length.
-         * Equivalent to `MAXLEN` in the Redis API.
-         */
-        method: "maxlen";
-        threshold: number;
-    }
+          /**
+           * Trim the stream according to length.
+           * Equivalent to `MAXLEN` in the Redis API.
+           */
+          method: "maxlen";
+          threshold: number;
+      }
 ) & {
     /**
      * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
@@ -2423,8 +2423,8 @@ export function createXRead(
  */
 export type ReturnTypeXinfoStream = {
     [key: string]:
-    | StreamEntries
-    | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
+        | StreamEntries
+        | Record<string, StreamEntries | Record<string, StreamEntries>[]>[];
 };
 
 /**
