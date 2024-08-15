@@ -1054,7 +1054,7 @@ export class BaseClient {
     /**
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
-     * See https://valkey.io/commands/dump/ for details.
+     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
      *
      * @param key - The key of the set.
      * @returns The serialized value of a set. If `key` does not exist, `null` will be returned.
@@ -1071,7 +1071,7 @@ export class BaseClient {
      * console.log(result); // Output: `null`
      * ```
      */
-    public dump(key: GlideString): Promise<GlideString | null> {
+    public async dump(key: GlideString): Promise<Buffer | null> {
         return this.createWritePromise(createDump(key), {
             decoder: Decoder.Bytes,
         });
@@ -1081,7 +1081,7 @@ export class BaseClient {
      * Create a `key` associated with a `value` that is obtained by deserializing the provided
      * serialized `value` (obtained via {@link dump}).
      *
-     * See https://valkey.io/commands/restore/ for details.
+     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
      *
      * @param key - The key of the set.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
@@ -1094,11 +1094,29 @@ export class BaseClient {
      * const result = await client.restore("myKey", 0, value);
      * console.log(result); // Output: "OK"
      * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 1000, value, {replace: true, absttl: true});
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value, {replace: true, idletime: 10});
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value, {replace: true, frequency: 10});
+     * console.log(result); // Output: "OK"
+     * ```
      */
-    public restore(
+    public async restore(
         key: GlideString,
         ttl: number,
-        value: GlideString,
+        value: Buffer,
         options?: RestoreOptions,
     ): Promise<"OK"> {
         return this.createWritePromise(createRestore(key, ttl, value, options));

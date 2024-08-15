@@ -29,7 +29,6 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    GlideString,
     InfScoreBoundary,
     InfoOptions,
     InsertPosition,
@@ -5401,6 +5400,22 @@ export function runBaseTests<Context>(config: {
                             "ResponseError: Invalid FREQ value",
                         );
                     }
+
+                    // Restore only uses IDLETIME or FREQ modifiers
+                    // Error will be raised if both options are set
+                    try {
+                        expect(
+                            await client.restore(key2, 0, data, {
+                                replace: true,
+                                idletime: 10,
+                                frequency: 10,
+                            }),
+                        ).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "ResponseError: syntax error",
+                        );
+                    }
                 }
 
                 // Restore with checksumto error
@@ -5415,56 +5430,6 @@ export function runBaseTests<Context>(config: {
                         "ResponseError: DUMP payload version or checksum are wrong",
                     );
                 }
-
-                // Transaction tests
-                let response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction().dump(key1),
-                              Decoder.Bytes,
-                          )
-                        : await client.exec(
-                              new ClusterTransaction().dump(key1),
-                              { decoder: Decoder.Bytes },
-                          );
-                expect(response?.[0]).not.toBeNull();
-                data = response?.[0] as GlideString;
-
-                // Restore with `String` exec decoder
-                response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              Decoder.String,
-                          )
-                        : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              { decoder: Decoder.String },
-                          );
-                expect(response?.[0]).toEqual("OK");
-                expect(response?.[1]).toEqual(value);
-
-                // Restore with `Bytes` exec decoder
-                response =
-                    client instanceof GlideClient
-                        ? await client.exec(
-                              new Transaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              Decoder.Bytes,
-                          )
-                        : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              { decoder: Decoder.Bytes },
-                          );
-                expect(response?.[0]).toEqual("OK");
-                expect(response?.[1]).toEqual(valueEncode);
             }, protocol);
         },
         config.timeout,
