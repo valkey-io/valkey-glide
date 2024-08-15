@@ -8629,15 +8629,18 @@ export function runBaseTests<Context>(config: {
                 try {
                     for (const promise of promiseList) {
                         const timeoutPromise = new Promise((resolve) => {
-                            setTimeout(resolve, 500);
+                            setTimeout(resolve, 500, "timeOutPromiseWins");
                         });
-                        await Promise.race([promise, timeoutPromise]);
+                        // client has default request timeout 250 ms, we run all commands with infinite blocking
+                        // we expect that all commands will still await for the response even after 500 ms
+                        expect(
+                            await Promise.race([
+                                promise.finally(() => fail()),
+                                timeoutPromise,
+                            ]),
+                        ).toEqual("timeOutPromiseWins");
                     }
                 } finally {
-                    for (const promise of promiseList) {
-                        await Promise.resolve([promise]);
-                    }
-
                     client.close();
                 }
             }, protocol);
