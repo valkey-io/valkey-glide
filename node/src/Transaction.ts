@@ -58,6 +58,7 @@ import {
     StreamPendingOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    TimeUnit,
     ZAddOptions,
     createAppend,
     createBLMPop,
@@ -243,7 +244,6 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
-    TimeUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -302,9 +302,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key to retrieve from the database.
      *
-     * Command Response - If `key` exists, returns the value of `key` as a string. Otherwise, return null.
+     * Command Response - If `key` exists, returns the value of `key`. Otherwise, return null.
      */
-    public get(key: string): T {
+    public get(key: GlideString): T {
         return this.addAndReturn(createGet(key));
     }
 
@@ -337,7 +337,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      */
-    public getdel(key: string): T {
+    public getdel(key: GlideString): T {
         return this.addAndReturn(createGetDel(key));
     }
 
@@ -384,7 +384,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      */
-    public ping(message?: string): T {
+    public ping(message?: GlideString): T {
         return this.addAndReturn(createPing(message));
     }
 
