@@ -3421,15 +3421,15 @@ export class BaseClient {
     /**
      * Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-     * To get the result directly, see `zunion_withscores`.
+     * To get the result directly, see {@link zunionWithScores}.
      *
      * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
-     * @returns - The number of elements in the resulting sorted set stored at `destination`.
+     *         string[] - for keys only.
+     *         KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * * @example
      * ```typescript
@@ -3440,7 +3440,7 @@ export class BaseClient {
      * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
      * await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
      * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
-     * await client.zunionstore("my_sorted_set", ["key1, "key2], {weights: [2, 1]}) // Output: 30.5 for "member1" and 16.4 for "member2"
+     * await client.zunionstore("my_sorted_set", ["key1, "key2], {weights: [2, 1]}) // Output: 46.9
      * ```
      */
     public async zunionstore(
