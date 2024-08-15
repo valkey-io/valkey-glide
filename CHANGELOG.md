@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
 * Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
 * Node: Update all commands to use `async` ([#2110](https://github.com/valkey-io/valkey-glide/pull/2110))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
