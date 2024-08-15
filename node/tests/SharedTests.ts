@@ -3789,7 +3789,7 @@ export function runBaseTests<Context>(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Union results are aggregated by the MAX score of elements
-        expect(await client.zunionStore(key3, [key1, key2], "MAX")).toEqual(3);
+        expect(await client.zunionstore(key3, [key1, key2], "MAX")).toEqual(3);
         const zunionstoreMapMax = await client.zrangeWithScores(key3, range);
         const expectedMapMax = {
             one: 1.5,
@@ -3815,7 +3815,7 @@ export function runBaseTests<Context>(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Union results are aggregated by the MIN score of elements
-        expect(await client.zunionStore(key3, [key1, key2], "MIN")).toEqual(3);
+        expect(await client.zunionstore(key3, [key1, key2], "MIN")).toEqual(3);
         const zunionstoreMapMin = await client.zrangeWithScores(key3, range);
         const expectedMapMin = {
             one: 1.0,
@@ -3841,7 +3841,7 @@ export function runBaseTests<Context>(config: {
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
         // Union results are aggregated by the SUM score of elements
-        expect(await client.zunionStore(key3, [key1, key2], "SUM")).toEqual(3);
+        expect(await client.zunionstore(key3, [key1, key2], "SUM")).toEqual(3);
         const zunionstoreMapSum = await client.zrangeWithScores(key3, range);
         const expectedMapSum = {
             one: 2.5,
@@ -3866,7 +3866,7 @@ export function runBaseTests<Context>(config: {
         expect(await client.zadd(key1, membersScores1)).toEqual(2);
         expect(await client.zadd(key2, membersScores2)).toEqual(3);
 
-        expect(await client.zunionStore(key3, [key1, key2])).toEqual(3);
+        expect(await client.zunionstore(key3, [key1, key2])).toEqual(3);
         const zunionstoreMap = await client.zrangeWithScores(key3, range);
         const expectedMap = {
             one: 3.0,
@@ -3892,7 +3892,7 @@ export function runBaseTests<Context>(config: {
 
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
         expect(
-            await client.zunionStore(
+            await client.zunionstore(
                 key3,
                 [
                     [key1, 2.0],
@@ -3926,7 +3926,7 @@ export function runBaseTests<Context>(config: {
 
         // Non existing key
         expect(
-            await client.zunionStore(key2, [
+            await client.zunionstore(key2, [
                 key1,
                 "{testKey}-non_existing_key",
             ]),
@@ -3944,7 +3944,7 @@ export function runBaseTests<Context>(config: {
         expect(zunionstore_map_nonexistingkey).toEqual(expectedMapMultiplied);
 
         // Empty list check
-        await expect(client.zunionStore("{xyz}", [])).rejects.toThrow();
+        await expect(client.zunionstore("{xyz}", [])).rejects.toThrow();
     }
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
