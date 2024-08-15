@@ -9503,6 +9503,40 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xgroupSetId test %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = "testKey" + uuidv4();
+                const nonExistingKey = "group" + uuidv4();
+                const stringKey = "testKey" + uuidv4();
+                const groupName = uuidv4();
+                const consumerName = uuidv4();
+                const streamId0 = "0";
+                const streamId1_0 = "1-0";
+                const streamId1_1 = "1-1";
+                const streamId1_2 = "1-2";
+
+                // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
+                expect(
+                    await client.xadd(key, [["f0", "v0"]], { id: streamId1_0 }),
+                ).toBe(streamId1_0);
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], { id: streamId1_1 }),
+                ).toBe(streamId1_1);
+                expect(
+                    await client.xadd(key, [["f2", "v2"]], { id: streamId1_2 }),
+                ).toBe(streamId1_2);
+
+                expect(
+                    await client.xgroupCreate(key, groupName, streamId0),
+                ).toBe("OK");
+                // TODO: finish implementing tests once XREADGROUP is done
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xpending test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
