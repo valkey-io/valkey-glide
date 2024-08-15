@@ -36,6 +36,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionKill,
     createFunctionList,
     createFunctionLoad,
     createFunctionStats,
@@ -355,7 +356,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(
+    public async customCommand(
         args: GlideString[],
         options?: { route?: Routes; decoder?: Decoder },
     ): Promise<ReturnType> {
@@ -378,7 +379,7 @@ export class GlideClusterClient extends BaseClient {
      *      the list entry will be null.
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
-    public exec(
+    public async exec(
         transaction: ClusterTransaction,
         options?: {
             route?: SingleNodeRoute;
@@ -423,7 +424,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public ping(message?: string, route?: Routes): Promise<string> {
+    public async ping(message?: string, route?: Routes): Promise<string> {
         return this.createWritePromise(createPing(message), {
             route: toProtobufRoute(route),
         });
@@ -439,7 +440,7 @@ export class GlideClusterClient extends BaseClient {
      * @returns a string containing the information for the sections requested. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
-    public info(
+    public async info(
         options?: InfoOptions[],
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
@@ -473,7 +474,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
      * ```
      */
-    public clientGetName(
+    public async clientGetName(
         route?: Routes,
     ): Promise<ClusterResponse<string | null>> {
         return this.createWritePromise<ClusterResponse<string | null>>(
@@ -497,7 +498,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configRewrite(route?: Routes): Promise<"OK"> {
+    public async configRewrite(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(createConfigRewrite(), {
             route: toProtobufRoute(route),
         });
@@ -518,7 +519,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configResetStat(route?: Routes): Promise<"OK"> {
+    public async configResetStat(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat(), {
             route: toProtobufRoute(route),
         });
@@ -532,7 +533,7 @@ export class GlideClusterClient extends BaseClient {
      * @returns the id of the client. When specifying a route other than a single node,
      * it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
-    public clientId(route?: Routes): Promise<ClusterResponse<number>> {
+    public async clientId(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
             createClientId(),
             { route: toProtobufRoute(route) },
@@ -564,7 +565,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
      * ```
      */
-    public configGet(
+    public async configGet(
         parameters: string[],
         route?: Routes,
     ): Promise<ClusterResponse<Record<string, string>>> {
@@ -591,7 +592,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configSet(
+    public async configSet(
         parameters: Record<string, string>,
         route?: Routes,
     ): Promise<"OK"> {
@@ -622,7 +623,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(echoedMessage); // Output: {'addr': 'valkey-glide', 'addr2': 'valkey-glide', 'addr3': 'valkey-glide'}
      * ```
      */
-    public echo(
+    public async echo(
         message: string,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
@@ -657,7 +658,9 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
      * ```
      */
-    public time(route?: Routes): Promise<ClusterResponse<[string, string]>> {
+    public async time(
+        route?: Routes,
+    ): Promise<ClusterResponse<[string, string]>> {
         return this.createWritePromise(createTime(), {
             route: toProtobufRoute(route),
         });
@@ -710,7 +713,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
      * ```
      */
-    public lolwut(
+    public async lolwut(
         options?: LolwutOptions,
         route?: Routes,
     ): Promise<ClusterResponse<string>> {
@@ -739,7 +742,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: Returns the function's return value.
      * ```
      */
-    public fcallWithRoute(
+    public async fcallWithRoute(
         func: string,
         args: string[],
         route?: Routes,
@@ -769,7 +772,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(response); // Output: 42 # The return value on the function that was execute.
      * ```
      */
-    public fcallReadonlyWithRoute(
+    public async fcallReadonlyWithRoute(
         func: string,
         args: string[],
         route?: Routes,
@@ -797,7 +800,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public functionDelete(
+    public async functionDelete(
         libraryCode: string,
         route?: Routes,
     ): Promise<string> {
@@ -827,7 +830,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'mylib'
      * ```
      */
-    public functionLoad(
+    public async functionLoad(
         libraryCode: string,
         replace?: boolean,
         route?: Routes,
@@ -856,7 +859,10 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public functionFlush(mode?: FlushMode, route?: Routes): Promise<string> {
+    public async functionFlush(
+        mode?: FlushMode,
+        route?: Routes,
+    ): Promise<string> {
         return this.createWritePromise(createFunctionFlush(mode), {
             route: toProtobufRoute(route),
         });
@@ -961,6 +967,28 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
+     * Kills a function that is currently executing.
+     * `FUNCTION KILL` terminates read-only functions only.
+     *
+     * See https://valkey.io/commands/function-kill/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed to all primary nodes.
+     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @example
+     * ```typescript
+     * await client.functionKill();
+     * ```
+     */
+    public async functionKill(route?: Routes): Promise<"OK"> {
+        return this.createWritePromise(createFunctionKill(), {
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -976,7 +1004,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public flushall(mode?: FlushMode, route?: Routes): Promise<string> {
+    public async flushall(mode?: FlushMode, route?: Routes): Promise<string> {
         return this.createWritePromise(createFlushAll(mode), {
             route: toProtobufRoute(route),
         });
@@ -998,7 +1026,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
+    public async flushdb(mode?: FlushMode, route?: Routes): Promise<string> {
         return this.createWritePromise(createFlushDB(mode), {
             route: toProtobufRoute(route),
         });
@@ -1020,7 +1048,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log("Number of keys across all primary nodes: ", numKeys);
      * ```
      */
-    public dbsize(route?: Routes): Promise<ClusterResponse<number>> {
+    public async dbsize(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise(createDBSize(), {
             route: toProtobufRoute(route),
         });
@@ -1052,7 +1080,7 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 2 - Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
      * ```
      */
-    public publish(
+    public async publish(
         message: string,
         channel: string,
         sharded: boolean = false,

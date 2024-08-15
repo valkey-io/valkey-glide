@@ -34,6 +34,7 @@ import {
     createFlushDB,
     createFunctionDelete,
     createFunctionFlush,
+    createFunctionKill,
     createFunctionList,
     createFunctionLoad,
     createFunctionStats,
@@ -147,7 +148,7 @@ export class GlideClient extends BaseClient {
         return configuration;
     }
 
-    public static createClient(
+    public static async createClient(
         options: GlideClientConfiguration,
     ): Promise<GlideClient> {
         return super.createClientInternal<GlideClient>(
@@ -178,7 +179,7 @@ export class GlideClient extends BaseClient {
      *      the list entry will be null.
      *      If the transaction failed due to a WATCH command, `exec` will return `null`.
      */
-    public exec(
+    public async exec(
         transaction: Transaction,
         decoder: Decoder = this.defaultDecoder,
     ): Promise<ReturnType[] | null> {
@@ -208,7 +209,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: Returns a list of all pub/sub clients
      * ```
      */
-    public customCommand(
+    public async customCommand(
         args: GlideString[],
         decoder?: Decoder,
     ): Promise<ReturnType> {
@@ -239,7 +240,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public ping(message?: string): Promise<string> {
+    public async ping(message?: string): Promise<string> {
         return this.createWritePromise(createPing(message));
     }
 
@@ -250,7 +251,7 @@ export class GlideClient extends BaseClient {
      *  When no parameter is provided, the default option is assumed.
      * @returns a string containing the information for the sections requested.
      */
-    public info(options?: InfoOptions[]): Promise<string> {
+    public async info(options?: InfoOptions[]): Promise<string> {
         return this.createWritePromise(createInfo(options));
     }
 
@@ -267,7 +268,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public select(index: number): Promise<"OK"> {
+    public async select(index: number): Promise<"OK"> {
         return this.createWritePromise(createSelect(index));
     }
 
@@ -283,7 +284,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Client Name'
      * ```
      */
-    public clientGetName(): Promise<string | null> {
+    public async clientGetName(): Promise<string | null> {
         return this.createWritePromise(createClientGetName());
     }
 
@@ -299,7 +300,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configRewrite(): Promise<"OK"> {
+    public async configRewrite(): Promise<"OK"> {
         return this.createWritePromise(createConfigRewrite());
     }
 
@@ -315,7 +316,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configResetStat(): Promise<"OK"> {
+    public async configResetStat(): Promise<"OK"> {
         return this.createWritePromise(createConfigResetStat());
     }
 
@@ -324,7 +325,7 @@ export class GlideClient extends BaseClient {
      *
      * @returns the id of the client.
      */
-    public clientId(): Promise<number> {
+    public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());
     }
 
@@ -342,7 +343,9 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: {'timeout': '1000', 'maxmemory': '1GB'}
      * ```
      */
-    public configGet(parameters: string[]): Promise<Record<string, string>> {
+    public async configGet(
+        parameters: string[],
+    ): Promise<Record<string, string>> {
         return this.createWritePromise(createConfigGet(parameters));
     }
 
@@ -360,7 +363,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public configSet(parameters: Record<string, string>): Promise<"OK"> {
+    public async configSet(parameters: Record<string, string>): Promise<"OK"> {
         return this.createWritePromise(createConfigSet(parameters));
     }
 
@@ -377,7 +380,7 @@ export class GlideClient extends BaseClient {
      * console.log(echoedMessage); // Output: 'valkey-glide'
      * ```
      */
-    public echo(message: string): Promise<string> {
+    public async echo(message: string): Promise<string> {
         return this.createWritePromise(createEcho(message));
     }
 
@@ -395,7 +398,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: ['1710925775', '913580']
      * ```
      */
-    public time(): Promise<[string, string]> {
+    public async time(): Promise<[string, string]> {
         return this.createWritePromise(createTime());
     }
 
@@ -475,7 +478,7 @@ export class GlideClient extends BaseClient {
      * console.log(response); // Output: "Redis ver. 7.2.3" - Indicates the current server version.
      * ```
      */
-    public lolwut(options?: LolwutOptions): Promise<string> {
+    public async lolwut(options?: LolwutOptions): Promise<string> {
         return this.createWritePromise(createLolwut(options));
     }
 
@@ -495,7 +498,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public functionDelete(libraryCode: string): Promise<string> {
+    public async functionDelete(libraryCode: string): Promise<string> {
         return this.createWritePromise(createFunctionDelete(libraryCode));
     }
 
@@ -518,7 +521,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'mylib'
      * ```
      */
-    public functionLoad(
+    public async functionLoad(
         libraryCode: string,
         replace?: boolean,
     ): Promise<string> {
@@ -543,7 +546,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public functionFlush(mode?: FlushMode): Promise<string> {
+    public async functionFlush(mode?: FlushMode): Promise<string> {
         return this.createWritePromise(createFunctionFlush(mode));
     }
 
@@ -635,6 +638,24 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Kills a function that is currently executing.
+     * `FUNCTION KILL` terminates read-only functions only.
+     *
+     * See https://valkey.io/commands/function-kill/ for details.
+     *
+     * since Valkey version 7.0.0.
+     *
+     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @example
+     * ```typescript
+     * await client.functionKill();
+     * ```
+     */
+    public async functionKill(): Promise<"OK"> {
+        return this.createWritePromise(createFunctionKill());
+    }
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * See https://valkey.io/commands/flushall/ for more details.
@@ -648,7 +669,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public flushall(mode?: FlushMode): Promise<string> {
+    public async flushall(mode?: FlushMode): Promise<string> {
         return this.createWritePromise(createFlushAll(mode));
     }
 
@@ -666,7 +687,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public flushdb(mode?: FlushMode): Promise<string> {
+    public async flushdb(mode?: FlushMode): Promise<string> {
         return this.createWritePromise(createFlushDB(mode));
     }
 
@@ -683,7 +704,7 @@ export class GlideClient extends BaseClient {
      * console.log("Number of keys in the current database: ", numKeys);
      * ```
      */
-    public dbsize(): Promise<number> {
+    public async dbsize(): Promise<number> {
         return this.createWritePromise(createDBSize());
     }
 
@@ -703,7 +724,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 1 - This message was posted to 1 subscription which is configured on primary node
      * ```
      */
-    public publish(message: string, channel: string): Promise<number> {
+    public async publish(message: string, channel: string): Promise<number> {
         return this.createWritePromise(createPublish(message, channel));
     }
 

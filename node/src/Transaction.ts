@@ -21,6 +21,7 @@ import {
     BitOffsetOptions,
     BitmapIndexType,
     BitwiseOperation,
+    Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
     ExpireOptions,
     FlushMode,
@@ -46,7 +47,6 @@ import {
     RangeByLex,
     RangeByScore,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
-    ScoreBoundary,
     ScoreFilter,
     SearchOrigin,
     SetOptions,
@@ -107,6 +107,7 @@ import {
     createGet,
     createGetBit,
     createGetDel,
+    createGetEx,
     createGetRange,
     createHDel,
     createHExists,
@@ -199,6 +200,7 @@ import {
     createTouch,
     createType,
     createUnlink,
+    createWait,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -211,6 +213,7 @@ import {
     createXInfoStream,
     createXLen,
     createXPending,
+    createXRange,
     createXRead,
     createXReadGroup,
     createXTrim,
@@ -241,6 +244,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    TimeUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -294,6 +298,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /** Get the value associated with the given key, or null if no such value exists.
+     *
      * See https://valkey.io/commands/get/ for details.
      *
      * @param key - The key to retrieve from the database.
@@ -302,6 +307,26 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public get(key: string): T {
         return this.addAndReturn(createGet(key));
+    }
+
+    /**
+     * Get the value of `key` and optionally set its expiration. `GETEX` is similar to {@link get}.
+     * See https://valkey.io/commands/getex for more details.
+     *
+     * @param key - The key to retrieve from the database.
+     * @param options - (Optional) set expiriation to the given key.
+     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     *
+     * since - Valkey 6.2.0 and above.
+     *
+     * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
+     */
+    public getex(
+        key: string,
+        options?: "persist" | { type: TimeUnit; duration: number },
+    ): T {
+        return this.addAndReturn(createGetEx(key, options));
     }
 
     /**
@@ -1757,8 +1782,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcount(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): T {
         return this.addAndReturn(createZCount(key, minScore, maxScore));
     }
@@ -2060,8 +2085,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByLex(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): T {
         return this.addAndReturn(createZRemRangeByLex(key, minLex, maxLex));
     }
@@ -2079,8 +2104,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zremRangeByScore(
         key: string,
-        minScore: ScoreBoundary<number>,
-        maxScore: ScoreBoundary<number>,
+        minScore: Boundary<number>,
+        maxScore: Boundary<number>,
     ): T {
         return this.addAndReturn(
             createZRemRangeByScore(key, minScore, maxScore),
@@ -2102,8 +2127,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zlexcount(
         key: string,
-        minLex: ScoreBoundary<string>,
-        maxLex: ScoreBoundary<string>,
+        minLex: Boundary<string>,
+        maxLex: Boundary<string>,
     ): T {
         return this.addAndReturn(createZLexCount(key, minLex, maxLex));
     }
@@ -2306,6 +2331,34 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public time(): T {
         return this.addAndReturn(createTime());
+    }
+
+    /**
+     * Returns stream entries matching a given range of entry IDs.
+     *
+     * See https://valkey.io/commands/xrange for more details.
+     *
+     * @param key - The key of the stream.
+     * @param start - The starting stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param end - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     *
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     */
+    public xrange(
+        key: string,
+        start: Boundary<string>,
+        end: Boundary<string>,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createXRange(key, start, end, count));
     }
 
     /**
@@ -2799,6 +2852,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lolwut(options?: LolwutOptions): T {
         return this.addAndReturn(createLolwut(options));
+    }
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred and
+     * acknowledged by at least `numreplicas` of replicas. If `timeout` is reached, the command returns
+     * the number of replicas that were not yet reached.
+     *
+     * See https://valkey.io/commands/wait/ for more details.
+     *
+     * @param numreplicas - The number of replicas to reach.
+     * @param timeout - The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+     *
+     * Command Response - The number of replicas reached by all the writes performed in the context of the
+     *     current connection.
+     */
+    public wait(numreplicas: number, timeout: number): T {
+        return this.addAndReturn(createWait(numreplicas, timeout));
     }
 
     /**
