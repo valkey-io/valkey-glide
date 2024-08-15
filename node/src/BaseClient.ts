@@ -684,17 +684,17 @@ export class BaseClient {
     ) {
         const message = Array.isArray(command)
             ? command_request.CommandRequest.create({
-                callbackIdx,
-                transaction: command_request.Transaction.create({
-                    commands: command,
-                }),
-            })
+                  callbackIdx,
+                  transaction: command_request.Transaction.create({
+                      commands: command,
+                  }),
+              })
             : command instanceof command_request.Command
-                ? command_request.CommandRequest.create({
+              ? command_request.CommandRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-                : command_request.CommandRequest.create({
+              : command_request.CommandRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -4665,9 +4665,9 @@ export class BaseClient {
         ReadFrom,
         connection_request.ReadFrom
     > = {
-            primary: connection_request.ReadFrom.Primary,
-            preferReplica: connection_request.ReadFrom.PreferReplica,
-        };
+        primary: connection_request.ReadFrom.Primary,
+        preferReplica: connection_request.ReadFrom.PreferReplica,
+    };
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
@@ -5913,11 +5913,11 @@ export class BaseClient {
             : connection_request.ReadFrom.Primary;
         const authenticationInfo =
             options.credentials !== undefined &&
-                "password" in options.credentials
+            "password" in options.credentials
                 ? {
-                    password: options.credentials.password,
-                    username: options.credentials.username,
-                }
+                      password: options.credentials.password,
+                      username: options.credentials.username,
+                  }
                 : undefined;
         const protocol = options.protocol as
             | connection_request.ProtocolVersion
