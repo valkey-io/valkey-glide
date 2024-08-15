@@ -245,7 +245,6 @@ import {
     createZScan,
     createZScore,
     createZUnionStore,
-    TimeUnit,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 

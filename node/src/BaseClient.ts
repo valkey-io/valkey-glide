@@ -209,7 +209,6 @@ import {
     createZScan,
     createZScore,
     createZUnionStore,
-    TimeUnit,
 } from "./Commands";
 import {
     ClosingError,
