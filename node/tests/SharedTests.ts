@@ -472,8 +472,21 @@ export function runBaseTests<Context>(config: {
         `ping test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
+                const pongEncoded = Buffer.from("PONG");
+                const helloEncoded = Buffer.from("Hello");
                 expect(await client.ping()).toEqual("PONG");
-                expect(await client.ping("Hello")).toEqual("Hello");
+                expect(await client.ping({ message: "Hello" })).toEqual(
+                    "Hello",
+                );
+                expect(await client.ping({ decoder: Decoder.Bytes })).toEqual(
+                    pongEncoded,
+                );
+                expect(
+                    await client.ping({
+                        message: "Hello",
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(helloEncoded);
             }, protocol);
         },
         config.timeout,
@@ -1177,11 +1190,18 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const value1 = uuidv4();
+                const value1Encoded = Buffer.from(value1);
                 const key2 = uuidv4();
 
                 expect(await client.set(key1, value1)).toEqual("OK");
                 expect(await client.getdel(key1)).toEqual(value1);
                 expect(await client.getdel(key1)).toEqual(null);
+
+                expect(await client.set(key1, value1)).toEqual("OK");
+                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(
+                    value1Encoded,
+                );
+                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(null);
 
                 // key isn't a string
                 expect(await client.sadd(key2, ["a"])).toEqual(1);

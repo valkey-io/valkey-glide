@@ -408,6 +408,7 @@ export class GlideClusterClient extends BaseClient {
      * If provided, the server will respond with a copy of the message.
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
@@ -424,9 +425,14 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(message?: string, route?: Routes): Promise<string> {
-        return this.createWritePromise(createPing(message), {
-            route: toProtobufRoute(route),
+    public async ping(options?: {
+        message?: GlideString;
+        route?: Routes;
+        decoder?: Decoder;
+    }): Promise<GlideString> {
+        return this.createWritePromise(createPing(options?.message), {
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 
