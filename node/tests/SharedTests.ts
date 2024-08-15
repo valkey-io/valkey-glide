@@ -291,8 +291,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info([InfoOptions.Commandstats]),
-                        ).join();
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -300,8 +300,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                            await client.info([InfoOptions.Commandstats]),
-                        ).join();
+                              await client.info([InfoOptions.Commandstats]),
+                          ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -328,8 +328,8 @@ export function runBaseTests<Context>(config: {
                     client instanceof GlideClient
                         ? await client.exec(new Transaction().lastsave())
                         : await client.exec(
-                            new ClusterTransaction().lastsave(),
-                        );
+                              new ClusterTransaction().lastsave(),
+                          );
                 expect(response?.[0]).toBeGreaterThan(yesterday);
             }, protocol);
         },
@@ -359,9 +359,11 @@ export function runBaseTests<Context>(config: {
                 //mget with binary buffers
                 expect(await client.mset(keyValueList)).toEqual("OK");
                 expect(
-                    await client.mget([key1, key2, "nonExistingKey", key3], Decoder.Bytes),
+                    await client.mget(
+                        [key1, key2, "nonExistingKey", key3],
+                        Decoder.Bytes,
+                    ),
                 ).toEqual([valueEncoded, valueEncoded, null, valueEncoded]);
-
             }, protocol);
         },
         config.timeout,
@@ -1299,13 +1301,15 @@ export function runBaseTests<Context>(config: {
                 );
 
                 //hget with binary buffer
-                expect(await client.hget(key, field1, Decoder.Bytes)).toEqual(valueEncoded);
-                expect(await client.hget(key, field2, Decoder.Bytes)).toEqual(valueEncoded);
-                expect(await client.hget(key, "nonExistingField", Decoder.Bytes)).toEqual(
-                    null,
+                expect(await client.hget(key, field1, Decoder.Bytes)).toEqual(
+                    valueEncoded,
                 );
-
-
+                expect(await client.hget(key, field2, Decoder.Bytes)).toEqual(
+                    valueEncoded,
+                );
+                expect(
+                    await client.hget(key, "nonExistingField", Decoder.Bytes),
+                ).toEqual(null);
             }, protocol);
         },
         config.timeout,
@@ -1783,10 +1787,14 @@ export function runBaseTests<Context>(config: {
 
                 //hvals with binary buffers
                 expect(await client.hset(key2, fieldValueMap)).toEqual(2);
-                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([value1Encoded, value2Encoded]);
+                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
+                    value1Encoded,
+                    value2Encoded,
+                ]);
                 expect(await client.hdel(key2, [field1])).toEqual(1);
-                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([value2Encoded]);
-
+                expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
+                    value2Encoded,
+                ]);
             }, protocol);
         },
         config.timeout,
@@ -5942,10 +5950,16 @@ export function runBaseTests<Context>(config: {
                     RequestError,
                 );
 
-                // Key and value as buffers 
-                expect(await client.append(key3, valueEncoded)).toBe(value.length);
-                expect(await client.append(key3, valueEncoded)).toBe(valueEncoded.length * 2);
-                expect(await client.get(key3, Decoder.Bytes)).toEqual(Buffer.concat([valueEncoded, valueEncoded]));
+                // Key and value as buffers
+                expect(await client.append(key3, valueEncoded)).toBe(
+                    value.length,
+                );
+                expect(await client.append(key3, valueEncoded)).toBe(
+                    valueEncoded.length * 2,
+                );
+                expect(await client.get(key3, Decoder.Bytes)).toEqual(
+                    Buffer.concat([valueEncoded, valueEncoded]),
+                );
             }, protocol);
         },
         config.timeout,
@@ -6154,13 +6168,13 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | TimeUnit.Seconds
-                        | TimeUnit.Milliseconds
-                        | TimeUnit.UnixSeconds
-                        | TimeUnit.UnixMilliseconds;
-                        count: number;
-                    },
+                          type:
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
+                          count: number;
+                      },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -6180,13 +6194,13 @@ export function runBaseTests<Context>(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                        type:
-                        | TimeUnit.Seconds
-                        | TimeUnit.Milliseconds
-                        | TimeUnit.UnixSeconds
-                        | TimeUnit.UnixMilliseconds;
-                        count: number;
-                    },
+                          type:
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
+                          count: number;
+                      },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
