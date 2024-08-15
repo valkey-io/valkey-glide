@@ -2279,7 +2279,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the list of all consumer groups and their attributes for the stream stored at `key`.
      *
-     * See https://valkey.io/commands/xinfo-groups/ for more details.
+     * @see {@link https://valkey.io/commands/xinfo-groups/|valkey.io} for details.
      *
      * @param key - The key of the stream.
      *
