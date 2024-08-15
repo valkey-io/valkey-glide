@@ -29,7 +29,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    InfScoreBoundary,
+    InfBoundary,
     InfoOptions,
     InsertPosition,
     ListDirection,
@@ -39,6 +39,7 @@ import {
     Script,
     SignedEncoding,
     SortOrder,
+    TimeUnit,
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
@@ -471,8 +472,21 @@ export function runBaseTests<Context>(config: {
         `ping test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
+                const pongEncoded = Buffer.from("PONG");
+                const helloEncoded = Buffer.from("Hello");
                 expect(await client.ping()).toEqual("PONG");
-                expect(await client.ping("Hello")).toEqual("Hello");
+                expect(await client.ping({ message: "Hello" })).toEqual(
+                    "Hello",
+                );
+                expect(await client.ping({ decoder: Decoder.Bytes })).toEqual(
+                    pongEncoded,
+                );
+                expect(
+                    await client.ping({
+                        message: "Hello",
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(helloEncoded);
             }, protocol);
         },
         config.timeout,
@@ -1176,11 +1190,18 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const value1 = uuidv4();
+                const value1Encoded = Buffer.from(value1);
                 const key2 = uuidv4();
 
                 expect(await client.set(key1, value1)).toEqual("OK");
                 expect(await client.getdel(key1)).toEqual(value1);
                 expect(await client.getdel(key1)).toEqual(null);
+
+                expect(await client.set(key1, value1)).toEqual("OK");
+                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(
+                    value1Encoded,
+                );
+                expect(await client.getdel(key1, Decoder.Bytes)).toEqual(null);
 
                 // key isn't a string
                 expect(await client.sadd(key2, ["a"])).toEqual(1);
@@ -1407,7 +1428,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `hscan empty set, negative cursor, negative count, and non-hash key exception tests`,
+        `hscan and sscan empty set, negative cursor, negative count, and non-hash key exception tests`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}-1" + uuidv4();
@@ -1421,8 +1442,16 @@ export function runBaseTests<Context>(config: {
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual([]);
 
+                result = await client.sscan(key1, initialCursor);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
                 // Negative cursor
                 result = await client.hscan(key1, "-1");
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
+                result = await client.sscan(key1, "-1");
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual([]);
 
@@ -1439,9 +1468,25 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).rejects.toThrow(RequestError);
 
+                await expect(client.sscan(key2, initialCursor)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(
+                    client.sscan(key2, initialCursor, {
+                        match: "test",
+                        count: 30,
+                    }),
+                ).rejects.toThrow(RequestError);
+
                 // Negative count
                 await expect(
                     client.hscan(key2, initialCursor, {
+                        count: -1,
+                    }),
+                ).rejects.toThrow(RequestError);
+
+                await expect(
+                    client.sscan(key2, initialCursor, {
                         count: -1,
                     }),
                 ).rejects.toThrow(RequestError);
@@ -2758,6 +2803,119 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sscan test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const initialCursor = "0";
+                const defaultCount = 10;
+
+                const numberMembers: string[] = [];
+
+                for (let i = 0; i < 50000; i++) {
+                    numberMembers[i] = i.toString();
+                }
+
+                const numberMembersSet: string[] = numberMembers;
+                const charMembers: string[] = ["a", "b", "c", "d", "e"];
+                const charMembersSet: Set<string> = new Set(charMembers);
+                const resultCursorIndex = 0;
+                const resultCollectionIndex = 1;
+
+                // Result contains the whole set
+                expect(await client.sadd(key1, charMembers)).toEqual(
+                    charMembers.length,
+                );
+                let result = await client.sscan(key1, initialCursor);
+                expect(await result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex].length).toEqual(
+                    charMembers.length,
+                );
+
+                const resultMembers = result[resultCollectionIndex] as string[];
+
+                const allResultMember = resultMembers.every((member) =>
+                    charMembersSet.has(member),
+                );
+                expect(allResultMember).toEqual(true);
+
+                // Testing sscan with match
+                result = await client.sscan(key1, initialCursor, {
+                    match: "a",
+                });
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual(["a"]);
+
+                // Result contains a subset of the key
+                expect(await client.sadd(key1, numberMembers)).toEqual(
+                    numberMembers.length,
+                );
+
+                let resultCursor = "0";
+                let secondResultValues: string[] = [];
+
+                let isFirstLoop = true;
+
+                do {
+                    result = await client.sscan(key1, resultCursor);
+                    resultCursor = result[resultCursorIndex].toString();
+                    secondResultValues = result[resultCollectionIndex];
+
+                    if (isFirstLoop) {
+                        expect(resultCursor).not.toBe("0");
+                        isFirstLoop = false;
+                    } else if (resultCursor === initialCursor) {
+                        break;
+                    }
+
+                    // Scan with result cursor has a different set
+                    const secondResult = await client.sscan(key1, resultCursor);
+                    const newResultCursor =
+                        secondResult[resultCursorIndex].toString();
+                    expect(resultCursor).not.toBe(newResultCursor);
+                    resultCursor = newResultCursor;
+                    expect(result[resultCollectionIndex]).not.toBe(
+                        secondResult[resultCollectionIndex],
+                    );
+                    secondResultValues = secondResult[resultCollectionIndex];
+                } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
+
+                const allSecondResultValues = Object.keys(
+                    secondResultValues,
+                ).every((value) => value in numberMembersSet);
+                expect(allSecondResultValues).toEqual(true);
+
+                // Test match pattern
+                result = await client.sscan(key1, initialCursor, {
+                    match: "*",
+                });
+                expect(result[resultCursorIndex]).not.toEqual(initialCursor);
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(defaultCount);
+
+                // Test count
+                result = await client.sscan(key1, initialCursor, { count: 20 });
+                expect(result[resultCursorIndex]).not.toEqual(0);
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(20);
+
+                // Test count with match returns a non-empty list
+                result = await client.sscan(key1, initialCursor, {
+                    match: "1*",
+                    count: 30,
+                });
+                expect(result[resultCursorIndex]).not.toEqual(initialCursor);
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sunion test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -3674,8 +3832,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zcount(
                         key1,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(3);
                 expect(
@@ -3693,28 +3851,20 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual(2);
                 expect(
-                    await client.zcount(
-                        key1,
-                        InfScoreBoundary.NegativeInfinity,
-                        {
-                            value: 3,
-                        },
-                    ),
+                    await client.zcount(key1, InfBoundary.NegativeInfinity, {
+                        value: 3,
+                    }),
                 ).toEqual(3);
                 expect(
-                    await client.zcount(
-                        key1,
-                        InfScoreBoundary.PositiveInfinity,
-                        {
-                            value: 3,
-                        },
-                    ),
+                    await client.zcount(key1, InfBoundary.PositiveInfinity, {
+                        value: 3,
+                    }),
                 ).toEqual(0);
                 expect(
                     await client.zcount(
                         "nonExistingKey",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -3722,8 +3872,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zcount(
                         key2,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow();
             }, protocol);
@@ -3778,14 +3928,14 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
                 ).toEqual(["one", "two"]);
                 const result = await client.zrangeWithScores(key, {
-                    start: InfScoreBoundary.NegativeInfinity,
-                    stop: InfScoreBoundary.PositiveInfinity,
+                    start: InfBoundary.NegativeInfinity,
+                    stop: InfBoundary.PositiveInfinity,
                     type: "byScore",
                 });
 
@@ -3801,7 +3951,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -3810,8 +3960,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -3821,7 +3971,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrange(
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3831,7 +3981,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3841,7 +3991,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrangeWithScores(
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -3851,7 +4001,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeWithScores(key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -3871,7 +4021,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -3879,8 +4029,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -3891,7 +4041,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -3902,7 +4052,7 @@ export function runBaseTests<Context>(config: {
                     await client.zrange(
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
@@ -3912,7 +4062,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrange(key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -3988,7 +4138,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -4006,7 +4156,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: 3, isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byScore",
                         },
                         true,
@@ -4025,8 +4175,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byScore",
                     }),
@@ -4043,7 +4193,7 @@ export function runBaseTests<Context>(config: {
                         destkey,
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: 3, isInclusive: false },
                             type: "byScore",
                         },
@@ -4053,7 +4203,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: 3, isInclusive: false },
                         type: "byScore",
                     }),
@@ -4075,7 +4225,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
+                        start: InfBoundary.NegativeInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -4089,8 +4239,8 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.NegativeInfinity,
-                        stop: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.NegativeInfinity,
+                        stop: InfBoundary.PositiveInfinity,
                         limit: { offset: 1, count: 2 },
                         type: "byLex",
                     }),
@@ -4108,7 +4258,7 @@ export function runBaseTests<Context>(config: {
                         key,
                         {
                             start: { value: "c", isInclusive: false },
-                            stop: InfScoreBoundary.NegativeInfinity,
+                            stop: InfBoundary.NegativeInfinity,
                             type: "byLex",
                         },
                         true,
@@ -4130,7 +4280,7 @@ export function runBaseTests<Context>(config: {
                         destkey,
                         key,
                         {
-                            start: InfScoreBoundary.NegativeInfinity,
+                            start: InfBoundary.NegativeInfinity,
                             stop: { value: "c", isInclusive: false },
                             type: "byLex",
                         },
@@ -4140,7 +4290,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(
                     await client.zrangeStore(destkey, key, {
-                        start: InfScoreBoundary.PositiveInfinity,
+                        start: InfBoundary.PositiveInfinity,
                         stop: { value: "c", isInclusive: false },
                         type: "byLex",
                     }),
@@ -4975,6 +5125,131 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xrange test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const stringKey = uuidv4();
+                const streamId1 = "0-1";
+                const streamId2 = "0-2";
+                const streamId3 = "0-3";
+
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], { id: streamId1 }),
+                ).toEqual(streamId1);
+                expect(
+                    await client.xadd(key, [["f2", "v2"]], { id: streamId2 }),
+                ).toEqual(streamId2);
+                expect(await client.xlen(key)).toEqual(2);
+
+                // get everything from the stream
+                expect(
+                    await client.xrange(
+                        key,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                    ),
+                ).toEqual({
+                    [streamId1]: [["f1", "v1"]],
+                    [streamId2]: [["f2", "v2"]],
+                });
+
+                // returns empty mapping if + before -
+                expect(
+                    await client.xrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                    ),
+                ).toEqual({});
+
+                expect(
+                    await client.xadd(key, [["f3", "v3"]], { id: streamId3 }),
+                ).toEqual(streamId3);
+
+                // get the newest entry
+                if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    expect(
+                        await client.xrange(
+                            key,
+                            { isInclusive: false, value: streamId2 },
+                            { value: "5" },
+                            1,
+                        ),
+                    ).toEqual({ [streamId3]: [["f3", "v3"]] });
+                }
+
+                // xrange against an emptied stream
+                expect(
+                    await client.xdel(key, [streamId1, streamId2, streamId3]),
+                ).toEqual(3);
+                expect(
+                    await client.xrange(
+                        key,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                        10,
+                    ),
+                ).toEqual({});
+
+                expect(
+                    await client.xrange(
+                        nonExistingKey,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                    ),
+                ).toEqual({});
+
+                // count value < 1 returns null
+                expect(
+                    await client.xrange(
+                        key,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                        0,
+                    ),
+                ).toEqual(null);
+                expect(
+                    await client.xrange(
+                        key,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                        -1,
+                    ),
+                ).toEqual(null);
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo"));
+                await expect(
+                    client.xrange(
+                        stringKey,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // invalid start bound
+                await expect(
+                    client.xrange(
+                        key,
+                        { value: "not_a_stream_id" },
+                        InfBoundary.PositiveInfinity,
+                    ),
+                ).rejects.toThrow(RequestError);
+
+                // invalid end bound
+                await expect(
+                    client.xrange(key, InfBoundary.NegativeInfinity, {
+                        value: "not_a_stream_id",
+                    }),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zremRangeByLex test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -4995,7 +5270,7 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByLex(
                         key,
                         { value: "d" },
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(1);
 
@@ -5004,15 +5279,15 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByLex(
                         key,
                         { value: "a" },
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(
                     await client.zremRangeByLex(
                         "nonExistingKey",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -5021,8 +5296,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zremRangeByLex(
                         stringKey,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
@@ -5050,15 +5325,15 @@ export function runBaseTests<Context>(config: {
                     await client.zremRangeByScore(
                         key,
                         { value: 1 },
-                        InfScoreBoundary.NegativeInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual(0);
 
                 expect(
                     await client.zremRangeByScore(
                         "nonExistingKey",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
             }, protocol);
@@ -5079,8 +5354,8 @@ export function runBaseTests<Context>(config: {
                 expect(
                     await client.zlexcount(
                         key,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(3);
 
@@ -5089,40 +5364,32 @@ export function runBaseTests<Context>(config: {
                     await client.zlexcount(
                         key,
                         { value: "a", isInclusive: false },
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(2);
 
                 // In range negative infinity to c (inclusive)
                 expect(
-                    await client.zlexcount(
-                        key,
-                        InfScoreBoundary.NegativeInfinity,
-                        {
-                            value: "c",
-                            isInclusive: true,
-                        },
-                    ),
+                    await client.zlexcount(key, InfBoundary.NegativeInfinity, {
+                        value: "c",
+                        isInclusive: true,
+                    }),
                 ).toEqual(3);
 
                 // Incorrect range start > end
                 expect(
-                    await client.zlexcount(
-                        key,
-                        InfScoreBoundary.PositiveInfinity,
-                        {
-                            value: "c",
-                            isInclusive: true,
-                        },
-                    ),
+                    await client.zlexcount(key, InfBoundary.PositiveInfinity, {
+                        value: "c",
+                        isInclusive: true,
+                    }),
                 ).toEqual(0);
 
                 // Non-existing key
                 expect(
                     await client.zlexcount(
                         "non_existing_key",
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual(0);
 
@@ -5131,8 +5398,8 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.zlexcount(
                         stringKey,
-                        InfScoreBoundary.NegativeInfinity,
-                        InfScoreBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
@@ -5633,6 +5900,38 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "wait test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const value1 = uuidv4();
+                const value2 = uuidv4();
+
+                // assert that wait returns 0 under standalone and 1 under cluster mode.
+                expect(await client.set(key, value1)).toEqual("OK");
+
+                if (client instanceof GlideClusterClient) {
+                    expect(await client.wait(1, 1000)).toBeGreaterThanOrEqual(
+                        1,
+                    );
+                } else {
+                    expect(await client.wait(1, 1000)).toBeGreaterThanOrEqual(
+                        0,
+                    );
+                }
+
+                // command should fail on a negative timeout value
+                await expect(client.wait(1, -1)).rejects.toThrow(RequestError);
+
+                // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+                expect(await client.set(key, value2)).toEqual("OK");
+                expect(await client.wait(100, 500)).toBeGreaterThanOrEqual(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
@@ -5640,7 +5939,7 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const setResWithExpirySetMilli = await client.set(key, value, {
             expiry: {
-                type: "milliseconds",
+                type: TimeUnit.Milliseconds,
                 count: 500,
             },
         });
@@ -5650,7 +5949,7 @@ export function runBaseTests<Context>(config: {
 
         const setResWithExpirySec = await client.set(key, value, {
             expiry: {
-                type: "seconds",
+                type: TimeUnit.Seconds,
                 count: 1,
             },
         });
@@ -5660,7 +5959,7 @@ export function runBaseTests<Context>(config: {
 
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
-                type: "unixSeconds",
+                type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
         });
@@ -5682,7 +5981,7 @@ export function runBaseTests<Context>(config: {
         expect(getResExpire).toEqual(null);
         const setResWithExpiryWithUmilli = await client.set(key, value, {
             expiry: {
-                type: "unixMilliseconds",
+                type: TimeUnit.UnixMilliseconds,
                 count: Date.now() + 1000,
             },
         });
@@ -5774,7 +6073,7 @@ export function runBaseTests<Context>(config: {
         // * returns the old value
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
-                type: "unixSeconds",
+                type: TimeUnit.UnixSeconds,
                 count: Math.floor(Date.now() / 1000) + 1,
             },
             conditionalSet: "onlyIfExists",
@@ -5791,10 +6090,10 @@ export function runBaseTests<Context>(config: {
         const value = uuidv4();
         const count = 2;
         const expiryCombination = [
-            { type: "seconds", count },
-            { type: "unixSeconds", count },
-            { type: "unixMilliseconds", count },
-            { type: "milliseconds", count },
+            { type: TimeUnit.Seconds, count },
+            { type: TimeUnit.Milliseconds, count },
+            { type: TimeUnit.UnixSeconds, count },
+            { type: TimeUnit.UnixMilliseconds, count },
             "keepExisting",
         ];
         let exist = false;
@@ -5805,10 +6104,10 @@ export function runBaseTests<Context>(config: {
                     | "keepExisting"
                     | {
                           type:
-                              | "seconds"
-                              | "milliseconds"
-                              | "unixSeconds"
-                              | "unixMilliseconds";
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
                           count: number;
                       },
                 conditionalSet: "onlyIfDoesNotExist",
@@ -5831,10 +6130,10 @@ export function runBaseTests<Context>(config: {
                     | "keepExisting"
                     | {
                           type:
-                              | "seconds"
-                              | "milliseconds"
-                              | "unixSeconds"
-                              | "unixMilliseconds";
+                              | TimeUnit.Seconds
+                              | TimeUnit.Milliseconds
+                              | TimeUnit.UnixSeconds
+                              | TimeUnit.UnixMilliseconds;
                           count: number;
                       },
 
@@ -7970,8 +8269,8 @@ export function runBaseTests<Context>(config: {
                 ]);
 
                 const result = await client.xpendingWithOptions(key, group, {
-                    start: InfScoreBoundary.NegativeInfinity,
-                    end: InfScoreBoundary.PositiveInfinity,
+                    start: InfBoundary.NegativeInfinity,
+                    end: InfBoundary.PositiveInfinity,
                     count: 1,
                     minIdleTime: 42,
                 });
@@ -8548,6 +8847,51 @@ export function runBaseTests<Context>(config: {
                 await expect(
                     client.xgroupDestroy(stringKey, groupName1),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `getex test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    return;
+                }
+
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const value = uuidv4();
+
+                expect(await client.set(key1, value)).toBe("OK");
+                expect(await client.getex(key1)).toEqual(value);
+                expect(await client.ttl(key1)).toBe(-1);
+
+                expect(
+                    await client.getex(key1, {
+                        type: TimeUnit.Seconds,
+                        duration: 15,
+                    }),
+                ).toEqual(value);
+                expect(await client.ttl(key1)).toBeGreaterThan(0);
+                expect(await client.getex(key1, "persist")).toEqual(value);
+                expect(await client.ttl(key1)).toBe(-1);
+
+                // non existent key
+                expect(await client.getex(key2)).toBeNull();
+
+                // invalid time measurement
+                await expect(
+                    client.getex(key1, {
+                        type: TimeUnit.Seconds,
+                        duration: -10,
+                    }),
+                ).rejects.toThrow(RequestError);
+
+                // Key exists, but is not a string
+                expect(await client.sadd(key2, ["a"])).toBe(1);
+                await expect(client.getex(key2)).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,

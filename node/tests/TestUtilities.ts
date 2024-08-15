@@ -24,7 +24,8 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
-    InfScoreBoundary,
+    GlideString,
+    InfBoundary,
     InsertPosition,
     ListDirection,
     ProtocolVersion,
@@ -33,6 +34,7 @@ import {
     ScoreFilter,
     SignedEncoding,
     SortOrder,
+    TimeUnit,
     Transaction,
     UnsignedEncoding,
 } from "..";
@@ -129,8 +131,8 @@ export function checkSimple(left: any): Checker {
 }
 
 export type Client = {
-    set: (key: string, value: string) => Promise<string | "OK" | null>;
-    get: (key: string) => Promise<string | null>;
+    set: (key: string, value: string) => Promise<GlideString | "OK" | null>;
+    get: (key: string) => Promise<GlideString | null>;
 };
 
 export async function GetAndSetRandomValue(client: Client) {
@@ -659,8 +661,21 @@ export async function transactionTest(
     responseData.push(["flushdb(FlushMode.SYNC)", "OK"]);
     baseTransaction.dbsize();
     responseData.push(["dbsize()", 0]);
-    baseTransaction.set(key1, "bar");
+    baseTransaction.set(key1, "foo");
     responseData.push(['set(key1, "bar")', "OK"]);
+    baseTransaction.set(key1, "bar", { returnOldValue: true });
+    responseData.push(['set(key1, "bar", {returnOldValue: true})', "foo"]);
+
+    if (gte(version, "6.2.0")) {
+        baseTransaction.getex(key1);
+        responseData.push(["getex(key1)", "bar"]);
+        baseTransaction.getex(key1, { type: TimeUnit.Seconds, duration: 1 });
+        responseData.push([
+            'getex(key1, {expiry: { type: "seconds", count: 1 }})',
+            "bar",
+        ]);
+    }
+
     baseTransaction.randomKey();
     responseData.push(["randomKey()", key1]);
     baseTransaction.getrange(key1, 0, -1);
@@ -866,6 +881,13 @@ export async function transactionTest(
     responseData.push(["sdiffstore(key7, [key7])", 2]);
     baseTransaction.srem(key7, ["foo"]);
     responseData.push(['srem(key7, ["foo"])', 1]);
+    baseTransaction.sscan(key7, "0");
+    responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
+    baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
+    responseData.push([
+        'sscan(key7, "0", {match: "*", count: 20})',
+        ["0", ["bar"]],
+    ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
     baseTransaction.sismember(key7, "bar");
@@ -973,22 +995,18 @@ export async function transactionTest(
         responseData.push(["zinterstore(key12, [key12, key13])", 2]);
     }
 
-    baseTransaction.zcount(
-        key8,
-        { value: 2 },
-        InfScoreBoundary.PositiveInfinity,
-    );
+    baseTransaction.zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity);
     responseData.push([
-        "zcount(key8, { value: 2 }, InfScoreBoundary.PositiveInfinity)",
+        "zcount(key8, { value: 2 }, InfBoundary.PositiveInfinity)",
         4,
     ]);
     baseTransaction.zlexcount(
         key8,
         { value: "a" },
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push([
-        'zlexcount(key8, { value: "a" }, InfScoreBoundary.PositiveInfinity)',
+        'zlexcount(key8, { value: "a" }, InfBoundary.PositiveInfinity)',
         4,
     ]);
     baseTransaction.zpopmin(key8);
@@ -1007,14 +1025,14 @@ export async function transactionTest(
     responseData.push(["zremRangeByRank(key8, 1, 1)", 1]);
     baseTransaction.zremRangeByScore(
         key8,
-        InfScoreBoundary.NegativeInfinity,
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.NegativeInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByScore(key8, -Inf, +Inf)", 1]); // key8 is now empty
     baseTransaction.zremRangeByLex(
         key8,
-        InfScoreBoundary.NegativeInfinity,
-        InfScoreBoundary.PositiveInfinity,
+        InfBoundary.NegativeInfinity,
+        InfBoundary.PositiveInfinity,
     );
     responseData.push(["zremRangeByLex(key8, -Inf, +Inf)", 0]); // key8 is already empty
 
@@ -1060,6 +1078,8 @@ export async function transactionTest(
     ]);
     baseTransaction.xlen(key9);
     responseData.push(["xlen(key9)", 3]);
+    baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
+    responseData.push(["xrange(key9)", { "0-1": [["field", "value1"]] }]);
     baseTransaction.xread({ [key9]: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
@@ -1117,8 +1137,8 @@ export async function transactionTest(
         [1, "0-2", "0-2", [[consumer, "1"]]],
     ]);
     baseTransaction.xpendingWithOptions(key9, groupName1, {
-        start: InfScoreBoundary.NegativeInfinity,
-        end: InfScoreBoundary.PositiveInfinity,
+        start: InfBoundary.NegativeInfinity,
+        end: InfBoundary.PositiveInfinity,
         count: 10,
     });
     responseData.push([
@@ -1518,5 +1538,7 @@ export async function transactionTest(
         responseData.push(["sortReadOnly(key21)", ["1", "2", "3"]]);
     }
 
+    baseTransaction.wait(1, 200);
+    responseData.push(["wait(1, 200)", 1]);
     return responseData;
 }
