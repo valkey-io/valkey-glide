@@ -1428,7 +1428,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `hscan empty set, negative cursor, negative count, and non-hash key exception tests`,
+        `hscan and sscan empty set, negative cursor, negative count, and non-hash key exception tests`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = "{key}-1" + uuidv4();
@@ -1442,8 +1442,16 @@ export function runBaseTests<Context>(config: {
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual([]);
 
+                result = await client.sscan(key1, initialCursor);
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
                 // Negative cursor
                 result = await client.hscan(key1, "-1");
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual([]);
+
+                result = await client.sscan(key1, "-1");
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual([]);
 
@@ -1460,9 +1468,25 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).rejects.toThrow(RequestError);
 
+                await expect(client.sscan(key2, initialCursor)).rejects.toThrow(
+                    RequestError,
+                );
+                await expect(
+                    client.sscan(key2, initialCursor, {
+                        match: "test",
+                        count: 30,
+                    }),
+                ).rejects.toThrow(RequestError);
+
                 // Negative count
                 await expect(
                     client.hscan(key2, initialCursor, {
+                        count: -1,
+                    }),
+                ).rejects.toThrow(RequestError);
+
+                await expect(
+                    client.sscan(key2, initialCursor, {
                         count: -1,
                     }),
                 ).rejects.toThrow(RequestError);
@@ -2773,6 +2797,119 @@ export function runBaseTests<Context>(config: {
                 expect(await client.smembers(stringKey)).toEqual(
                     new Set(["a", "b"]),
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sscan test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const initialCursor = "0";
+                const defaultCount = 10;
+
+                const numberMembers: string[] = [];
+
+                for (let i = 0; i < 50000; i++) {
+                    numberMembers[i] = i.toString();
+                }
+
+                const numberMembersSet: string[] = numberMembers;
+                const charMembers: string[] = ["a", "b", "c", "d", "e"];
+                const charMembersSet: Set<string> = new Set(charMembers);
+                const resultCursorIndex = 0;
+                const resultCollectionIndex = 1;
+
+                // Result contains the whole set
+                expect(await client.sadd(key1, charMembers)).toEqual(
+                    charMembers.length,
+                );
+                let result = await client.sscan(key1, initialCursor);
+                expect(await result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex].length).toEqual(
+                    charMembers.length,
+                );
+
+                const resultMembers = result[resultCollectionIndex] as string[];
+
+                const allResultMember = resultMembers.every((member) =>
+                    charMembersSet.has(member),
+                );
+                expect(allResultMember).toEqual(true);
+
+                // Testing sscan with match
+                result = await client.sscan(key1, initialCursor, {
+                    match: "a",
+                });
+                expect(result[resultCursorIndex]).toEqual(initialCursor);
+                expect(result[resultCollectionIndex]).toEqual(["a"]);
+
+                // Result contains a subset of the key
+                expect(await client.sadd(key1, numberMembers)).toEqual(
+                    numberMembers.length,
+                );
+
+                let resultCursor = "0";
+                let secondResultValues: string[] = [];
+
+                let isFirstLoop = true;
+
+                do {
+                    result = await client.sscan(key1, resultCursor);
+                    resultCursor = result[resultCursorIndex].toString();
+                    secondResultValues = result[resultCollectionIndex];
+
+                    if (isFirstLoop) {
+                        expect(resultCursor).not.toBe("0");
+                        isFirstLoop = false;
+                    } else if (resultCursor === initialCursor) {
+                        break;
+                    }
+
+                    // Scan with result cursor has a different set
+                    const secondResult = await client.sscan(key1, resultCursor);
+                    const newResultCursor =
+                        secondResult[resultCursorIndex].toString();
+                    expect(resultCursor).not.toBe(newResultCursor);
+                    resultCursor = newResultCursor;
+                    expect(result[resultCollectionIndex]).not.toBe(
+                        secondResult[resultCollectionIndex],
+                    );
+                    secondResultValues = secondResult[resultCollectionIndex];
+                } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
+
+                const allSecondResultValues = Object.keys(
+                    secondResultValues,
+                ).every((value) => value in numberMembersSet);
+                expect(allSecondResultValues).toEqual(true);
+
+                // Test match pattern
+                result = await client.sscan(key1, initialCursor, {
+                    match: "*",
+                });
+                expect(result[resultCursorIndex]).not.toEqual(initialCursor);
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(defaultCount);
+
+                // Test count
+                result = await client.sscan(key1, initialCursor, { count: 20 });
+                expect(result[resultCursorIndex]).not.toEqual(0);
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(20);
+
+                // Test count with match returns a non-empty list
+                result = await client.sscan(key1, initialCursor, {
+                    match: "1*",
+                    count: 30,
+                });
+                expect(result[resultCursorIndex]).not.toEqual(initialCursor);
+                expect(
+                    result[resultCollectionIndex].length,
+                ).toBeGreaterThanOrEqual(0);
             }, protocol);
         },
         config.timeout,

@@ -1021,6 +1021,23 @@ export function createSRem(
 /**
  * @internal
  */
+export function createSScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.SScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createSMembers(key: string): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }

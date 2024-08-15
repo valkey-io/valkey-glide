@@ -153,6 +153,7 @@ import {
     createSPop,
     createSRandMember,
     createSRem,
+    createSScan,
     createSUnion,
     createSUnionStore,
     createSet,
@@ -2353,6 +2354,50 @@ export class BaseClient {
      */
     public async srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
+    }
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see {@link https://valkey.io/commands/sscan} for details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - The (Optional) {@link BaseScanOptions}.
+     * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
+     * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     *
+     * @example
+     * ```typescript
+     * // Assume key contains a set with 200 members
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.sscan(key1, newCursor, {
+     *      match: "*",
+     *      count: 5,
+     * });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     *
+     * // The output of the code above is something similar to:
+     * // Cursor:  8, Match: "f*"
+     * // Members:  ['field', 'fur', 'fun', 'fame']
+     * // Cursor:  20, Count: 3
+     * // Members:  ['1', '2', '3', '4', '5', '6']
+     * // Cursor:  0
+     * // Members:  ['1', '2', '3', '4', '5', '6']
+     * ```
+     */
+    public async sscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createSScan(key, cursor, options));
     }
 
     /** Returns all the members of the set value stored at `key`.
