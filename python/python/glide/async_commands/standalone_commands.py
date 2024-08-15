@@ -395,6 +395,8 @@ class StandaloneCommands(CoreCommands):
         Returns information about the function that's currently running and information about the
         available execution engines.
 
+        FUNCTION STATS runs on all nodes of the cluster, including primary and replicas.  The response includes a mapping from node address to the command response for that node.
+
         See https://valkey.io/commands/function-stats/ for more details
 
         Returns:
@@ -406,24 +408,24 @@ class StandaloneCommands(CoreCommands):
         Examples:
             >>> await client.function_stats()
                 {b"addr": {                         # Response from the master node
-                    'running_script': {
-                        'name': 'foo',
-                        'command': ['FCALL', 'foo', '0', 'hello'],
-                        'duration_ms': 7758
+                    b'running_script': {
+                        b'name': b'foo',
+                        b'command': [b'FCALL', b'foo', b'0', b'hello'],
+                        b'duration_ms': 7758
                     },
-                    'engines': {
-                        'LUA': {
-                            'libraries_count': 1,
-                            'functions_count': 1,
+                    b'engines': {
+                        b'LUA': {
+                            b'libraries_count': 1,
+                            b'functions_count': 1,
                         }
                     }
                 },
                 b"addr2": {
-                    'running_script': None,
+                    b'running_script': None,        # Response from a replica
                     b"engines": {
-                        'LUA': {
-                            'libraries_count': 1,
-                            'functions_count': 1,
+                        b'LUA': {
+                            b'libraries_count': 1,
+                            b'functions_count': 1,
                         }
                     }
                 }}

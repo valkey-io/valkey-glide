@@ -315,17 +315,16 @@ impl StandaloneClient {
             Some(ResponsePolicy::Special) => {
                 // Await all futures and collect results
                 let results = future::try_join_all(requests).await?;
-                let map_entries = self
+                // Create key-value pairs where the key is the node address and the value is the corresponding result
+                let node_result_pairs = self
                     .inner
                     .nodes
                     .iter()
                     .zip(results)
-                    .map(|(node, result)| {
-                        (Value::BulkString(node.node_address().into()), result)
-                    })
+                    .map(|(node, result)| (Value::BulkString(node.node_address().into()), result))
                     .collect();
 
-                Ok(Value::Map(map_entries))
+                Ok(Value::Map(node_result_pairs))
             }
 
             None => {

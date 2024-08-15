@@ -1010,7 +1010,7 @@ fn convert_inner_map_by_type(
     key_type: Option<ExpectedReturnType>,
     value_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
-    let result = map
+    let result: Result<Vec<(Value, Value)>, redis::RedisError> = map
         .into_iter()
         .map(|(key, inner_value)| {
             Ok((
