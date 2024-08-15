@@ -403,7 +403,7 @@ export function createConfigSet(
  */
 export function createHGet(
     key: GlideString,
-    field: string,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
 }
@@ -3541,7 +3541,7 @@ export function createSetRange(
 /** @internal */
 export function createAppend(
     key: GlideString,
-    value: string,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.Append, [key, value]);
 }
