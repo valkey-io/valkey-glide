@@ -1026,9 +1026,11 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder
+        decoder?: Decoder,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createGetRange(key, start, end), { decoder: decoder });
+        return this.createWritePromise(createGetRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1114,7 +1116,10 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public async mget(keys: GlideString[], decoder?: Decoder): Promise<(GlideString | null)[]> {
+    public async mget(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<(GlideString | null)[]> {
         return this.createWritePromise(createMGet(keys), { decoder: decoder });
     }
 
@@ -1504,8 +1509,14 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async hget(key: GlideString, field: string, decoder?: Decoder): Promise<GlideString | null> {
-        return this.createWritePromise(createHGet(key, field), { decoder: decoder });
+    public async hget(
+        key: GlideString,
+        field: string,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHGet(key, field), {
+            decoder: decoder,
+        });
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -5861,7 +5872,8 @@ export class BaseClient {
      *     // new value of "Hello world" with a length of 11.
      * ```
      */
-    public async append(key: GlideString, value: string): Promise<number> {
+    public async append(key: GlideString, value: GlideString
+    ): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
     }
 
