@@ -4259,8 +4259,8 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for more details.
      *
-     * @param keys_and_ids - Pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - (Optional) Parameters detailing how to read the stream.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
      * @returns A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      *
      * @example
@@ -4293,8 +4293,8 @@ export class BaseClient {
      *
      * @param group - The consumer group name.
      * @param consumer - The group consumer.
-     * @param keys_and_ids - An object of stream keys and entry ids to read from.
-     *     Use the special entry id of `">"` to receive only new messages.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special entry ID of `">"` to receive only new messages.
      * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
      * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries. Returns `null` if there is no stream that can be served.
      *
