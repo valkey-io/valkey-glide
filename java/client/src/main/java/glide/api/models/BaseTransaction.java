@@ -5267,6 +5267,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
+     * @apiNote <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
      * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will

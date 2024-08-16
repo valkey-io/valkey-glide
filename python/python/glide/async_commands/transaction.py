@@ -2108,7 +2108,7 @@ class BaseTransaction:
 
         See https://valkey.io/commands/restore for more details.
 
-        Note: `IDELTIME` and `FREQ` modifiers cannot be set at the same time.
+        Note: `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
 
         Args:
             key (TEncodable): The `key` to create.

@@ -1126,6 +1126,7 @@ export class BaseClient {
      * serialized `value` (obtained via {@link dump}).
      *
      * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
      *
      * @param key - The `key` to create.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
