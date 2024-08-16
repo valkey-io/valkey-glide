@@ -91,6 +91,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHKeys,
     createHLen,
     createHMGet,
     createHRandField,
@@ -153,6 +154,7 @@ import {
     createSPop,
     createSRandMember,
     createSRem,
+    createSScan,
     createSUnion,
     createSUnionStore,
     createSet,
@@ -1486,7 +1488,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hget method on an-existing field
-     * await client.hset("my_hash", "field");
+     * await client.hset("my_hash", {"field": "value"});
      * const result = await client.hget("my_hash", "field");
      * console.log(result); // Output: "value"
      * ```
@@ -1514,7 +1516,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * // Example usage of the hset method
-     * const result = await client.hset("my_hash", \{"field": "value", "field2": "value2"\});
+     * const result = await client.hset("my_hash", {"field": "value", "field2": "value2"});
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
@@ -1523,6 +1525,26 @@ export class BaseClient {
         fieldValueMap: Record<string, string>,
     ): Promise<number> {
         return this.createWritePromise(createHSet(key, fieldValueMap));
+    }
+
+    /**
+     * Returns all field names in the hash stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     * @returns A list of field names for the hash, or an empty list when the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of the hkeys method:
+     * await client.hset("my_hash", {"field1": "value1", "field2": "value2", "field3": "value3"});
+     * const result = await client.hkeys("my_hash");
+     * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
+     * ```
+     */
+    public hkeys(key: string): Promise<string[]> {
+        return this.createWritePromise(createHKeys(key));
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -2353,6 +2375,50 @@ export class BaseClient {
      */
     public async srem(key: string, members: string[]): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
+    }
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see {@link https://valkey.io/commands/sscan} for details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - The (Optional) {@link BaseScanOptions}.
+     * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
+     * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     *
+     * @example
+     * ```typescript
+     * // Assume key contains a set with 200 members
+     * let newCursor = "0";
+     * let result = [];
+     *
+     * do {
+     *      result = await client.sscan(key1, newCursor, {
+     *      match: "*",
+     *      count: 5,
+     * });
+     *      newCursor = result[0];
+     *      console.log("Cursor: ", newCursor);
+     *      console.log("Members: ", result[1]);
+     * } while (newCursor !== "0");
+     *
+     * // The output of the code above is something similar to:
+     * // Cursor:  8, Match: "f*"
+     * // Members:  ['field', 'fur', 'fun', 'fame']
+     * // Cursor:  20, Count: 3
+     * // Members:  ['1', '2', '3', '4', '5', '6']
+     * // Cursor:  0
+     * // Members:  ['1', '2', '3', '4', '5', '6']
+     * ```
+     */
+    public async sscan(
+        key: string,
+        cursor: string,
+        options?: BaseScanOptions,
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createSScan(key, cursor, options));
     }
 
     /** Returns all the members of the set value stored at `key`.
@@ -5580,7 +5646,7 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
      * const result = await client.lcs("testKey1", "testKey2");
-     * console.log(result); // Output: 'cd'
+     * console.log(result); // Output: 'acd'
      * ```
      */
     public async lcs(key1: string, key2: string): Promise<string> {
@@ -5602,7 +5668,7 @@ export class BaseClient {
      * ```typescript
      * await client.mset({"testKey1": "abcd", "testKey2": "axcd"});
      * const result = await client.lcsLen("testKey1", "testKey2");
-     * console.log(result); // Output: 2
+     * console.log(result); // Output: 3
      * ```
      */
     public async lcsLen(key1: string, key2: string): Promise<number> {
@@ -5629,6 +5695,8 @@ export class BaseClient {
      *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by `key1` and `key2`.
+     *
+     *     See example for more details.
      *
      * @example
      * ```typescript

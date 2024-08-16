@@ -424,6 +424,13 @@ export function createHSet(
 /**
  * @internal
  */
+export function createHKeys(key: string): command_request.Command {
+    return createCommand(RequestType.HKeys, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createHSetNX(
     key: string,
     field: string,
@@ -1016,6 +1023,23 @@ export function createSRem(
     members: string[],
 ): command_request.Command {
     return createCommand(RequestType.SRem, [key].concat(members));
+}
+
+/**
+ * @internal
+ */
+export function createSScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.SScan, args);
 }
 
 /**

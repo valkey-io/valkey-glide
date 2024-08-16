@@ -116,6 +116,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHKeys,
     createHLen,
     createHMGet,
     createHRandField,
@@ -187,6 +188,7 @@ import {
     createSPop,
     createSRandMember,
     createSRem,
+    createSScan,
     createSUnion,
     createSUnionStore,
     createSelect,
@@ -742,6 +744,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createHSet(key, fieldValueMap));
     }
 
+    /**
+     * Returns all field names in the hash stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
+     */
+    public hkeys(key: string): T {
+        return this.addAndReturn(createHKeys(key));
+    }
+
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
      * If `key` does not exist, a new key holding a hash is created.
      * If `field` already exists, this operation has no effect.
@@ -1224,6 +1239,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public srem(key: string, members: string[]): T {
         return this.addAndReturn(createSRem(key, members));
+    }
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see {@link https://valkey.io/commands/sscan} for details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - The (Optional) {@link BaseScanOptions}.
+     *
+     * Command Response -  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
+     * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     */
+    public sscan(key: string, cursor: string, options?: BaseScanOptions): T {
+        return this.addAndReturn(createSScan(key, cursor, options));
     }
 
     /** Returns all the members of the set value stored at `key`.
@@ -3318,6 +3349,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by `key1` and `key2`.
+     *
+     *     See example of {@link BaseClient.lcsIdx|lcsIdx} for more details.
      */
     public lcsIdx(
         key1: string,
