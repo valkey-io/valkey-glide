@@ -371,12 +371,8 @@ describe("GlideClusterClient", () => {
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
-                client.zinter(["abc", "zxy", "lkn"]),
-                client.zinterWithScores(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
-                client.zunion(["abc", "zxy", "lkn"]),
-                client.zunionWithScores(["abc", "zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
@@ -411,6 +407,10 @@ describe("GlideClusterClient", () => {
                         { radius: 5, unit: GeoUnit.METERS },
                     ),
                     client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
+                    client.zinter(["abc", "zxy", "lkn"]),
+                    client.zinterWithScores(["abc", "zxy", "lkn"]),
+                    client.zunion(["abc", "zxy", "lkn"]),
+                    client.zunionWithScores(["abc", "zxy", "lkn"]),
                 );
             }
 
