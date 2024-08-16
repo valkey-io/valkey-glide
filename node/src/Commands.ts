@@ -2813,11 +2813,12 @@ export function createDump(key: GlideString): command_request.Command {
 /** Optional arguments for `RESTORE` command. */
 export type RestoreOptions = {
     /**
-     * Set to `True` to replace the key if it exists.
+     * Set to `true` to replace the key if it exists.
      */
     replace?: boolean;
     /**
-     * Set to `True` to specify that `ttl` represents an absolute Unix timestamp (in milliseconds).
+     * Set to `true` to specify that `ttl` argument of {@link BaseClient.restore} represents
+     * an absolute Unix timestamp (in milliseconds).
      */
     absttl?: boolean;
     /**

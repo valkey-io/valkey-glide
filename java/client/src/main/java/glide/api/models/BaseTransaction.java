@@ -5231,7 +5231,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
      * @param key The <code>key</code> to serialize.
-     * @return The serialized value of the data stored at <code>key</code>.<br>
+     * @return Command Response - The serialized value of the data stored at <code>key</code>.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      */
     public <ArgType> T dump(@NonNull ArgType key) {

@@ -5774,13 +5774,9 @@ export function runBaseTests<Context>(config: {
                     );
 
                     // Restore to an existing key
-                    try {
-                        expect(await client.restore(key2, 0, data)).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message).toMatch(
-                            "BUSYKEY: Target key name already exists.",
-                        );
-                    }
+                    await expect(client.restore(key2, 0, data)).rejects.toThrow(
+                        "BUSYKEY: Target key name already exists.",
+                    );
 
                     // Restore with `REPLACE` and existing key holding different value
                     expect(await client.sadd(key3, ["a"])).toEqual(1);
@@ -5802,18 +5798,12 @@ export function runBaseTests<Context>(config: {
                     ).toEqual("OK");
 
                     // Restore with `REPLACE`, `ABSTTL`, and negative TTL
-                    try {
-                        expect(
-                            await client.restore(key2, -10, data, {
-                                replace: true,
-                                absttl: true,
-                            }),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message).toMatch(
-                            "ResponseError: Invalid TTL value",
-                        );
-                    }
+                    await expect(
+                        client.restore(key2, -10, data, {
+                            replace: true,
+                            absttl: true,
+                        }),
+                    ).rejects.toThrow("Invalid TTL value");
 
                     // Restore with REPLACE and positive idletime
                     expect(
@@ -5824,18 +5814,12 @@ export function runBaseTests<Context>(config: {
                     ).toEqual("OK");
 
                     // Restore with REPLACE and negative idletime
-                    try {
-                        expect(
-                            await client.restore(key2, 0, data, {
-                                replace: true,
-                                idletime: -10,
-                            }),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message).toMatch(
-                            "ResponseError: Invalid IDLETIME value",
-                        );
-                    }
+                    await expect(
+                        client.restore(key2, 0, data, {
+                            replace: true,
+                            idletime: -10,
+                        }),
+                    ).rejects.toThrow("Invalid IDLETIME value");
 
                     // Restore with REPLACE and positive frequency
                     expect(
@@ -5846,48 +5830,28 @@ export function runBaseTests<Context>(config: {
                     ).toEqual("OK");
 
                     // Restore with REPLACE and negative frequency
-                    try {
-                        expect(
-                            await client.restore(key2, 0, data, {
-                                replace: true,
-                                frequency: -10,
-                            }),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message).toMatch(
-                            "ResponseError: Invalid FREQ value",
-                        );
-                    }
+                    await expect(
+                        client.restore(key2, 0, data, {
+                            replace: true,
+                            frequency: -10,
+                        }),
+                    ).rejects.toThrow("Invalid FREQ value");
 
                     // Restore only uses IDLETIME or FREQ modifiers
                     // Error will be raised if both options are set
-                    try {
-                        expect(
-                            await client.restore(key2, 0, data, {
-                                replace: true,
-                                idletime: 10,
-                                frequency: 10,
-                            }),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message).toMatch(
-                            "ResponseError: syntax error",
-                        );
-                    }
+                    await expect(
+                        client.restore(key2, 0, data, {
+                            replace: true,
+                            idletime: 10,
+                            frequency: 10,
+                        }),
+                    ).rejects.toThrow("syntax error");
                 }
 
                 // Restore with checksumto error
-                try {
-                    expect(
-                        await client.restore(key2, 0, valueEncode, {
-                            replace: true,
-                        }),
-                    ).toThrow();
-                } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "ResponseError: DUMP payload version or checksum are wrong",
-                    );
-                }
+                await expect(
+                    client.restore(key2, 0, valueEncode, { replace: true }),
+                ).rejects.toThrow("DUMP payload version or checksum are wrong");
             }, protocol);
         },
         config.timeout,
