@@ -5272,8 +5272,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
      * @param value The serialized value to deserialize and assign to <code>key</code>.
-     * @param restoreOptions The restore options. See {@link RestoreOptions}. <code>IDELTIME</code>
-     *     and <code>FREQ</code> modifiers cannot be set at the same time.
+     * @param restoreOptions The restore options. See {@link RestoreOptions}.
      * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
      *     restored with a <code>value</code>.
      */

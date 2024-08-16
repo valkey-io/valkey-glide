@@ -2810,7 +2810,12 @@ export function createDump(key: GlideString): command_request.Command {
     return createCommand(RequestType.Dump, [key]);
 }
 
-/** Optional arguments for `RESTORE` command. */
+/**
+ * Optional arguments for `RESTORE` command.
+ *
+ * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+ * @remarks `IDELTIME` and `FREQ` modifiers cannot be set at the same time.
+ */
 export type RestoreOptions = {
     /**
      * Set to `true` to replace the key if it exists.

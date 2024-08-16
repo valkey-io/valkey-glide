@@ -11,9 +11,10 @@ import lombok.*;
 
 /**
  * Optional arguments to {@link GenericBaseCommands#restore(GlideString, long, byte[],
- * RestoreOptions)}
+ * RestoreOptions)}.
  *
  * @see <a href="https://valkey.io/commands/restore/">valkey.io</a>
+ * @apiNote <code>IDELTIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
  */
 @Getter
 @Builder

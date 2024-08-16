@@ -1131,7 +1131,6 @@ export class BaseClient {
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
      * @param value - The serialized value to deserialize and assign to `key`.
      * @param options - (Optional) Restore options {@link RestoreOptions}.
-     *     `IDELTIME` and `FREQ` modifiers cannot be set at the same time.
      * @returns Return "OK" if the `key` was successfully restored with a `value`.
      *
      * @example
