@@ -5358,6 +5358,7 @@ export function runBaseTests<Context>(config: {
                 const group = uuidv4();
                 const consumer = uuidv4();
 
+                // setup data
                 expect(
                     await client.xgroupCreate(key1, group, "0", {
                         mkStream: true,

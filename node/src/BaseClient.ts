@@ -4176,7 +4176,7 @@ export class BaseClient {
      * @param consumer - The group consumer.
      * @param keys_and_ids - An object of stream keys and entry ids to read from.
      *     Use the special entry id of `">"` to receive only new messages.
-     * @param options - (Optional) Parameters detailing how to read the stream.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
      * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries. Returns `null` if there is no stream that can be served.
      *
      * @example

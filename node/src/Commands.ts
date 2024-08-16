@@ -2360,6 +2360,7 @@ export type StreamReadGroupOptions = StreamReadOptions & {
     noAck?: boolean;
 };
 
+/** @internal */
 function addReadOptions(options: StreamReadOptions): string[] {
     const args = [];
 
@@ -2376,18 +2377,13 @@ function addReadOptions(options: StreamReadOptions): string[] {
     return args;
 }
 
+/** @internal */
 function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
-    const args = ["STREAMS"];
-
-    for (const key of Object.keys(keys_and_ids)) {
-        args.push(key);
-    }
-
-    for (const id of Object.values(keys_and_ids)) {
-        args.push(id);
-    }
-
-    return args;
+    return [
+        "STREAMS",
+        ...Object.keys(keys_and_ids),
+        ...Object.values(keys_and_ids),
+    ];
 }
 
 /**
@@ -2403,7 +2399,7 @@ export function createXRead(
         args = addReadOptions(options);
     }
 
-    args = args.concat(addStreamsArgs(keys_and_ids));
+    args.push(...addStreamsArgs(keys_and_ids));
 
     return createCommand(RequestType.XRead, args);
 }
@@ -2415,14 +2411,14 @@ export function createXReadGroup(
     keys_and_ids: Record<string, string>,
     options?: StreamReadGroupOptions,
 ): command_request.Command {
-    let args: string[] = ["GROUP", group, consumer];
+    const args: string[] = ["GROUP", group, consumer];
 
     if (options) {
-        args = args.concat(addReadOptions(options));
+        args.push(...addReadOptions(options));
         if (options.noAck) args.push("NOACK");
     }
 
-    args = args.concat(addStreamsArgs(keys_and_ids));
+    args.push(...addStreamsArgs(keys_and_ids));
 
     return createCommand(RequestType.XReadGroup, args);
 }

@@ -2387,7 +2387,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param consumer - The group consumer.
      * @param keys_and_ids - Pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      *     Use the special id of `">"` to receive only new messages.
-     * @param options - (Optional) Parameters detailing how to read the stream.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
      *
      * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
