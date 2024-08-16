@@ -392,25 +392,11 @@ export class GlideClusterClient extends BaseClient {
             decoder?: Decoder;
         },
     ): Promise<ReturnType[] | null> {
-        if (
-            options?.decoder == Decoder.String &&
-            transaction.requiresBinaryDecorer
-        ) {
-            throw new RequestError(
-                "Transaction has a command which requres `Decoder.Bytes`.",
-            );
-        }
-
-        const decoder =
-            options?.decoder ??
-            (transaction.requiresBinaryDecorer
-                ? Decoder.Bytes
-                : this.defaultDecoder);
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             {
                 route: toProtobufRoute(options?.route),
-                decoder: decoder,
+                decoder: options?.decoder,
             },
         ).then((result) =>
             this.processResultWithSetCommands(

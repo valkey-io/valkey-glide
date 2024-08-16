@@ -54,7 +54,6 @@ import {
     createTime,
     createUnWatch,
 } from "./Commands";
-import { RequestError } from "./Errors";
 import { connection_request } from "./ProtobufMessage";
 import { Transaction } from "./Transaction";
 
@@ -190,17 +189,6 @@ export class GlideClient extends BaseClient {
         transaction: Transaction,
         decoder?: Decoder,
     ): Promise<ReturnType[] | null> {
-        if (decoder == Decoder.String && transaction.requiresBinaryDecorer) {
-            throw new RequestError(
-                "Transaction has a command which requres `Decoder.Bytes`.",
-            );
-        }
-
-        decoder =
-            decoder ??
-            (transaction.requiresBinaryDecorer
-                ? Decoder.Bytes
-                : this.defaultDecoder);
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             { decoder: decoder },

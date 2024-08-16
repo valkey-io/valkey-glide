@@ -28,7 +28,6 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionRestorePolicy,
     FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -96,11 +95,9 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
-    createFunctionDump,
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
-    createFunctionRestore,
     createFunctionStats,
     createGeoAdd,
     createGeoDist,
@@ -279,12 +276,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @internal
      */
     readonly setCommandsIndexes: number[] = [];
-
-    /**
-     * Flag to be set to `true` by a command if it requires {@link Decoder.Bytes}.
-     * @internal
-     */
-    requiresBinaryDecorer: boolean = false;
 
     /**
      * Adds a command to the transaction and returns the transaction instance.
@@ -2942,47 +2933,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public functionStats(): T {
         return this.addAndReturn(createFunctionStats());
-    }
-
-    /**
-     * Returns the serialized payload of all loaded libraries.
-     *
-     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @remarks This function requires {@link Decoder.Bytes} to be used in `exec` call for the current transaction.
-     *
-     * Command Response - The serialized payload of all loaded libraries.
-     *
-     * @example
-     * ```typescript
-     * const data = await client.functionDump();
-     * // data can be used to restore loaded functions on any Valkey instance
-     * ```
-     */
-    public functionDump(): T {
-        this.requiresBinaryDecorer = true;
-        return this.addAndReturn(createFunctionDump());
-    }
-
-    /**
-     * Restores libraries from the serialized payload returned by {@link functionDump}.
-     *
-     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
-     * @remarks Since Valkey version 7.0.0.
-     *
-     * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries.
-     *
-     * Command Response - `"OK"`.
-     *
-     * @example
-     * ```typescript
-     * await client.functionRestore(data, FunctionRestorePolicy.FLUSH);
-     * ```
-     */
-    public functionRestore(payload: Buffer, policy?: FunctionRestorePolicy): T {
-        return this.addAndReturn(createFunctionRestore(payload, policy));
     }
 
     /**
