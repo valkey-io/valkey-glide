@@ -2385,15 +2385,15 @@ export type StreamReadGroupOptions = StreamReadOptions & {
 };
 
 /** @internal */
-function addReadOptions(options: StreamReadOptions): string[] {
+function addReadOptions(options?: StreamReadOptions): string[] {
     const args = [];
 
-    if (options.count !== undefined) {
+    if (options?.count !== undefined) {
         args.push("COUNT");
         args.push(options.count.toString());
     }
 
-    if (options.block !== undefined) {
+    if (options?.block !== undefined) {
         args.push("BLOCK");
         args.push(options.block.toString());
     }
@@ -2417,12 +2417,7 @@ export function createXRead(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
 ): command_request.Command {
-    let args: string[] = [];
-
-    if (options) {
-        args = addReadOptions(options);
-    }
-
+    const args = addReadOptions(options);
     args.push(...addStreamsArgs(keys_and_ids));
 
     return createCommand(RequestType.XRead, args);
