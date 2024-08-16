@@ -34,7 +34,7 @@ import {
     GeoUnit,
     GeospatialData,
     InsertPosition,
-    KeyWeight, // eslint-disable-line @typescript-eslint/no-unused-vars
+    KeyWeight,
     LPosOptions,
     ListDirection,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -176,6 +176,7 @@ import {
     createXGroupDelConsumer,
     createXGroupDestroy,
     createXInfoConsumers,
+    createXInfoGroups,
     createXInfoStream,
     createXLen,
     createXPending,
@@ -4403,6 +4404,45 @@ export class BaseClient {
         group: string,
     ): Promise<Record<string, string | number>[]> {
         return this.createWritePromise(createXInfoConsumers(key, group));
+    }
+
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xinfo-groups/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @returns An array of maps, where each mapping represents the
+     *     attributes of a consumer group for the stream at `key`.
+     * @example
+     * ```typescript
+     *     <pre>{@code
+     * const result = await client.xinfoGroups("my_stream");
+     * console.log(result); // Output:
+     * // [
+     * //     {
+     * //         "name": "mygroup",
+     * //         "consumers": 2,
+     * //         "pending": 2,
+     * //         "last-delivered-id": "1638126030001-0",
+     * //         "entries-read": 2,                       // Added in version 7.0.0
+     * //         "lag": 0                                 // Added in version 7.0.0
+     * //     },
+     * //     {
+     * //         "name": "some-other-group",
+     * //         "consumers": 1,
+     * //         "pending": 0,
+     * //         "last-delivered-id": "0-0",
+     * //         "entries-read": null,                    // Added in version 7.0.0
+     * //         "lag": 1                                 // Added in version 7.0.0
+     * //     }
+     * // ]
+     * ```
+     */
+    public async xinfoGroups(
+        key: string,
+    ): Promise<Record<string, string | number | null>[]> {
+        return this.createWritePromise(createXInfoGroups(key));
     }
 
     /**

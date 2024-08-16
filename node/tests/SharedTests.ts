@@ -5570,7 +5570,6 @@ export function runBaseTests<Context>(config: {
                     "last-entry": (string | number | string[])[];
                     groups: number;
                 };
-                console.log(result);
 
                 // verify result:
                 expect(result.length).toEqual(1);
@@ -8227,6 +8226,197 @@ export function runBaseTests<Context>(config: {
                 expect(await client.xinfoConsumers(key2, groupName1)).toEqual(
                     [],
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xinfogroups xinfo groups %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key = uuidv4();
+                const stringKey = uuidv4();
+                const groupName1 = uuidv4();
+                const consumer1 = uuidv4();
+                const streamId1 = "0-1";
+                const streamId2 = "0-2";
+                const streamId3 = "0-3";
+
+                expect(
+                    await client.xgroupCreate(key, groupName1, "0-0", {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+
+                // one empty group exists
+                expect(await client.xinfoGroups(key)).toEqual(
+                    cluster.checkIfServerVersionLessThan("7.0.0")
+                        ? [
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                              },
+                          ]
+                        : [
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                                  "entries-read": null,
+                                  lag: 0,
+                              },
+                          ],
+                );
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["entry1_field1", "entry1_value1"],
+                            ["entry1_field2", "entry1_value2"],
+                        ],
+                        { id: streamId1 },
+                    ),
+                ).toEqual(streamId1);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [
+                            ["entry2_field1", "entry2_value1"],
+                            ["entry2_field2", "entry2_value2"],
+                        ],
+                        { id: streamId2 },
+                    ),
+                ).toEqual(streamId2);
+
+                expect(
+                    await client.xadd(
+                        key,
+                        [["entry3_field1", "entry3_value1"]],
+                        { id: streamId3 },
+                    ),
+                ).toEqual(streamId3);
+
+                // same as previous check, bug lag = 3, there are 3 messages unread
+                expect(await client.xinfoGroups(key)).toEqual(
+                    cluster.checkIfServerVersionLessThan("7.0.0")
+                        ? [
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                              },
+                          ]
+                        : [
+                              {
+                                  name: groupName1,
+                                  consumers: 0,
+                                  pending: 0,
+                                  "last-delivered-id": "0-0",
+                                  "entries-read": null,
+                                  lag: 3,
+                              },
+                          ],
+                );
+
+                expect(
+                    await client.customCommand([
+                        "XREADGROUP",
+                        "GROUP",
+                        groupName1,
+                        consumer1,
+                        "STREAMS",
+                        key,
+                        ">",
+                    ]),
+                ).toEqual({
+                    [key]: {
+                        [streamId1]: [
+                            ["entry1_field1", "entry1_value1"],
+                            ["entry1_field2", "entry1_value2"],
+                        ],
+                        [streamId2]: [
+                            ["entry2_field1", "entry2_value1"],
+                            ["entry2_field2", "entry2_value2"],
+                        ],
+                        [streamId3]: [["entry3_field1", "entry3_value1"]],
+                    },
+                });
+                // after reading, `lag` is reset, and `pending`, consumer count and last ID are set
+                expect(await client.xinfoGroups(key)).toEqual(
+                    cluster.checkIfServerVersionLessThan("7.0.0")
+                        ? [
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 3,
+                                  "last-delivered-id": streamId3,
+                              },
+                          ]
+                        : [
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 3,
+                                  "last-delivered-id": streamId3,
+                                  "entries-read": 3,
+                                  lag: 0,
+                              },
+                          ],
+                );
+
+                expect(
+                    await client.customCommand([
+                        "XACK",
+                        key,
+                        groupName1,
+                        streamId1,
+                    ]),
+                ).toEqual(1);
+                // once message ack'ed, pending counter decreased
+                expect(await client.xinfoGroups(key)).toEqual(
+                    cluster.checkIfServerVersionLessThan("7.0.0")
+                        ? [
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 2,
+                                  "last-delivered-id": streamId3,
+                              },
+                          ]
+                        : [
+                              {
+                                  name: groupName1,
+                                  consumers: 1,
+                                  pending: 2,
+                                  "last-delivered-id": streamId3,
+                                  "entries-read": 3,
+                                  lag: 0,
+                              },
+                          ],
+                );
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(client.xinfoGroups(stringKey)).rejects.toThrow(
+                    RequestError,
+                );
+
+                // Passing a non-existing key raises an error
+                const key2 = uuidv4();
+                await expect(client.xinfoGroups(key2)).rejects.toThrow(
+                    RequestError,
+                );
+                // create a second stream
+                await client.xadd(key2, [["a", "b"]]);
+                // no group yet exists
+                expect(await client.xinfoGroups(key2)).toEqual([]);
             }, protocol);
         },
         config.timeout,
