@@ -1129,7 +1129,7 @@ export class BaseClient {
      *
      * @param key - The `key` to create.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
-     * @param value - The serialized value to deserialize and assign to `key`
+     * @param value - The serialized value to deserialize and assign to `key`.
      * @param options - (Optional) Restore options {@link RestoreOptions}.
      * @returns Return "OK" if the `key` was successfully restored with a `value`.
      *

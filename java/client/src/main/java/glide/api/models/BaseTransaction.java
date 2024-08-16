@@ -5230,9 +5230,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
-     * @param key The key of the set.
-     * @return Command Response - The serialized value of a set. If <code>key</code> does not exist,
-     *     <code>null</code> will be returned.
+     * @param key The <code>key</code> to serialize.
+     * @return The serialized value of the data stored at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
      */
     public <ArgType> T dump(@NonNull ArgType key) {
         checkTypeOrThrow(key);
@@ -5247,12 +5247,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
-     * @param value The serialized value.
-     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
-     *     with a <code>value</code>.
+     * @param value The serialized value to deserialize and assign to <code>key</code>.
+     * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
+     *     restored with a <code>value</code>.
      */
     public <ArgType> T restore(@NonNull ArgType key, long ttl, @NonNull byte[] value) {
         checkTypeOrThrow(key);
@@ -5268,13 +5268,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
-     * @param value The serialized value.
+     * @param value The serialized value to deserialize and assign to <code>key</code>.
      * @param restoreOptions The restore options. See {@link RestoreOptions}.
-     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
-     *     with a <code>value</code>.
+     * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
+     *     restored with a <code>value</code>.
      */
     public <ArgType> T restore(
             @NonNull ArgType key,
