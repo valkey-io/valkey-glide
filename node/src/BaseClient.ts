@@ -1164,7 +1164,10 @@ export class BaseClient {
         value: Buffer,
         options?: RestoreOptions,
     ): Promise<"OK"> {
-        return this.createWritePromise(createRestore(key, ttl, value, options));
+        return this.createWritePromise(
+            createRestore(key, ttl, value, options),
+            { decoder: Decoder.String },
+        );
     }
 
     /** Retrieve the values of multiple keys.
