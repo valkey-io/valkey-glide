@@ -92,14 +92,14 @@ function createCommand(
 /**
  * @internal
  */
-export function createGet(key: string): command_request.Command {
+export function createGet(key: GlideString): command_request.Command {
     return createCommand(RequestType.Get, [key]);
 }
 
 /**
  * @internal
  */
-export function createGetDel(key: string): command_request.Command {
+export function createGetDel(key: GlideString): command_request.Command {
     return createCommand(RequestType.GetDel, [key]);
 }
 
@@ -142,26 +142,7 @@ export type SetOptions = {
      */
     | "keepExisting"
         | {
-              type: /**
-               * Set the specified expire time, in seconds. Equivalent to
-               * `EX` in the Redis API.
-               */
-              | "seconds"
-                  /**
-                   * Set the specified expire time, in milliseconds. Equivalent
-                   * to `PX` in the Redis API.
-                   */
-                  | "milliseconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in seconds. Equivalent to `EXAT` in the Redis API.
-                   */
-                  | "unixSeconds"
-                  /**
-                   * Set the specified Unix time at which the key will expire,
-                   * in milliseconds. Equivalent to `PXAT` in the Redis API.
-                   */
-                  | "unixMilliseconds";
+              type: TimeUnit;
               count: number;
           };
 };
@@ -187,28 +168,23 @@ export function createSet(
             args.push("GET");
         }
 
-        if (
-            options.expiry &&
-            options.expiry !== "keepExisting" &&
-            !Number.isInteger(options.expiry.count)
-        ) {
-            throw new Error(
-                `Received expiry '${JSON.stringify(
-                    options.expiry,
-                )}'. Count must be an integer`,
-            );
-        }
+        if (options.expiry) {
+            if (
+                options.expiry !== "keepExisting" &&
+                !Number.isInteger(options.expiry.count)
+            ) {
+                throw new Error(
+                    `Received expiry '${JSON.stringify(
+                        options.expiry,
+                    )}'. Count must be an integer`,
+                );
+            }
 
-        if (options.expiry === "keepExisting") {
-            args.push("KEEPTTL");
-        } else if (options.expiry?.type === "seconds") {
-            args.push("EX", options.expiry.count.toString());
-        } else if (options.expiry?.type === "milliseconds") {
-            args.push("PX", options.expiry.count.toString());
-        } else if (options.expiry?.type === "unixSeconds") {
-            args.push("EXAT", options.expiry.count.toString());
-        } else if (options.expiry?.type === "unixMilliseconds") {
-            args.push("PXAT", options.expiry.count.toString());
+            if (options.expiry === "keepExisting") {
+                args.push("KEEPTTL");
+            } else {
+                args.push(options.expiry.type, options.expiry.count.toString());
+            }
         }
     }
 
@@ -293,8 +269,8 @@ export enum InfoOptions {
 /**
  * @internal
  */
-export function createPing(str?: string): command_request.Command {
-    const args: string[] = str == undefined ? [] : [str];
+export function createPing(str?: GlideString): command_request.Command {
+    const args: GlideString[] = str == undefined ? [] : [str];
     return createCommand(RequestType.Ping, args);
 }
 
@@ -443,6 +419,13 @@ export function createHSet(
         RequestType.HSet,
         [key].concat(Object.entries(fieldValueMap).flat()),
     );
+}
+
+/**
+ * @internal
+ */
+export function createHKeys(key: string): command_request.Command {
+    return createCommand(RequestType.HKeys, [key]);
 }
 
 /**
@@ -1045,6 +1028,23 @@ export function createSRem(
 /**
  * @internal
  */
+export function createSScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.SScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createSMembers(key: string): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }
@@ -1542,35 +1542,35 @@ export function createZMScore(
     return createCommand(RequestType.ZMScore, [key, ...members]);
 }
 
-export enum InfScoreBoundary {
+export enum InfBoundary {
     /**
-     * Positive infinity bound for sorted set.
+     * Positive infinity bound.
      */
     PositiveInfinity = "+",
     /**
-     * Negative infinity bound for sorted set.
+     * Negative infinity bound.
      */
     NegativeInfinity = "-",
 }
 
 /**
- * Defines where to insert new elements into a list.
+ * Defines the boundaries of a range.
  */
-export type ScoreBoundary<T> =
+export type Boundary<T> =
     /**
-     *  Represents an lower/upper boundary in a sorted set.
+     *  Represents an lower/upper boundary.
      */
-    | InfScoreBoundary
+    | InfBoundary
     /**
-     *  Represents a specific numeric score boundary in a sorted set.
+     *  Represents a specific boundary.
      */
     | {
           /**
-           * The score value.
+           * The comparison value.
            */
           value: T;
           /**
-           * Whether the score value is inclusive. Defaults to True.
+           * Whether the value is inclusive. Defaults to `true`.
            */
           isInclusive?: boolean;
       };
@@ -1598,11 +1598,11 @@ type SortedSetRange<T> = {
     /**
      * The start boundary.
      */
-    start: ScoreBoundary<T>;
+    start: Boundary<T>;
     /**
      * The stop boundary.
      */
-    stop: ScoreBoundary<T>;
+    stop: Boundary<T>;
     /**
      * The limit argument for a range query.
      * Represents a limit argument for a range query in a sorted set to
@@ -1629,10 +1629,10 @@ export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
 /** Returns a string representation of a score boundary as a command argument. */
 function getScoreBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
+    score: Boundary<number> | Boundary<string>,
 ): string {
     if (typeof score === "string") {
-        // InfScoreBoundary
+        // InfBoundary
         return score + "inf";
     }
 
@@ -1644,11 +1644,9 @@ function getScoreBoundaryArg(
 }
 
 /** Returns a string representation of a lex boundary as a command argument. */
-function getLexBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
-): string {
+function getLexBoundaryArg(score: Boundary<number> | Boundary<string>): string {
     if (typeof score === "string") {
-        // InfScoreBoundary
+        // InfBoundary
         return score;
     }
 
@@ -1661,18 +1659,18 @@ function getLexBoundaryArg(
 
 /** Returns a string representation of a stream boundary as a command argument. */
 function getStreamBoundaryArg(
-    score: ScoreBoundary<number> | ScoreBoundary<string>,
+    boundary: Boundary<number> | Boundary<string>,
 ): string {
-    if (typeof score === "string") {
-        // InfScoreBoundary
-        return score;
+    if (typeof boundary === "string") {
+        // InfBoundary
+        return boundary;
     }
 
-    if (score.isInclusive == false) {
-        return "(" + score.value.toString();
+    if (boundary.isInclusive == false) {
+        return "(" + boundary.value.toString();
     }
 
-    return score.value.toString();
+    return boundary.value.toString();
 }
 
 function createZRangeArgs(
@@ -1728,8 +1726,8 @@ function createZRangeArgs(
  */
 export function createZCount(
     key: string,
-    minScore: ScoreBoundary<number>,
-    maxScore: ScoreBoundary<number>,
+    minScore: Boundary<number>,
+    maxScore: Boundary<number>,
 ): command_request.Command {
     const args = [
         key,
@@ -1885,8 +1883,8 @@ export function createZRemRangeByRank(
  */
 export function createZRemRangeByLex(
     key: string,
-    minLex: ScoreBoundary<string>,
-    maxLex: ScoreBoundary<string>,
+    minLex: Boundary<string>,
+    maxLex: Boundary<string>,
 ): command_request.Command {
     const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZRemRangeByLex, args);
@@ -1897,8 +1895,8 @@ export function createZRemRangeByLex(
  */
 export function createZRemRangeByScore(
     key: string,
-    minScore: ScoreBoundary<number>,
-    maxScore: ScoreBoundary<number>,
+    minScore: Boundary<number>,
+    maxScore: Boundary<number>,
 ): command_request.Command {
     const args = [
         key,
@@ -1918,8 +1916,8 @@ export function createPersist(key: string): command_request.Command {
  */
 export function createZLexCount(
     key: string,
-    minLex: ScoreBoundary<string>,
-    maxLex: ScoreBoundary<string>,
+    minLex: Boundary<string>,
+    maxLex: Boundary<string>,
 ): command_request.Command {
     const args = [key, getLexBoundaryArg(minLex), getLexBoundaryArg(maxLex)];
     return createCommand(RequestType.ZLexCount, args);
@@ -2062,6 +2060,25 @@ export function createXTrim(
     const args = [key];
     addTrimOptions(options, args);
     return createCommand(RequestType.XTrim, args);
+}
+
+/**
+ * @internal
+ */
+export function createXRange(
+    key: string,
+    start: Boundary<string>,
+    end: Boundary<string>,
+    count?: number,
+): command_request.Command {
+    const args = [key, getStreamBoundaryArg(start), getStreamBoundaryArg(end)];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.XRange, args);
 }
 
 /**
@@ -2238,6 +2255,11 @@ export type FunctionStatsResponse = Record<
 /** @internal */
 export function createFunctionStats(): command_request.Command {
     return createCommand(RequestType.FunctionStats, []);
+}
+
+/** @internal */
+export function createFunctionKill(): command_request.Command {
+    return createCommand(RequestType.FunctionKill, []);
 }
 
 /**
@@ -2448,9 +2470,9 @@ export type StreamPendingOptions = {
     /** Filter pending entries by their idle time - in milliseconds */
     minIdleTime?: number;
     /** Starting stream ID bound for range. */
-    start: ScoreBoundary<string>;
+    start: Boundary<string>;
     /** Ending stream ID bound for range. */
-    end: ScoreBoundary<string>;
+    end: Boundary<string>;
     /** Limit the number of messages returned. */
     count: number;
     /** Filter pending entries by consumer. */
@@ -2518,9 +2540,6 @@ export type StreamClaimOptions = {
      * otherwise the IDs of non-existing messages are ignored.
      */
     isForce?: boolean;
-
-    /** The last ID of the entry which should be claimed. */
-    lastId?: string;
 };
 
 /** @internal */
@@ -2543,7 +2562,6 @@ export function createXClaim(
         if (options.retryCount !== undefined)
             args.push("RETRYCOUNT", options.retryCount.toString());
         if (options.isForce) args.push("FORCE");
-        if (options.lastId) args.push("LASTID", options.lastId);
     }
 
     if (justId) args.push("JUSTID");
@@ -3370,6 +3388,23 @@ export function createHRandField(
 /**
  * @internal
  */
+export function createHScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.HScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createZRandMember(
     key: string,
     count?: number,
@@ -3439,6 +3474,17 @@ export function createUnWatch(): command_request.Command {
     return createCommand(RequestType.UnWatch, []);
 }
 
+/** @internal */
+export function createWait(
+    numreplicas: number,
+    timeout: number,
+): command_request.Command {
+    return createCommand(RequestType.Wait, [
+        numreplicas.toString(),
+        timeout.toString(),
+    ]);
+}
+
 /**
  * This base class represents the common set of optional arguments for the SCAN family of commands.
  * Concrete implementations of this class are tied to specific SCAN commands (SCAN, HSCAN, SSCAN,
@@ -3464,6 +3510,23 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
+    const args: string[] = [];
+
+    if (options.match) {
+        args.push("MATCH", options.match);
+    }
+
+    if (options.count !== undefined) {
+        args.push("COUNT", options.count.toString());
+    }
+
+    return args;
+}
+
+/**
+ * @internal
+ */
 export function createZScan(
     key: string,
     cursor: string,
@@ -3472,13 +3535,7 @@ export function createZScan(
     let args: string[] = [key, cursor];
 
     if (options) {
-        if (options.match) {
-            args = args.concat("MATCH", options.match);
-        }
-
-        if (options.count !== undefined) {
-            args = args.concat("COUNT", options.count.toString());
-        }
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
     }
 
     return createCommand(RequestType.ZScan, args);
@@ -3604,4 +3661,58 @@ export function createBZPopMin(
     timeout: number,
 ): command_request.Command {
     return createCommand(RequestType.BZPopMin, [...keys, timeout.toString()]);
+}
+
+/**
+ * Time unit representation which is used in optional arguments for {@link BaseClient.getex|getex} and {@link BaseClient.set|set} command.
+ */
+export enum TimeUnit {
+    /**
+     * Set the specified expire time, in seconds. Equivalent to
+     * `EX` in the VALKEY API.
+     */
+    Seconds = "EX",
+    /**
+     * Set the specified expire time, in milliseconds. Equivalent
+     * to `PX` in the VALKEY API.
+     */
+    Milliseconds = "PX",
+    /**
+     * Set the specified Unix time at which the key will expire,
+     * in seconds. Equivalent to `EXAT` in the VALKEY API.
+     */
+    UnixSeconds = "EXAT",
+    /**
+     * Set the specified Unix time at which the key will expire,
+     * in milliseconds. Equivalent to `PXAT` in the VALKEY API.
+     */
+    UnixMilliseconds = "PXAT",
+}
+
+/**
+ * @internal
+ */
+export function createGetEx(
+    key: string,
+    options?: "persist" | { type: TimeUnit; duration: number },
+): command_request.Command {
+    const args = [key];
+
+    if (options) {
+        if (options !== "persist" && !Number.isInteger(options.duration)) {
+            throw new Error(
+                `Received expiry '${JSON.stringify(
+                    options.duration,
+                )}'. Count must be an integer`,
+            );
+        }
+
+        if (options === "persist") {
+            args.push("PERSIST");
+        } else {
+            args.push(options.type, options.duration.toString());
+        }
+    }
+
+    return createCommand(RequestType.GetEx, args);
 }
