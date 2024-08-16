@@ -179,6 +179,7 @@ import {
     createXPending,
     createXRange,
     createXRead,
+    createXRevRange,
     createXTrim,
     createZAdd,
     createZCard,
@@ -3081,7 +3082,7 @@ export class BaseClient {
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      *
      * @example
      * ```typescript
@@ -3102,6 +3103,46 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
+    }
+
+    /**
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to `XRANGE` but returns the
+     * entries in reverse order.
+     *
+     * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param start - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     *
+     * @example
+     * ```typescript
+     * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
+     * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
+     * console.log(await client.xrevrange("mystream", InfBoundary.PositiveInfinity, InfBoundary.NegativeInfinity));
+     * // Output:
+     * // {
+     * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
+     * //     "0-1": [["field1", "value1"]],
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * ```
+     */
+    public async xrevrange(
+        key: string,
+        end: Boundary<string>,
+        start: Boundary<string>,
+        count?: number,
+    ): Promise<Record<string, [string, string][]> | null> {
+        return this.createWritePromise(createXRevRange(key, end, start, count));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.

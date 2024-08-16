@@ -4988,7 +4988,7 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `xrange test_%p`,
+        `xrange and xrevrange test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
@@ -5018,12 +5018,31 @@ export function runBaseTests<Context>(config: {
                     [streamId2]: [["f2", "v2"]],
                 });
 
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                    ),
+                ).toEqual({
+                    [streamId2]: [["f2", "v2"]],
+                    [streamId1]: [["f1", "v1"]],
+                });
+
                 // returns empty mapping if + before -
                 expect(
                     await client.xrange(
                         key,
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
+                    ),
+                ).toEqual({});
+                // rev search returns empty mapping if - before +
+                expect(
+                    await client.xrange(
+                        key,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual({});
 
@@ -5041,9 +5060,18 @@ export function runBaseTests<Context>(config: {
                             1,
                         ),
                     ).toEqual({ [streamId3]: [["f3", "v3"]] });
+
+                    expect(
+                        await client.xrevrange(
+                            key,
+                            { value: "5" },
+                            { isInclusive: false, value: streamId2 },
+                            1,
+                        ),
+                    ).toEqual({ [streamId3]: [["f3", "v3"]] });
                 }
 
-                // xrange against an emptied stream
+                // xrange/xrevrange against an emptied stream
                 expect(
                     await client.xdel(key, [streamId1, streamId2, streamId3]),
                 ).toEqual(3);
@@ -5055,12 +5083,27 @@ export function runBaseTests<Context>(config: {
                         10,
                     ),
                 ).toEqual({});
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        10,
+                    ),
+                ).toEqual({});
 
                 expect(
                     await client.xrange(
                         nonExistingKey,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
+                    ),
+                ).toEqual({});
+                expect(
+                    await client.xrevrange(
+                        nonExistingKey,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual({});
 
@@ -5081,6 +5124,22 @@ export function runBaseTests<Context>(config: {
                         -1,
                     ),
                 ).toEqual(null);
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        0,
+                    ),
+                ).toEqual(null);
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        -1,
+                    ),
+                ).toEqual(null);
 
                 // key exists, but it is not a stream
                 expect(await client.set(stringKey, "foo"));
@@ -5089,6 +5148,13 @@ export function runBaseTests<Context>(config: {
                         stringKey,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
+                    ),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xrevrange(
+                        stringKey,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
 
@@ -5100,12 +5166,26 @@ export function runBaseTests<Context>(config: {
                         InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xrevrange(key, InfBoundary.PositiveInfinity, {
+                        value: "not_a_stream_id",
+                    }),
+                ).rejects.toThrow(RequestError);
 
                 // invalid end bound
                 await expect(
                     client.xrange(key, InfBoundary.NegativeInfinity, {
                         value: "not_a_stream_id",
                     }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xrevrange(
+                        key,
+                        {
+                            value: "not_a_stream_id",
+                        },
+                        InfBoundary.NegativeInfinity,
+                    ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
         },
