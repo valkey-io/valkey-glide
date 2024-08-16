@@ -24,6 +24,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideString,
     InfBoundary,
     InsertPosition,
     ListDirection,
@@ -130,8 +131,8 @@ export function checkSimple(left: any): Checker {
 }
 
 export type Client = {
-    set: (key: string, value: string) => Promise<string | "OK" | null>;
-    get: (key: string) => Promise<string | null>;
+    set: (key: string, value: string) => Promise<GlideString | "OK" | null>;
+    get: (key: string) => Promise<GlideString | null>;
 };
 
 export async function GetAndSetRandomValue(client: Client) {
@@ -743,6 +744,8 @@ export async function transactionTest(
     responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
     responseData.push(["hvals(key4)", [value]]);
+    baseTransaction.hkeys(key4);
+    responseData.push(["hkeys(key4)", [field]]);
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
@@ -880,6 +883,13 @@ export async function transactionTest(
     responseData.push(["sdiffstore(key7, [key7])", 2]);
     baseTransaction.srem(key7, ["foo"]);
     responseData.push(['srem(key7, ["foo"])', 1]);
+    baseTransaction.sscan(key7, "0");
+    responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
+    baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
+    responseData.push([
+        'sscan(key7, "0", {match: "*", count: 20})',
+        ["0", ["bar"]],
+    ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
     baseTransaction.sismember(key7, "bar");

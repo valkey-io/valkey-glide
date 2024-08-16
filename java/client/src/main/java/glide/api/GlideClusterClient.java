@@ -107,10 +107,26 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull GlideString[] args) {
+        // TODO if a command returns a map as a single value, ClusterValue misleads user
+        return commandManager.submitNewCommand(
+                CustomCommand,
+                args,
+                response -> ClusterValue.of(handleBinaryObjectOrNullResponse(response)));
+    }
+
+    @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(
             @NonNull String[] args, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 CustomCommand, args, route, response -> handleCustomCommandResponse(route, response));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> customCommand(
+            @NonNull GlideString[] args, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                CustomCommand, args, route, response -> handleCustomCommandBinaryResponse(route, response));
     }
 
     protected ClusterValue<Object> handleCustomCommandResponse(Route route, Response response) {
@@ -121,6 +137,16 @@ public class GlideClusterClient extends BaseClient
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
         return ClusterValue.ofMultiValue(handleMapResponse(response));
+    }
+
+    protected ClusterValue<Object> handleCustomCommandBinaryResponse(Route route, Response response) {
+        if (route instanceof SingleNodeRoute) {
+            return ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response));
+        }
+        if (response.hasConstantResponse()) {
+            return ClusterValue.ofSingleValue(handleStringResponse(response));
+        }
+        return ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response));
     }
 
     @Override
