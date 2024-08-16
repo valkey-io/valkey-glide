@@ -372,7 +372,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Execute a transaction by processing the queued commands.
      *
-     * @see {@link https://redis.io/topics/Transactions/|Valkey Glide Wiki} for details on Redis Transactions.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
      * @param route - (Optional) If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.

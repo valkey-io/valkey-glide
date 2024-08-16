@@ -269,11 +269,11 @@ export const enum Decoder {
     /**
      * Decodes the response into a buffer array.
      */
-    Bytes = "binary",
+    Bytes,
     /**
      * Decodes the response into a string.
      */
-    String = "string",
+    String,
 }
 
 /**

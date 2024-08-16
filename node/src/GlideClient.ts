@@ -175,7 +175,7 @@ export class GlideClient extends BaseClient {
     /**
      * Execute a transaction by processing the queued commands.
      *
-     * @see {@link https://redis.io/topics/Transactions/|Valkey Glide Wiki} for details on Redis Transactions.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
      * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
      * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
