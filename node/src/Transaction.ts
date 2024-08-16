@@ -1894,10 +1894,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
-     * To get the scores as well, see `zinterWithScores`.
-     * To store the result in a key as a sorted set, see `zinterStore`.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
      *
-     * since - Valkey version 6.2.0.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
@@ -1911,12 +1911,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
-     * To get the elements only, see `zinter`.
-     * To store the result in a key as a sorted set, see `zinterStore`.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
      *
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
-     * since Valkey version 6.2.0.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - string[] - for keys only.
@@ -1934,11 +1934,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
-     * To get the scores as well, see `zunionWithScores`.
+     * To get the scores as well, see {@link zunionWithScores}.
      *
-     * To store the result in a key as a sorted set, see `zunionStore`.
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
      *
-     * since - Valkey version 6.2.0.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
      *
@@ -1952,11 +1952,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
-     * To get the elements only, see `zunion`.
+     * To get the elements only, see {@link zunion}.
      *
      * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
      *
-     * since Valkey version 6.2.0.
+     * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
      *  - string[] - for keys only.
