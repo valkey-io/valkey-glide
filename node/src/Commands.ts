@@ -2848,6 +2848,12 @@ export function createRestore(
     const args: GlideString[] = [key, ttl.toString(), value];
 
     if (options) {
+        if (options.idletime !== undefined && options.frequency !== undefined) {
+            throw new Error(
+                `syntax error: both IDLETIME and FREQ cannot be set at the same time.`,
+            );
+        }
+
         if (options.replace) {
             args.push("REPLACE");
         }
