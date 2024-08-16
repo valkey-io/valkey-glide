@@ -2453,6 +2453,11 @@ export function createXInfoStream(
     return createCommand(RequestType.XInfoStream, args);
 }
 
+/** @internal */
+export function createXInfoGroups(key: string): command_request.Command {
+    return createCommand(RequestType.XInfoGroups, [key]);
+}
+
 /**
  * @internal
  */
