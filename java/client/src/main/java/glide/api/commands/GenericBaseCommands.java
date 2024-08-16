@@ -1195,6 +1195,7 @@ public interface GenericBaseCommands {
      *     persist.
      * @param value The serialized value to deserialize and assign to <code>key</code>.
      * @param restoreOptions The restore options. See {@link RestoreOptions}.
+     *     <code>IDELTIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
      * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
      *      </code>.
      * @example
