@@ -4412,7 +4412,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/xinfo-groups/|valkey.io} for details.
      *
      * @param key - The key of the stream.
-     * @returns An `Array` of `Records`, where each mapping represents the
+     * @returns An array of maps, where each mapping represents the
      *     attributes of a consumer group for the stream at `key`.
      * @example
      * ```typescript
