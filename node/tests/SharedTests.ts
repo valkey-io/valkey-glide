@@ -5777,6 +5777,116 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "dump and restore test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}-1" + uuidv4();
+                const key2 = "{key}-2" + uuidv4();
+                const key3 = "{key}-3" + uuidv4();
+                const nonExistingkey = "{nonExistingkey}-" + uuidv4();
+                const value = "orange";
+                const valueEncode = Buffer.from(value);
+
+                expect(await client.set(key1, value)).toEqual("OK");
+
+                // Dump non-existing key
+                expect(await client.dump(nonExistingkey)).toBeNull();
+
+                // Dump existing key
+                const data = (await client.dump(key1)) as Buffer;
+                expect(data).not.toBeNull();
+
+                // Restore to a new key without option
+                expect(await client.restore(key2, 0, data)).toEqual("OK");
+                expect(await client.get(key2, Decoder.String)).toEqual(value);
+                expect(await client.get(key2, Decoder.Bytes)).toEqual(
+                    valueEncode,
+                );
+
+                // Restore to an existing key
+                await expect(client.restore(key2, 0, data)).rejects.toThrow(
+                    "BUSYKEY: Target key name already exists.",
+                );
+
+                // Restore with `REPLACE` and existing key holding different value
+                expect(await client.sadd(key3, ["a"])).toEqual(1);
+                expect(
+                    await client.restore(key3, 0, data, { replace: true }),
+                ).toEqual("OK");
+
+                // Restore with `REPLACE` option
+                expect(
+                    await client.restore(key2, 0, data, { replace: true }),
+                ).toEqual("OK");
+
+                // Restore with `REPLACE`, `ABSTTL`, and positive TTL
+                expect(
+                    await client.restore(key2, 1000, data, {
+                        replace: true,
+                        absttl: true,
+                    }),
+                ).toEqual("OK");
+
+                // Restore with `REPLACE`, `ABSTTL`, and negative TTL
+                await expect(
+                    client.restore(key2, -10, data, {
+                        replace: true,
+                        absttl: true,
+                    }),
+                ).rejects.toThrow("Invalid TTL value");
+
+                // Restore with REPLACE and positive idletime
+                expect(
+                    await client.restore(key2, 0, data, {
+                        replace: true,
+                        idletime: 10,
+                    }),
+                ).toEqual("OK");
+
+                // Restore with REPLACE and negative idletime
+                await expect(
+                    client.restore(key2, 0, data, {
+                        replace: true,
+                        idletime: -10,
+                    }),
+                ).rejects.toThrow("Invalid IDLETIME value");
+
+                // Restore with REPLACE and positive frequency
+                expect(
+                    await client.restore(key2, 0, data, {
+                        replace: true,
+                        frequency: 10,
+                    }),
+                ).toEqual("OK");
+
+                // Restore with REPLACE and negative frequency
+                await expect(
+                    client.restore(key2, 0, data, {
+                        replace: true,
+                        frequency: -10,
+                    }),
+                ).rejects.toThrow("Invalid FREQ value");
+
+                // Restore only uses IDLETIME or FREQ modifiers
+                // Error will be raised if both options are set
+                await expect(
+                    client.restore(key2, 0, data, {
+                        replace: true,
+                        idletime: 10,
+                        frequency: 10,
+                    }),
+                ).rejects.toThrow("syntax error");
+
+                // Restore with checksumto error
+                await expect(
+                    client.restore(key2, 0, valueEncode, { replace: true }),
+                ).rejects.toThrow("DUMP payload version or checksum are wrong");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "pfadd test_%p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
