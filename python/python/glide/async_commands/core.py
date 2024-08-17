@@ -6010,6 +6010,8 @@ class CoreCommands(Protocol):
 
         See https://valkey.io/commands/restore for more details.
 
+        Note: `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
+
         Args:
             key (TEncodable): The `key` to create.
             ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
