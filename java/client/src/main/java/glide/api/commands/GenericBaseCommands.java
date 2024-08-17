@@ -1153,8 +1153,8 @@ public interface GenericBaseCommands {
      * user.
      *
      * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
-     * @param key The key of the set.
-     * @return The serialized value of a set.<br>
+     * @param key The <code>key</code> to serialize.
+     * @return The serialized value of the data stored at <code>key</code>.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      * @example
      *     <pre>{@code
@@ -1171,10 +1171,10 @@ public interface GenericBaseCommands {
      * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
      *
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
-     * @param value The serialized value.
+     * @param value The serialized value to deserialize and assign to <code>key</code>.
      * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
      *      </code>.
      * @example
@@ -1189,11 +1189,12 @@ public interface GenericBaseCommands {
      * Create a <code>key</code> associated with a <code>value</code> that is obtained by
      * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
      *
+     * @apiNote <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
-     * @param value The serialized value.
+     * @param value The serialized value to deserialize and assign to <code>key</code>.
      * @param restoreOptions The restore options. See {@link RestoreOptions}.
      * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
      *      </code>.

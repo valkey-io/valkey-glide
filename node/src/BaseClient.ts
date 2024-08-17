@@ -41,6 +41,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream,
     ScoreFilter,
     SearchOrigin,
@@ -68,6 +69,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createExists,
     createExpire,
     createExpireAt,
@@ -140,6 +142,7 @@ import {
     createRPushX,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -1092,6 +1095,81 @@ export class BaseClient {
      */
     public async del(keys: string[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     *
+     * @param key - The `key` to serialize.
+     * @returns The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
+     *
+     * @example
+     * ```typescript
+     * let result = await client.dump("myKey");
+     * console.log(result); // Output: the serialized value of "myKey"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * result = await client.dump("nonExistingKey");
+     * console.log(result); // Output: `null`
+     * ```
+     */
+    public async dump(key: GlideString): Promise<Buffer | null> {
+        return this.createWritePromise(createDump(key), {
+            decoder: Decoder.Bytes,
+        });
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
+     *
+     * @param key - The `key` to create.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value to deserialize and assign to `key`.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
+     * @returns Return "OK" if the `key` was successfully restored with a `value`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value);
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 1000, value, {replace: true, absttl: true});
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value, {replace: true, idletime: 10});
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value, {replace: true, frequency: 10});
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async restore(
+        key: GlideString,
+        ttl: number,
+        value: Buffer,
+        options?: RestoreOptions,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createRestore(key, ttl, value, options),
+            { decoder: Decoder.String },
+        );
     }
 
     /** Retrieve the values of multiple keys.
