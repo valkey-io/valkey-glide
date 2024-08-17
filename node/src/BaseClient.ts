@@ -4296,7 +4296,8 @@ export class BaseClient {
      * @param keys_and_ids - An object of stream keys and entry IDs to read from.
      *     Use the special entry ID of `">"` to receive only new messages.
      * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
-     * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries. Returns `null` if there is no stream that can be served.
+     * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
      *
      * @example
      * ```typescript

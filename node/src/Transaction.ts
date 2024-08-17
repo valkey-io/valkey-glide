@@ -2400,7 +2400,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     Use the special ID of `">"` to receive only new messages.
      * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
      *
-     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
+     * Command Response - A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
      */
     public xreadgroup(
         group: string,
