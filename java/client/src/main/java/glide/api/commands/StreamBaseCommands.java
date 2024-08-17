@@ -203,7 +203,7 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
-     *     <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
@@ -213,7 +213,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -231,7 +231,7 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
-     *     <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
@@ -241,7 +241,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -261,7 +261,7 @@ public interface StreamBaseCommands {
      *     will be read.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
-     *     <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
@@ -273,7 +273,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -293,7 +293,8 @@ public interface StreamBaseCommands {
      *     will be read.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
      * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
      *     [[field, entry], [field, entry], ...]</code>.
      * @example
      *     <pre>{@code
@@ -305,7 +306,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -423,35 +424,36 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
      * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * // Retrieve exactly one stream entry by id
      * Map<String, String[][]> result = client.xrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
-     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * System.out.println("stream entry ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
     CompletableFuture<Map<String, String[][]>> xrange(String key, StreamRange start, StreamRange end);
@@ -461,35 +463,36 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
      * Map<GlideString, GlideString[][]> result = client.xrange(gs("key"), InfRangeBound.MIN, InfRangeBound.MAX).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * // Retrieve exactly one stream entry by id
      * Map<GlideString, GlideString[][]> result = client.xrange(gs("key"), IdBound.of(streamId), IdBound.of(streamId)).get();
-     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * System.out.println("stream entry ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
     CompletableFuture<Map<GlideString, GlideString[][]>> xrange(
@@ -500,29 +503,30 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
      * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
@@ -537,29 +541,30 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
      * Map<GlideString, GlideString[][]> result = client.xrange(gs("key"), InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
@@ -576,35 +581,36 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
      * Map<String, String[][]> result = client.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * // Retrieve exactly one stream entry by id
      * Map<String, String[][]> result = client.xrevrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
-     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * System.out.println("stream entry ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
     CompletableFuture<Map<String, String[][]>> xrevrange(
@@ -617,17 +623,17 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
@@ -638,14 +644,14 @@ public interface StreamBaseCommands {
      * // Retrieve all stream entries
      * Map<GlideString, GlideString[][]> result = client.xrevrange(gs("key"), InfRangeBound.MAX, InfRangeBound.MIN).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * // Retrieve exactly one stream entry by id
      * Map<GlideString, GlideString[][]> result = client.xrevrange(gs("key"), IdBound.of(streamId), IdBound.of(streamId)).get();
-     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * System.out.println("stream entry ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
     CompletableFuture<Map<GlideString, GlideString[][]>> xrevrange(
@@ -658,29 +664,30 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
      * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 2).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
@@ -697,29 +704,30 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
      * @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     pairings with format <code>[[field, entry], [field, entry], ...]</code>. Returns or <code>
+     *     null</code> if <code>count</code> is non-positive.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
      * Map<GlideString, GlideString[][]> result = client.xrange(gs("key"), InfRangeBound.MAX, InfRangeBound.MIN, 2).get();
      * result.forEach((k, v) -> {
-     *     System.out.println("Stream ID: " + k);
+     *     System.out.println("stream entry ID: " + k);
      *     for (int i = 0; i < v.length; i++) {
      *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
@@ -997,12 +1005,12 @@ public interface StreamBaseCommands {
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
-     *     <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
      *     stream that can be served.
      * @example
      *     <pre>{@code
-     * // create a new stream at "mystream", with stream id "1-0"
+     * // create a new stream at "mystream", with stream entry ID "1-0"
      * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
      * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK"); // create the consumer group "mygroup"
      * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer").get();
@@ -1011,7 +1019,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -1033,12 +1041,13 @@ public interface StreamBaseCommands {
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
      *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
      *     stream that can be served.
      * @example
      *     <pre>{@code
-     * // create a new stream at gs("mystream"), with stream id gs("1-0")
+     * // create a new stream at gs("mystream"), with stream entry ID gs("1-0")
      * String streamId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")), StreamAddOptionsBinary.builder().id(gs("1-0")).build()).get();
      * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK"); // create the consumer group gs("mygroup")
      * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xreadgroup(Map.of(gs("mystream"), gs(">")), gs("mygroup"), gs("myconsumer")).get();
@@ -1047,7 +1056,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -1070,12 +1079,12 @@ public interface StreamBaseCommands {
      * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
-     *     <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
      *     stream that can be served.
      * @example
      *     <pre>{@code
-     * // create a new stream at "mystream", with stream id "1-0"
+     * // create a new stream at "mystream", with stream entry ID "1-0"
      * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
      * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK"); // create the consumer group "mygroup"
      * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
@@ -1085,7 +1094,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -1111,12 +1120,13 @@ public interface StreamBaseCommands {
      * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
      *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
      *     stream that can be served.
      * @example
      *     <pre>{@code
-     * // create a new stream at gs("mystream"), with stream id gs("1-0")
+     * // create a new stream at gs("mystream"), with stream entry ID gs("1-0")
      * String streamId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")), StreamAddOptionsBinary.builder().id(gs("1-0")).build()).get();
      * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK"); // create the consumer group gs("mygroup")
      * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
@@ -1126,7 +1136,7 @@ public interface StreamBaseCommands {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
      *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
-     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *             System.out.printf("stream entry ID: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
      *         );
      *     }
      * }
@@ -1248,17 +1258,17 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -1293,17 +1303,17 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -1338,17 +1348,17 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -1396,17 +1406,17 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry ID bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry ID.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -1794,7 +1804,8 @@ public interface StreamBaseCommands {
      *     specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -1828,7 +1839,8 @@ public interface StreamBaseCommands {
      *     specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -1867,7 +1879,8 @@ public interface StreamBaseCommands {
      * @param count Limits the number of claimed entries to the specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -1902,7 +1915,8 @@ public interface StreamBaseCommands {
      * @param count Limits the number of claimed entries to the specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -1943,7 +1957,8 @@ public interface StreamBaseCommands {
      *     specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
@@ -1977,7 +1992,8 @@ public interface StreamBaseCommands {
      *     specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
@@ -2016,7 +2032,8 @@ public interface StreamBaseCommands {
      * @param count Limits the number of claimed entries to the specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
@@ -2051,7 +2068,8 @@ public interface StreamBaseCommands {
      * @param count Limits the number of claimed entries to the specified value.
      * @return An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry ID to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
