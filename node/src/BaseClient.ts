@@ -1010,7 +1010,7 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
-     * @param decoder - Optional enum parameter for decoding the response.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1182,7 +1182,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
-     * @param decoder - Optional enum parameter for decoding the response.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1570,7 +1570,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
-     * @param decoder - Optional enum parameter for decoding the response.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1590,7 +1590,7 @@ export class BaseClient {
      */
     public async hget(
         key: GlideString,
-        field: string,
+        field: GlideString,
         decoder?: Decoder,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createHGet(key, field), {
@@ -1846,7 +1846,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
-     * @param decoder - Optional enum parameter for decoding the response.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
