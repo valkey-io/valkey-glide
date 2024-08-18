@@ -2030,7 +2030,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
-    public async lpush(key: string, elements: string[]): Promise<number> {
+    public async lpush(key: GlideString, elements: GlideString[]): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
     }
 
@@ -2059,6 +2059,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      *
@@ -2076,8 +2077,8 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async lpop(key: string): Promise<string | null> {
-        return this.createWritePromise(createLPop(key));
+    public async lpop(key: GlideString, decoder?:Decoder): Promise<GlideString | null> {
+        return this.createWritePromise(createLPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -2086,6 +2087,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2104,10 +2106,11 @@ export class BaseClient {
      * ```
      */
     public async lpopCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[] | null> {
-        return this.createWritePromise(createLPop(key, count));
+        decoder?: Decoder
+    ): Promise<GlideString[] | null> {
+        return this.createWritePromise(createLPop(key, count), { decoder: decoder });
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -2120,6 +2123,7 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns list of elements in the specified range.
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
@@ -2147,11 +2151,12 @@ export class BaseClient {
      * ```
      */
     public async lrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createLRange(key, start, end));
+        decoder?: Decoder 
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createLRange(key, start, end), { decoder: decoder });
     }
 
     /** Returns the length of the list stored at `key`.

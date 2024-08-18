@@ -838,8 +838,8 @@ export function createHGetAll(key: string): command_request.Command {
  * @internal
  */
 export function createLPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.LPush, [key].concat(elements));
 }
@@ -858,10 +858,10 @@ export function createLPushX(
  * @internal
  */
 export function createLPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] = count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
 
@@ -869,7 +869,7 @@ export function createLPop(
  * @internal
  */
 export function createLRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
