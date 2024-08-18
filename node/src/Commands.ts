@@ -2453,6 +2453,11 @@ export function createXInfoStream(
     return createCommand(RequestType.XInfoStream, args);
 }
 
+/** @internal */
+export function createXInfoGroups(key: string): command_request.Command {
+    return createCommand(RequestType.XInfoGroups, [key]);
+}
+
 /**
  * @internal
  */
@@ -2808,6 +2813,77 @@ export function createMove(
     dbIndex: number,
 ): command_request.Command {
     return createCommand(RequestType.Move, [key, dbIndex.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createDump(key: GlideString): command_request.Command {
+    return createCommand(RequestType.Dump, [key]);
+}
+
+/**
+ * Optional arguments for `RESTORE` command.
+ *
+ * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+ * @remarks `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
+ */
+export type RestoreOptions = {
+    /**
+     * Set to `true` to replace the key if it exists.
+     */
+    replace?: boolean;
+    /**
+     * Set to `true` to specify that `ttl` argument of {@link BaseClient.restore} represents
+     * an absolute Unix timestamp (in milliseconds).
+     */
+    absttl?: boolean;
+    /**
+     * Set the `IDLETIME` option with object idletime to the given key.
+     */
+    idletime?: number;
+    /**
+     * Set the `FREQ` option with object frequency to the given key.
+     */
+    frequency?: number;
+};
+
+/**
+ * @internal
+ */
+export function createRestore(
+    key: GlideString,
+    ttl: number,
+    value: GlideString,
+    options?: RestoreOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, ttl.toString(), value];
+
+    if (options) {
+        if (options.idletime !== undefined && options.frequency !== undefined) {
+            throw new Error(
+                `syntax error: both IDLETIME and FREQ cannot be set at the same time.`,
+            );
+        }
+
+        if (options.replace) {
+            args.push("REPLACE");
+        }
+
+        if (options.absttl) {
+            args.push("ABSTTL");
+        }
+
+        if (options.idletime !== undefined) {
+            args.push("IDLETIME", options.idletime.toString());
+        }
+
+        if (options.frequency !== undefined) {
+            args.push("FREQ", options.frequency.toString());
+        }
+    }
+
+    return createCommand(RequestType.Restore, args);
 }
 
 /**
