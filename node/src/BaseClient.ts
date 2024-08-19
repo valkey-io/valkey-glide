@@ -196,6 +196,7 @@ import {
     createZDiffStore,
     createZDiffWithScores,
     createZIncrBy,
+    createZInter,
     createZInterCard,
     createZInterstore,
     createZLexCount,
@@ -216,6 +217,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnion,
     createZUnionStore,
 } from "./Commands";
 import {
@@ -3808,7 +3810,7 @@ export class BaseClient {
     /**
      * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-     * To get the result directly, see `zinter_withscores`.
+     * To get the result directly, see {@link zinterWithScores}.
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
@@ -3817,7 +3819,8 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -3826,9 +3829,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
      * await client.zadd("key2", {"member1": 9.5})
      * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
      * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
     public async zinterstore(
@@ -3838,6 +3841,132 @@ export class BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @returns The resulting array of intersecting elements.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result = await client.zinter(["key1", "key2"]);
+     * console.log(result); // Output: ['member1']
+     * ```
+     */
+    public zinter(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZInter(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @returns The resulting sorted set with scores.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result1 = await client.zinterWithScores(["key1", "key2"]);
+     * console.log(result1); // Output: {'member1': 20} - "member1" with score of 20 is the result
+     * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
+     * console.log(result2); // Output: {'member1': 10.5} - "member1" with score of 10.5 is the result.
+     * ```
+     */
+    public zinterWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(
+            createZInter(keys, aggregationType, true),
+        );
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     * To get the scores as well, see {@link zunionWithScores}.
+     *
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @returns The resulting array of union elements.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result = await client.zunion(["key1", "key2"]);
+     * console.log(result); // Output: ['member1', 'member2']
+     * ```
+     */
+    public zunion(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZUnion(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
+     * To get the elements only, see {@link zunion}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @returns The resulting sorted set with scores.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result1 = await client.zunionWithScores(["key1", "key2"]);
+     * console.log(result1); // {'member1': 20, 'member2': 8.2}
+     * const result2 = await client.zunionWithScores(["key1", "key2"], "MAX");
+     * console.log(result2); // {'member1': 10.5, 'member2': 8.2}
+     * ```
+     */
+    public zunionWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(
+            createZUnion(keys, aggregationType, true),
         );
     }
 

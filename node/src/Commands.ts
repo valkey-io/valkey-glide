@@ -1431,16 +1431,59 @@ export function createZInterstore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    const args = createZCmdArgs(keys, {
+        aggregationType,
+        withScores: false,
+        destination,
+    });
     return createCommand(RequestType.ZInterStore, args);
 }
 
-function createZCmdStoreArgs(
-    destination: string,
+/**
+ * @internal
+ */
+export function createZInter(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
+    withScores?: boolean,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
+    return createCommand(RequestType.ZInter, args);
+}
+
+/**
+ * @internal
+ */
+export function createZUnion(
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+    withScores?: boolean,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
+    return createCommand(RequestType.ZUnion, args);
+}
+
+/**
+ * @internal
+ * Helper function for Zcommands (ZInter, ZinterStore, ZUnion..) that arranges arguments in the server's required order.
+ */
+function createZCmdArgs(
+    keys: string[] | KeyWeight[],
+    options: {
+        aggregationType?: AggregationType;
+        withScores?: boolean;
+        destination?: string;
+    },
 ): string[] {
-    const args: string[] = [destination, keys.length.toString()];
+    const args = [];
+
+    const destination = options.destination;
+
+    if (destination) {
+        args.push(destination);
+    }
+
+    args.push(keys.length.toString());
 
     if (typeof keys[0] === "string") {
         args.push(...(keys as string[]));
@@ -1451,8 +1494,14 @@ function createZCmdStoreArgs(
         args.push("WEIGHTS", ...weights);
     }
 
+    const aggregationType = options.aggregationType;
+
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
+    }
+
+    if (options.withScores) {
+        args.push("WITHSCORES");
     }
 
     return args;
@@ -1540,7 +1589,7 @@ export function createZUnionStore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    const args = createZCmdArgs(keys, { destination, aggregationType });
     return createCommand(RequestType.ZUnionStore, args);
 }
 
