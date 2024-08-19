@@ -8260,9 +8260,12 @@ export function runBaseTests<Context>(config: {
 
                 // checking result with metric specification of kilometers
                 expect(
-                    await client.geodist(key1, member1, member2, {
-                        geoUnit: GeoUnit.KILOMETERS,
-                    }),
+                    await client.geodist(
+                        key1,
+                        member1,
+                        member2,
+                        GeoUnit.KILOMETERS,
+                    ),
                 ).toBeCloseTo(expectedKM, delta);
 
                 // null result when member index is missing
