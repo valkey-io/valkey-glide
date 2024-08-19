@@ -3442,9 +3442,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *      pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
      *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
      *     pairings with format <code>[[field, entry],
@@ -3460,9 +3458,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *      pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
      *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
@@ -3841,10 +3837,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code> Map</code>
-     *     is composed of a stream's key and the id of the entry after which the stream will be read.
-     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
-     *     </code> to receive only new messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
@@ -3867,10 +3861,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>Map</code>
-     *     is composed of a stream's key and the id of the entry after which the stream will be read.
-     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}</code> to
-     *     receive only new messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
