@@ -1424,7 +1424,11 @@ export function createZInterstore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdArgs(keys, aggregationType, false, destination);
+    const args = createZCmdArgs(keys, {
+        aggregationType,
+        withScores: false,
+        destination,
+    });
     return createCommand(RequestType.ZInterStore, args);
 }
 
@@ -1436,7 +1440,7 @@ export function createZInter(
     aggregationType?: AggregationType,
     withScores?: boolean,
 ): command_request.Command {
-    const args = createZCmdArgs(keys, aggregationType, withScores);
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
     return createCommand(RequestType.ZInter, args);
 }
 
@@ -1448,7 +1452,7 @@ export function createZUnion(
     aggregationType?: AggregationType,
     withScores?: boolean,
 ): command_request.Command {
-    const args = createZCmdArgs(keys, aggregationType, withScores);
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
     return createCommand(RequestType.ZUnion, args);
 }
 
@@ -1458,12 +1462,15 @@ export function createZUnion(
  */
 function createZCmdArgs(
     keys: string[] | KeyWeight[],
-    aggregationType?: AggregationType,
-    withscores?: boolean,
-    destination?: string,
+    options: {
+        aggregationType?: AggregationType;
+        withScores?: boolean;
+        destination?: string;
+    },
 ): string[] {
     const args = [];
 
+    const destination = options.destination;
     if (destination) {
         args.push(destination);
     }
@@ -1479,11 +1486,12 @@ function createZCmdArgs(
         args.push("WEIGHTS", ...weights);
     }
 
+    const aggregationType = options.aggregationType;
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
     }
 
-    if (withscores) {
+    if (options.withScores) {
         args.push("WITHSCORES");
     }
 
