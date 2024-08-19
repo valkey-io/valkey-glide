@@ -687,7 +687,8 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries.
+     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     *     {@link FunctionRestorePolicy.APPEND} is used by default.
      * @returns `"OK"`.
      *
      * @example

@@ -1021,7 +1021,8 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries.
+     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     *     {@link FunctionRestorePolicy.APPEND} is used by default.
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed all primary nodes.
      * @returns `"OK"`.
