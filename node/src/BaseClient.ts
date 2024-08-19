@@ -5659,8 +5659,6 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param members - The array of members whose `GeoHash` strings are to be retrieved.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *     If a member does not exist in the sorted set, a `null` value is returned for that member.
      *
