@@ -1780,6 +1780,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *        string[] - for keys only.
      *        KeyWeight[] - for weighted keys with score multipliers.
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zunionstore(
