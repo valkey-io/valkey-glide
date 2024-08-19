@@ -5143,15 +5143,15 @@ export function runBaseTests<Context>(config: {
 
                 // key exists, but it is not a stream
                 expect(await client.set(stringKey, "foo"));
-                await expect(
-                    client.xrange(
+                expect(
+                    await client.xrange(
                         stringKey,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
-                await expect(
-                    client.xrevrange(
+                expect(
+                    await client.xrevrange(
                         stringKey,
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
@@ -5159,27 +5159,27 @@ export function runBaseTests<Context>(config: {
                 ).rejects.toThrow(RequestError);
 
                 // invalid start bound
-                await expect(
-                    client.xrange(
+                expect(
+                    await client.xrange(
                         key,
                         { value: "not_a_stream_id" },
                         InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
-                await expect(
-                    client.xrevrange(key, InfBoundary.PositiveInfinity, {
+                expect(
+                    await client.xrevrange(key, InfBoundary.PositiveInfinity, {
                         value: "not_a_stream_id",
                     }),
                 ).rejects.toThrow(RequestError);
 
                 // invalid end bound
-                await expect(
-                    client.xrange(key, InfBoundary.NegativeInfinity, {
+                expect(
+                    await client.xrange(key, InfBoundary.NegativeInfinity, {
                         value: "not_a_stream_id",
                     }),
                 ).rejects.toThrow(RequestError);
-                await expect(
-                    client.xrevrange(
+                expect(
+                    await client.xrevrange(
                         key,
                         {
                             value: "not_a_stream_id",

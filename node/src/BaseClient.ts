@@ -3106,7 +3106,7 @@ export class BaseClient {
     }
 
     /**
-     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to `XRANGE` but returns the
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to {@link xrange} but returns the
      * entries in reverse order.
      *
      * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
