@@ -2084,6 +2084,25 @@ export function createXRange(
 /**
  * @internal
  */
+export function createXRevRange(
+    key: string,
+    start: Boundary<string>,
+    end: Boundary<string>,
+    count?: number,
+): command_request.Command {
+    const args = [key, getStreamBoundaryArg(start), getStreamBoundaryArg(end)];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.XRevRange, args);
+}
+
+/**
+ * @internal
+ */
 export function createXGroupCreateConsumer(
     key: string,
     groupName: string,
