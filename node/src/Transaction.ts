@@ -56,6 +56,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -218,6 +219,7 @@ import {
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
     createXTrim,
     createZAdd,
     createZCard,
@@ -2387,18 +2389,44 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads entries from the given streams.
+     *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
      *
-     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     *
+     * Command Response - A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**
