@@ -1535,6 +1535,18 @@ export function createZScore(
 /**
  * @internal
  */
+export function createZUnionStore(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): command_request.Command {
+    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    return createCommand(RequestType.ZUnionStore, args);
+}
+
+/**
+ * @internal
+ */
 export function createZMScore(
     key: string,
     members: string[],
