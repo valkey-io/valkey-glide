@@ -250,6 +250,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnionStore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1768,6 +1769,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zscore(key: string, member: string): T {
         return this.addAndReturn(createZScore(key, member));
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see {@link zunionWithScores}.
+     *
+     * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *        string[] - for keys only.
+     *        KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     *
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public zunionstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(
+            createZUnionStore(destination, keys, aggregationType),
+        );
     }
 
     /**
