@@ -1589,7 +1589,7 @@ export function createZUnionStore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdArgs(keys, {destination, aggregationType});
+    const args = createZCmdArgs(keys, { destination, aggregationType });
     return createCommand(RequestType.ZUnionStore, args);
 }
 
