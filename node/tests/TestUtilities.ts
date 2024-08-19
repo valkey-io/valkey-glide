@@ -338,7 +338,7 @@ export async function testTeardown(
 export const getClientConfigurationOption = (
     addresses: [string, number][],
     protocol: ProtocolVersion,
-    timeout?: number,
+    configOverrides?: Partial<BaseClientConfiguration>,
 ): BaseClientConfiguration => {
     return {
         addresses: addresses.map(([host, port]) => ({
@@ -346,7 +346,7 @@ export const getClientConfigurationOption = (
             port,
         })),
         protocol,
-        ...(timeout && { requestTimeout: timeout }),
+        ...configOverrides,
     };
 };
 
@@ -357,7 +357,9 @@ export async function flushAndCloseClient(
 ) {
     await testTeardown(
         cluster_mode,
-        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, 2000),
+        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+            requestTimeout: 2000,
+        }),
     );
 
     // some tests don't initialize a client
