@@ -422,10 +422,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
-     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
      * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
      *
      * @param key - The `key` to serialize.
+     *
      * Command Response - The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
      */
     public dump(key: GlideString): T {
@@ -436,13 +437,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Create a `key` associated with a `value` that is obtained by deserializing the provided
      * serialized `value` (obtained via {@link dump}).
      *
-     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
      * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
      *
      * @param key - The `key` to create.
      * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
      * @param value - The serialized value to deserialize and assign to `key`.
      * @param options - (Optional) Restore options {@link RestoreOptions}.
+     *
      * Command Response - Return "OK" if the `key` was successfully restored with a `value`.
      */
     public restore(
