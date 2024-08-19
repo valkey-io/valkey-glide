@@ -978,8 +978,8 @@ export function createLRem(
  * @internal
  */
 export function createRPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
@@ -998,10 +998,11 @@ export function createRPushX(
  * @internal
  */
 export function createRPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
 
@@ -2214,7 +2215,7 @@ export function createPublish(
  * @internal
  */
 export function createBRPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
@@ -2225,7 +2226,7 @@ export function createBRPop(
  * @internal
  */
 export function createBLPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];

@@ -2361,7 +2361,10 @@ export class BaseClient {
      * console.log(result); // Output: 1
      * ```
      */
-    public async rpush(key: string, elements: string[]): Promise<number> {
+    public async rpush(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
     }
 
@@ -2390,6 +2393,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      *
@@ -2407,8 +2411,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async rpop(key: string): Promise<string | null> {
-        return this.createWritePromise(createRPop(key));
+    public async rpop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createRPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -2417,6 +2424,7 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2435,10 +2443,13 @@ export class BaseClient {
      * ```
      */
     public async rpopCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[] | null> {
-        return this.createWritePromise(createRPop(key, count));
+        decoder?: Decoder,
+    ): Promise<GlideString[] | null> {
+        return this.createWritePromise(createRPop(key, count), {
+            decoder: decoder,
+        });
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
@@ -5302,6 +5313,7 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5313,10 +5325,13 @@ export class BaseClient {
      * ```
      */
     public async brpop(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBRPop(keys, timeout));
+        decoder?: Decoder,
+    ): Promise<[GlideString, GlideString] | null> {
+        return this.createWritePromise(createBRPop(keys, timeout), {
+            decoder: decoder,
+        });
     }
 
     /** Blocking list pop primitive.
@@ -5330,6 +5345,7 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5340,10 +5356,13 @@ export class BaseClient {
      * ```
      */
     public async blpop(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBLPop(keys, timeout));
+        decoder?: Decoder,
+    ): Promise<[GlideString, GlideString] | null> {
+        return this.createWritePromise(createBLPop(keys, timeout), {
+            decoder: decoder,
+        });
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.

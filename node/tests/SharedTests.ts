@@ -2409,15 +2409,32 @@ export function runBaseTests(config: {
         `rpush and rpop with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const valueList = ["value1", "value2", "value3", "value4"];
-                expect(await client.rpush(key, valueList)).toEqual(4);
-                expect(await client.rpop(key)).toEqual("value4");
-                expect(await client.rpopCount(key, 2)).toEqual([
+                const key1 = uuidv4();
+                const key2 = Buffer.from(uuidv4());
+                const valueList1 = ["value1", "value2", "value3", "value4"];
+                const valueList2 = ["value5", "value6", "value7"];
+                expect(await client.rpush(key1, valueList1)).toEqual(4);
+                expect(await client.rpop(key1)).toEqual("value4");
+                expect(await client.rpopCount(key1, 2)).toEqual([
                     "value3",
                     "value2",
                 ]);
                 expect(await client.rpop("nonExistingKey")).toEqual(null);
+
+                expect(await client.rpush(key2, valueList2)).toEqual(3);
+                expect(await client.rpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value7"),
+                );
+                expect(await client.rpopCount(key2, 2, Decoder.Bytes)).toEqual([
+                    Buffer.from("value6"),
+                    Buffer.from("value5"),
+                ]);
+                expect(
+                    await client.rpush(key2, [Buffer.from("value8")]),
+                ).toEqual(1);
+                expect(await client.rpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value8"),
+                );
             }, protocol);
         },
         config.timeout,
@@ -5618,6 +5635,10 @@ export function runBaseTests(config: {
                     "brpop-test",
                     "baz",
                 ]);
+                // Test encoded value
+                expect(
+                    await client.brpop(["brpop-test"], 0.1, Decoder.Bytes),
+                ).toEqual([Buffer.from("brpop-test"), Buffer.from("bar")]);
                 // Delete all values from list
                 expect(await client.del(["brpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
@@ -5655,6 +5676,10 @@ export function runBaseTests(config: {
                     "blpop-test",
                     "foo",
                 ]);
+                // Test decoded value
+                expect(
+                    await client.blpop(["blpop-test"], 0.1, Decoder.Bytes),
+                ).toEqual([Buffer.from("blpop-test"), Buffer.from("bar")]);
                 // Delete all values from list
                 expect(await client.del(["blpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
