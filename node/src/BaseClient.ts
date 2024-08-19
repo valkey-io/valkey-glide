@@ -5645,10 +5645,10 @@ export class BaseClient {
         key: GlideString,
         member1: GlideString,
         member2: GlideString,
-        options?: { geoUnit?: GeoUnit },
+        geoUnit?: GeoUnit,
     ): Promise<number | null> {
         return this.createWritePromise(
-            createGeoDist(key, member1, member2, options?.geoUnit),
+            createGeoDist(key, member1, member2, geoUnit),
         );
     }
 
