@@ -62,6 +62,7 @@
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
 * Node: Added XRANGE command ([#2069](https://github.com/valkey-io/valkey-glide/pull/2069))
+* Node: Added XREVRANGE command ([#2148](https://github.com/valkey-io/valkey-glide/pull/2148))
 * Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
 * Node: Added WATCH and UNWATCH commands ([#2076](https://github.com/valkey-io/valkey-glide/pull/2076))
 * Node: Added WAIT command ([#2113](https://github.com/valkey-io/valkey-glide/pull/2113))
