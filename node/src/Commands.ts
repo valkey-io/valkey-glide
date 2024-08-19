@@ -1478,6 +1478,7 @@ function createZCmdArgs(
     const args = [];
 
     const destination = options.destination;
+
     if (destination) {
         args.push(destination);
     }
@@ -1494,6 +1495,7 @@ function createZCmdArgs(
     }
 
     const aggregationType = options.aggregationType;
+
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
     }
