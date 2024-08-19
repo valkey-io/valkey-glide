@@ -373,6 +373,7 @@ describe("GlideClusterClient", () => {
                 client.sinter(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
+                client.zunionstore("abc", ["zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
@@ -385,6 +386,8 @@ describe("GlideClusterClient", () => {
                 client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
+                client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
+                client.xreadgroup("_", "_", { abc: ">", zxy: ">", lkn: ">" }),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {

@@ -42,6 +42,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream,
     ScoreFilter,
     SearchOrigin,
@@ -50,6 +51,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -69,6 +71,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createExists,
     createExpire,
     createExpireAt,
@@ -141,6 +144,7 @@ import {
     createRPushX,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -183,6 +187,8 @@ import {
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
+    createXRevRange,
     createXTrim,
     createZAdd,
     createZCard,
@@ -211,6 +217,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnionStore,
 } from "./Commands";
 import {
     ClosingError,
@@ -1008,6 +1015,7 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1024,11 +1032,14 @@ export class BaseClient {
      * ```
      */
     public async getrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetRange(key, start, end));
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1095,12 +1106,88 @@ export class BaseClient {
         return this.createWritePromise(createDel(keys));
     }
 
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     *
+     * @param key - The `key` to serialize.
+     * @returns The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
+     *
+     * @example
+     * ```typescript
+     * let result = await client.dump("myKey");
+     * console.log(result); // Output: the serialized value of "myKey"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * result = await client.dump("nonExistingKey");
+     * console.log(result); // Output: `null`
+     * ```
+     */
+    public async dump(key: GlideString): Promise<Buffer | null> {
+        return this.createWritePromise(createDump(key), {
+            decoder: Decoder.Bytes,
+        });
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
+     *
+     * @param key - The `key` to create.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value to deserialize and assign to `key`.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
+     * @returns Return "OK" if the `key` was successfully restored with a `value`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value);
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 1000, value, {replace: true, absttl: true});
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value, {replace: true, idletime: 10});
+     * console.log(result); // Output: "OK"
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.restore("myKey", 0, value, {replace: true, frequency: 10});
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async restore(
+        key: GlideString,
+        ttl: number,
+        value: Buffer,
+        options?: RestoreOptions,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createRestore(key, ttl, value, options),
+            { decoder: Decoder.String },
+        );
+    }
+
     /** Retrieve the values of multiple keys.
      *
      * @see {@link https://valkey.io/commands/mget/|valkey.io} for details.
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1113,8 +1200,11 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public async mget(keys: string[]): Promise<(string | null)[]> {
-        return this.createWritePromise(createMGet(keys));
+    public async mget(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createMGet(keys), { decoder: decoder });
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -1485,6 +1575,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1502,8 +1593,14 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async hget(key: string, field: string): Promise<string | null> {
-        return this.createWritePromise(createHGet(key, field));
+    public async hget(
+        key: GlideString,
+        field: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHGet(key, field), {
+            decoder: decoder,
+        });
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -1754,6 +1851,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1763,8 +1861,11 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public async hvals(key: string): Promise<string[]> {
-        return this.createWritePromise(createHVals(key));
+    public async hvals(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHVals(key), { decoder: decoder });
     }
 
     /**
@@ -3149,7 +3250,7 @@ export class BaseClient {
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      *
      * @example
      * ```typescript
@@ -3170,6 +3271,46 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
+    }
+
+    /**
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to {@link xrange} but returns the
+     * entries in reverse order.
+     *
+     * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param start - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     *
+     * @example
+     * ```typescript
+     * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
+     * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
+     * console.log(await client.xrevrange("mystream", InfBoundary.PositiveInfinity, InfBoundary.NegativeInfinity));
+     * // Output:
+     * // {
+     * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
+     * //     "0-1": [["field1", "value1"]],
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * ```
+     */
+    public async xrevrange(
+        key: string,
+        end: Boundary<string>,
+        start: Boundary<string>,
+        count?: number,
+    ): Promise<Record<string, [string, string][]> | null> {
+        return this.createWritePromise(createXRevRange(key, end, start, count));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
@@ -3438,6 +3579,42 @@ export class BaseClient {
      */
     public async zscore(key: string, member: string): Promise<number | null> {
         return this.createWritePromise(createZScore(key, member));
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see {@link zunionWithScores}.
+     *
+     * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
+     * @remarks When in cluster mode, `destination` and all keys in `keys` both must map to the same hash slot.
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *         string[] - for keys only.
+     *         KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * * @example
+     * ```typescript
+     * // Example usage of zunionstore command with an existing key
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
+     * await client.zunionstore("my_sorted_set", ["key1", "key2"]) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
+     * await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
+     * await client.zunionstore("my_sorted_set", ["key1, "key2], {weights: [2, 1]}) // Output: 46
+     * ```
+     */
+    public async zunionstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZUnionStore(destination, keys, aggregationType),
+        );
     }
 
     /**
@@ -4259,9 +4436,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for more details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
-     * @returns A map of stream keys, to a map of stream ids, to an array of entries.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
+     * @returns A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
+     *
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
@@ -4283,6 +4461,50 @@ export class BaseClient {
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special entry ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     *
+     * @example
+     * ```typescript
+     * const streamResults = await client.xreadgroup("my_group", "my_consumer", {"my_stream": "0-0", "writers_stream": "0-0", "readers_stream", ">"});
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers_stream": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": null,                                          // entry was deleted
+     * //     },
+     * //     "readers_stream": {}                                                  // stream is empty
+     * // }
+     * ```
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): Promise<Record<
+        string,
+        Record<string, [string, string][] | null>
+    > | null> {
+        return this.createWritePromise(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**
@@ -5903,7 +6125,7 @@ export class BaseClient {
      *     // new value of "Hello world" with a length of 11.
      * ```
      */
-    public async append(key: string, value: string): Promise<number> {
+    public async append(key: GlideString, value: GlideString): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
     }
 

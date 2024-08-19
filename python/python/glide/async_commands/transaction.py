@@ -2108,6 +2108,8 @@ class BaseTransaction:
 
         See https://valkey.io/commands/restore for more details.
 
+        Note: `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
+
         Args:
             key (TEncodable): The `key` to create.
             ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
@@ -2297,8 +2299,7 @@ class BaseTransaction:
         See https://valkey.io/commands/xread for more details.
 
         Args:
-            keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of keys and entry IDs to read from. The mapping is composed of a
-                stream's key and the ID of the entry after which the stream will be read.
+            keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of stream keys to stream entry IDs to read from.
             options (Optional[StreamReadOptions]): Options detailing how to read the stream.
 
         Command response:
@@ -2448,9 +2449,8 @@ class BaseTransaction:
         See https://valkey.io/commands/xreadgroup for more details.
 
         Args:
-            keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of stream keys to stream entry IDs to read from. The special ">"
-                ID returns messages that were never delivered to any other consumer. Any other valid ID will return
-                entries pending for the consumer with IDs greater than the one provided.
+            keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of stream keys to stream entry IDs to read from.
+                Use the special entry ID of `">"` to receive only new messages.
             group_name (TEncodable): The consumer group name.
             consumer_name (TEncodable): The consumer name. The consumer will be auto-created if it does not already exist.
             options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
