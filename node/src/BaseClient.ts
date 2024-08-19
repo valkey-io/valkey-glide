@@ -1010,6 +1010,7 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1026,11 +1027,14 @@ export class BaseClient {
      * ```
      */
     public async getrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetRange(key, start, end));
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1178,6 +1182,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1190,8 +1195,11 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public async mget(keys: string[]): Promise<(string | null)[]> {
-        return this.createWritePromise(createMGet(keys));
+    public async mget(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createMGet(keys), { decoder: decoder });
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -1562,6 +1570,7 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1579,8 +1588,14 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async hget(key: string, field: string): Promise<string | null> {
-        return this.createWritePromise(createHGet(key, field));
+    public async hget(
+        key: GlideString,
+        field: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHGet(key, field), {
+            decoder: decoder,
+        });
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -1831,6 +1846,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1840,8 +1856,11 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public async hvals(key: string): Promise<string[]> {
-        return this.createWritePromise(createHVals(key));
+    public async hvals(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHVals(key), { decoder: decoder });
     }
 
     /**
@@ -5974,7 +5993,7 @@ export class BaseClient {
      *     // new value of "Hello world" with a length of 11.
      * ```
      */
-    public async append(key: string, value: string): Promise<number> {
+    public async append(key: GlideString, value: GlideString): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
     }
 
