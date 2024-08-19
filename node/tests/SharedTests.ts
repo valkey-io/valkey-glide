@@ -3436,7 +3436,69 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `script test_%p`,
+        `script test_decoder_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = Buffer.from(uuidv4());
+                const key2 = Buffer.from(uuidv4());
+
+                let script = new Script(Buffer.from("return 'Hello'"));
+                expect(
+                    await client.invokeScript(script, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("Hello"));
+
+                script = new Script(
+                    Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
+                );
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key1],
+                        args: [Buffer.from("value1")],
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual("OK");
+
+                /// Reuse the same script with different parameters.
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key2],
+                        args: [Buffer.from("value2")],
+                    }),
+                ).toEqual("OK");
+
+                script = new Script(
+                    Buffer.from("return redis.call('GET', KEYS[1])"),
+                );
+                expect(
+                    await client.invokeScript(script, { keys: [key1] }),
+                ).toEqual("value1");
+
+                expect(
+                    await client.invokeScript(script, { keys: [key2] }),
+                ).toEqual("value2");
+                // Get bytes rsponse
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key1],
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("value1"));
+
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key2],
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("value2"));
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script test_binary_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = Buffer.from(uuidv4());
@@ -3479,7 +3541,7 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `script test_binary_%p`,
+        `script test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
