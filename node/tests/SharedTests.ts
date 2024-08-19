@@ -5039,7 +5039,7 @@ export function runBaseTests<Context>(config: {
                 ).toEqual({});
                 // rev search returns empty mapping if - before +
                 expect(
-                    await client.xrange(
+                    await client.xrevrange(
                         key,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
