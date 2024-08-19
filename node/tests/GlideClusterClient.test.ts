@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 import {
     BitwiseOperation,
     ClusterTransaction,
+    Decoder,
     FunctionListResponse,
     GlideClusterClient,
     InfoOptions,
@@ -25,11 +26,18 @@ import {
     ScoreFilter,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode, SortOrder } from "../build-ts/src/Commands";
+import {
+    FlushMode,
+    FunctionStatsResponse,
+    GeoUnit,
+    SortOrder,
+} from "../build-ts/src/Commands";
 import { runBaseTests } from "./SharedTests";
 import {
     checkClusterResponse,
     checkFunctionListResponse,
+    checkFunctionStatsResponse,
+    createLuaLibWithLongRunningFunction,
     flushAndCloseClient,
     generateLuaLibCode,
     getClientConfigurationOption,
@@ -40,6 +48,7 @@ import {
     parseEndpoints,
     transactionTest,
     validateTransactionResponse,
+    waitForNotBusy,
 } from "./TestUtilities";
 type Context = {
     client: GlideClusterClient;
@@ -107,9 +116,7 @@ describe("GlideClusterClient", () => {
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server]),
             );
-            expect(intoString(info_server)).toEqual(
-                expect.stringContaining("# Server"),
-            );
+            expect(info_server).toEqual(expect.stringContaining("# Server"));
 
             const infoReplicationValues = Object.values(
                 await client.info([InfoOptions.Replication]),
@@ -135,12 +142,8 @@ describe("GlideClusterClient", () => {
                 [InfoOptions.Server],
                 "randomNode",
             );
-            expect(intoString(result)).toEqual(
-                expect.stringContaining("# Server"),
-            );
-            expect(intoString(result)).toEqual(
-                expect.not.stringContaining("# Errorstats"),
-            );
+            expect(result).toEqual(expect.stringContaining("# Server"));
+            expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
         },
         TIMEOUT,
     );
@@ -163,10 +166,9 @@ describe("GlideClusterClient", () => {
             );
             const result = cleanResult(
                 intoString(
-                    await client.customCommand(
-                        ["cluster", "nodes"],
-                        "randomNode",
-                    ),
+                    await client.customCommand(["cluster", "nodes"], {
+                        route: "randomNode",
+                    }),
                 ),
             );
 
@@ -180,8 +182,10 @@ describe("GlideClusterClient", () => {
             const secondResult = cleanResult(
                 intoString(
                     await client.customCommand(["cluster", "nodes"], {
-                        type: "routeByAddress",
-                        host,
+                        route: {
+                            type: "routeByAddress",
+                            host,
+                        },
                     }),
                 ),
             );
@@ -194,9 +198,11 @@ describe("GlideClusterClient", () => {
             const thirdResult = cleanResult(
                 intoString(
                     await client.customCommand(["cluster", "nodes"], {
-                        type: "routeByAddress",
-                        host: host2,
-                        port: Number(port),
+                        route: {
+                            type: "routeByAddress",
+                            host: host2,
+                            port: Number(port),
+                        },
                     }),
                 ),
             );
@@ -212,12 +218,50 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            expect(() =>
+            await expect(
                 client.info(undefined, {
                     type: "routeByAddress",
                     host: "foo",
                 }),
-            ).toThrowError();
+            ).rejects.toThrowError(RequestError);
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `dump and restore custom command_%p`,
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = "key";
+            const value = "value";
+            const valueEncoded = Buffer.from(value);
+            expect(await client.set(key, value)).toEqual("OK");
+            // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
+            // TODO: fix custom command with unmatch decoder to return an error: https://github.com/valkey-io/valkey-glide/issues/2119
+            // expect(await client.customCommand(["DUMP", key])).toThrowError();
+            const dumpResult = await client.customCommand(["DUMP", key], {
+                decoder: Decoder.Bytes,
+            });
+            expect(await client.del([key])).toEqual(1);
+
+            if (dumpResult instanceof Buffer) {
+                // check the delete
+                expect(await client.get(key)).toEqual(null);
+                expect(
+                    await client.customCommand(
+                        ["RESTORE", key, "0", dumpResult],
+                        { decoder: Decoder.Bytes },
+                    ),
+                ).toEqual("OK");
+                // check the restore
+                expect(await client.get(key)).toEqual(value);
+                expect(await client.get(key, Decoder.Bytes)).toEqual(
+                    valueEncoded,
+                );
+            }
         },
         TIMEOUT,
     );
@@ -253,8 +297,13 @@ describe("GlideClusterClient", () => {
             );
 
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
-                transaction.publish("message", "key");
-                expectedRes.push(['publish("message", "key")', 0]);
+                transaction.publish("message", "key", true);
+                expectedRes.push(['publish("message", "key", true)', 0]);
+
+                transaction.pubsubShardChannels();
+                expectedRes.push(["pubsubShardChannels()", []]);
+                transaction.pubsubShardNumSub();
+                expectedRes.push(["pubsubShardNumSub()", {}]);
             }
 
             const result = await client.exec(transaction);
@@ -274,7 +323,7 @@ describe("GlideClusterClient", () => {
             );
             const transaction = new ClusterTransaction();
             transaction.get("key");
-            const result1 = await client1.customCommand(["WATCH", "key"]);
+            const result1 = await client1.watch(["key"]);
             expect(result1).toEqual("OK");
 
             const result2 = await client2.set("key", "foo");
@@ -334,6 +383,8 @@ describe("GlideClusterClient", () => {
                 client.sortStore("abc", "zyx", { isAlpha: true }),
                 client.lmpop(["abc", "def"], ListDirection.LEFT, 1),
                 client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
+                client.bzpopmax(["abc", "def"], 0.5),
+                client.bzpopmin(["abc", "def"], 0.5),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {
@@ -349,6 +400,13 @@ describe("GlideClusterClient", () => {
                     client.zdiffWithScores(["abc", "zxy", "lkn"]),
                     client.zdiffstore("abc", ["zxy", "lkn"]),
                     client.copy("abc", "zxy", true),
+                    client.geosearchstore(
+                        "abc",
+                        "zxy",
+                        { member: "_" },
+                        { radius: 5, unit: GeoUnit.METERS },
+                    ),
+                    client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
                 );
             }
 
@@ -385,6 +443,7 @@ describe("GlideClusterClient", () => {
             await client.mget(["abc", "zxy", "lkn"]);
             await client.mset({ abc: "1", zxy: "2", lkn: "3" });
             await client.touch(["abc", "zxy", "lkn"]);
+            await client.watch(["ghi", "zxy", "lkn"]);
             client.close();
         },
     );
@@ -727,7 +786,7 @@ describe("GlideClusterClient", () => {
                 "Single node route = %s",
                 (singleNodeRoute) => {
                     it(
-                        "function load and function list",
+                        "function load function list function stats",
                         async () => {
                             if (cluster.checkIfServerVersionLessThan("7.0.0"))
                                 return;
@@ -763,6 +822,21 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) => expect(value).toEqual([]),
                                 );
+
+                                let functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            0,
+                                            0,
+                                        ),
+                                );
+
                                 // load the library
                                 expect(await client.functionLoad(code)).toEqual(
                                     libName,
@@ -789,6 +863,19 @@ describe("GlideClusterClient", () => {
                                             libName,
                                             expectedDescription,
                                             expectedFlags,
+                                        ),
+                                );
+                                functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            1,
+                                            1,
                                         ),
                                 );
 
@@ -869,6 +956,19 @@ describe("GlideClusterClient", () => {
                                             newCode,
                                         ),
                                 );
+                                functionStats =
+                                    await client.functionStats(route);
+                                checkClusterResponse(
+                                    functionStats as object,
+                                    singleNodeRoute,
+                                    (value) =>
+                                        checkFunctionStatsResponse(
+                                            value as FunctionStatsResponse,
+                                            [],
+                                            1,
+                                            2,
+                                        ),
+                                );
 
                                 fcall = await client.fcallWithRoute(
                                     func2Name,
@@ -900,17 +1000,6 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
-                },
-            );
-        },
-    );
-
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "Protocol is RESP2 = %s",
-        (protocol) => {
-            describe.each([true, false])(
-                "Single node route = %s",
-                (singleNodeRoute) => {
                     it(
                         "function flush",
                         async () => {
@@ -997,17 +1086,6 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
-                },
-            );
-        },
-    );
-
-    describe.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "Protocol is RESP2 = %s",
-        (protocol) => {
-            describe.each([true, false])(
-                "Single node route = %s",
-                (singleNodeRoute) => {
                     it(
                         "function delete",
                         async () => {
@@ -1081,7 +1159,201 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
+                    it(
+                        "function kill with route",
+                        async () => {
+                            if (cluster.checkIfServerVersionLessThan("7.0.0"))
+                                return;
+
+                            const config = getClientConfigurationOption(
+                                cluster.getAddresses(),
+                                protocol,
+                                10000,
+                            );
+                            const client =
+                                await GlideClusterClient.createClient(config);
+                            const testClient =
+                                await GlideClusterClient.createClient(config);
+
+                            try {
+                                const libName =
+                                    "function_kill_no_write_with_route_" +
+                                    singleNodeRoute;
+                                const funcName =
+                                    "deadlock_with_route_" + singleNodeRoute;
+                                const code =
+                                    createLuaLibWithLongRunningFunction(
+                                        libName,
+                                        funcName,
+                                        6,
+                                        true,
+                                    );
+                                const route: Routes = singleNodeRoute
+                                    ? { type: "primarySlotKey", key: "1" }
+                                    : "allPrimaries";
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
+
+                                // nothing to kill
+                                await expect(
+                                    client.functionKill(route),
+                                ).rejects.toThrow(/notbusy/i);
+
+                                // load the lib
+                                expect(
+                                    await client.functionLoad(
+                                        code,
+                                        true,
+                                        route,
+                                    ),
+                                ).toEqual(libName);
+
+                                try {
+                                    // call the function without await
+                                    const promise = testClient
+                                        .fcallWithRoute(funcName, [], route)
+                                        .catch((e) =>
+                                            expect(
+                                                (e as Error).message,
+                                            ).toContain("Script killed"),
+                                        );
+
+                                    let killed = false;
+                                    let timeout = 4000;
+                                    await new Promise((resolve) =>
+                                        setTimeout(resolve, 1000),
+                                    );
+
+                                    while (timeout >= 0) {
+                                        try {
+                                            expect(
+                                                await client.functionKill(
+                                                    route,
+                                                ),
+                                            ).toEqual("OK");
+                                            killed = true;
+                                            break;
+                                        } catch {
+                                            // do nothing
+                                        }
+
+                                        await new Promise((resolve) =>
+                                            setTimeout(resolve, 500),
+                                        );
+                                        timeout -= 500;
+                                    }
+
+                                    expect(killed).toBeTruthy();
+                                    await promise;
+                                } finally {
+                                    await waitForNotBusy(client);
+                                }
+                            } finally {
+                                expect(await client.functionFlush()).toEqual(
+                                    "OK",
+                                );
+                                client.close();
+                                testClient.close();
+                            }
+                        },
+                        TIMEOUT,
+                    );
                 },
+            );
+            it(
+                "function kill key based write function",
+                async () => {
+                    if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+                    const config = getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                        10000,
+                    );
+                    const client =
+                        await GlideClusterClient.createClient(config);
+                    const testClient =
+                        await GlideClusterClient.createClient(config);
+
+                    try {
+                        const libName =
+                            "function_kill_key_based_write_function";
+                        const funcName =
+                            "deadlock_write_function_with_key_based_route";
+                        const key = libName;
+                        const code = createLuaLibWithLongRunningFunction(
+                            libName,
+                            funcName,
+                            6,
+                            false,
+                        );
+
+                        const route: Routes = {
+                            type: "primarySlotKey",
+                            key: key,
+                        };
+                        expect(await client.functionFlush()).toEqual("OK");
+
+                        // nothing to kill
+                        await expect(
+                            client.functionKill(route),
+                        ).rejects.toThrow(/notbusy/i);
+
+                        // load the lib
+                        expect(
+                            await client.functionLoad(code, true, route),
+                        ).toEqual(libName);
+
+                        let promise = null;
+
+                        try {
+                            // call the function without await
+                            promise = testClient.fcall(funcName, [key], []);
+
+                            let foundUnkillable = false;
+                            let timeout = 4000;
+                            await new Promise((resolve) =>
+                                setTimeout(resolve, 1000),
+                            );
+
+                            while (timeout >= 0) {
+                                try {
+                                    // valkey kills a function with 5 sec delay
+                                    // but this will always throw an error in the test
+                                    await client.functionKill(route);
+                                } catch (err) {
+                                    // looking for an error with "unkillable" in the message
+                                    // at that point we can break the loop
+                                    if (
+                                        (err as Error).message
+                                            .toLowerCase()
+                                            .includes("unkillable")
+                                    ) {
+                                        foundUnkillable = true;
+                                        break;
+                                    }
+                                }
+
+                                await new Promise((resolve) =>
+                                    setTimeout(resolve, 500),
+                                );
+                                timeout -= 500;
+                            }
+
+                            expect(foundUnkillable).toBeTruthy();
+                        } finally {
+                            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+                            // test to fail. Wait for the function to complete (we cannot kill it)
+                            expect(await promise).toContain("Timed out");
+                        }
+                    } finally {
+                        expect(await client.functionFlush()).toEqual("OK");
+                        client.close();
+                        testClient.close();
+                    }
+                },
+                TIMEOUT,
             );
         },
     );
@@ -1105,6 +1377,108 @@ describe("GlideClusterClient", () => {
             // `key` should be the only existing key, so randomKey should return `key`
             expect(await client.randomKey()).toEqual(key);
             expect(await client.randomKey("allPrimaries")).toEqual(key);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "watch test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+            const key3 = "{key}-3" + uuidv4();
+            const key4 = "{key}-4" + uuidv4();
+            const setFoobarTransaction = new ClusterTransaction();
+            const setHelloTransaction = new ClusterTransaction();
+
+            // Returns null when a watched key is modified before it is executed in a transaction command.
+            // Transaction commands are not performed.
+            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.set(key2, "hello")).toEqual("OK");
+            setFoobarTransaction
+                .set(key1, "foobar")
+                .set(key2, "foobar")
+                .set(key3, "foobar");
+            let results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(null);
+            // sanity check
+            expect(await client.get(key1)).toEqual(null);
+            expect(await client.get(key2)).toEqual("hello");
+            expect(await client.get(key3)).toEqual(null);
+
+            // Transaction executes command successfully with a read command on the watch key before
+            // transaction is executed.
+            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.get(key2)).toEqual("hello");
+            results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(["OK", "OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("foobar");
+            expect(await client.get(key2)).toEqual("foobar");
+            expect(await client.get(key3)).toEqual("foobar");
+
+            // Transaction executes command successfully with unmodified watched keys
+            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(["OK", "OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("foobar");
+            expect(await client.get(key2)).toEqual("foobar");
+            expect(await client.get(key3)).toEqual("foobar");
+
+            // Transaction executes command successfully with a modified watched key but is not in the
+            // transaction.
+            expect(await client.watch([key4])).toEqual("OK");
+            setHelloTransaction
+                .set(key1, "hello")
+                .set(key2, "hello")
+                .set(key3, "hello");
+            results = await client.exec(setHelloTransaction);
+            expect(results).toEqual(["OK", "OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("hello");
+            expect(await client.get(key2)).toEqual("hello");
+            expect(await client.get(key3)).toEqual("hello");
+
+            // WATCH can not have an empty String array parameter
+            await expect(client.watch([])).rejects.toThrow(RequestError);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "unwatch test_%p",
+        async (protocol) => {
+            const client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key1 = "{key}-1" + uuidv4();
+            const key2 = "{key}-2" + uuidv4();
+            const setFoobarTransaction = new ClusterTransaction();
+
+            // UNWATCH returns OK when there no watched keys
+            expect(await client.unwatch()).toEqual("OK");
+
+            // Transaction executes successfully after modifying a watched key then calling UNWATCH
+            expect(await client.watch([key1, key2])).toEqual("OK");
+            expect(await client.set(key2, "hello")).toEqual("OK");
+            expect(await client.unwatch()).toEqual("OK");
+            expect(await client.unwatch("allPrimaries")).toEqual("OK");
+            setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
+            const results = await client.exec(setFoobarTransaction);
+            expect(results).toEqual(["OK", "OK"]);
+            // sanity check
+            expect(await client.get(key1)).toEqual("foobar");
+            expect(await client.get(key2)).toEqual("foobar");
 
             client.close();
         },

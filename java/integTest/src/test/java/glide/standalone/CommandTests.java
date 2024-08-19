@@ -107,6 +107,14 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void custom_command_info_binary() {
+        Object data = regularClient.customCommand(new GlideString[] {gs("info")}).get();
+        assertInstanceOf(GlideString.class, data);
+        assertTrue(data.toString().contains("# Stats"));
+    }
+
+    @Test
+    @SneakyThrows
     public void custom_command_del_returns_a_number() {
         String key = "custom_command_del_returns_a_number";
         regularClient.set(key, INITIAL_VALUE).get();
@@ -278,13 +286,13 @@ public class CommandTests {
     @SneakyThrows
     public void config_reset_stat() {
         String data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
-        int value_before = getValueFromInfo(data, "total_net_input_bytes");
+        long value_before = getValueFromInfo(data, "total_net_input_bytes");
 
         var result = regularClient.configResetStat().get();
         assertEquals(OK, result);
 
         data = regularClient.info(InfoOptions.builder().section(STATS).build()).get();
-        int value_after = getValueFromInfo(data, "total_net_input_bytes");
+        long value_after = getValueFromInfo(data, "total_net_input_bytes");
         assertTrue(value_after < value_before);
     }
 
