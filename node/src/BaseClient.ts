@@ -1108,7 +1108,7 @@ export class BaseClient {
     /**
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
-     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
      *
      * @param key - The `key` to serialize.
      * @returns The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
@@ -1135,7 +1135,7 @@ export class BaseClient {
      * Create a `key` associated with a `value` that is obtained by deserializing the provided
      * serialized `value` (obtained via {@link dump}).
      *
-     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
      * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
      *
      * @param key - The `key` to create.

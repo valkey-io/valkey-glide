@@ -6244,6 +6244,8 @@ export function runBaseTests(config: {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
+                const key4 = "{key}-4" + uuidv4();
+                const key5 = "{key}-5" + uuidv4();
                 const nonExistingkey = "{nonExistingkey}-" + uuidv4();
                 const value = "orange";
                 const valueEncode = Buffer.from(value);
@@ -6254,7 +6256,7 @@ export function runBaseTests(config: {
                 expect(await client.dump(nonExistingkey)).toBeNull();
 
                 // Dump existing key
-                const data = (await client.dump(key1)) as Buffer;
+                let data = (await client.dump(key1)) as Buffer;
                 expect(data).not.toBeNull();
 
                 // Restore to a new key without option
@@ -6342,6 +6344,56 @@ export function runBaseTests(config: {
                 await expect(
                     client.restore(key2, 0, valueEncode, { replace: true }),
                 ).rejects.toThrow("DUMP payload version or checksum are wrong");
+
+                // Transaction tests
+                let response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction().dump(key1),
+                              Decoder.Bytes,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction().dump(key1),
+                              { decoder: Decoder.Bytes },
+                          );
+                expect(response?.[0]).not.toBeNull();
+                data = response?.[0] as Buffer;
+
+                // Restore with `String` exec decoder
+                response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              Decoder.String,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              { decoder: Decoder.String },
+                          );
+                expect(response?.[0]).toEqual("OK");
+                expect(response?.[1]).toEqual(value);
+
+                // Restore with `Bytes` exec decoder
+                response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction()
+                                  .restore(key5, 0, data)
+                                  .get(key5),
+                              Decoder.Bytes,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction()
+                                  .restore(key5, 0, data)
+                                  .get(key5),
+                              { decoder: Decoder.Bytes },
+                          );
+                expect(response?.[0]).toEqual("OK");
+                expect(response?.[1]).toEqual(valueEncode);
             }, protocol);
         },
         config.timeout,
