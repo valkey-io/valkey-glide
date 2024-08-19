@@ -56,6 +56,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -115,6 +116,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHKeys,
     createHLen,
     createHMGet,
     createHRandField,
@@ -186,6 +188,7 @@ import {
     createSPop,
     createSRandMember,
     createSRem,
+    createSScan,
     createSUnion,
     createSUnionStore,
     createSelect,
@@ -210,11 +213,13 @@ import {
     createXGroupDelConsumer,
     createXGroupDestroy,
     createXInfoConsumers,
+    createXInfoGroups,
     createXInfoStream,
     createXLen,
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
     createXRevRange,
     createXTrim,
     createZAdd,
@@ -742,6 +747,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createHSet(key, fieldValueMap));
     }
 
+    /**
+     * Returns all field names in the hash stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
+     */
+    public hkeys(key: string): T {
+        return this.addAndReturn(createHKeys(key));
+    }
+
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
      * If `key` does not exist, a new key holding a hash is created.
      * If `field` already exists, this operation has no effect.
@@ -1224,6 +1242,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public srem(key: string, members: string[]): T {
         return this.addAndReturn(createSRem(key, members));
+    }
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see {@link https://valkey.io/commands/sscan} for details.
+     *
+     * @param key - The key of the set.
+     * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
+     * @param options - The (Optional) {@link BaseScanOptions}.
+     *
+     * Command Response -  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
+     * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
+     */
+    public sscan(key: string, cursor: string, options?: BaseScanOptions): T {
+        return this.addAndReturn(createSScan(key, cursor, options));
     }
 
     /** Returns all the members of the set value stored at `key`.
@@ -2301,6 +2335,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
     }
 
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xinfo-groups/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     *
+     * Command Response -  An `Array` of `Records`, where each mapping represents the
+     *     attributes of a consumer group for the stream at `key`.
+     */
+    public xinfoGroups(key: string): T {
+        return this.addAndReturn(createXInfoGroups(key));
+    }
+
     /** Returns the server time.
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
@@ -2371,18 +2419,44 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads entries from the given streams.
+     *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
      *
-     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     *
+     * Command Response - A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**
@@ -3347,6 +3421,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by `key1` and `key2`.
+     *
+     *     See example of {@link BaseClient.lcsIdx|lcsIdx} for more details.
      */
     public lcsIdx(
         key1: string,

@@ -105,6 +105,9 @@ import static command_request.CommandRequestOuterClass.RequestType.PfAdd;
 import static command_request.CommandRequestOuterClass.RequestType.PfCount;
 import static command_request.CommandRequestOuterClass.RequestType.PfMerge;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubChannels;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubNumPat;
+import static command_request.CommandRequestOuterClass.RequestType.PubSubNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.Publish;
 import static command_request.CommandRequestOuterClass.RequestType.RPop;
 import static command_request.CommandRequestOuterClass.RequestType.RPush;
@@ -222,6 +225,7 @@ import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import command_request.CommandRequestOuterClass.Transaction;
+import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -339,7 +343,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Glide
      *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
-     * @return Command Response - A response from the server with an <code>Object</code>.
+     * @return Command Response - The returned value for the custom command.
      */
     public <ArgType> T customCommand(ArgType[] args) {
         checkTypeOrThrow(args);
@@ -3035,7 +3039,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.<br>
      * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
-     * {@link #zinterstore(Object, KeysOrWeightedKeys, Aggregate)}.
+     * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}.
      *
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -3061,7 +3065,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.<br>
      * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
-     * {@link #zinterstore(Object, KeysOrWeightedKeys, Aggregate)}.
+     * {@link #zinterstore(GlideString, KeysOrWeightedKeysBinary, Aggregate)}.
      *
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
@@ -3438,9 +3442,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *      pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
      *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
      *     pairings with format <code>[[field, entry],
@@ -3456,9 +3458,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
-     *      pair</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
      *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
@@ -3837,10 +3837,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code> Map</code>
-     *     is composed of a stream's key and the id of the entry after which the stream will be read.
-     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
-     *     </code> to receive only new messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
@@ -3863,10 +3861,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>Map</code>
-     *     is composed of a stream's key and the id of the entry after which the stream will be read.
-     *     Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}</code> to
-     *     receive only new messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
@@ -5226,9 +5222,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
-     * @param key The key of the set.
-     * @return Command Response - The serialized value of a set. If <code>key</code> does not exist,
-     *     <code>null</code> will be returned.
+     * @param key The <code>key</code> to serialize.
+     * @return Command Response - The serialized value of the data stored at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
      */
     public <ArgType> T dump(@NonNull ArgType key) {
         checkTypeOrThrow(key);
@@ -5243,12 +5239,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
-     * @param value The serialized value.
-     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
-     *     with a <code>value</code>.
+     * @param value The serialized value to deserialize and assign to <code>key</code>.
+     * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
+     *     restored with a <code>value</code>.
      */
     public <ArgType> T restore(@NonNull ArgType key, long ttl, @NonNull byte[] value) {
         checkTypeOrThrow(key);
@@ -5263,14 +5259,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
+     * @apiNote <code>IDLETIME</code> and <code>FREQ</code> modifiers cannot be set at the same time.
      * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The <code>key</code> to create.
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
-     * @param value The serialized value.
+     * @param value The serialized value to deserialize and assign to <code>key</code>.
      * @param restoreOptions The restore options. See {@link RestoreOptions}.
-     * @return Command Response - Return <code>OK</code> if successfully create a <code>key</code>
-     *     with a <code>value</code>.
+     * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
+     *     restored with a <code>value</code>.
      */
     public <ArgType> T restore(
             @NonNull ArgType key,
@@ -6240,27 +6237,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
-     *  key2</code>.
-     *
-     * @since Valkey 7.0 and above.
-     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
-     *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
-     * @param key1 The key that stores the first string.
-     * @param key2 The key that stores the second string.
-     * @return Command Response - A <code>String</code> containing the longest common subsequence
-     *     between the 2 strings. An empty <code>String</code> is returned if the keys do not exist or
-     *     have no common subsequences.
-     */
-    public <ArgType> T lcs(@NonNull ArgType key1, @NonNull ArgType key2) {
-        checkTypeOrThrow(key1);
-        protobufTransaction.addCommands(buildCommand(LCS, newArgsBuilder().add(key1).add(key2)));
-        return getThis();
-    }
-
-    /**
-     * Returns the length of the longest common subsequence between strings stored at <code>key1
+     * Returns all the longest common subsequences combined between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -6269,7 +6246,28 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
-     * @return Command Response - The length of the longest common subsequence between the 2 strings.
+     * @return Command Response - A <code>String</code> containing all the longest common subsequences
+     *     combined between the 2 strings. An empty <code>String</code>/<code>GlideString</code> is
+     *     returned if the keys do not exist or have no common subsequences.
+     */
+    public <ArgType> T lcs(@NonNull ArgType key1, @NonNull ArgType key2) {
+        checkTypeOrThrow(key1);
+        protobufTransaction.addCommands(buildCommand(LCS, newArgsBuilder().add(key1).add(key2)));
+        return getThis();
+    }
+
+    /**
+     * Returns the total length of all the longest common subsequences between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Valkey 7.0 and above.
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return Command Response - The total length of all the longest common subsequences between the
+     *     2 strings.
      */
     public <ArgType> T lcsLen(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
@@ -6292,6 +6290,75 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         checkTypeOrThrow(channel);
         protobufTransaction.addCommands(
                 buildCommand(Publish, newArgsBuilder().add(channel).add(message)));
+        return getThis();
+    }
+
+    /**
+     * Lists the currently active channels.
+     *
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single array.
+     * @see <a href="https://valkey.io/commands/pubsub-channels/">valkey.io</a> for details.
+     * @return Command response - An <code>Array</code> of all active channels.
+     */
+    public T pubsubChannels() {
+        protobufTransaction.addCommands(buildCommand(PubSubChannels));
+        return getThis();
+    }
+
+    /**
+     * Lists the currently active channels.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single array.
+     * @see <a href="https://valkey.io/commands/pubsub-channels/">valkey.io</a> for details.
+     * @param pattern A glob-style pattern to match active channels.
+     * @return Command response - An <code>Array</code> of currently active channels matching the
+     *     given pattern.
+     */
+    public <ArgType> T pubsubChannels(@NonNull ArgType pattern) {
+        checkTypeOrThrow(pattern);
+        protobufTransaction.addCommands(buildCommand(PubSubChannels, newArgsBuilder().add(pattern)));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of unique patterns that are subscribed to by clients.
+     *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *           into a single array.
+     *       <li>This is the total number of unique patterns all the clients are subscribed to, not
+     *           the count of clients subscribed to patterns.
+     *     </ul>
+     *
+     * @see <a href="https://valkey.io/commands/pubsub-numpat/">valkey.io</a> for details.
+     * @return Command response - The number of unique patterns.
+     */
+    public T pubsubNumPat() {
+        protobufTransaction.addCommands(buildCommand(PubSubNumPat));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the
+     * specified channels.
+     *
+     * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
+     *     will throw {@link IllegalArgumentException}.
+     * @apiNote When in cluster mode, the command is routed to all nodes, and aggregates the response
+     *     into a single map.
+     * @see <a href="https://valkey.io/commands/pubsub-numsub/">valkey.io</a> for details.
+     * @param channels The list of channels to query for the number of subscribers.
+     * @return Command response - A <code>Map</code> where keys are the channel names and values are
+     *     the numbers of subscribers.
+     */
+    public <ArgType> T pubsubNumSub(@NonNull ArgType[] channels) {
+        checkTypeOrThrow(channels);
+        protobufTransaction.addCommands(buildCommand(PubSubNumSub, newArgsBuilder().add(channels)));
         return getThis();
     }
 
@@ -6322,35 +6389,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
      * @return Command Response - A <code>Map</code> containing the indices of the longest common
-     *     subsequence between the 2 strings and the length of the longest common subsequence. The
-     *     resulting map contains two keys, "matches" and "len":
+     *     subsequence between the 2 strings and the total length of all the longest common
+     *     subsequences. The resulting map contains two keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
-     *           stored as <code>Long</code>.
+     *       <li>"len" is mapped to the total length of the all longest common subsequences between
+     *           the 2 strings stored as <code>Long</code>.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
      *     </ul>
-     *
-     * @example If <code>key1</code> holds the string <code>"abcd123"</code> and <code>key2</code>
-     *     holds the string <code>"bcdef123"</code> then the sample result would be
-     *     <pre>{@code
-     * new Long[][][] {
-     *     {
-     *         {4L, 6L},
-     *         {5L, 7L}
-     *     },
-     *     {
-     *         {1L, 3L},
-     *         {0L, 2L}
-     *     }
-     * }
-     * }</pre>
-     *     The result indicates that the first substring match is <code>"123"</code> in <code>key1
-     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
-     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
-     *      "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
-     *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     *     See example of {@link StringBaseCommands#lcsIdx(String, String)} for more details.
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
@@ -6360,8 +6408,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the indices and length of the longest common subsequence between strings stored at
-     * <code>key1</code> and <code>key2</code>.
+     * Returns the indices and the total length of all the longest common subsequences between strings
+     * stored at <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
@@ -6371,35 +6419,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key2 The key that stores the second string.
      * @param minMatchLen The minimum length of matches to include in the result.
      * @return Command Response - A <code>Map</code> containing the indices of the longest common
-     *     subsequence between the 2 strings and the length of the longest common subsequence. The
-     *     resulting map contains two keys, "matches" and "len":
+     *     subsequence between the 2 strings and the total length of all the longest common
+     *     subsequences. The resulting map contains two keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
-     *           stored as <code>Long</code>.
+     *       <li>"len" is mapped to the total length of the all longest common subsequences between
+     *           the 2 strings stored as <code>Long</code>. This value doesn't count towards the
+     *           <code>minMatchLen</code> filter.
      *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by <code>key1</code> and <code>key2</code>.
      *     </ul>
-     *
-     * @example If <code>key1</code> holds the string <code>"abcd123"</code> and <code>key2</code>
-     *     holds the string <code>"bcdef123"</code> then the sample result would be
-     *     <pre>{@code
-     * new Long[][][] {
-     *     {
-     *         {4L, 6L},
-     *         {5L, 7L}
-     *     },
-     *     {
-     *         {1L, 3L},
-     *         {0L, 2L}
-     *     }
-     * }
-     * }</pre>
-     *     The result indicates that the first substring match is <code>"123"</code> in <code>key1
-     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
-     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
-     *      "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
-     *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     *     See example of {@link StringBaseCommands#lcsIdx(String, String, long)} for more details.
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
         checkTypeOrThrow(key1);
@@ -6416,7 +6446,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the indices and length of the longest common subsequence between strings stored at
+     * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -6426,39 +6456,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key1 The key that stores the first string.
      * @param key2 The key that stores the second string.
      * @return Command Response - A <code>Map</code> containing the indices of the longest common
-     *     subsequence between the 2 strings and the length of the longest common subsequence. The
+     *     subsequence between the 2 strings and the lengths of the longest common subsequences. The
      *     resulting map contains two keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
-     *           stored as <code>Long</code>.
-     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
-     *           of indices that represent the location of the common subsequences in the strings held
-     *           by <code>key1</code> and <code>key2</code>.
+     *       <li>"len" is mapped to the total length of the all longest common subsequences between
+     *           the 2 strings stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional array that stores pairs of indices that
+     *           represent the location of the common subsequences in the strings held by <code>key1
+     *            </code> and <code>key2</code> and the match length.
      *     </ul>
-     *
-     * @example If <code>key1</code> holds the string <code>"abcd1234"</code> and <code>key2</code>
-     *     holds the string <code>"bcdef1234"</code> then the sample result would be
-     *     <pre>{@code
-     * new Object[] {
-     *     new Object[] {
-     *         new Long[] {4L, 7L},
-     *         new Long[] {5L, 8L},
-     *         4L
-     *     },
-     *     new Object[] {
-     *         new Long[] {1L, 3L},
-     *         new Long[] {0L, 2L},
-     *         3L
-     *     }
-     * }
-     * }</pre>
-     *     The result indicates that the first substring match is <code>"1234"</code> in <code>key1
-     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
-     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
-     *     length of the substring match which is <code>4</code>. And the second substring match is
-     *     <code>"bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
-     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
-     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     *     See example of {@link StringBaseCommands#lcsIdxWithMatchLen(String, String)} for more
+     *     details.
      */
     public <ArgType> T lcsIdxWithMatchLen(@NonNull ArgType key1, @NonNull ArgType key2) {
         checkTypeOrThrow(key1);
@@ -6474,7 +6482,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the indices and length of the longest common subsequence between strings stored at
+     * Returns the indices and lengths of the longest common subsequences between strings stored at
      * <code>key1</code> and <code>key2</code>.
      *
      * @since Valkey 7.0 and above.
@@ -6485,39 +6493,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key2 The key that stores the second string.
      * @param minMatchLen The minimum length of matches to include in the result.
      * @return Command Response - A <code>Map</code> containing the indices of the longest common
-     *     subsequence between the 2 strings and the length of the longest common subsequence. The
+     *     subsequence between the 2 strings and the lengths of the longest common subsequences. The
      *     resulting map contains two keys, "matches" and "len":
      *     <ul>
-     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
-     *           stored as <code>Long</code>.
-     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
-     *           of indices that represent the location of the common subsequences in the strings held
-     *           by <code>key1</code> and <code>key2</code>.
+     *       <li>"len" is mapped to the total length of the all longest common subsequences between
+     *           the 2 strings stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional array that stores pairs of indices that
+     *           represent the location of the common subsequences in the strings held by <code>key1
+     *            </code> and <code>key2</code> and the match length.
      *     </ul>
-     *
-     * @example If <code>key1</code> holds the string <code>"abcd1234"</code> and <code>key2</code>
-     *     holds the string <code>"bcdef1234"</code> then the sample result would be
-     *     <pre>{@code
-     * new Object[] {
-     *     new Object[] {
-     *         new Long[] { 4L, 7L },
-     *         new Long[] { 5L, 8L },
-     *         4L
-     *     },
-     *     new Object[] {
-     *         new Long[] { 1L, 3L },
-     *         new Long[] { 0L, 2L },
-     *         3L
-     *     }
-     * }
-     * }</pre>
-     *     The result indicates that the first substring match is <code>"1234"</code> in <code>key1
-     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
-     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
-     *     length of the substring match which is <code>4</code>. And the second substring match is
-     *     <code>"bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
-     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
-     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     *     See example of {@link StringBaseCommands#lcsIdxWithMatchLen(String, String, long)} for more
+     *     details.
      */
     public <ArgType> T lcsIdxWithMatchLen(
             @NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {

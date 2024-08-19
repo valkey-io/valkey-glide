@@ -744,6 +744,8 @@ export async function transactionTest(
     responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
     responseData.push(["hvals(key4)", [value]]);
+    baseTransaction.hkeys(key4);
+    responseData.push(["hkeys(key4)", [field]]);
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
@@ -881,6 +883,13 @@ export async function transactionTest(
     responseData.push(["sdiffstore(key7, [key7])", 2]);
     baseTransaction.srem(key7, ["foo"]);
     responseData.push(['srem(key7, ["foo"])', 1]);
+    baseTransaction.sscan(key7, "0");
+    responseData.push(['sscan(key7, "0")', ["0", ["bar"]]]);
+    baseTransaction.sscan(key7, "0", { match: "*", count: 20 });
+    responseData.push([
+        'sscan(key7, "0", {match: "*", count: 20})',
+        ["0", ["bar"]],
+    ]);
     baseTransaction.scard(key7);
     responseData.push(["scard(key7)", 1]);
     baseTransaction.sismember(key7, "bar");
@@ -1094,6 +1103,8 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+    baseTransaction.xinfoGroups(key9);
+    responseData.push(["xinfoGroups(key9)", []]);
     baseTransaction.xgroupCreate(key9, groupName1, "0-0");
     responseData.push(['xgroupCreate(key9, groupName1, "0-0")', "OK"]);
     baseTransaction.xgroupCreate(key9, groupName2, "0-0", { mkStream: true });
@@ -1113,17 +1124,9 @@ export async function transactionTest(
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.customCommand([
-        "xreadgroup",
-        "group",
-        groupName1,
-        consumer,
-        "STREAMS",
-        key9,
-        ">",
-    ]);
+    baseTransaction.xreadgroup(groupName1, consumer, { [key9]: ">" });
     responseData.push([
-        "xreadgroup(groupName1, consumer, key9, >)",
+        'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         { [key9]: { "0-2": [["field", "value2"]] } },
     ]);
     baseTransaction.xpending(key9, groupName1);

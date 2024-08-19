@@ -107,7 +107,7 @@ export function createGetDel(key: GlideString): command_request.Command {
  * @internal
  */
 export function createGetRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -320,7 +320,7 @@ export function createConfigResetStat(): command_request.Command {
 /**
  * @internal
  */
-export function createMGet(keys: string[]): command_request.Command {
+export function createMGet(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.MGet, keys);
 }
 
@@ -402,8 +402,8 @@ export function createConfigSet(
  * @internal
  */
 export function createHGet(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
 }
@@ -419,6 +419,13 @@ export function createHSet(
         RequestType.HSet,
         [key].concat(Object.entries(fieldValueMap).flat()),
     );
+}
+
+/**
+ * @internal
+ */
+export function createHKeys(key: string): command_request.Command {
+    return createCommand(RequestType.HKeys, [key]);
 }
 
 /**
@@ -1021,6 +1028,23 @@ export function createSRem(
 /**
  * @internal
  */
+export function createSScan(
+    key: string,
+    cursor: string,
+    options?: BaseScanOptions,
+): command_request.Command {
+    let args: string[] = [key, cursor];
+
+    if (options) {
+        args = args.concat(convertBaseScanOptionsToArgsArray(options));
+    }
+
+    return createCommand(RequestType.SScan, args);
+}
+
+/**
+ * @internal
+ */
 export function createSMembers(key: string): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }
@@ -1197,7 +1221,7 @@ export function createHLen(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createHVals(key: string): command_request.Command {
+export function createHVals(key: GlideString): command_request.Command {
     return createCommand(RequestType.HVals, [key]);
 }
 
@@ -1627,10 +1651,10 @@ function getLexBoundaryArg(score: Boundary<number> | Boundary<string>): string {
     }
 
     if (score.isInclusive == false) {
-        return "(" + score.value.toString();
+        return "(" + score.value;
     }
 
-    return "[" + score.value.toString();
+    return "[" + score.value;
 }
 
 /** Returns a string representation of a stream boundary as a command argument. */
@@ -2355,6 +2379,7 @@ export enum FlushMode {
     ASYNC = "ASYNC",
 }
 
+/** Optional arguments for {@link BaseClient.xread|xread} command. */
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
@@ -2369,30 +2394,39 @@ export type StreamReadOptions = {
     count?: number;
 };
 
-function addReadOptions(options: StreamReadOptions, args: string[]) {
-    if (options.count !== undefined) {
+/** Optional arguments for {@link BaseClient.xreadgroup|xreadgroup} command. */
+export type StreamReadGroupOptions = StreamReadOptions & {
+    /**
+     * If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+     * acknowledging the message when it is read.
+     */
+    noAck?: boolean;
+};
+
+/** @internal */
+function addReadOptions(options?: StreamReadOptions): string[] {
+    const args = [];
+
+    if (options?.count !== undefined) {
         args.push("COUNT");
         args.push(options.count.toString());
     }
 
-    if (options.block !== undefined) {
+    if (options?.block !== undefined) {
         args.push("BLOCK");
         args.push(options.block.toString());
     }
+
+    return args;
 }
 
-function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
-    args.push("STREAMS");
-
-    const pairs = Object.entries(keys_and_ids);
-
-    for (const [key] of pairs) {
-        args.push(key);
-    }
-
-    for (const [, id] of pairs) {
-        args.push(id);
-    }
+/** @internal */
+function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
+    return [
+        "STREAMS",
+        ...Object.keys(keys_and_ids),
+        ...Object.values(keys_and_ids),
+    ];
 }
 
 /**
@@ -2402,15 +2436,29 @@ export function createXRead(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
 ): command_request.Command {
-    const args: string[] = [];
-
-    if (options) {
-        addReadOptions(options, args);
-    }
-
-    addStreamsArgs(keys_and_ids, args);
+    const args = addReadOptions(options);
+    args.push(...addStreamsArgs(keys_and_ids));
 
     return createCommand(RequestType.XRead, args);
+}
+
+/** @internal */
+export function createXReadGroup(
+    group: string,
+    consumer: string,
+    keys_and_ids: Record<string, string>,
+    options?: StreamReadGroupOptions,
+): command_request.Command {
+    const args: string[] = ["GROUP", group, consumer];
+
+    if (options) {
+        args.push(...addReadOptions(options));
+        if (options.noAck) args.push("NOACK");
+    }
+
+    args.push(...addStreamsArgs(keys_and_ids));
+
+    return createCommand(RequestType.XReadGroup, args);
 }
 
 /**
@@ -2448,6 +2496,11 @@ export function createXInfoStream(
     return createCommand(RequestType.XInfoStream, args);
 }
 
+/** @internal */
+export function createXInfoGroups(key: string): command_request.Command {
+    return createCommand(RequestType.XInfoGroups, [key]);
+}
+
 /**
  * @internal
  */
@@ -2457,11 +2510,11 @@ export function createXLen(key: string): command_request.Command {
 
 /** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
 export type StreamPendingOptions = {
-    /** Filter pending entries by their idle time - in milliseconds */
+    /** Filter pending entries by their idle time - in milliseconds. Available since Valkey 6.2.0. */
     minIdleTime?: number;
-    /** Starting stream ID bound for range. */
+    /** Starting stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
     start: Boundary<string>;
-    /** Ending stream ID bound for range. */
+    /** Ending stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
     end: Boundary<string>;
     /** Limit the number of messages returned. */
     count: number;
@@ -2803,6 +2856,77 @@ export function createMove(
     dbIndex: number,
 ): command_request.Command {
     return createCommand(RequestType.Move, [key, dbIndex.toString()]);
+}
+
+/**
+ * @internal
+ */
+export function createDump(key: GlideString): command_request.Command {
+    return createCommand(RequestType.Dump, [key]);
+}
+
+/**
+ * Optional arguments for `RESTORE` command.
+ *
+ * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+ * @remarks `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
+ */
+export type RestoreOptions = {
+    /**
+     * Set to `true` to replace the key if it exists.
+     */
+    replace?: boolean;
+    /**
+     * Set to `true` to specify that `ttl` argument of {@link BaseClient.restore} represents
+     * an absolute Unix timestamp (in milliseconds).
+     */
+    absttl?: boolean;
+    /**
+     * Set the `IDLETIME` option with object idletime to the given key.
+     */
+    idletime?: number;
+    /**
+     * Set the `FREQ` option with object frequency to the given key.
+     */
+    frequency?: number;
+};
+
+/**
+ * @internal
+ */
+export function createRestore(
+    key: GlideString,
+    ttl: number,
+    value: GlideString,
+    options?: RestoreOptions,
+): command_request.Command {
+    const args: GlideString[] = [key, ttl.toString(), value];
+
+    if (options) {
+        if (options.idletime !== undefined && options.frequency !== undefined) {
+            throw new Error(
+                `syntax error: both IDLETIME and FREQ cannot be set at the same time.`,
+            );
+        }
+
+        if (options.replace) {
+            args.push("REPLACE");
+        }
+
+        if (options.absttl) {
+            args.push("ABSTTL");
+        }
+
+        if (options.idletime !== undefined) {
+            args.push("IDLETIME", options.idletime.toString());
+        }
+
+        if (options.frequency !== undefined) {
+            args.push("FREQ", options.frequency.toString());
+        }
+    }
+
+    return createCommand(RequestType.Restore, args);
 }
 
 /**
@@ -3542,8 +3666,8 @@ export function createSetRange(
 
 /** @internal */
 export function createAppend(
-    key: string,
-    value: string,
+    key: GlideString,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.Append, [key, value]);
 }

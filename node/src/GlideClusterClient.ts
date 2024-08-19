@@ -358,7 +358,7 @@ export class GlideClusterClient extends BaseClient {
     public async customCommand(
         args: GlideString[],
         options?: { route?: Routes; decoder?: Decoder },
-    ): Promise<ReturnType> {
+    ): Promise<ClusterResponse<ReturnType>> {
         const command = createCustomCommand(args);
         return super.createWritePromise(command, {
             route: toProtobufRoute(options?.route),
