@@ -988,6 +988,8 @@ export async function transactionTest(
         responseData.push(["zdiffWithScores([key13, key12])", { three: 3.5 }]);
         baseTransaction.zdiffstore(key13, [key13, key13]);
         responseData.push(["zdiffstore(key13, [key13, key13])", 0]);
+        baseTransaction.zunionstore(key5, [key12, key13]);
+        responseData.push(["zunionstore(key5, [key12, key13])", 2]);
         baseTransaction.zmscore(key12, ["two", "one"]);
         responseData.push(['zmscore(key12, ["two", "one"]', [2.0, 1.0]]);
         baseTransaction.zinterstore(key12, [key12, key13]);
