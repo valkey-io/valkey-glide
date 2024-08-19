@@ -4,7 +4,6 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    Decoder, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
@@ -47,6 +46,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreFilter,
     SearchOrigin,
@@ -86,6 +86,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createEcho,
     createExists,
     createExpire,
@@ -175,6 +176,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -415,6 +417,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public del(keys: string[]): T {
         return this.addAndReturn(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * @param key - The `key` to serialize.
+     * Command Response - The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
+     */
+    public dump(key: GlideString): T {
+        return this.addAndReturn(createDump(key));
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
+     *
+     * @param key - The `key` to create.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value to deserialize and assign to `key`.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
+     * Command Response - Return "OK" if the `key` was successfully restored with a `value`.
+     */
+    public restore(
+        key: GlideString,
+        ttl: number,
+        value: Buffer,
+        options?: RestoreOptions,
+    ): T {
+        return this.addAndReturn(createRestore(key, ttl, value, options));
     }
 
     /** Get the name of the connection on which the transaction is being executed.
