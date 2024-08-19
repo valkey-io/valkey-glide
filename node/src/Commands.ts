@@ -107,7 +107,7 @@ export function createGetDel(key: GlideString): command_request.Command {
  * @internal
  */
 export function createGetRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -320,7 +320,7 @@ export function createConfigResetStat(): command_request.Command {
 /**
  * @internal
  */
-export function createMGet(keys: string[]): command_request.Command {
+export function createMGet(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.MGet, keys);
 }
 
@@ -402,8 +402,8 @@ export function createConfigSet(
  * @internal
  */
 export function createHGet(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
 }
@@ -1221,7 +1221,7 @@ export function createHLen(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createHVals(key: string): command_request.Command {
+export function createHVals(key: GlideString): command_request.Command {
     return createCommand(RequestType.HVals, [key]);
 }
 
@@ -3623,8 +3623,8 @@ export function createSetRange(
 
 /** @internal */
 export function createAppend(
-    key: string,
-    value: string,
+    key: GlideString,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.Append, [key, value]);
 }
