@@ -647,9 +647,8 @@ export class GlideClient extends BaseClient {
      * Kills a function that is currently executing.
      * `FUNCTION KILL` terminates read-only functions only.
      *
-     * See https://valkey.io/commands/function-kill/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @returns `OK` if function is terminated. Otherwise, throws an error.
      * @example
@@ -664,9 +663,8 @@ export class GlideClient extends BaseClient {
     /**
      * Returns the serialized payload of all loaded libraries.
      *
-     * See https://valkey.io/commands/function-dump/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @returns The serialized payload of all loaded libraries.
      *
@@ -685,9 +683,8 @@ export class GlideClient extends BaseClient {
     /**
      * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
-     * See https://valkey.io/commands/function-restore/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries.
