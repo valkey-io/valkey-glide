@@ -1952,7 +1952,7 @@ export function runBaseTests(config: {
                 const key2 = Buffer.from(uuidv4());
                 const valueList1 = ["value4", "value3", "value2", "value1"];
                 const valueList2 = ["value7", "value6", "value5"];
-                const encodedValues =  [
+                const encodedValues = [
                     Buffer.from("value6"),
                     Buffer.from("value7"),
                 ];
@@ -1972,11 +1972,21 @@ export function runBaseTests(config: {
                 );
                 expect(await client.lpop("nonExistingKey")).toEqual(null);
                 expect(await client.lpush(key2, valueList2)).toEqual(3);
-                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(Buffer.from("value5"));
-                expect(await client.lrange(key2, 0, -1, Decoder.Bytes)).toEqual(encodedValues);
-                expect(await client.lpopCount(key2, 2, Decoder.Bytes)).toEqual(encodedValues);
-                expect(await client.lpush(key2, [Buffer.from("value8")])).toEqual(1);
-                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(Buffer.from("value8"));
+                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value5"),
+                );
+                expect(await client.lrange(key2, 0, -1, Decoder.Bytes)).toEqual(
+                    encodedValues,
+                );
+                expect(await client.lpopCount(key2, 2, Decoder.Bytes)).toEqual(
+                    encodedValues,
+                );
+                expect(
+                    await client.lpush(key2, [Buffer.from("value8")]),
+                ).toEqual(1);
+                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value8"),
+                );
             }, protocol);
         },
         config.timeout,
