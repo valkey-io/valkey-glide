@@ -406,6 +406,10 @@ describe("GlideClusterClient", () => {
                         { radius: 5, unit: GeoUnit.METERS },
                     ),
                     client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
+                    client.zinter(["abc", "zxy", "lkn"]),
+                    client.zinterWithScores(["abc", "zxy", "lkn"]),
+                    client.zunion(["abc", "zxy", "lkn"]),
+                    client.zunionWithScores(["abc", "zxy", "lkn"]),
                 );
             }
 
