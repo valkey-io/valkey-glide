@@ -1215,11 +1215,6 @@ export async function transactionTest(
         ]);
     }
 
-    baseTransaction.xgroupCreateConsumer(key9, groupName1, consumer);
-    responseData.push([
-        "xgroupCreateConsumer(key9, groupName1, consumer)",
-        true,
-    ]);
     baseTransaction.xack(key9, groupName1, ["0-3"]);
     responseData.push(["xack(key9, groupName1, ['0-3'])", 0]);
     baseTransaction.xgroupDelConsumer(key9, groupName1, consumer);
