@@ -77,26 +77,34 @@ tasks.register('clearDirs', Delete) {
 
 tasks.register('startCluster') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
-                standardOutput = os
+        if (System.getProperty("cluster-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine 'python3', 'cluster_manager.py', 'start', '--cluster-mode'
+                    standardOutput = os
+                }
+                clusterPorts = extractPortsFromClusterManagerOutput(os.toString())
             }
-            clusterPorts = extractPortsFromClusterManagerOutput(os.toString())
+        } else {
+            clusterPorts = System.getProperty("cluster-endpoints").split(',').collect { it.split(':')[1] }
         }
     }
 }
 
 tasks.register('startStandalone') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                workingDir "${project.rootDir}/../utils"
-                commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
-                standardOutput = os
+        if (System.getProperty("standalone-endpoints") == null) {
+            new ByteArrayOutputStream().withStream { os ->
+                exec {
+                    workingDir "${project.rootDir}/../utils"
+                    commandLine 'python3', 'cluster_manager.py', 'start', '-r', '0'
+                    standardOutput = os
+                }
+                standalonePorts = extractPortsFromClusterManagerOutput(os.toString())
             }
-            standalonePorts = extractPortsFromClusterManagerOutput(os.toString())
+        } else {
+            standalonePorts = System.getProperty("standalone-endpoints").split(',').collect { it.split(':')[1] }
         }
     }
 }
