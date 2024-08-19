@@ -977,7 +977,7 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all primary nodes.
+     *     If not defined, the command will be routed to all nodes.
      * @returns `OK` if function is terminated. Otherwise, throws an error.
      *
      * @example

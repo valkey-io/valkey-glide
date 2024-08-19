@@ -493,7 +493,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/function-kill/ for more details.
 
         Args:
-            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:

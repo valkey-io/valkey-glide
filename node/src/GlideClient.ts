@@ -597,7 +597,7 @@ export class GlideClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
-     * FUNCTION STATS runs on all nodes of the cluster, including primary and replicas.
+     * FUNCTION STATS runs on all nodes of the server, including primary and replicas.
      * The response includes a mapping from node address to the command response for that node.
      *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
@@ -644,6 +644,7 @@ export class GlideClient extends BaseClient {
     /**
      * Kills a function that is currently executing.
      * `FUNCTION KILL` terminates read-only functions only.
+     * `FUNCTION KILL` runs on all nodes of the server, including primary and replicas.
      *
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.

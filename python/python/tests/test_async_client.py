@@ -10245,5 +10245,3 @@ class TestScripts:
             == key.encode()
         )
         await glide_client.close()
-        await glide_client.close()
-        await glide_client.close()

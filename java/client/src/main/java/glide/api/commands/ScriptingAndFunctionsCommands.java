@@ -328,7 +328,8 @@ public interface ScriptingAndFunctionsCommands {
 
     /**
      * Kills a function that is currently executing.<br>
-     * <code>FUNCTION KILL</code> terminates read-only functions only.
+     * <code>FUNCTION KILL</code> terminates read-only functions only. <code>FUNCTION KILL</code> runs
+     * on all nodes of the server, including primary and replicas.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.

@@ -374,6 +374,8 @@ class StandaloneCommands(CoreCommands):
         Kills a function that is currently executing.
         This command only terminates read-only functions.
 
+        FUNCTION KILL runs on all nodes of the server, including primary and replicas.
+
         See https://valkey.io/commands/function-kill/ for more details.
 
         Returns:
@@ -395,7 +397,8 @@ class StandaloneCommands(CoreCommands):
         Returns information about the function that's currently running and information about the
         available execution engines.
 
-        FUNCTION STATS runs on all nodes of the cluster, including primary and replicas.  The response includes a mapping from node address to the command response for that node.
+        FUNCTION STATS runs on all nodes of the server, including primary and replicas.
+        The response includes a mapping from node address to the command response for that node.
 
         See https://valkey.io/commands/function-stats/ for more details
 
