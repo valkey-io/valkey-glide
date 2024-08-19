@@ -5674,7 +5674,9 @@ export class BaseClient {
         key: GlideString,
         members: GlideString[],
     ): Promise<(string | null)[]> {
-        return this.createWritePromise(createGeoHash(key, members));
+        return this.createWritePromise(createGeoHash(key, members), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
