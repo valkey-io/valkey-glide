@@ -1082,6 +1082,8 @@ export async function transactionTest(
     responseData.push(["xlen(key9)", 3]);
     baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push(["xrange(key9)", { "0-1": [["field", "value1"]] }]);
+    baseTransaction.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
+    responseData.push(["xrevrange(key9)", { "0-1": [["field", "value1"]] }]);
     baseTransaction.xread({ [key9]: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
@@ -1122,17 +1124,9 @@ export async function transactionTest(
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.customCommand([
-        "xreadgroup",
-        "group",
-        groupName1,
-        consumer,
-        "STREAMS",
-        key9,
-        ">",
-    ]);
+    baseTransaction.xreadgroup(groupName1, consumer, { [key9]: ">" });
     responseData.push([
-        "xreadgroup(groupName1, consumer, key9, >)",
+        'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         { [key9]: { "0-2": [["field", "value2"]] } },
     ]);
     baseTransaction.xpending(key9, groupName1);

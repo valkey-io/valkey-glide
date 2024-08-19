@@ -50,6 +50,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -185,6 +186,8 @@ import {
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
+    createXRevRange,
     createXTrim,
     createZAdd,
     createZCard,
@@ -3245,7 +3248,7 @@ export class BaseClient {
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      *
      * @example
      * ```typescript
@@ -3266,6 +3269,46 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
+    }
+
+    /**
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to {@link xrange} but returns the
+     * entries in reverse order.
+     *
+     * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param start - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     *
+     * @example
+     * ```typescript
+     * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
+     * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
+     * console.log(await client.xrevrange("mystream", InfBoundary.PositiveInfinity, InfBoundary.NegativeInfinity));
+     * // Output:
+     * // {
+     * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
+     * //     "0-1": [["field1", "value1"]],
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * ```
+     */
+    public async xrevrange(
+        key: string,
+        end: Boundary<string>,
+        start: Boundary<string>,
+        count?: number,
+    ): Promise<Record<string, [string, string][]> | null> {
+        return this.createWritePromise(createXRevRange(key, end, start, count));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
@@ -4355,9 +4398,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for more details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
-     * @returns A map of stream keys, to a map of stream ids, to an array of entries.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
+     * @returns A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
+     *
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
@@ -4379,6 +4423,50 @@ export class BaseClient {
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special entry ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     *
+     * @example
+     * ```typescript
+     * const streamResults = await client.xreadgroup("my_group", "my_consumer", {"my_stream": "0-0", "writers_stream": "0-0", "readers_stream", ">"});
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers_stream": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": null,                                          // entry was deleted
+     * //     },
+     * //     "readers_stream": {}                                                  // stream is empty
+     * // }
+     * ```
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): Promise<Record<
+        string,
+        Record<string, [string, string][] | null>
+    > | null> {
+        return this.createWritePromise(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**

@@ -5214,7 +5214,7 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `xrange test_%p`,
+        `xrange and xrevrange test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
@@ -5244,12 +5244,31 @@ export function runBaseTests(config: {
                     [streamId2]: [["f2", "v2"]],
                 });
 
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                    ),
+                ).toEqual({
+                    [streamId2]: [["f2", "v2"]],
+                    [streamId1]: [["f1", "v1"]],
+                });
+
                 // returns empty mapping if + before -
                 expect(
                     await client.xrange(
                         key,
                         InfBoundary.PositiveInfinity,
                         InfBoundary.NegativeInfinity,
+                    ),
+                ).toEqual({});
+                // rev search returns empty mapping if - before +
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.NegativeInfinity,
+                        InfBoundary.PositiveInfinity,
                     ),
                 ).toEqual({});
 
@@ -5267,9 +5286,18 @@ export function runBaseTests(config: {
                             1,
                         ),
                     ).toEqual({ [streamId3]: [["f3", "v3"]] });
+
+                    expect(
+                        await client.xrevrange(
+                            key,
+                            { value: "5" },
+                            { isInclusive: false, value: streamId2 },
+                            1,
+                        ),
+                    ).toEqual({ [streamId3]: [["f3", "v3"]] });
                 }
 
-                // xrange against an emptied stream
+                // xrange/xrevrange against an emptied stream
                 expect(
                     await client.xdel(key, [streamId1, streamId2, streamId3]),
                 ).toEqual(3);
@@ -5281,12 +5309,27 @@ export function runBaseTests(config: {
                         10,
                     ),
                 ).toEqual({});
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        10,
+                    ),
+                ).toEqual({});
 
                 expect(
                     await client.xrange(
                         nonExistingKey,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
+                    ),
+                ).toEqual({});
+                expect(
+                    await client.xrevrange(
+                        nonExistingKey,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).toEqual({});
 
@@ -5307,6 +5350,22 @@ export function runBaseTests(config: {
                         -1,
                     ),
                 ).toEqual(null);
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        0,
+                    ),
+                ).toEqual(null);
+                expect(
+                    await client.xrevrange(
+                        key,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
+                        -1,
+                    ),
+                ).toEqual(null);
 
                 // key exists, but it is not a stream
                 expect(await client.set(stringKey, "foo"));
@@ -5315,6 +5374,13 @@ export function runBaseTests(config: {
                         stringKey,
                         InfBoundary.NegativeInfinity,
                         InfBoundary.PositiveInfinity,
+                    ),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xrevrange(
+                        stringKey,
+                        InfBoundary.PositiveInfinity,
+                        InfBoundary.NegativeInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
 
@@ -5326,12 +5392,26 @@ export function runBaseTests(config: {
                         InfBoundary.PositiveInfinity,
                     ),
                 ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xrevrange(key, InfBoundary.PositiveInfinity, {
+                        value: "not_a_stream_id",
+                    }),
+                ).rejects.toThrow(RequestError);
 
                 // invalid end bound
                 await expect(
                     client.xrange(key, InfBoundary.NegativeInfinity, {
                         value: "not_a_stream_id",
                     }),
+                ).rejects.toThrow(RequestError);
+                await expect(
+                    client.xrevrange(
+                        key,
+                        {
+                            value: "not_a_stream_id",
+                        },
+                        InfBoundary.NegativeInfinity,
+                    ),
                 ).rejects.toThrow(RequestError);
             }, protocol);
         },
@@ -5512,11 +5592,12 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `streams read test_%p`,
-        async () => {
+        `streams xread test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key1 = uuidv4();
-                const key2 = `{${key1}}${uuidv4()}`;
+                const key1 = "{xread}-1-" + uuidv4();
+                const key2 = "{xread}-2-" + uuidv4();
+                const key3 = "{xread}-3-" + uuidv4();
                 const field1 = "foo";
                 const field2 = "bar";
                 const field3 = "barvaz";
@@ -5568,13 +5649,156 @@ export function runBaseTests(config: {
                     },
                 };
                 expect(result).toEqual(expected);
-            }, ProtocolVersion.RESP2);
+
+                // key does not exist
+                expect(await client.xread({ [key3]: "0-0" })).toBeNull();
+                expect(
+                    await client.xread({
+                        [key2]: timestamp_2_1 as string,
+                        [key3]: "0-0",
+                    }),
+                ).toEqual({
+                    [key2]: {
+                        [timestamp_2_2 as string]: [["bar", "bar2"]],
+                        [timestamp_2_3 as string]: [["bar", "bar3"]],
+                    },
+                });
+
+                // key is not a stream
+                expect(await client.set(key3, uuidv4())).toEqual("OK");
+                await expect(client.xread({ [key3]: "0-0" })).rejects.toThrow(
+                    RequestError,
+                );
+            }, protocol);
         },
         config.timeout,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `xinfo stream test_%p`,
+        `xreadgroup test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{xreadgroup}-1-" + uuidv4();
+                const key2 = "{xreadgroup}-2-" + uuidv4();
+                const key3 = "{xreadgroup}-3-" + uuidv4();
+                const group = uuidv4();
+                const consumer = uuidv4();
+
+                // setup data
+                expect(
+                    await client.xgroupCreate(key1, group, "0", {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+
+                expect(
+                    await client.xgroupCreateConsumer(key1, group, consumer),
+                ).toBeTruthy();
+
+                const entry1 = (await client.xadd(key1, [
+                    ["a", "b"],
+                ])) as string;
+                const entry2 = (await client.xadd(key1, [
+                    ["c", "d"],
+                ])) as string;
+
+                // read the entire stream for the consumer and mark messages as pending
+                expect(
+                    await client.xreadgroup(group, consumer, { [key1]: ">" }),
+                ).toEqual({
+                    [key1]: {
+                        [entry1]: [["a", "b"]],
+                        [entry2]: [["c", "d"]],
+                    },
+                });
+
+                // delete one of the entries
+                expect(await client.xdel(key1, [entry1])).toEqual(1);
+
+                // now xreadgroup returns one empty entry and one non-empty entry
+                expect(
+                    await client.xreadgroup(group, consumer, { [key1]: "0" }),
+                ).toEqual({
+                    [key1]: {
+                        [entry1]: null,
+                        [entry2]: [["c", "d"]],
+                    },
+                });
+
+                // try to read new messages only
+                expect(
+                    await client.xreadgroup(group, consumer, { [key1]: ">" }),
+                ).toBeNull();
+
+                // add a message and read it with ">"
+                const entry3 = (await client.xadd(key1, [
+                    ["e", "f"],
+                ])) as string;
+                expect(
+                    await client.xreadgroup(group, consumer, { [key1]: ">" }),
+                ).toEqual({
+                    [key1]: {
+                        [entry3]: [["e", "f"]],
+                    },
+                });
+
+                // add second key with a group and a consumer, but no messages
+                expect(
+                    await client.xgroupCreate(key2, group, "0", {
+                        mkStream: true,
+                    }),
+                ).toEqual("OK");
+                expect(
+                    await client.xgroupCreateConsumer(key2, group, consumer),
+                ).toBeTruthy();
+
+                // read both keys
+                expect(
+                    await client.xreadgroup(group, consumer, {
+                        [key1]: "0",
+                        [key2]: "0",
+                    }),
+                ).toEqual({
+                    [key1]: {
+                        [entry1]: null,
+                        [entry2]: [["c", "d"]],
+                        [entry3]: [["e", "f"]],
+                    },
+                    [key2]: {},
+                });
+
+                // error cases:
+                // key does not exist
+                await expect(
+                    client.xreadgroup("_", "_", { [key3]: "0-0" }),
+                ).rejects.toThrow(RequestError);
+                // key is not a stream
+                expect(await client.set(key3, uuidv4())).toEqual("OK");
+                await expect(
+                    client.xreadgroup("_", "_", { [key3]: "0-0" }),
+                ).rejects.toThrow(RequestError);
+                expect(await client.del([key3])).toEqual(1);
+                // group and consumer don't exist
+                await client.xadd(key3, [["a", "b"]]);
+                await expect(
+                    client.xreadgroup("_", "_", { [key3]: "0-0" }),
+                ).rejects.toThrow(RequestError);
+                // consumer don't exist
+                expect(await client.xgroupCreate(key3, group, "0-0")).toEqual(
+                    "OK",
+                );
+                expect(
+                    await client.xreadgroup(group, "_", { [key3]: "0-0" }),
+                ).toEqual({
+                    [key3]: {},
+                });
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xinfo stream xinfosream test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
@@ -5600,17 +5824,9 @@ export function runBaseTests(config: {
                     await client.xgroupCreate(key, groupName, streamId0_0),
                 ).toEqual("OK");
 
-                // TODO: uncomment when XREADGROUP is implemented
-                // const xreadgroupResult = await client.xreadgroup([[key, ">"]], groupName, consumerName);
-                await client.customCommand([
-                    "XREADGROUP",
-                    "GROUP",
-                    groupName,
-                    consumerName,
-                    "STREAMS",
-                    key,
-                    ">",
-                ]);
+                await client.xreadgroup(groupName, consumerName, {
+                    [key]: ">",
+                });
 
                 // test xinfoStream base (non-full) case:
                 const result = (await client.xinfoStream(key)) as {
@@ -8312,18 +8528,14 @@ export function runBaseTests(config: {
                 expect(
                     await client.xgroupCreate(key, groupName1, "0-0"),
                 ).toEqual("OK");
+
                 expect(
-                    await client.customCommand([
-                        "XREADGROUP",
-                        "GROUP",
+                    await client.xreadgroup(
                         groupName1,
                         consumer1,
-                        "COUNT",
-                        "1",
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
+                        { [key]: ">" },
+                        { count: 1 },
+                    ),
                 ).toEqual({
                     [key]: {
                         [streamId1]: [
@@ -8352,15 +8564,9 @@ export function runBaseTests(config: {
                     ),
                 ).toBeTruthy();
                 expect(
-                    await client.customCommand([
-                        "XREADGROUP",
-                        "GROUP",
-                        groupName1,
-                        consumer2,
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
+                    await client.xreadgroup(groupName1, consumer2, {
+                        [key]: ">",
+                    }),
                 ).toEqual({
                     [key]: {
                         [streamId2]: [
@@ -8603,7 +8809,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xpending test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster) => {
                 const key = uuidv4();
                 const group = uuidv4();
 
@@ -8641,15 +8847,7 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    await client.customCommand([
-                        "xreadgroup",
-                        "group",
-                        group,
-                        "consumer",
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
+                    await client.xreadgroup(group, "consumer", { [key]: ">" }),
                 ).toEqual({
                     [key]: {
                         "0-1": [
@@ -8670,12 +8868,22 @@ export function runBaseTests(config: {
                     [["consumer", "2"]],
                 ]);
 
-                const result = await client.xpendingWithOptions(key, group, {
-                    start: InfBoundary.NegativeInfinity,
-                    end: InfBoundary.PositiveInfinity,
-                    count: 1,
-                    minIdleTime: 42,
-                });
+                const result = await client.xpendingWithOptions(
+                    key,
+                    group,
+                    cluster.checkIfServerVersionLessThan("6.2.0")
+                        ? {
+                              start: InfBoundary.NegativeInfinity,
+                              end: InfBoundary.PositiveInfinity,
+                              count: 1,
+                          }
+                        : {
+                              start: InfBoundary.NegativeInfinity,
+                              end: InfBoundary.PositiveInfinity,
+                              count: 1,
+                              minIdleTime: 42,
+                          },
+                );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);
 
@@ -8735,15 +8943,7 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    await client.customCommand([
-                        "xreadgroup",
-                        "group",
-                        group,
-                        "consumer",
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
+                    await client.xreadgroup(group, "consumer", { [key]: ">" }),
                 ).toEqual({
                     [key]: {
                         "0-1": [
@@ -8849,15 +9049,7 @@ export function runBaseTests(config: {
                 ).toEqual("0-2");
 
                 expect(
-                    await client.customCommand([
-                        "xreadgroup",
-                        "group",
-                        group,
-                        "consumer",
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
+                    await client.xreadgroup(group, "consumer", { [key]: ">" }),
                 ).toEqual({
                     [key]: {
                         "0-1": [
@@ -9117,15 +9309,9 @@ export function runBaseTests(config: {
 
                 // read the entire stream for the consumer and mark messages as pending
                 expect(
-                    await client.customCommand([
-                        "XREADGROUP",
-                        "GROUP",
-                        groupName,
-                        consumer,
-                        "STREAMS",
-                        key,
-                        ">",
-                    ]),
+                    await client.xreadgroup(groupName, consumer, {
+                        [key]: ">",
+                    }),
                 ).toEqual({
                     [key]: {
                         [streamid1 as string]: [["field1", "value1"]],
