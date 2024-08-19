@@ -338,7 +338,7 @@ export async function testTeardown(
 export const getClientConfigurationOption = (
     addresses: [string, number][],
     protocol: ProtocolVersion,
-    timeout?: number,
+    configOverrides?: Partial<BaseClientConfiguration>,
 ): BaseClientConfiguration => {
     return {
         addresses: addresses.map(([host, port]) => ({
@@ -346,7 +346,7 @@ export const getClientConfigurationOption = (
             port,
         })),
         protocol,
-        ...(timeout && { requestTimeout: timeout }),
+        ...configOverrides,
     };
 };
 
@@ -357,7 +357,9 @@ export async function flushAndCloseClient(
 ) {
     await testTeardown(
         cluster_mode,
-        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, 2000),
+        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, {
+            requestTimeout: 2000,
+        }),
     );
 
     // some tests don't initialize a client
@@ -746,6 +748,8 @@ export async function transactionTest(
     responseData.push(["hsetnx(key4, field, value)", false]);
     baseTransaction.hvals(key4);
     responseData.push(["hvals(key4)", [value]]);
+    baseTransaction.hkeys(key4);
+    responseData.push(["hkeys(key4)", [field]]);
     baseTransaction.hget(key4, field);
     responseData.push(["hget(key4, field)", value]);
     baseTransaction.hgetall(key4);
@@ -988,6 +992,8 @@ export async function transactionTest(
         responseData.push(["zdiffWithScores([key13, key12])", { three: 3.5 }]);
         baseTransaction.zdiffstore(key13, [key13, key13]);
         responseData.push(["zdiffstore(key13, [key13, key13])", 0]);
+        baseTransaction.zunionstore(key5, [key12, key13]);
+        responseData.push(["zunionstore(key5, [key12, key13])", 2]);
         baseTransaction.zmscore(key12, ["two", "one"]);
         responseData.push(['zmscore(key12, ["two", "one"]', [2.0, 1.0]]);
         baseTransaction.zinterstore(key12, [key12, key13]);
@@ -1104,6 +1110,8 @@ export async function transactionTest(
     responseData.push(["xlen(key9)", 3]);
     baseTransaction.xrange(key9, { value: "0-1" }, { value: "0-1" });
     responseData.push(["xrange(key9)", { "0-1": [["field", "value1"]] }]);
+    baseTransaction.xrevrange(key9, { value: "0-1" }, { value: "0-1" });
+    responseData.push(["xrevrange(key9)", { "0-1": [["field", "value1"]] }]);
     baseTransaction.xread({ [key9]: "0-1" });
     responseData.push([
         'xread({ [key9]: "0-1" })',
@@ -1123,6 +1131,8 @@ export async function transactionTest(
         'xtrim(key9, { method: "minid", threshold: "0-2", exact: true }',
         1,
     ]);
+    baseTransaction.xinfoGroups(key9);
+    responseData.push(["xinfoGroups(key9)", []]);
     baseTransaction.xgroupCreate(key9, groupName1, "0-0");
     responseData.push(['xgroupCreate(key9, groupName1, "0-0")', "OK"]);
     baseTransaction.xgroupCreate(key9, groupName2, "0-0", { mkStream: true });
@@ -1142,17 +1152,9 @@ export async function transactionTest(
         "xgroupCreateConsumer(key9, groupName1, consumer)",
         true,
     ]);
-    baseTransaction.customCommand([
-        "xreadgroup",
-        "group",
-        groupName1,
-        consumer,
-        "STREAMS",
-        key9,
-        ">",
-    ]);
+    baseTransaction.xreadgroup(groupName1, consumer, { [key9]: ">" });
     responseData.push([
-        "xreadgroup(groupName1, consumer, key9, >)",
+        'xreadgroup(groupName1, consumer, {[key9]: ">"})',
         { [key9]: { "0-2": [["field", "value2"]] } },
     ]);
     baseTransaction.xpending(key9, groupName1);
