@@ -1864,7 +1864,7 @@ export function createZPopMax(
 /**
  * @internal
  */
-export function createEcho(message: string): command_request.Command {
+export function createEcho(message: GlideString): command_request.Command {
     return createCommand(RequestType.Echo, [message]);
 }
 
@@ -3629,7 +3629,7 @@ export function createRandomKey(): command_request.Command {
 }
 
 /** @internal */
-export function createWatch(keys: string[]): command_request.Command {
+export function createWatch(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Watch, keys);
 }
 

@@ -406,16 +406,16 @@ export class GlideClusterClient extends BaseClient {
         );
     }
 
-    /** Ping the Redis server.
+    /**
+     * Pings the Redis server.
      *
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
-     * @param message - An optional message to include in the PING command.
-     * If not provided, the server will respond with "PONG".
-     * If provided, the server will respond with a copy of the message.
-     * @param route - The command will be routed to all primaries, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param message - (Optional) A message to include in the PING command.
+     *     If not provided, the server will respond with "PONG".
+     *     If provided, the server will respond with a copy of the message.
+     * @param route - (Optional) The command will be routed to all primaries, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
@@ -435,11 +435,13 @@ export class GlideClusterClient extends BaseClient {
     public async ping(options?: {
         message?: GlideString;
         route?: Routes;
-        decoder?: Decoder;
     }): Promise<GlideString> {
         return this.createWritePromise(createPing(options?.message), {
             route: toProtobufRoute(options?.route),
-            decoder: options?.decoder,
+            decoder:
+                !options?.message || typeof options?.message === "string"
+                    ? Decoder.String
+                    : Decoder.Bytes,
         });
     }
 
@@ -463,15 +465,19 @@ export class GlideClusterClient extends BaseClient {
         );
     }
 
-    /** Get the name of the connection to which the request is routed.
+    /**
+     * Gets the name of the connection to which the request is routed.
+     *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
      *
-     * @param route - The command will be routed a random node, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
+     * @param route - (Optional) The command will be routed a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      *
-     * @returns - the name of the client connection as a string if a name is set, or null if no name is assigned.
-     * When specifying a route other than a single node, it returns a dictionary where each address is the key and
-     * its corresponding node response is the value.
+     * @returns - The name of the client connection as a string if a name is set, or `null` if no name is assigned.
+     *     When specifying a route other than a single node, it returns a dictionary where each address is the key and
+     *     its corresponding node response is the value.
      *
      * @example
      * ```typescript
@@ -487,12 +493,16 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
      * ```
      */
-    public async clientGetName(
-        route?: Routes,
-    ): Promise<ClusterResponse<string | null>> {
-        return this.createWritePromise<ClusterResponse<string | null>>(
+    public async clientGetName(options?: {
+        route?: Routes;
+        decoder?: Decoder;
+    }): Promise<ClusterResponse<GlideString | null>> {
+        return this.createWritePromise<ClusterResponse<GlideString | null>>(
             createClientGetName(),
-            { route: toProtobufRoute(route) },
+            {
+                route: toProtobufRoute(options?.route),
+                decoder: options?.decoder,
+            },
         );
     }
 
@@ -536,13 +546,15 @@ export class GlideClusterClient extends BaseClient {
         });
     }
 
-    /** Returns the current connection id.
+    /**
+     * Returns the current connection ID.
+     *
      * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
-     * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
-     * @returns the id of the client. When specifying a route other than a single node,
-     * it returns a dictionary where each address is the key and its corresponding node response is the value.
+     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     * @returns The ID of the client. When specifying a route other than a single node,
+     *     it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
     public async clientId(route?: Routes): Promise<ClusterResponse<number>> {
         return this.createWritePromise<ClusterResponse<number>>(
@@ -611,14 +623,16 @@ export class GlideClusterClient extends BaseClient {
         });
     }
 
-    /** Echoes the provided `message` back.
+    /**
+     * Echoes the provided `message` back.
+     *
      * @see {@link https://valkey.io/commands/echo/|valkey.io} for details.
      *
      * @param message - The message to be echoed back.
-     * @param route - The command will be routed to a random node, unless `route` is provided, in which
-     *  case the client will route the command to the nodes defined by `route`.
+     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
      * @returns The provided `message`. When specifying a route other than a single node,
-     *  it returns a dictionary where each address is the key and its corresponding node response is the value.
+     *     it returns a dictionary where each address is the key and its corresponding node response is the value.
      *
      * @example
      * ```typescript
@@ -634,11 +648,13 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async echo(
-        message: string,
+        message: GlideString,
         route?: Routes,
-    ): Promise<ClusterResponse<string>> {
+    ): Promise<ClusterResponse<GlideString>> {
         return this.createWritePromise(createEcho(message), {
             route: toProtobufRoute(route),
+            decoder:
+                typeof message === "string" ? Decoder.String : Decoder.Bytes,
         });
     }
 
@@ -1347,6 +1363,7 @@ export class GlideClusterClient extends BaseClient {
     public async unwatch(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
             route: toProtobufRoute(route),
+            decoder: Decoder.String,
         });
     }
 }

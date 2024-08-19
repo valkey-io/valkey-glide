@@ -1585,7 +1585,9 @@ describe("GlideClusterClient", () => {
 
             // Transaction executes command successfully with a read command on the watch key before
             // transaction is executed.
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.watch([key1, key2, Buffer.from(key3)])).toEqual(
+                "OK",
+            );
             expect(await client.get(key2)).toEqual("hello");
             results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK", "OK"]);

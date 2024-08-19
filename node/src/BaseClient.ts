@@ -6042,8 +6042,10 @@ export class BaseClient {
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
      * ```
      */
-    public async watch(keys: string[]): Promise<"OK"> {
-        return this.createWritePromise(createWatch(keys));
+    public async watch(keys: GlideString[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
