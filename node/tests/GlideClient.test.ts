@@ -13,7 +13,6 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import {
-    BaseClientConfiguration,
     Decoder,
     GlideClient,
     ListDirection,
@@ -135,11 +134,9 @@ describe("GlideClient", () => {
         "check that blocking commands returns never timeout_%p",
         async (protocol) => {
             client = await GlideClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    protocol,
-                    300,
-                ),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 300,
+                }),
             );
 
             const promiseList = [
@@ -846,7 +843,7 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                10000,
+                { requestTimeout: 10000 },
             );
             const client = await GlideClient.createClient(config);
             const testClient = await GlideClient.createClient(config);
@@ -917,7 +914,7 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                10000,
+                { requestTimeout: 10000 },
             );
             const client = await GlideClient.createClient(config);
             const testClient = await GlideClient.createClient(config);
@@ -1508,12 +1505,8 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
+                configOverrides,
             );
-
-            for (const key of Object.keys(configOverrides ?? {})) {
-                const param = key as keyof BaseClientConfiguration;
-                config[param] = configOverrides?.[param] as never;
-            }
 
             testsFailed += 1;
             client = await GlideClient.createClient(config);

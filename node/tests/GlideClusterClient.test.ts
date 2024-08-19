@@ -13,7 +13,6 @@ import {
 import { gte } from "semver";
 import { v4 as uuidv4 } from "uuid";
 import {
-    BaseClientConfiguration,
     BitwiseOperation,
     ClusterTransaction,
     Decoder,
@@ -22,8 +21,8 @@ import {
     InfoOptions,
     ListDirection,
     ProtocolVersion,
-    ReturnType,
     RequestError,
+    ReturnType,
     Routes,
     ScoreFilter,
 } from "..";
@@ -86,12 +85,8 @@ describe("GlideClusterClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
+                configOverrides,
             );
-
-            for (const key of Object.keys(configOverrides ?? {})) {
-                const param = key as keyof BaseClientConfiguration;
-                config[param] = configOverrides?.[param] as never;
-            }
 
             testsFailed += 1;
             client = await GlideClusterClient.createClient(config);
@@ -1172,7 +1167,7 @@ describe("GlideClusterClient", () => {
                             const config = getClientConfigurationOption(
                                 cluster.getAddresses(),
                                 protocol,
-                                10000,
+                                { requestTimeout: 10000 },
                             );
                             const client =
                                 await GlideClusterClient.createClient(config);
@@ -1445,7 +1440,7 @@ describe("GlideClusterClient", () => {
                     const config = getClientConfigurationOption(
                         cluster.getAddresses(),
                         protocol,
-                        10000,
+                        { requestTimeout: 10000 },
                     );
                     const client =
                         await GlideClusterClient.createClient(config);
