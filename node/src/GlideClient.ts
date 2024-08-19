@@ -17,6 +17,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
+    FunctionRestorePolicy,
     FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
@@ -34,10 +35,12 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionKill,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createInfo,
     createLastSave,
@@ -175,26 +178,27 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
      *
-     * @param transaction - A Transaction object containing a list of commands to be executed.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
+     * @param transaction - A {@link Transaction} object containing a list of commands to be executed.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of results corresponding to the execution of each command in the transaction.
-     *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
-     *      the list entry will be null.
-     *      If the transaction failed due to a WATCH command, `exec` will return `null`.
+     *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
+     *     the list entry will be `null`.
+     *     If the transaction failed due to a `WATCH` command, `exec` will return `null`.
      */
     public async exec(
         transaction: Transaction,
-        decoder: Decoder = this.defaultDecoder,
+        decoder?: Decoder,
     ): Promise<ReturnType[] | null> {
         return this.createWritePromise<ReturnType[] | null>(
             transaction.commands,
             { decoder: decoder },
-        ).then((result: ReturnType[] | null) => {
-            return this.processResultWithSetCommands(
+        ).then((result) =>
+            this.processResultWithSetCommands(
                 result,
                 transaction.setCommandsIndexes,
-            );
-        });
+            ),
+        );
     }
 
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
@@ -644,9 +648,8 @@ export class GlideClient extends BaseClient {
      * Kills a function that is currently executing.
      * `FUNCTION KILL` terminates read-only functions only.
      *
-     * See https://valkey.io/commands/function-kill/ for details.
-     *
-     * since Valkey version 7.0.0.
+     * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
      *
      * @returns `OK` if function is terminated. Otherwise, throws an error.
      * @example
@@ -656,6 +659,51 @@ export class GlideClient extends BaseClient {
      */
     public async functionKill(): Promise<"OK"> {
         return this.createWritePromise(createFunctionKill());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @returns The serialized payload of all loaded libraries.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.functionDump();
+     * // data can be used to restore loaded functions on any Valkey instance
+     * ```
+     */
+    public async functionDump(): Promise<Buffer> {
+        return this.createWritePromise(createFunctionDump(), {
+            decoder: Decoder.Bytes,
+        });
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     *     {@link FunctionRestorePolicy.APPEND} is used by default.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * await client.functionRestore(data, FunctionRestorePolicy.FLUSH);
+     * ```
+     */
+    public async functionRestore(
+        payload: Buffer,
+        policy?: FunctionRestorePolicy,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createFunctionRestore(payload, policy), {
+            decoder: Decoder.String,
+        });
     }
 
     /**

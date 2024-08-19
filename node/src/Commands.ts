@@ -2302,6 +2302,44 @@ export function createFunctionKill(): command_request.Command {
     return createCommand(RequestType.FunctionKill, []);
 }
 
+/** @internal */
+export function createFunctionDump(): command_request.Command {
+    return createCommand(RequestType.FunctionDump, []);
+}
+
+/**
+ * Option for `FUNCTION RESTORE` command: {@link GlideClient.functionRestore} and
+ * {@link GlideClusterClient.functionRestore}.
+ *
+ * @see {@link https://valkey.io/commands/function-restore/"|valkey.io} for more details.
+ */
+export enum FunctionRestorePolicy {
+    /**
+     * Appends the restored libraries to the existing libraries and aborts on collision. This is the
+     * default policy.
+     */
+    APPEND = "APPEND",
+    /** Deletes all existing libraries before restoring the payload. */
+    FLUSH = "FLUSH",
+    /**
+     * Appends the restored libraries to the existing libraries, replacing any existing ones in case
+     * of name collisions. Note that this policy doesn't prevent function name collisions, only
+     * libraries.
+     */
+    REPLACE = "REPLACE",
+}
+
+/** @internal */
+export function createFunctionRestore(
+    data: Buffer,
+    policy?: FunctionRestorePolicy,
+): command_request.Command {
+    return createCommand(
+        RequestType.FunctionRestore,
+        policy ? [data, policy] : [data],
+    );
+}
+
 /**
  * Represents offsets specifying a string interval to analyze in the {@link BaseClient.bitcount|bitcount} command. The offsets are
  * zero-based indexes, with `0` being the first index of the string, `1` being the next index and so on.

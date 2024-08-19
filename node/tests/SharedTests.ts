@@ -10,6 +10,7 @@
 import { expect, it } from "@jest/globals";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BaseClientConfiguration,
     BitFieldGet,
     BitFieldIncrBy,
     BitFieldOverflow,
@@ -56,16 +57,18 @@ import {
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
-export function runBaseTests<Context>(config: {
+// Same as `BaseClientConfiguration`, but all fields are optional
+export type ClientConfig = Partial<BaseClientConfiguration>;
+
+export function runBaseTests(config: {
     init: (
         protocol: ProtocolVersion,
-        clientName?: string,
+        configOverrides?: ClientConfig,
     ) => Promise<{
-        context: Context;
         client: BaseClient;
         cluster: RedisCluster;
     }>;
-    close: (context: Context, testSucceeded: boolean) => void;
+    close: (testSucceeded: boolean) => void;
     timeout?: number;
 }) {
     runCommonTests({
@@ -77,11 +80,11 @@ export function runBaseTests<Context>(config: {
     const runTest = async (
         test: (client: BaseClient, cluster: RedisCluster) => Promise<void>,
         protocol: ProtocolVersion,
-        clientName?: string,
+        configOverrides?: ClientConfig,
     ) => {
-        const { context, client, cluster } = await config.init(
+        const { client, cluster } = await config.init(
             protocol,
-            clientName,
+            configOverrides,
         );
         let testSucceeded = false;
 
@@ -89,7 +92,7 @@ export function runBaseTests<Context>(config: {
             await test(client, cluster);
             testSucceeded = true;
         } finally {
-            config.close(context, testSucceeded);
+            config.close(testSucceeded);
         }
     };
 
@@ -161,7 +164,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.clientGetName()).toBe("TEST_CLIENT");
                 },
                 protocol,
-                "TEST_CLIENT",
+                { clientName: "TEST_CLIENT" },
             );
         },
         config.timeout,
@@ -9721,20 +9724,20 @@ export function runBaseTests<Context>(config: {
     );
 }
 
-export function runCommonTests<Context>(config: {
-    init: () => Promise<{ context: Context; client: Client }>;
-    close: (context: Context, testSucceeded: boolean) => void;
+export function runCommonTests(config: {
+    init: () => Promise<{ client: Client }>;
+    close: (testSucceeded: boolean) => void;
     timeout?: number;
 }) {
     const runTest = async (test: (client: Client) => Promise<void>) => {
-        const { context, client } = await config.init();
+        const { client } = await config.init();
         let testSucceeded = false;
 
         try {
             await test(client);
             testSucceeded = true;
         } finally {
-            config.close(context, testSucceeded);
+            config.close(testSucceeded);
         }
     };
 
