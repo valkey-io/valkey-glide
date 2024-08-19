@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added binary variant to generic commands ([#2158](https://github.com/valkey-io/valkey-glide/pull/2158))
 * Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
 * Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
 * Node: Added XINFO GROUPS command ([#2122](https://github.com/valkey-io/valkey-glide/pull/2122))

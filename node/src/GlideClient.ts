@@ -13,6 +13,7 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
+    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -443,8 +444,8 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         options?: { destinationDB?: number; replace?: boolean },
     ): Promise<boolean> {
         return this.createWritePromise(
@@ -468,7 +469,7 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: true
      * ```
      */
-    public async move(key: string, dbIndex: number): Promise<boolean> {
+    public async move(key: GlideString, dbIndex: number): Promise<boolean> {
         return this.createWritePromise(createMove(key, dbIndex));
     }
 
@@ -741,7 +742,8 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions}.
+     * @param options - The {@link SortOptions} and {@link DecoderOption}.
+     *
      * @returns An `Array` of sorted elements.
      *
      * @example
@@ -754,10 +756,12 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async sort(
-        key: string,
-        options?: SortOptions,
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createSort(key, options));
+        key: GlideString,
+        options?: SortOptions & DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createSort(key, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -772,7 +776,7 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions}.
+     * @param options - The {@link SortOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements
      *
      * @example
@@ -785,10 +789,12 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async sortReadOnly(
-        key: string,
-        options?: SortOptions,
-    ): Promise<(string | null)[]> {
-        return this.createWritePromise(createSortReadOnly(key, options));
+        key: GlideString,
+        options?: SortOptions & DecoderOption,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createSortReadOnly(key, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -819,8 +825,8 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async sortStore(
-        key: string,
-        destination: string,
+        key: GlideString,
+        destination: GlideString,
         options?: SortOptions,
     ): Promise<number> {
         return this.createWritePromise(createSort(key, options, destination));
@@ -833,6 +839,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/lastsave/|valkey.io} for more details.
      *
      * @returns `UNIX TIME` of the last DB save executed with success.
+     *
      * @example
      * ```typescript
      * const timestamp = await client.lastsave();
@@ -848,6 +855,8 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for more details.
      *
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A random existing key name from the currently selected database.
      *
      * @example
@@ -856,8 +865,8 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name from the currently selected database.
      * ```
      */
-    public async randomKey(): Promise<string | null> {
-        return this.createWritePromise(createRandomKey());
+    public async randomKey(decoder?: Decoder): Promise<GlideString | null> {
+        return this.createWritePromise(createRandomKey(), { decoder: decoder });
     }
 
     /**

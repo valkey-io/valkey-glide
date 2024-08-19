@@ -273,7 +273,7 @@ export type GlideString = string | Buffer;
 /**
  * Enum representing the different types of decoders.
  */
-export const enum Decoder {
+export enum Decoder {
     /**
      * Decodes the response into a buffer array.
      */
@@ -1079,12 +1079,13 @@ export class BaseClient {
         return this.createWritePromise(createSet(key, value, options));
     }
 
-    /** Removes the specified keys. A key is ignored if it does not exist.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
      *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
-     * @param keys - the keys we wanted to remove.
-     * @returns the number of keys that were removed.
+     * @param keys - The keys we wanted to remove.
+     * @returns The number of keys that were removed.
      *
      * @example
      * ```typescript
@@ -1101,7 +1102,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async del(keys: string[]): Promise<number> {
+    public async del(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
     }
 
@@ -2932,7 +2933,8 @@ export class BaseClient {
         return this.createWritePromise(createSRandMember(key, count));
     }
 
-    /** Returns the number of keys in `keys` that exist in the database.
+    /**
+     * Returns the number of keys in `keys` that exist in the database.
      *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
@@ -2947,13 +2949,14 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
      * ```
      */
-    public async exists(keys: string[]): Promise<number> {
+    public async exists(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createExists(keys));
     }
 
-    /** Removes the specified keys. A key is ignored if it does not exist.
-     * This command, similar to DEL, removes specified keys and ignores non-existent ones.
-     * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
+     * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
      *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
@@ -2967,11 +2970,12 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
      * ```
      */
-    public async unlink(keys: string[]): Promise<number> {
+    public async unlink(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createUnlink(keys));
     }
 
-    /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -2980,7 +2984,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -2999,14 +3003,15 @@ export class BaseClient {
      * ```
      */
     public async expire(
-        key: string,
+        key: GlideString,
         seconds: number,
         option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(createExpire(key, seconds, option));
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -3015,7 +3020,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3027,7 +3032,7 @@ export class BaseClient {
      * ```
      */
     public async expireAt(
-        key: string,
+        key: GlideString,
         unixSeconds: number,
         option?: ExpireOptions,
     ): Promise<boolean> {
@@ -3060,11 +3065,12 @@ export class BaseClient {
      * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
      * ```
      */
-    public async expiretime(key: string): Promise<number> {
+    public async expiretime(key: GlideString): Promise<number> {
         return this.createWritePromise(createExpireTime(key));
     }
 
-    /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -3073,7 +3079,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3085,7 +3091,7 @@ export class BaseClient {
      * ```
      */
     public async pexpire(
-        key: string,
+        key: GlideString,
         milliseconds: number,
         option?: ExpireOptions,
     ): Promise<boolean> {
@@ -3094,7 +3100,8 @@ export class BaseClient {
         );
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -3103,7 +3110,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3115,7 +3122,7 @@ export class BaseClient {
      * ```
      */
     public async pexpireAt(
-        key: string,
+        key: GlideString,
         unixMilliseconds: number,
         option?: ExpireOptions,
     ): Promise<number> {
@@ -3147,11 +3154,12 @@ export class BaseClient {
      * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
      * ```
      */
-    public async pexpiretime(key: string): Promise<number> {
+    public async pexpiretime(key: GlideString): Promise<number> {
         return this.createWritePromise(createPExpireTime(key));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout.
      *
      * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
@@ -3179,7 +3187,7 @@ export class BaseClient {
      * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
      * ```
      */
-    public async ttl(key: string): Promise<number> {
+    public async ttl(key: GlideString): Promise<number> {
         return this.createWritePromise(createTTL(key));
     }
 
@@ -3956,7 +3964,8 @@ export class BaseClient {
         return this.createWritePromise(createStrlen(key));
     }
 
-    /** Returns the string representation of the type of the value stored at `key`.
+    /**
+     * Returns the string representation of the type of the value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/type/|valkey.io} for more details.
      *
@@ -3979,8 +3988,10 @@ export class BaseClient {
      * console.log(type); // Output: 'list'
      * ```
      */
-    public async type(key: string): Promise<string> {
-        return this.createWritePromise(createType(key));
+    public async type(key: GlideString): Promise<string> {
+        return this.createWritePromise(createType(key), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
@@ -4105,7 +4116,8 @@ export class BaseClient {
         return this.createWritePromise(createBZPopMax(keys, timeout));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout, in milliseconds.
      *
      * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
@@ -4133,7 +4145,7 @@ export class BaseClient {
      * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
      * ```
      */
-    public async pttl(key: string): Promise<number> {
+    public async pttl(key: GlideString): Promise<number> {
         return this.createWritePromise(createPTTL(key));
     }
 
@@ -5097,7 +5109,8 @@ export class BaseClient {
         );
     }
 
-    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+    /**
+     * Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
      *
      * @see {@link https://valkey.io/commands/persist/|valkey.io} for more details.
@@ -5112,7 +5125,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the timeout associated with the key "my_key" was successfully removed.
      * ```
      */
-    public async persist(key: string): Promise<boolean> {
+    public async persist(key: GlideString): Promise<boolean> {
         return this.createWritePromise(createPersist(key));
     }
 
@@ -5135,8 +5148,10 @@ export class BaseClient {
      * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public async rename(key: string, newKey: string): Promise<"OK"> {
-        return this.createWritePromise(createRename(key, newKey));
+    public async rename(key: GlideString, newKey: GlideString): Promise<"OK"> {
+        return this.createWritePromise(createRename(key, newKey), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -5158,7 +5173,10 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public async renamenx(key: string, newKey: string): Promise<boolean> {
+    public async renamenx(
+        key: GlideString,
+        newKey: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createRenameNX(key, newKey));
     }
 
@@ -5286,37 +5304,43 @@ export class BaseClient {
         return this.createWritePromise(createPfMerge(destination, sourceKeys));
     }
 
-    /** Returns the internal encoding for the Valkey object stored at `key`.
+    /**
+     * Returns the internal encoding for the Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the internal encoding of.
      * @returns - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
-     *     Otherwise, returns None.
+     *     Otherwise, returns `null`.
+     *
      * @example
      * ```typescript
      * const result = await client.objectEncoding("my_hash");
      * console.log(result); // Output: "listpack"
      * ```
      */
-    public async objectEncoding(key: string): Promise<string | null> {
-        return this.createWritePromise(createObjectEncoding(key));
+    public async objectEncoding(key: GlideString): Promise<string | null> {
+        return this.createWritePromise(createObjectEncoding(key), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
      * @returns - If `key` exists, returns the logarithmic access frequency counter of the object
      *            stored at `key` as a `number`. Otherwise, returns `null`.
+     *
      * @example
      * ```typescript
      * const result = await client.objectFreq("my_hash");
      * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
      * ```
      */
-    public async objectFreq(key: string): Promise<number | null> {
+    public async objectFreq(key: GlideString): Promise<number | null> {
         return this.createWritePromise(createObjectFreq(key));
     }
 
@@ -5334,7 +5358,7 @@ export class BaseClient {
      * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
      * ```
      */
-    public async objectIdletime(key: string): Promise<number | null> {
+    public async objectIdletime(key: GlideString): Promise<number | null> {
         return this.createWritePromise(createObjectIdletime(key));
     }
 
@@ -5353,7 +5377,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
      * ```
      */
-    public async objectRefcount(key: string): Promise<number | null> {
+    public async objectRefcount(key: GlideString): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
     }
 
@@ -6010,7 +6034,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public async touch(keys: string[]): Promise<number> {
+    public async touch(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
     }
 

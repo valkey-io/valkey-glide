@@ -636,25 +636,36 @@ describe("GlideClusterClient", () => {
 
             // neither key exists
             expect(await client.copy(source, destination, true)).toEqual(false);
-            expect(await client.copy(source, destination)).toEqual(false);
+            expect(await client.copy(Buffer.from(source), destination)).toEqual(
+                false,
+            );
 
             // source exists, destination does not
             expect(await client.set(source, value1)).toEqual("OK");
-            expect(await client.copy(source, destination, false)).toEqual(true);
+            expect(
+                await client.copy(source, Buffer.from(destination), false),
+            ).toEqual(true);
             expect(await client.get(destination)).toEqual(value1);
 
             // new value for source key
             expect(await client.set(source, value2)).toEqual("OK");
 
             // both exists, no REPLACE
-            expect(await client.copy(source, destination)).toEqual(false);
+            expect(
+                await client.copy(
+                    Buffer.from(source),
+                    Buffer.from(destination),
+                ),
+            ).toEqual(false);
             expect(await client.copy(source, destination, false)).toEqual(
                 false,
             );
             expect(await client.get(destination)).toEqual(value1);
 
             // both exists, with REPLACE
-            expect(await client.copy(source, destination, true)).toEqual(true);
+            expect(
+                await client.copy(source, Buffer.from(destination), true),
+            ).toEqual(true);
             expect(await client.get(destination)).toEqual(value2);
 
             //transaction tests
@@ -712,27 +723,58 @@ describe("GlideClusterClient", () => {
 
             expect(await client.sort(key3)).toEqual([]);
             expect(await client.lpush(key1, ["2", "1", "4", "3"])).toEqual(4);
-            expect(await client.sort(key1)).toEqual(["1", "2", "3", "4"]);
+            expect(await client.sort(Buffer.from(key1))).toEqual([
+                "1",
+                "2",
+                "3",
+                "4",
+            ]);
+            expect(await client.sort(key1, { decoder: Decoder.Bytes })).toEqual(
+                [
+                    Buffer.from("1"),
+                    Buffer.from("2"),
+                    Buffer.from("3"),
+                    Buffer.from("4"),
+                ],
+            );
 
             // sort RO
             if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
                 expect(await client.sortReadOnly(key3)).toEqual([]);
-                expect(await client.sortReadOnly(key1)).toEqual([
-                    "1",
-                    "2",
-                    "3",
-                    "4",
+                expect(await client.sortReadOnly(Buffer.from(key3))).toEqual(
+                    [],
+                );
+                expect(
+                    await client.sortReadOnly(key1, { decoder: Decoder.Bytes }),
+                ).toEqual([
+                    Buffer.from("1"),
+                    Buffer.from("2"),
+                    Buffer.from("3"),
+                    Buffer.from("4"),
                 ]);
             }
 
             // sort with store
             expect(await client.sortStore(key1, key2)).toEqual(4);
+            expect(
+                await client.sortStore(Buffer.from(key1), Buffer.from(key2)),
+            ).toEqual(4);
             expect(await client.lrange(key2, 0, -1)).toEqual([
                 "1",
                 "2",
                 "3",
                 "4",
             ]);
+            /*
+            // sort with store binary
+            expect(await client.sortStore(Buffer.from(key1), Buffer.from(key2))).toEqual(4);
+            expect(await client.lrange(key2, 0, -1)).toEqual([
+                "1",
+                "2",
+                "3",
+                "4",
+            ]);
+            */
 
             // SORT with strings require ALPHA
             expect(
@@ -1378,8 +1420,12 @@ describe("GlideClusterClient", () => {
 
             expect(await client.set(key, "foo")).toEqual("OK");
             // `key` should be the only existing key, so randomKey should return `key`
-            expect(await client.randomKey()).toEqual(key);
-            expect(await client.randomKey("allPrimaries")).toEqual(key);
+            expect(await client.randomKey({ decoder: Decoder.Bytes })).toEqual(
+                Buffer.from(key),
+            );
+            expect(await client.randomKey({ route: "allPrimaries" })).toEqual(
+                key,
+            );
 
             client.close();
         },
