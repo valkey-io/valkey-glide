@@ -2897,7 +2897,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
      * This command should be called on a pending message so that such message does not get processed again.
      *
-     * See https://valkey.io/commands/xack/ for more details.
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
      *
      * @param key - The key of the stream.
      * @param group - The consumer group name.
