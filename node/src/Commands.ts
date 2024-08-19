@@ -861,7 +861,8 @@ export function createLPop(
     key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: GlideString[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
 

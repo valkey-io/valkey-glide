@@ -2030,7 +2030,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
-    public async lpush(key: GlideString, elements: GlideString[]): Promise<number> {
+    public async lpush(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
     }
 
@@ -2077,7 +2080,10 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async lpop(key: GlideString, decoder?:Decoder): Promise<GlideString | null> {
+    public async lpop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(createLPop(key), { decoder: decoder });
     }
 
@@ -2108,9 +2114,11 @@ export class BaseClient {
     public async lpopCount(
         key: GlideString,
         count: number,
-        decoder?: Decoder
+        decoder?: Decoder,
     ): Promise<GlideString[] | null> {
-        return this.createWritePromise(createLPop(key, count), { decoder: decoder });
+        return this.createWritePromise(createLPop(key, count), {
+            decoder: decoder,
+        });
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -2154,9 +2162,11 @@ export class BaseClient {
         key: GlideString,
         start: number,
         end: number,
-        decoder?: Decoder 
+        decoder?: Decoder,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createLRange(key, start, end), { decoder: decoder });
+        return this.createWritePromise(createLRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Returns the length of the list stored at `key`.
