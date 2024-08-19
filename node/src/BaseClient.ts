@@ -267,7 +267,7 @@ export type GlideString = string | Buffer;
 /**
  * Enum representing the different types of decoders.
  */
-export const enum Decoder {
+export enum Decoder {
     /**
      * Decodes the response into a buffer array.
      */
@@ -5257,14 +5257,14 @@ export class BaseClient {
      * @param membersToGeospatialData - A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
      *     coordinates outside the specified ranges.
-     * @param options - The GeoAdd options - see {@link GeoAddOptions} and {@link DecoderOption}.
+     * @param options - The GeoAdd options - see {@link GeoAddOptions}.
      * @returns The number of elements added to the sorted set. If `changed` is set to
      *    `true` in the options, returns the number of elements updated in the sorted set.
      *
      * @example
      * ```typescript
      * const options = {updateMode: ConditionalChange.ONLY_IF_EXISTS, changed: true};
-     * const membersToCoordinates = new Map<GlideString, GeospatialData>([
+     * const membersToCoordinates = new Map<string, GeospatialData>([
      *      ["Palermo", { longitude: 13.361389, latitude: 38.115556 }],
      * ]);
      * const num = await client.geoadd("mySortedSet", membersToCoordinates, options);
@@ -5274,11 +5274,10 @@ export class BaseClient {
     public async geoadd(
         key: GlideString,
         membersToGeospatialData: Map<GlideString, GeospatialData>,
-        options?: GeoAddOptions & DecoderOption,
+        options?: GeoAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
             createGeoAdd(key, membersToGeospatialData, options),
-            { decoder: options?.decoder },
         );
     }
 
@@ -5382,7 +5381,7 @@ export class BaseClient {
      * - {@link GeoCircleShape} to search inside circular area according to given radius.
      * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
      * @param options - (Optional) Parameters to request additional information and configure sorting/limiting the results,
-     *     see {@link GeoSearchStoreResultOptions} and {@link DecoderOption}.
+     *     see {@link GeoSearchStoreResultOptions}.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -5426,7 +5425,7 @@ export class BaseClient {
         source: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
-        options?: GeoSearchStoreResultOptions & DecoderOption,
+        options?: GeoSearchStoreResultOptions,
     ): Promise<number> {
         return this.createWritePromise(
             createGeoSearchStore(
@@ -5436,7 +5435,6 @@ export class BaseClient {
                 searchBy,
                 options,
             ),
-            { decoder: options?.decoder },
         );
     }
 
@@ -5448,8 +5446,6 @@ export class BaseClient {
      *
      * @param key - The key of the sorted set.
      * @param members - The members for which to get the positions.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A 2D `Array` which represents positions (longitude and latitude) corresponding to the
      *     given members. The order of the returned positions matches the order of the input members.
      *     If a member does not exist, its position will be `null`.
@@ -5461,17 +5457,19 @@ export class BaseClient {
      * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
      * // returned might not be exactly the same as the input values
-     * console.log(result); // Output: [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], null]
+     * console.log(result); // Output:
+     * // [
+     * //     [13.36138933897018433, 38.11555639549629859],
+     * //     [15.08726745843887329, 37.50266842333162032],
+     * //     null
+     * // ]
      * ```
      */
     public async geopos(
         key: GlideString,
         members: GlideString[],
-        decoder?: Decoder,
     ): Promise<([number, number] | null)[]> {
-        return this.createWritePromise(createGeoPos(key, members), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createGeoPos(key, members));
     }
 
     /**
@@ -5634,8 +5632,6 @@ export class BaseClient {
      * @param member1 - The name of the first member.
      * @param member2 - The name of the second member.
      * @param geoUnit - (Optional) The unit of distance measurement - see {@link GeoUnit}. If not specified, the {@link GeoUnit.METERS} is used as a default unit.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
      *     or if the key does not exist.
      *
@@ -5649,11 +5645,10 @@ export class BaseClient {
         key: GlideString,
         member1: GlideString,
         member2: GlideString,
-        options?: { geoUnit?: GeoUnit; decoder?: Decoder },
+        options?: { geoUnit?: GeoUnit },
     ): Promise<number | null> {
         return this.createWritePromise(
             createGeoDist(key, member1, member2, options?.geoUnit),
-            { decoder: options?.decoder },
         );
     }
 
@@ -5671,18 +5666,15 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const result = await client.geohash("mySortedSet",["Palermo", "Catania", "NonExisting"]);
+     * const result = await client.geohash("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
      * ```
      */
     public async geohash(
         key: GlideString,
         members: GlideString[],
-        decoder?: Decoder,
-    ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createGeoHash(key, members), {
-            decoder: decoder,
-        });
+    ): Promise<(string | null)[]> {
+        return this.createWritePromise(createGeoHash(key, members));
     }
 
     /**
