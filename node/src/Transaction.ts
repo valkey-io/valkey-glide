@@ -210,6 +210,7 @@ import {
     createType,
     createUnlink,
     createWait,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -2893,6 +2894,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createXGroupDelConsumer(key, groupName, consumerName),
         );
+    }
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of messages that were successfully acknowledged.
+     */
+    public xack(key: string, group: string, ids: string[]): T {
+        return this.addAndReturn(createXAck(key, group, ids));
     }
 
     /**

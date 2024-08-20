@@ -171,6 +171,7 @@ import {
     createUnlink,
     createWait,
     createWatch,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -5182,6 +5183,36 @@ export class BaseClient {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     * @returns The number of messages that were successfully acknowledged.
+     *
+     * @example
+     * ```typescript
+     *  <pre>{@code
+     * const entryId = await client.xadd("mystream", ["myfield", "mydata"]);
+     * // read messages from streamId
+     * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
+     * // acknowledge messages on stream
+     * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1L
+     * </pre>
+     * ```
+     */
+    public async xack(
+        key: string,
+        group: string,
+        ids: string[],
+    ): Promise<number> {
+        return this.createWritePromise(createXAck(key, group, ids));
+    }
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
