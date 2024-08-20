@@ -5110,7 +5110,7 @@ export class BaseClient {
     }
 
     /**
-     * Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+     * Removes the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
      *
      * @see {@link https://valkey.io/commands/persist/|valkey.io} for more details.
