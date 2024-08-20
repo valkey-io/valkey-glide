@@ -3322,8 +3322,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *    `true` in the options, returns the number of elements updated in the sorted set.
      */
     public geoadd(
-        key: string,
-        membersToGeospatialData: Map<string, GeospatialData>,
+        key: GlideString,
+        membersToGeospatialData: Map<GlideString, GeospatialData>,
         options?: GeoAddOptions,
     ): T {
         return this.addAndReturn(
@@ -3363,7 +3363,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * - The coordinates as a two item `array` of floating point `number`s.
      */
     public geosearch(
-        key: string,
+        key: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchResultOptions,
@@ -3397,8 +3397,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public geosearchstore(
-        destination: string,
-        source: string,
+        destination: GlideString,
+        source: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchStoreResultOptions,
@@ -3427,7 +3427,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     given members. The order of the returned positions matches the order of the input members.
      *     If a member does not exist, its position will be `null`.
      */
-    public geopos(key: string, members: string[]): T {
+    public geopos(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createGeoPos(key, members));
     }
 
@@ -3530,9 +3530,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     or if the key does not exist.
      */
     public geodist(
-        key: string,
-        member1: string,
-        member2: string,
+        key: GlideString,
+        member1: GlideString,
+        member2: GlideString,
         geoUnit?: GeoUnit,
     ): T {
         return this.addAndReturn(createGeoDist(key, member1, member2, geoUnit));
@@ -3549,7 +3549,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      */
-    public geohash(key: string, members: string[]): T {
+    public geohash(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createGeoHash(key, members));
     }
 
