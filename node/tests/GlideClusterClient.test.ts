@@ -1530,6 +1530,47 @@ describe("GlideClusterClient", () => {
                 },
                 TIMEOUT,
             );
+            it("function dump function restore in transaction %p", async () => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+                const config = getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                );
+                const client = await GlideClusterClient.createClient(config);
+                expect(await client.functionFlush()).toEqual("OK");
+
+                try {
+                    const name1 = "Foster";
+                    const name2 = "Dogster";
+                    // function returns first argument
+                    const code = generateLuaLibCode(
+                        name1,
+                        new Map([[name2, "return args[1]"]]),
+                        false,
+                    );
+                    expect(await client.functionLoad(code)).toEqual(name1);
+
+                    // Verify functionDump
+                    let transaction = new ClusterTransaction().functionDump();
+                    const result = await client.exec(transaction, {
+                        decoder: Decoder.Bytes,
+                    });
+                    const data = result?.[0] as Buffer;
+
+                    // Verify functionRestore
+                    transaction = new ClusterTransaction()
+                        .functionRestore(data, FunctionRestorePolicy.REPLACE)
+                        .fcall(name2, [], ["meow"]);
+                    expect(await client.exec(transaction)).toEqual([
+                        "OK",
+                        "meow",
+                    ]);
+                } finally {
+                    expect(await client.functionFlush()).toEqual("OK");
+                    client.close();
+                }
+            });
         },
     );
 
