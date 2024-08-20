@@ -10312,21 +10312,23 @@ class TestScripts:
 
         async def run_long_script():
             with pytest.raises(RequestError) as e:
-                # Since executing the script with no keys cause for a random node selection that could be a replica
-                # Until we decide on a proper routing option
-                await test_client.invoke_script(
-                    long_script, keys=[get_random_string(5)]
-                )
+                await test_client.invoke_script(long_script)
             assert "Script killed by user" in str(e)
 
         async def wait_and_kill_script():
             await asyncio.sleep(3)  # Give some time for the script to start
-            while True:
+            timeout = 0
+            while timeout <= 5:
+                # keep trying to kill until we get an "OK"
                 try:
-                    result = await test_client2.script_kill()
-                    assert result == OK
+                    result = await glide_client.script_kill()
+                    #  we expect to get success
+                    assert result == "OK"
                     break
                 except RequestError:
+                    # a RequestError may occur if the script is not yet running
+                    # sleep and try again
+                    timeout += 0.5
                     await asyncio.sleep(0.5)
 
         # Run the long script and kill it
