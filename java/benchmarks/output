@@ -1,0 +1,25 @@
+[
+  {
+    "client": "lettuce",
+    "client_count": 1,
+    "data_size": 100,
+    "is_cluster": true,
+    "num_of_tasks": 1,
+    "get_existing_average_latency": 0.78,
+    "get_existing_p50_latency": 0.206,
+    "get_existing_p90_latency": 0.631,
+    "get_existing_p99_latency": 14.764,
+    "get_existing_std_dev": 2.95,
+    "get_non_existing_average_latency": 0.747,
+    "get_non_existing_p50_latency": 0.206,
+    "get_non_existing_p90_latency": 0.626,
+    "get_non_existing_p99_latency": 14.671,
+    "get_non_existing_std_dev": 2.794,
+    "set_average_latency": 0.794,
+    "set_p50_latency": 0.215,
+    "set_p90_latency": 0.701,
+    "set_p99_latency": 14.597,
+    "set_std_dev": 2.801,
+    "tps": 1282.0
+  }
+]
