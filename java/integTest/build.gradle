@@ -103,12 +103,53 @@ tasks.register('startStandalone') {
 
 tasks.register('getServerVersion') {
     doLast {
-        new ByteArrayOutputStream().withStream { os ->
-            exec {
-                commandLine 'redis-server', '-v'
-                standardOutput = os
+        def detectedVersion
+        def output = new ByteArrayOutputStream()
+
+        // Helper method to find the full path of a command
+        def findFullPath = { command ->
+            def pathOutput = new ByteArrayOutputStream()
+            try {
+                exec {
+                    commandLine 'which', command  // Use 'where' for Windows
+                    standardOutput = pathOutput
+                }
+                return pathOutput.toString().trim()
+            } catch (Exception e) {
+                println "Failed to find path for ${command}: ${e.message}"
+                return ""
             }
-            serverVersion = extractServerVersion(os.toString())
+        }
+
+        // Get full paths
+        def valkeyPath = findFullPath('valkey-server')
+        def redisPath = findFullPath('redis-server')
+
+        def tryGetVersion = { serverPath ->
+            try {
+                exec {
+                    commandLine serverPath, '-v'
+                    standardOutput = output
+                }
+                return output.toString()
+            } catch (Exception e) {
+                println "Failed to execute ${serverPath}: ${e.message}"
+                return ""
+            }
+        }
+
+        // Try valkey-server first, then redis-server if it fails
+        def versionOutput = tryGetVersion(valkeyPath)
+        if (versionOutput.isEmpty() && !redisPath.isEmpty()) {
+            versionOutput = tryGetVersion(redisPath)
+        }
+
+        if (!versionOutput.isEmpty()) {
+            detectedVersion = extractServerVersion(versionOutput)
+            println "Detected server version: ${detectedVersion}"
+            serverVersion = detectedVersion
+        } else {
+            throw new GradleException("Failed to retrieve the server version.")
         }
     }
 }

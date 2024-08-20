@@ -280,11 +280,31 @@ def start_redis_server(
 ) -> Tuple[RedisServer, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
+
     # Create sub-folder for each node
     node_folder = f"{cluster_folder}/{port}"
     Path(node_folder).mkdir(exist_ok=True)
+
+    # Determine which server to use by checking `valkey-server` and `redis-server`
+    def get_server_command() -> str:
+        for server in ["valkey-server", "redis-server"]:
+            try:
+                result = subprocess.run(
+                    ["which", server],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    return server
+            except Exception as e:
+                logging.error(f"Error checking {server}: {e}")
+        raise Exception("Neither valkey-server nor redis-server found in the system.")
+
+    server_name = get_server_command()
+    # Define command arguments
     cmd_args = [
-        "redis-server",
+        server_name,
         f"{'--tls-port' if tls else '--port'}",
         str(port),
         "--cluster-enabled",
@@ -315,6 +335,7 @@ def start_redis_server(
         raise Exception(
             f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
+
     server = RedisServer(host, port)
     return server, node_folder
 
