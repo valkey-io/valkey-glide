@@ -16,6 +16,7 @@ on:
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
             - .github/json_matrices/engine-matrix.json
+            - .github/workflows/start-self-hosted-runner/action.yml
 
     pull_request:
         paths:
@@ -31,6 +32,7 @@ on:
             - .github/workflows/install-valkey/action.yml
             - .github/json_matrices/build-matrix.json
             - .github/json_matrices/engine-matrix.json
+            - .github/workflows/start-self-hosted-runner/action.yml
     workflow_dispatch:
 
 concurrency:
@@ -39,6 +41,7 @@ concurrency:
 
 permissions:
     contents: read
+    id-token: write
 
 jobs:
     load-engine-matrix:
@@ -156,7 +159,7 @@ jobs:
                         OS: ubuntu,
                         RUNNER: ubuntu-latest,
                         TARGET: x86_64-unknown-linux-gnu
-                    }
+                     }
                     # - {
                     #     OS: macos,
                     #     RUNNER: macos-latest,
@@ -284,3 +287,77 @@ jobs:
                   name: smoke-test-report-amazon-linux
                   path: |
                       python/python/tests/pytest_report.html
+
+    
+    start-self-hosted-runner:
+      if: github.repository_owner == 'valkey-io'
+      runs-on: ubuntu-latest
+      environment: AWS_ACTIONS
+      steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Start self hosted EC2 runner
+            uses: ./.github/workflows/start-self-hosted-runner
+            with:
+                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                aws-region: ${{ secrets.AWS_REGION }}
+                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+    test-modules:
+      needs: [start-self-hosted-runner, load-engine-matrix]
+      if: github.repository_owner == 'valkey-io'
+      name: Running Module Tests
+      runs-on: ${{ matrix.host.RUNNER }}
+      timeout-minutes: 35
+      strategy:
+        fail-fast: false
+        matrix:
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
+                python:
+                    - "3.12"
+                host:
+                    - {
+                        OS: "ubuntu",
+                        NAMED_OS: "linux",
+                        RUNNER: ["self-hosted", "Linux", "ARM64"],
+                        TARGET: "aarch64-unknown-linux-gnu",
+                     }
+        
+      steps:
+          - name: Setup self-hosted runner access
+            if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
+            run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+          
+          - uses: actions/checkout@v4
+            with:
+              submodules: recursive
+          
+          - name: Setup Python for self-hosted Ubuntu runners
+            if: contains(matrix.host.OS, 'ubuntu') && contains(matrix.host.RUNNER, 'self-hosted')
+            run: |
+                  sudo apt update -y
+                  sudo apt upgrade -y
+                  sudo apt install python3 python3-venv python3-pip -y
+  
+          - name: Install dependencies
+            working-directory: ./python
+            run: |
+                    python3 -m pip install --upgrade pip
+                    pip install mypy-protobuf
+  
+          - name: Build Python wrapper
+            uses: ./.github/workflows/build-python-wrapper
+            with:
+                    os: ${{ matrix.host.OS }}
+                    target: ${{ matrix.host.TARGET }}
+                    github-token: ${{ secrets.GITHUB_TOKEN }}
+                    engine-version: ${{ matrix.engine.version }}
+
+          - name: Test with pytest
+            working-directory: ./python
+            run: |
+                    source .env/bin/activate
+                    cd python/tests/tests_server_modules
+                    pytest --asyncio-mode=auto --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --override-ini=addopts= --html=pytest_report.html --self-contained-html
+
+  

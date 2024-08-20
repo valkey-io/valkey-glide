@@ -9524,11 +9524,6 @@ class TestMultiKeyCommandCrossSlot:
         await glide_client.touch(["abc", "zxy", "lkn"])
         await glide_client.watch(["abc", "zxy", "lkn"])
 
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_vss(self, glide_client: GlideClusterClient):
-        assert await glide_client.custom_command("FT.CREATE idx ON JSON SCHEMA $.title AS title TEXT $.categories AS categories TAG".split()) == OK  # type: ignore
-
 
 class TestCommandsUnitTests:
     def test_expiry_cmd_args(self):
