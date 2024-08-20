@@ -2824,8 +2824,8 @@ export function createRenameNX(
  * @internal
  */
 export function createPfAdd(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     const args = [key, ...elements];
     return createCommand(RequestType.PfAdd, args);
@@ -2834,7 +2834,7 @@ export function createPfAdd(
 /**
  * @internal
  */
-export function createPfCount(keys: string[]): command_request.Command {
+export function createPfCount(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.PfCount, keys);
 }
 
@@ -2842,8 +2842,8 @@ export function createPfCount(keys: string[]): command_request.Command {
  * @internal
  */
 export function createPfMerge(
-    destination: string,
-    sourceKey: string[],
+    destination: GlideString,
+    sourceKey: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PfMerge, [destination, ...sourceKey]);
 }

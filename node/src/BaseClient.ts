@@ -180,6 +180,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -220,7 +221,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import {
     ClosingError,
@@ -5448,8 +5448,13 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
      * ```
      */
-    public async pfadd(key: string, elements: string[]): Promise<number> {
-        return this.createWritePromise(createPfAdd(key, elements));
+    public async pfadd(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
+        return this.createWritePromise(createPfAdd(key, elements), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
@@ -5467,8 +5472,10 @@ export class BaseClient {
      * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
      * ```
      */
-    public async pfcount(keys: string[]): Promise<number> {
-        return this.createWritePromise(createPfCount(keys));
+    public async pfcount(keys: GlideString[]): Promise<number> {
+        return this.createWritePromise(createPfCount(keys), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -5493,10 +5500,12 @@ export class BaseClient {
      * ```
      */
     public async pfmerge(
-        destination: string,
-        sourceKeys: string[],
+        destination: GlideString,
+        sourceKeys: GlideString[],
     ): Promise<"OK"> {
-        return this.createWritePromise(createPfMerge(destination, sourceKeys));
+        return this.createWritePromise(createPfMerge(destination, sourceKeys), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Returns the internal encoding for the Valkey object stored at `key`.

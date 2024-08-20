@@ -6850,7 +6850,9 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.pfadd(key, [])).toEqual(1);
                 expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
-                expect(await client.pfadd(key, ["two"])).toEqual(0);
+                expect(
+                    await client.pfadd(Buffer.from(key), [Buffer.from("two")]),
+                ).toEqual(0);
                 expect(await client.pfadd(key, [])).toEqual(0);
 
                 // key exists, but it is not a HyperLogLog
@@ -6874,7 +6876,7 @@ export function runBaseTests(config: {
                 expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
                 expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
                 expect(await client.pfcount([key1])).toEqual(3);
-                expect(await client.pfcount([key2])).toEqual(3);
+                expect(await client.pfcount([Buffer.from(key2)])).toEqual(3);
                 expect(await client.pfcount([key1, key2])).toEqual(4);
                 expect(
                     await client.pfcount([key1, key2, nonExistingKey]),
@@ -6915,11 +6917,15 @@ export function runBaseTests(config: {
                 expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
 
                 // merge into new HyperLogLog data set
-                expect(await client.pfmerge(key3, [key1, key2])).toEqual("OK");
+                expect(
+                    await client.pfmerge(Buffer.from(key3), [key1, key2]),
+                ).toEqual("OK");
                 expect(await client.pfcount([key3])).toEqual(4);
 
                 // merge into existing HyperLogLog data set
-                expect(await client.pfmerge(key1, [key2])).toEqual("OK");
+                expect(await client.pfmerge(key1, [Buffer.from(key2)])).toEqual(
+                    "OK",
+                );
                 expect(await client.pfcount([key1])).toEqual(4);
 
                 // non-existing source key
