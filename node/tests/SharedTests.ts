@@ -7,8 +7,8 @@
 // Each test cases has access to a client instance and, optionally, to a cluster - object, which
 // represents a running server instance. See first 2 test cases as examples.
 
-import { expect, it } from "@jest/globals";
-import { v4 as uuidv4 } from "uuid";
+import {expect,it} from "@jest/globals";
+import {v4 as uuidv4} from "uuid";
 import {
     BaseClientConfiguration,
     BitFieldGet,
@@ -55,8 +55,8 @@ import {
     convertGlideRecordToRecord,
     parseInfoResponse,
 } from "..";
-import { ValkeyCluster } from "../../utils/TestUtils";
-import { Client, GetAndSetRandomValue, getFirstResult } from "./TestUtilities";
+import {ValkeyCluster} from "../../utils/TestUtils";
+import {Client,GetAndSetRandomValue,getFirstResult} from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
 
@@ -4187,6 +4187,33 @@ export function runBaseTests(config: {
                 expect(await client.scriptExists([script.getHash()])).toEqual([
                     false,
                 ]);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script show test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    return;
+                }
+
+                const value = uuidv4();
+                const code = `return '${value}'`;
+                const script = new Script(Buffer.from(code));
+
+                expect(await client.invokeScript(script)).toEqual(value);
+
+                // Get the SHA1 digests of the script
+                const sha1 = script.getHash();
+
+                expect(await client.scriptShow(sha1)).toEqual(code);
+
+                await expect(
+                    client.scriptShow("non existing sha1"),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,

@@ -5393,6 +5393,26 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZInterCard, args),
         )
 
+    async def script_show(self, sha1: TEncodable) -> bytes:
+        """
+        Returns the original source code of a script in the script cache.
+
+        See https://valkey.io/commands/script-show for more details.
+
+        Args:
+            sha1 (TEncodable): The SHA1 digest of the script.
+
+        Returns:
+            bytes: The original source code of the script, if present in the cache.
+
+        Examples:
+            >>> await client.script_show(script.get_hash())
+                b"return { KEYS[1], ARGV[1] }"
+
+        Since: Valkey version 8.0.0.
+        """
+        return cast(bytes, await self._execute_command(RequestType.ScriptShow, [sha1]))
+
     async def pfadd(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.

@@ -695,6 +695,36 @@ public interface GenericBaseCommands {
     CompletableFuture<Object> invokeScript(Script script, ScriptOptionsGlideString options);
 
     /**
+     * Returns the original source code of a script in the script cache.
+     *
+     * @see <a href="https://valkey.io/commands/script-show">valkey.io</a> for details.
+     * @since Valkey 8.0.0 and above.
+     * @param sha1 The SHA1 digest of the script.
+     * @return The original source code of the script, if present in the cache.
+     * @example
+     *     <pre>{@code
+     * String scriptSource = client.scriptShow(luaScript.getHash()).get();
+     * assert scriptSource.equals("return { KEYS[1], ARGV[1] }");
+     * }</pre>
+     */
+    CompletableFuture<String> scriptShow(String sha1);
+
+    /**
+     * Returns the original source code of a script in the script cache.
+     *
+     * @see <a href="https://valkey.io/commands/script-show">valkey.io</a> for details.
+     * @since Valkey 8.0.0 and above.
+     * @param sha1 The SHA1 digest of the script.
+     * @return The original source code of the script, if present in the cache.
+     * @example
+     *     <pre>{@code
+     * String scriptSource = client.scriptShow(gs(luaScript.getHash())).get();
+     * assert scriptSource.equals(gs("return { KEYS[1], ARGV[1] }"));
+     * }</pre>
+     */
+    CompletableFuture<GlideString> scriptShow(GlideString sha1);
+
+    /**
      * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
      *
      * @see <a href="https://valkey.io/commands/pttl/">valkey.io</a> for details.

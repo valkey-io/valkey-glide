@@ -165,6 +165,7 @@ import {
     createSScan,
     createSUnion,
     createSUnionStore,
+    createScriptShow,
     createSet,
     createSetBit,
     createSetRange,
@@ -3693,6 +3694,32 @@ export class BaseClient {
             }),
         });
         return this.createWritePromise(scriptInvocation, options);
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache.
+     * See {@link https://valkey.io/commands/script-show} for more details.
+     *
+     * @param sha1 - The SHA1 digest of the script.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns The original source code of the script, if present in the cache.
+     *
+     * @example
+     * ```typescript
+     * const scriptHash = script.getHash();
+     * const scriptSource = await client.scriptShow(scriptHash);
+     * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }"
+     * ```
+     *
+     * @remarks Since Valkey version 8.0.0.
+     */
+    public async scriptShow(
+        sha1: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createScriptShow(sha1), {
+            decoder: decoder,
+        });
     }
 
     /**
