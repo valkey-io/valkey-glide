@@ -5,7 +5,7 @@
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
-    ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
+    ReadFrom,
 } from "./BaseClient";
 
 import {
@@ -3114,7 +3114,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The invoked function's return value.
      */
-    public fcall(func: string, keys: string[], args: string[]): T {
+    public fcall(
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): T {
         return this.addAndReturn(createFCall(func, keys, args));
     }
 
@@ -3131,7 +3135,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The invoked function's return value.
      */
-    public fcallReadonly(func: string, keys: string[], args: string[]): T {
+    public fcallReadonly(
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): T {
         return this.addAndReturn(createFCallReadOnly(func, keys, args));
     }
 
@@ -3145,7 +3153,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `OK`.
      */
-    public functionDelete(libraryCode: string): T {
+    public functionDelete(libraryCode: GlideString): T {
         return this.addAndReturn(createFunctionDelete(libraryCode));
     }
 
@@ -3161,7 +3169,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The library name that was loaded.
      */
-    public functionLoad(libraryCode: string, replace?: boolean): T {
+    public functionLoad(libraryCode: GlideString, replace?: boolean): T {
         return this.addAndReturn(createFunctionLoad(libraryCode, replace));
     }
 

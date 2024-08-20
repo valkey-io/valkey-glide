@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added binary variant to FUNCTION commands ([#2172](https://github.com/valkey-io/valkey-glide/pull/2172))
 * Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129))
 * Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
 * Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
