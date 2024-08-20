@@ -341,7 +341,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const message = uuidv4();
-            const echoDict = await client.echo(message, "allNodes");
+            const echoDict = await client.echo(message, { route: "allNodes" });
 
             expect(typeof echoDict).toBe("object");
             expect(intoArray(echoDict)).toEqual(

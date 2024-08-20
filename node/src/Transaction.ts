@@ -4,7 +4,6 @@
 
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
-    Decoder, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
@@ -381,12 +380,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSet(key, value, options));
     }
 
-    /** Ping the Redis server.
+    /**
+     * Pings the server.
+     *
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
-     * @param message - An optional message to include in the PING command.
-     * If not provided, the server will respond with "PONG".
-     * If provided, the server will respond with a copy of the message.
+     * @param message - (Optional) A message to include in the PING command.
+     * - If not provided, the server will respond with "PONG".
+     * - If provided, the server will respond with a copy of the message.
      *
      * Command Response - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      */
@@ -417,10 +418,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createDel(keys));
     }
 
-    /** Get the name of the connection on which the transaction is being executed.
+    /**
+     * Gets the name of the connection on which the transaction is being executed.
+     *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
      *
-     * Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
+     * Command Response - The name of the client connection as a string if a name is set, or null if no name is assigned.
      */
     public clientGetName(): T {
         return this.addAndReturn(createClientGetName());
@@ -518,10 +521,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createIncrByFloat(key, amount));
     }
 
-    /** Returns the current connection id.
+    /**
+     * Returns the current connection ID.
+     *
      * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
-     * Command Response - the id of the client.
+     * Command Response - The ID of the connection.
      */
     public clientId(): T {
         return this.addAndReturn(createClientId());
@@ -2071,14 +2076,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBZPopMax(keys, timeout));
     }
 
-    /** Echoes the provided `message` back.
+    /**
+     * Echoes the provided `message` back
+     *
      * @see {@link https://valkey.io/commands/echo/|valkey.io} for more details.
      *
      * @param message - The message to be echoed back.
      *
      * Command Response - The provided `message`.
      */
-    public echo(message: string): T {
+    public echo(message: GlideString): T {
         return this.addAndReturn(createEcho(message));
     }
 
@@ -3625,7 +3632,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 export class Transaction extends BaseTransaction<Transaction> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
 
-    /** Change the currently selected Redis database.
+    /**
+     * Change the currently selected database.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.

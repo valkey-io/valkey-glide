@@ -500,16 +500,24 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const pongEncoded = Buffer.from("PONG");
                 expect(await client.ping()).toEqual("PONG");
+                expect(await client.ping({ message: "Hello" })).toEqual(
+                    "Hello",
+                );
                 expect(
-                    client instanceof GlideClient
-                        ? await client.ping("Hello")
-                        : await client.ping({ message: "Hello" }),
-                ).toEqual("Hello");
+                    await client.ping({
+                        message: pongEncoded,
+                        decoder: Decoder.String,
+                    }),
+                ).toEqual("PONG");
+                expect(await client.ping({ decoder: Decoder.Bytes })).toEqual(
+                    pongEncoded,
+                );
                 expect(
-                    client instanceof GlideClient
-                        ? await client.ping(pongEncoded)
-                        : await client.ping({ message: pongEncoded }),
-                ).toEqual(pongEncoded);
+                    await client.ping({
+                        message: "Hello",
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("Hello"));
             }, protocol);
         },
         config.timeout,
@@ -4817,8 +4825,32 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const message = uuidv4();
                 expect(await client.echo(message)).toEqual(message);
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(message, Decoder.String)
+                        : await client.echo(message, {
+                              decoder: Decoder.String,
+                          }),
+                ).toEqual(message);
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(message, Decoder.Bytes)
+                        : await client.echo(message, {
+                              decoder: Decoder.Bytes,
+                          }),
+                ).toEqual(Buffer.from(message));
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(
+                              Buffer.from(message),
+                              Decoder.String,
+                          )
+                        : await client.echo(Buffer.from(message), {
+                              decoder: Decoder.String,
+                          }),
+                ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
-                    Buffer.from(message),
+                    message,
                 );
             }, protocol);
         },
