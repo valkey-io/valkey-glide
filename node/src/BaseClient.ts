@@ -220,6 +220,7 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
+    createXGroupSetid,
 } from "./Commands";
 import {
     ClosingError,
@@ -5212,6 +5213,40 @@ export class BaseClient {
         ids: string[],
     ): Promise<number> {
         return this.createWritePromise(createXAck(key, group, ids));
+    }
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns `"OK"`.
+     *
+     * * @example
+     * ```typescript
+     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", 1L)); // Output is "OK"
+     * ```
+     */
+    public async xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+        decoder?: Decoder,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createXGroupSetid(key, groupName, id, entriesRead),
+            {
+                decoder: decoder,
+            },
+        );
     }
 
     /** Returns the element at index `index` in the list stored at `key`.
