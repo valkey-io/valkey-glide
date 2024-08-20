@@ -3966,6 +3966,7 @@ export function createXGroupSetid(
     const args = [key, groupName, id];
 
     if (entriesRead) {
+        args.push("ENTRIESREAD");
         args.push(entriesRead.toString());
     }
 

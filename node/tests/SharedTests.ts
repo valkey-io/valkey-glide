@@ -9505,32 +9505,100 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xgroupSetId test %p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient, cluster) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 const key = "testKey" + uuidv4();
                 const nonExistingKey = "group" + uuidv4();
                 const stringKey = "testKey" + uuidv4();
                 const groupName = uuidv4();
                 const consumerName = uuidv4();
-                const streamId0 = "0";
-                const streamId1_0 = "1-0";
-                const streamId1_1 = "1-1";
-                const streamId1_2 = "1-2";
+                const streamid0 = "0";
+                const streamid1_0 = "1-0";
+                const streamid1_1 = "1-1";
+                const streamid1_2 = "1-2";
 
                 // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
                 expect(
-                    await client.xadd(key, [["f0", "v0"]], { id: streamId1_0 }),
-                ).toBe(streamId1_0);
+                    await client.xadd(key, [["f0", "v0"]], { id: streamid1_0 }),
+                ).toBe(streamid1_0);
                 expect(
-                    await client.xadd(key, [["f1", "v1"]], { id: streamId1_1 }),
-                ).toBe(streamId1_1);
+                    await client.xadd(key, [["f1", "v1"]], { id: streamid1_1 }),
+                ).toBe(streamid1_1);
                 expect(
-                    await client.xadd(key, [["f2", "v2"]], { id: streamId1_2 }),
-                ).toBe(streamId1_2);
+                    await client.xadd(key, [["f2", "v2"]], { id: streamid1_2 }),
+                ).toBe(streamid1_2);
 
                 expect(
-                    await client.xgroupCreate(key, groupName, streamId0),
+                    await client.xgroupCreate(key, groupName, streamid0),
                 ).toBe("OK");
-                // TODO: finish implementing tests once XREADGROUP is done
+
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({
+                    [key]: {
+                        [streamid1_0]: [["f0", "v0"]],
+                        [streamid1_1]: [["f1", "v1"]],
+                        [streamid1_2]: [["f2", "v2"]],
+                    },
+                });
+
+                // Sanity check: xreadgroup should not return more entries since they're all already in the
+                // Pending Entries List.
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toBeNull();
+
+                // Reset the last delivered ID for the consumer group to "1-1"
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(
+                        await client.xgroupSetId(key, groupName, streamid1_1),
+                    ).toBe("OK");
+                } else {
+                    expect(
+                        await client.xgroupSetId(
+                            key,
+                            groupName,
+                            streamid1_1,
+                            1,
+                        ),
+                    ).toBe("OK");
+                }
+
+                // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
+                const newResult = await client.xreadgroup(
+                    groupName,
+                    consumerName,
+                    { [key]: ">" },
+                );
+                expect(newResult).toEqual({
+                    [key]: {
+                        [streamid1_2]: [["f2", "v2"]],
+                    },
+                });
+
+                // An error is raised if XGROUP SETID is called with a non-existing key
+                await expect(
+                    client.xgroupSetId(nonExistingKey, groupName, streamid0),
+                ).rejects.toThrow(RequestError);
+
+                // An error is raised if XGROUP SETID is called with a non-existing group
+                await expect(
+                    client.xgroupSetId(key, "non_existing_group", streamid0),
+                ).rejects.toThrow(RequestError);
+
+                // Setting the ID to a non-existing ID is allowed
+                expect(await client.xgroupSetId(key, groupName, "99-99")).toBe(
+                    "OK",
+                );
+
+                // key exists, but is not a stream
+                expect(await client.set(stringKey, "xgroup setid")).toBe("OK");
+                await expect(
+                    client.xgroupSetId(stringKey, groupName, streamid1_0),
+                ).rejects.toThrow(RequestError);
             }, protocol);
         },
         config.timeout,
