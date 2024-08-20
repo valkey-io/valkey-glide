@@ -19,7 +19,7 @@ import {
     ClusterTransaction,
     FlushMode,
     FunctionListResponse,
-    FunctionStatsResponse,
+    FunctionStatsSingleResponse,
     GeoUnit,
     GeospatialData,
     GlideClient,
@@ -461,7 +461,7 @@ export function checkFunctionListResponse(
  * @param functionCount - Expected functions count.
  */
 export function checkFunctionStatsResponse(
-    response: FunctionStatsResponse,
+    response: FunctionStatsSingleResponse,
     runningFunction: string[],
     libCount: number,
     functionCount: number,

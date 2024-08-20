@@ -2324,12 +2324,24 @@ export function createFunctionList(
     return createCommand(RequestType.FunctionList, args);
 }
 
-/** Type of the response of `FUNCTION STATS` command. */
-export type FunctionStatsResponse = Record<
+/** Response for `FUNCTION STATS` command on a single node.
+ *  The response is a map with 2 keys:
+ *  1. Information about the current running function/script (or null if none).
+ *  2. Details about the execution engines.
+ */
+export type FunctionStatsSingleResponse = Record<
     string,
     | null
-    | Record<string, string | string[] | number>
-    | Record<string, Record<string, number>>
+    | Record<string, string | string[] | number> // Running function/script information
+    | Record<string, Record<string, number>> // Execution engines information
+>;
+
+/** Full response for `FUNCTION STATS` command across multiple nodes.
+ *  It maps node addresses to the per-node response.
+ */
+export type FunctionStatsFullResponse = Record<
+    string, // Node address
+    FunctionStatsSingleResponse
 >;
 
 /** @internal */

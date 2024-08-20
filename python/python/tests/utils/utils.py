@@ -8,7 +8,7 @@ from glide.async_commands.core import InfoSection
 from glide.constants import (
     TClusterResponse,
     TFunctionListResponse,
-    TFunctionStatsResponse,
+    TFunctionStatsSingleNodeResponse,
     TResult,
 )
 from glide.glide_client import TGlideClient
@@ -309,7 +309,7 @@ def check_function_list_response(
 
 
 def check_function_stats_response(
-    response: TFunctionStatsResponse,
+    response: TFunctionStatsSingleNodeResponse,
     running_function: List[bytes],
     lib_count: int,
     function_count: int,
@@ -318,7 +318,7 @@ def check_function_stats_response(
     Validate whether `FUNCTION STATS` response contains required info.
 
     Args:
-        response (TFunctionStatsResponse): The response from server.
+        response (TFunctionStatsSingleNodeResponse): The response from server.
         running_function (List[bytes]): Command line of running function expected. Empty, if nothing expected.
         lib_count (int): Expected libraries count.
         function_count (int): Expected functions count.
