@@ -208,6 +208,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
@@ -696,7 +697,7 @@ public abstract class BaseClient
         return data;
     }
 
-    /** Process a <code>FUNCTION STATS</code> standalone response. */
+    /** Process a <code>FUNCTION STATS</code> response from one node. */
     protected Map<String, Map<String, Object>> handleFunctionStatsResponse(
             Map<String, Map<String, Object>> response) {
         Map<String, Object> runningScriptInfo = response.get("running_script");
@@ -707,7 +708,7 @@ public abstract class BaseClient
         return response;
     }
 
-    /** Process a <code>FUNCTION STATS</code> standalone response. */
+    /** Process a <code>FUNCTION STATS</code> response from one node. */
     protected Map<GlideString, Map<GlideString, Object>> handleFunctionStatsBinaryResponse(
             Map<GlideString, Map<GlideString, Object>> response) {
         Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
@@ -716,6 +717,36 @@ public abstract class BaseClient
             runningScriptInfo.put(gs("command"), castArray(command, GlideString.class));
         }
         return response;
+    }
+
+    /** Process a <code>FUNCTION STATS</code> cluster response. */
+    protected ClusterValue<Map<String, Map<String, Object>>> handleFunctionStatsResponse(
+            Response response, boolean isSingleValue) {
+        if (isSingleValue) {
+            return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
+        } else {
+            Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
+            for (var nodeInfo : data.entrySet()) {
+                nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValue(data);
+        }
+    }
+
+    /** Process a <code>FUNCTION STATS</code> cluster response. */
+    protected ClusterValue<Map<GlideString, Map<GlideString, Object>>>
+            handleFunctionStatsBinaryResponse(Response response, boolean isSingleValue) {
+        if (isSingleValue) {
+            return ClusterValue.ofSingleValue(
+                    handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
+        } else {
+            Map<GlideString, Map<GlideString, Map<GlideString, Object>>> data =
+                    handleBinaryStringMapResponse(response);
+            for (var nodeInfo : data.entrySet()) {
+                nodeInfo.setValue(handleFunctionStatsBinaryResponse(nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValueBinary(data);
+        }
     }
 
     /** Process a <code>LCS key1 key2 IDX</code> response */

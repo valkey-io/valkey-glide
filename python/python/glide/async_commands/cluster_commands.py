@@ -18,7 +18,7 @@ from glide.constants import (
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
-    TFunctionStatsResponse,
+    TFunctionStatsSingleNodeResponse,
     TResult,
     TSingleNodeRoute,
 )
@@ -493,7 +493,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/function-kill/ for more details.
 
         Args:
-            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
@@ -588,7 +588,7 @@ class ClusterCommands(CoreCommands):
 
     async def function_stats(
         self, route: Optional[Route] = None
-    ) -> TClusterResponse[TFunctionStatsResponse]:
+    ) -> TClusterResponse[TFunctionStatsSingleNodeResponse]:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -596,11 +596,11 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/function-stats/ for more details
 
         Args:
-            route (Optional[Route]): Specifies the routing configuration for the command. The client
-                will route the command to the nodes defined by `route`.
+            route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TClusterResponse[TFunctionStatsResponse]: A `Mapping` with two keys:
+            TClusterResponse[TFunctionStatsSingleNodeResponse]: A `Mapping` with two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.
@@ -624,7 +624,7 @@ class ClusterCommands(CoreCommands):
         Since: Valkey version 7.0.0.
         """
         return cast(
-            TClusterResponse[TFunctionStatsResponse],
+            TClusterResponse[TFunctionStatsSingleNodeResponse],
             await self._execute_command(RequestType.FunctionStats, [], route),
         )
 

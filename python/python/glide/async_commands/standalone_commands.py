@@ -18,7 +18,7 @@ from glide.constants import (
     TOK,
     TEncodable,
     TFunctionListResponse,
-    TFunctionStatsResponse,
+    TFunctionStatsFullResponse,
     TResult,
 )
 from glide.protobuf.command_request_pb2 import RequestType
@@ -374,6 +374,8 @@ class StandaloneCommands(CoreCommands):
         Kills a function that is currently executing.
         This command only terminates read-only functions.
 
+        FUNCTION KILL runs on all nodes of the server, including primary and replicas.
+
         See https://valkey.io/commands/function-kill/ for more details.
 
         Returns:
@@ -390,39 +392,51 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.FunctionKill, []),
         )
 
-    async def function_stats(self) -> TFunctionStatsResponse:
+    async def function_stats(self) -> TFunctionStatsFullResponse:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
 
+        FUNCTION STATS runs on all nodes of the server, including primary and replicas.
+        The response includes a mapping from node address to the command response for that node.
+
         See https://valkey.io/commands/function-stats/ for more details
 
         Returns:
-            TFunctionStatsResponse: A `Mapping` with two keys:
+            TFunctionStatsFullResponse: A Map where the key is the node address and the value is a Map of two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.
 
         Examples:
             >>> await client.function_stats()
-                {
-                    'running_script': {
-                        'name': 'foo',
-                        'command': ['FCALL', 'foo', '0', 'hello'],
-                        'duration_ms': 7758
+                {b"addr": {                         # Response from the master node
+                    b'running_script': {
+                        b'name': b'foo',
+                        b'command': [b'FCALL', b'foo', b'0', b'hello'],
+                        b'duration_ms': 7758
                     },
-                    'engines': {
-                        'LUA': {
-                            'libraries_count': 1,
-                            'functions_count': 1,
+                    b'engines': {
+                        b'LUA': {
+                            b'libraries_count': 1,
+                            b'functions_count': 1,
                         }
                     }
-                }
+                },
+                b"addr2": {                         # Response from a replica
+                    b'running_script': None,
+                    b"engines": {
+                        b'LUA': {
+                            b'libraries_count': 1,
+                            b'functions_count': 1,
+                        }
+                    }
+                }}
 
         Since: Valkey version 7.0.0.
         """
         return cast(
-            TFunctionStatsResponse,
+            TFunctionStatsFullResponse,
             await self._execute_command(RequestType.FunctionStats, []),
         )
 

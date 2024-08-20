@@ -27,7 +27,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionStatsSingleResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -3182,7 +3182,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     * Command Response - A `Record` of type {@link FunctionStatsSingleResponse} with two keys:
      *
      * - `"running_script"` with information about the running script.
      * - `"engines"` with information about available engines and their stats.

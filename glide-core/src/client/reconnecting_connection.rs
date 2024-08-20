@@ -165,7 +165,7 @@ impl ReconnectingConnection {
         create_connection(backend, connection_retry_strategy, push_sender).await
     }
 
-    fn node_address(&self) -> String {
+    pub(crate) fn node_address(&self) -> String {
         self.inner
             .backend
             .connection_info

@@ -2028,7 +2028,7 @@ class BaseTransaction:
         See https://valkey.io/commands/function-stats/ for more details
 
         Command Response:
-            TFunctionStatsResponse: A `Mapping` with two keys:
+            TFunctionStatsSingleNodeResponse: A `Mapping` with two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.

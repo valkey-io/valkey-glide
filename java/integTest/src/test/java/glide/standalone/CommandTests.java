@@ -986,7 +986,9 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         var response = regularClient.functionStats().get();
-        checkFunctionStatsResponse(response, new String[0], 1, 1);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 1, 1);
+        }
 
         code =
                 generateLuaLibCode(
@@ -996,12 +998,16 @@ public class CommandTests {
         assertEquals(libName + "_2", regularClient.functionLoad(code, true).get());
 
         response = regularClient.functionStats().get();
-        checkFunctionStatsResponse(response, new String[0], 2, 3);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 2, 3);
+        }
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         response = regularClient.functionStats().get();
-        checkFunctionStatsResponse(response, new String[0], 0, 0);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
+        }
     }
 
     @Test
@@ -1019,7 +1025,9 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         var response = regularClient.functionStatsBinary().get();
-        checkFunctionStatsBinaryResponse(response, new GlideString[0], 1, 1);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 1, 1);
+        }
 
         code =
                 generateLuaLibCodeBinary(
@@ -1033,12 +1041,16 @@ public class CommandTests {
         assertEquals(gs(libName.toString() + "_2"), regularClient.functionLoad(code, true).get());
 
         response = regularClient.functionStatsBinary().get();
-        checkFunctionStatsBinaryResponse(response, new GlideString[0], 2, 3);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 2, 3);
+        }
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         response = regularClient.functionStatsBinary().get();
-        checkFunctionStatsBinaryResponse(response, new GlideString[0], 0, 0);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 0, 0);
+        }
     }
 
     @Test

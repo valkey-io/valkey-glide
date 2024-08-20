@@ -946,36 +946,6 @@ public class GlideClusterClient extends BaseClient
                 FunctionKill, new String[0], route, this::handleStringResponse);
     }
 
-    /** Process a <code>FUNCTION STATS</code> cluster response. */
-    protected ClusterValue<Map<String, Map<String, Object>>> handleFunctionStatsResponse(
-            Response response, boolean isSingleValue) {
-        if (isSingleValue) {
-            return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
-        } else {
-            Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
-                nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
-            }
-            return ClusterValue.ofMultiValue(data);
-        }
-    }
-
-    /** Process a <code>FUNCTION STATS</code> cluster response. */
-    protected ClusterValue<Map<GlideString, Map<GlideString, Object>>>
-            handleFunctionStatsBinaryResponse(Response response, boolean isSingleValue) {
-        if (isSingleValue) {
-            return ClusterValue.ofSingleValue(
-                    handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
-        } else {
-            Map<GlideString, Map<GlideString, Map<GlideString, Object>>> data =
-                    handleBinaryStringMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
-                nodeInfo.setValue(handleFunctionStatsBinaryResponse(nodeInfo.getValue()));
-            }
-            return ClusterValue.ofMultiValueBinary(data);
-        }
-    }
-
     @Override
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(

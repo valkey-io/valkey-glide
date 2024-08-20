@@ -42,15 +42,25 @@ TFunctionListResponse = List[
         Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]],
     ]
 ]
-TFunctionStatsResponse = Mapping[
+# Response for function stats command on a single node.
+# The response holds a map with 2 keys: Current running function / script and information about it, and the engines and the information about it.
+TFunctionStatsSingleNodeResponse = Mapping[
     bytes,
     Union[
         None,
         Mapping[
-            bytes, Union[Mapping[bytes, Mapping[bytes, int]], bytes, int, List[bytes]]
+            bytes,
+            Union[Mapping[bytes, Mapping[bytes, int]], bytes, int, List[bytes]],
         ],
     ],
 ]
+# Full response for function stats command across multiple nodes.
+# It maps node address to the per-node response.
+TFunctionStatsFullResponse = Mapping[
+    bytes,
+    TFunctionStatsSingleNodeResponse,
+]
+
 
 TXInfoStreamResponse = Mapping[
     bytes, Union[bytes, int, Mapping[bytes, Optional[List[List[bytes]]]]]

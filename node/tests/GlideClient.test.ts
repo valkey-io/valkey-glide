@@ -675,7 +675,10 @@ describe("GlideClient", () => {
                 ).toEqual("one");
 
                 let functionStats = await client.functionStats();
-                checkFunctionStatsResponse(functionStats, [], 1, 1);
+
+                for (const response of Object.values(functionStats)) {
+                    checkFunctionStatsResponse(response, [], 1, 1);
+                }
 
                 let functionList = await client.functionList({
                     libNamePattern: libName,
@@ -736,7 +739,10 @@ describe("GlideClient", () => {
                 );
 
                 functionStats = await client.functionStats();
-                checkFunctionStatsResponse(functionStats, [], 1, 2);
+
+                for (const response of Object.values(functionStats)) {
+                    checkFunctionStatsResponse(response, [], 1, 2);
+                }
 
                 expect(
                     await client.fcall(func2Name, [], ["one", "two"]),
@@ -747,7 +753,11 @@ describe("GlideClient", () => {
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 const functionStats = await client.functionStats();
-                checkFunctionStatsResponse(functionStats, [], 0, 0);
+
+                for (const response of Object.values(functionStats)) {
+                    checkFunctionStatsResponse(response, [], 0, 0);
+                }
+
                 client.close();
             }
         },
