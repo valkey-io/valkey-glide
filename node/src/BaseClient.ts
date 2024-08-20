@@ -5224,8 +5224,9 @@ export class BaseClient {
      * @param groupName - The consumer group name.
      * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group. This option can only be specified if you are using Valkey
-     *      version 7.0.0 or above.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns `"OK"`.
      *
      * * @example
@@ -5238,9 +5239,13 @@ export class BaseClient {
         groupName: string,
         id: string,
         entriesRead?: number,
-    ): Promise<string> {
+        decoder?: Decoder,
+    ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupSetid(key, groupName, id, entriesRead),
+            {
+                decoder: decoder,
+            },
         );
     }
 

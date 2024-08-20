@@ -2917,10 +2917,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the stream.
      * @param groupName - The consumer group name.
-     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
-     *     group.
-     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group. This option can only be specified if you are using Valkey
-     *      version 7.0.0 or above.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
      *
      * Command Response - `"OK"`.
      */
