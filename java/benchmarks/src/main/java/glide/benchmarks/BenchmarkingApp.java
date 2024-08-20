@@ -176,6 +176,10 @@ public class BenchmarkingApp {
             runConfiguration.host = line.getOptionValue("host");
         }
 
+        if (line.hasOption("port")) {
+            runConfiguration.port = Integer.parseInt(line.getOptionValue("port"));
+        }
+
         if (line.hasOption("clientCount")) {
             runConfiguration.clientCount = parseIntListOption(line.getOptionValue("clientCount"));
         }
