@@ -358,6 +358,6 @@ jobs:
             run: |
                     source .env/bin/activate
                     cd python/tests/tests_server_modules
-                    pytest --asyncio-mode=auto --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --override-ini=addopts= --html=pytest_report.html --self-contained-html
+                    pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --override-ini=addopts= --html=pytest_report.html --self-contained-html
 
   
