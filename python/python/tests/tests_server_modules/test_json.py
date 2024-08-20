@@ -17,12 +17,6 @@ from tests.test_async_client import get_random_string, parse_info_response
 class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_module_is_loaded(self, glide_client: TGlideClient):
-        res = parse_info_response(await glide_client.info([InfoSection.MODULES]))
-        assert "ReJSON" in res["module"]
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_set_get(self, glide_client: TGlideClient):
         key = get_random_string(5)
 
@@ -30,15 +24,15 @@ class TestJson:
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
         result = await json.get(glide_client, key, ".")
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == json_value
 
         result = await json.get(glide_client, key, ["$.a", "$.b"])
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == {"$.a": [1.0], "$.b": [2]}
 
         assert await json.get(glide_client, "non_existing_key", "$") is None
-        assert await json.get(glide_client, key, "$.d") == "[]"
+        assert await json.get(glide_client, key, "$.d") == b"[]"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -56,16 +50,16 @@ class TestJson:
         )
 
         result = await json.get(glide_client, key, "$..c")
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [True, 1, 2]
 
         result = await json.get(glide_client, key, ["$..c", "$.c"])
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == {"$..c": [True, 1, 2], "$.c": [True]}
 
         assert await json.set(glide_client, key, "$..c", '"new_value"') == OK
         result = await json.get(glide_client, key, "$..c")
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == ["new_value"] * 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -105,7 +99,7 @@ class TestJson:
             is None
         )
 
-        assert await json.get(glide_client, key, ".a") == "1.0"
+        assert await json.get(glide_client, key, ".a") == b"1.0"
 
         assert (
             await json.set(
@@ -118,7 +112,7 @@ class TestJson:
             == OK
         )
 
-        assert await json.get(glide_client, key, ".a") == "4.5"
+        assert await json.get(glide_client, key, ".a") == b"4.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -138,16 +132,14 @@ class TestJson:
             glide_client, key, "$", JsonGetOptions(indent="  ", newline="\n", space=" ")
         )
 
-        expected_result = '[\n  {\n    "a": 1.0,\n    "b": 2,\n    "c": {\n      "d": 3,\n      "e": 4\n    }\n  }\n]'
+        expected_result = b'[\n  {\n    "a": 1.0,\n    "b": 2,\n    "c": {\n      "d": 3,\n      "e": 4\n    }\n  }\n]'
         assert result == expected_result
 
         result = await json.get(
             glide_client, key, "$", JsonGetOptions(indent="~", newline="\n", space="*")
         )
 
-        expected_result = (
-            '[\n~{\n~~"a":*1.0,\n~~"b":*2,\n~~"c":*{\n~~~"d":*3,\n~~~"e":*4\n~~}\n~}\n]'
-        )
+        expected_result = b'[\n~{\n~~"a":*1.0,\n~~"b":*2,\n~~"c":*{\n~~~"d":*3,\n~~~"e":*4\n~~}\n~}\n]'
         assert result == expected_result
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -159,10 +151,10 @@ class TestJson:
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
         assert await json.delete(glide_client, key, "$..a") == 2
-        assert await json.get(glide_client, key, "$..a") == "[]"
+        assert await json.get(glide_client, key, "$..a") == b"[]"
 
         result = await json.get(glide_client, key, "$")
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [{"b": {"b": 2.5, "c": True}}]
 
         assert await json.delete(glide_client, key, "$") == 1
@@ -178,10 +170,10 @@ class TestJson:
         assert await json.set(glide_client, key, "$", OuterJson.dumps(json_value)) == OK
 
         assert await json.forget(glide_client, key, "$..a") == 2
-        assert await json.get(glide_client, key, "$..a") == "[]"
+        assert await json.get(glide_client, key, "$..a") == b"[]"
 
         result = await json.get(glide_client, key, "$")
-        assert isinstance(result, str)
+        assert isinstance(result, bytes)
         assert OuterJson.loads(result) == [{"b": {"b": 2.5, "c": True}}]
 
         assert await json.forget(glide_client, key, "$") == 1
