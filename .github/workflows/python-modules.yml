@@ -34,10 +34,27 @@ jobs:
               id: load-engine-matrix
               shell: bash
               run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
-        
-    test:
+                
+
+    start-self-hosted-runner:
+        if: github.repository_owner == 'valkey-io'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+          - name: Start self hosted EC2 runner
+            uses: ./.github/workflows/start-self-hosted-runner
+            with:
+                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                aws-region: ${{ secrets.AWS_REGION }}
+                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+
+    python-modules-test:
+        needs: [start-self-hosted-runner, load-engine-matrix]
+        if: github.repository_owner == 'valkey-io'
+        name: Running Module Tests
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: load-engine-matrix
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -59,44 +76,7 @@ jobs:
                         PACKAGE_MANAGERS: ["pypi", "npm"],
                         CONTAINER: "2_28"
                      }
-                
-
-    start-self-hosted-runner:
-        if: github.repository_owner == 'valkey-io'
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
-    python-modules-test:
-        needs: [start-self-hosted-runner, load-engine-matrix]
-        if: github.repository_owner == 'valkey-io'
-        name: Publish packages to PyPi
-        runs-on: ${{ matrix.host.RUNNER }}
-        timeout-minutes: 25
-        strategy:
-            fail-fast: false
-            matrix:
-                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
-                python:
-                    - "3.12"
-                host:
-                    - {
-                        OS: "ubuntu",
-                        NAMED_OS: "linux",
-                        RUNNER: ["self-hosted", "Linux", "ARM64"],
-                        ARCH: "arm64",
-                        TARGET: "aarch64-unknown-linux-gnu",
-                        PACKAGE_MANAGERS: ["pypi", "npm"],
-                        CONTAINER: "2_28"
-                     }
+        
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.host.RUNNER, 'self-hosted') }}
