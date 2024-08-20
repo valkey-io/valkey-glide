@@ -9835,6 +9835,119 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xack test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = "{testKey}:1-" + uuidv4();
+                const nonExistingKey = "{testKey}:2-" + uuidv4();
+                const string_key = "{testKey}:3-" + uuidv4();
+                const groupName = uuidv4();
+                const consumerName = uuidv4();
+                const stream_id0 = "0";
+                const stream_id1_0 = "1-0";
+                const stream_id1_1 = "1-1";
+                const stream_id1_2 = "1-2";
+
+                // setup: add 2 entries to the stream, create consumer group and read to mark them as pending
+                expect(
+                    await client.xadd(key, [["f0", "v0"]], {
+                        id: stream_id1_0,
+                    }),
+                ).toEqual(stream_id1_0);
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], {
+                        id: stream_id1_1,
+                    }),
+                ).toEqual(stream_id1_1);
+                expect(
+                    await client.xgroupCreate(key, groupName, stream_id0),
+                ).toBe("OK");
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({
+                    [key]: {
+                        [stream_id1_0]: [["f0", "v0"]],
+                        [stream_id1_1]: [["f1", "v1"]],
+                    },
+                });
+
+                // add one more entry
+                expect(
+                    await client.xadd(key, [["f2", "v2"]], {
+                        id: stream_id1_2,
+                    }),
+                ).toEqual(stream_id1_2);
+
+                // acknowledge the first 2 entries
+                expect(
+                    await client.xack(key, groupName, [
+                        stream_id1_0,
+                        stream_id1_1,
+                    ]),
+                ).toBe(2);
+
+                // attempt to acknowledge the first 2 entries again, returns 0 since they were already acknowledged
+                expect(
+                    await client.xack(key, groupName, [
+                        stream_id1_0,
+                        stream_id1_1,
+                    ]),
+                ).toBe(0);
+
+                // read the last unacknowledged entry
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({ [key]: { [stream_id1_2]: [["f2", "v2"]] } });
+
+                // deleting the consumer, returns 1 since the last entry still hasn't been acknowledged
+                expect(
+                    await client.xgroupDelConsumer(
+                        key,
+                        groupName,
+                        consumerName,
+                    ),
+                ).toBe(1);
+
+                // attempt to acknowledge a non-existing key, returns 0
+                expect(
+                    await client.xack(nonExistingKey, groupName, [
+                        stream_id1_0,
+                    ]),
+                ).toBe(0);
+
+                // attempt to acknowledge a non-existing group name, returns 0
+                expect(
+                    await client.xack(key, "nonExistingGroup", [stream_id1_0]),
+                ).toBe(0);
+
+                // attempt to acknowledge a non-existing ID, returns 0
+                expect(await client.xack(key, groupName, ["99-99"])).toBe(0);
+
+                // invalid argument - ID list must not be empty
+                await expect(client.xack(key, groupName, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // invalid argument - invalid stream ID format
+                await expect(
+                    client.xack(key, groupName, ["invalid stream ID format"]),
+                ).rejects.toThrow(RequestError);
+
+                // key exists, but is not a stream
+                expect(await client.set(string_key, "xack")).toBe("OK");
+                await expect(
+                    client.xack(string_key, groupName, [stream_id1_0]),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `lmpop test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster: RedisCluster) => {
