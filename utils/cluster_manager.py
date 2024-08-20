@@ -280,62 +280,61 @@ def start_redis_server(
 ) -> Tuple[RedisServer, str]:
     port = port if port else next_free_port()
     logging.debug(f"Creating server {host}:{port}")
+
     # Create sub-folder for each node
     node_folder = f"{cluster_folder}/{port}"
     Path(node_folder).mkdir(exist_ok=True)
 
-    # Define commands
-    def create_cmd_args(server_name: str) -> List[str]:
-        cmd_args = [
-            server_name,
-            f"{'--tls-port' if tls else '--port'}",
-            str(port),
-            "--cluster-enabled",
-            f"{'yes' if cluster_mode else 'no'}",
-            "--dir",
-            node_folder,
-            "--daemonize",
-            "yes",
-            "--logfile",
-            f"{node_folder}/redis.log",
-        ]
-        if load_module:
-            if len(load_module) == 0:
-                raise ValueError(
-                    "Please provide the path(s) to the module(s) you want to load."
+    # Determine which server to use by checking `valkey-server` and `redis-server`
+    def get_server_command() -> str:
+        for server in ["valkey-server", "redis-server"]:
+            try:
+                result = subprocess.run(
+                    ["which", server],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
                 )
-            for module_path in load_module:
-                cmd_args.extend(["--loadmodule", module_path])
-        cmd_args += tls_args
-        return cmd_args
+                if result.returncode == 0:
+                    return server
+            except Exception as e:
+                logging.error(f"Error checking {server}: {e}")
+        raise Exception("Neither valkey-server nor redis-server found in the system.")
 
-    # Try starting valkey-server first
-    server_name = "valkey-server"
-    cmd_args = create_cmd_args(server_name)
-    try:
-        p = subprocess.Popen(
-            cmd_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+    server_name = get_server_command()
+    # Define command arguments
+    cmd_args = [
+        server_name,
+        f"{'--tls-port' if tls else '--port'}",
+        str(port),
+        "--cluster-enabled",
+        f"{'yes' if cluster_mode else 'no'}",
+        "--dir",
+        node_folder,
+        "--daemonize",
+        "yes",
+        "--logfile",
+        f"{node_folder}/redis.log",
+    ]
+    if load_module:
+        if len(load_module) == 0:
+            raise ValueError(
+                "Please provide the path(s) to the module(s) you want to load."
+            )
+        for module_path in load_module:
+            cmd_args.extend(["--loadmodule", module_path])
+    cmd_args += tls_args
+    p = subprocess.Popen(
+        cmd_args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    output, err = p.communicate(timeout=2)
+    if p.returncode != 0:
+        raise Exception(
+            f"Failed to execute command: {str(p.args)}\n Return code: {p.returncode}\n Error: {err}"
         )
-        output, err = p.communicate(timeout=2)
-        if p.returncode != 0:
-            raise Exception(f"Failed to execute command with valkey-server: {err}")
-    except Exception as e:
-        logging.error(f"{e}. Trying with redis-server.")
-        # Fallback to redis-server
-        server_name = "redis-server"
-        cmd_args = create_cmd_args(server_name)
-        p = subprocess.Popen(
-            cmd_args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        output, err = p.communicate(timeout=2)
-        if p.returncode != 0:
-            raise Exception(f"Failed to execute command with redis-server: {err}")
 
     server = RedisServer(host, port)
     return server, node_folder

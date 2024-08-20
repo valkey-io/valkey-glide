@@ -1052,6 +1052,7 @@ public class CommandTests {
 
         var replicaRoute = new SlotKeyRoute("key", REPLICA);
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            // Since Valkey 8.0.0 flushall can run on replicas
             assertEquals(OK, clusterClient.flushall(route).get());
         } else {
             // command should fail on a replica, because it is read-only

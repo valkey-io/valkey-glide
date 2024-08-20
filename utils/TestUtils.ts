@@ -52,6 +52,9 @@ export class RedisCluster {
 
     private static async detectVersion(): Promise<string> {
         return new Promise<string>((resolve, reject) => {
+            const extractVersion = (stdout: string): string =>
+                stdout.split("v=")[1].split(" ")[0];
+
             // First, try with `valkey-server -v`
             exec("valkey-server -v", (error, stdout) => {
                 if (error) {
@@ -60,12 +63,12 @@ export class RedisCluster {
                         if (error) {
                             reject(error);
                         } else {
-                            resolve(stdout.split("v=")[1].split(" ")[0]);
+                            resolve(extractVersion(stdout));
                         }
                     });
+                } else {
+                    resolve(extractVersion(stdout));
                 }
-
-                resolve(stdout.split("v=")[1].split(" ")[0]);
             });
         });
     }

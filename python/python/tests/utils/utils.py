@@ -77,14 +77,11 @@ def get_random_string(length):
 
 
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
-    # TODO: change it to pytest fixture after we'll implement a sync client
-    info_str = await client.info([InfoSection.SERVER])
-    valkey_version = parse_info_response(info_str).get("valkey_version")
-    if valkey_version:
-        return version.parse(valkey_version) < version.parse(min_version)
-    server_version = parse_info_response(info_str).get("redis_version")
-    assert server_version is not None
-    return version.parse(server_version) < version.parse(min_version)
+    # TODO: change to pytest fixture after sync client is implemented
+    info = parse_info_response(await client.info([InfoSection.SERVER]))
+    version_str = info.get("valkey_version") or info.get("redis_version")
+    assert version_str is not None, "Server version not found in INFO response"
+    return version.parse(version_str) < version.parse(min_version)
 
 
 def compare_maps(
