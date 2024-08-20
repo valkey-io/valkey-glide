@@ -13774,9 +13774,14 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.sscan(key1, "-1").get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> client.sscan(key1, "-1").get());
+        } else {
+            result = client.sscan(key1, "-1").get();
+            assertEquals(initialCursor, result[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        }
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
@@ -13910,9 +13915,14 @@ public class SharedCommandTests {
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.sscan(key1, gs("-1")).get();
-        assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
-        assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> client.sscan(key1, gs("-1")).get());
+        } else {
+            result = client.sscan(key1, gs("-1")).get();
+            assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
+            assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        }
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
@@ -14059,9 +14069,14 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.zscan(key1, "-1").get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> client.zscan(key1, "-1").get());
+        } else {
+            result = client.zscan(key1, "-1").get();
+            assertEquals(initialCursor, result[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        }
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.zadd(key1, charMap).get());
@@ -14240,9 +14255,14 @@ public class SharedCommandTests {
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.zscan(key1, gs("-1")).get();
-        assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
-        assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> client.zscan(key1, gs("-1")).get());
+        } else {
+            result = client.zscan(key1, gs("-1")).get();
+            assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
+            assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        }
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.zadd(key1.toString(), charMap_strings).get());
@@ -14425,9 +14445,14 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.hscan(key1, "-1").get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> client.hscan(key1, "-1").get());
+        } else {
+            result = client.hscan(key1, "-1").get();
+            assertEquals(initialCursor, result[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        }
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.hset(key1, charMap).get());
@@ -14589,9 +14614,14 @@ public class SharedCommandTests {
         assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.hscan(key1, gs("-1")).get();
-        assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
-        assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> client.hscan(key1, gs("-1")).get());
+        } else {
+            result = client.hscan(key1, gs("-1")).get();
+            assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
+            assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
+        }
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.hset(key1, charMap).get());

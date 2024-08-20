@@ -842,9 +842,8 @@ class TestTransaction:
         transaction.custom_command(["WATCH", key])
         with pytest.raises(RequestError) as e:
             await self.exec_transaction(glide_client, transaction)
-        assert "WATCH inside MULTI is not allowed" in str(
-            e
-        )  # TODO : add an assert on EXEC ABORT
+
+        assert "not allowed" in str(e)  # TODO : add an assert on EXEC ABORT
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
