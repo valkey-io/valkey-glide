@@ -2922,7 +2922,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group. This option can only be specified if you are using Valkey
      *      version 7.0.0 or above.
      *
-     * Command Response - "OK".
+     * Command Response - `"OK"`.
      */
     public xgroupSetId(
         key: string,

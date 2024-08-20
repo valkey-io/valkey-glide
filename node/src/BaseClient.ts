@@ -5226,7 +5226,7 @@ export class BaseClient {
      *     group.
      * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group. This option can only be specified if you are using Valkey
      *      version 7.0.0 or above.
-     * @returns `OK`.
+     * @returns `"OK"`.
      *
      * * @example
      * ```typescript
