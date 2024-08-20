@@ -371,8 +371,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Execute a transaction by processing the queued commands.
-     *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki}} for details on Valkey Transactions.
      *
      * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
      * @param route - (Optional) If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
@@ -415,7 +414,8 @@ export class GlideClusterClient extends BaseClient {
      * If provided, the server will respond with a copy of the message.
      * @param route - The command will be routed to all primaries, unless `route` is provided, in which
      *   case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
