@@ -9877,6 +9877,11 @@ export function runBaseTests(config: {
                     ]),
                 ).toBe(0);
 
+                // attempt to acknowledge a non-existing group name, returns 0
+                expect(
+                    await client.xack(key, "nonExistingGroup", [stream_id1_0]),
+                ).toBe(0);
+
                 // attempt to acknowledge a non-existing ID, returns 0
                 expect(await client.xack(key, groupName, ["99-99"])).toBe(0);
 
