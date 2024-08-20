@@ -25,6 +25,7 @@ import {
     ReturnType,
     Routes,
     ScoreFilter,
+    SlotKeyTypes,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import {
@@ -1530,7 +1531,7 @@ describe("GlideClusterClient", () => {
                 },
                 TIMEOUT,
             );
-            it("function dump function restore in transaction %p", async () => {
+            it("function dump function restore in transaction", async () => {
                 if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
 
                 const config = getClientConfigurationOption(
@@ -1538,6 +1539,10 @@ describe("GlideClusterClient", () => {
                     protocol,
                 );
                 const client = await GlideClusterClient.createClient(config);
+                const route: SlotKeyTypes = {
+                    key: uuidv4(),
+                    type: "primarySlotKey",
+                };
                 expect(await client.functionFlush()).toEqual("OK");
 
                 try {
@@ -1549,12 +1554,15 @@ describe("GlideClusterClient", () => {
                         new Map([[name2, "return args[1]"]]),
                         false,
                     );
-                    expect(await client.functionLoad(code)).toEqual(name1);
+                    expect(
+                        await client.functionLoad(code, true, route),
+                    ).toEqual(name1);
 
                     // Verify functionDump
                     let transaction = new ClusterTransaction().functionDump();
                     const result = await client.exec(transaction, {
                         decoder: Decoder.Bytes,
+                        route: route,
                     });
                     const data = result?.[0] as Buffer;
 
@@ -1562,10 +1570,9 @@ describe("GlideClusterClient", () => {
                     transaction = new ClusterTransaction()
                         .functionRestore(data, FunctionRestorePolicy.REPLACE)
                         .fcall(name2, [], ["meow"]);
-                    expect(await client.exec(transaction)).toEqual([
-                        "OK",
-                        "meow",
-                    ]);
+                    expect(
+                        await client.exec(transaction, { route: route }),
+                    ).toEqual(["OK", "meow"]);
                 } finally {
                     expect(await client.functionFlush()).toEqual("OK");
                     client.close();
