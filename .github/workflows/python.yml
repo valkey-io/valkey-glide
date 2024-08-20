@@ -41,6 +41,7 @@ concurrency:
 
 permissions:
     contents: read
+    # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
     id-token: write
 
 jobs:
@@ -287,10 +288,9 @@ jobs:
                   name: smoke-test-report-amazon-linux
                   path: |
                       python/python/tests/pytest_report.html
-
     
     start-self-hosted-runner:
-      if: github.repository_owner == 'valkey-io'
+      if: github.event.pull_request.head.repo.owner.login == 'valkey-io'
       runs-on: ubuntu-latest
       environment: AWS_ACTIONS
       steps:
@@ -303,9 +303,9 @@ jobs:
                 role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
                 aws-region: ${{ secrets.AWS_REGION }}
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+
     test-modules:
       needs: [start-self-hosted-runner, load-engine-matrix]
-      if: github.repository_owner == 'valkey-io'
       name: Running Module Tests
       runs-on: ${{ matrix.host.RUNNER }}
       timeout-minutes: 35
@@ -333,17 +333,10 @@ jobs:
               submodules: recursive
           
           - name: Setup Python for self-hosted Ubuntu runners
-            if: contains(matrix.host.OS, 'ubuntu') && contains(matrix.host.RUNNER, 'self-hosted')
             run: |
                   sudo apt update -y
                   sudo apt upgrade -y
                   sudo apt install python3 python3-venv python3-pip -y
-  
-          - name: Install dependencies
-            working-directory: ./python
-            run: |
-                    python3 -m pip install --upgrade pip
-                    pip install mypy-protobuf
   
           - name: Build Python wrapper
             uses: ./.github/workflows/build-python-wrapper
@@ -357,7 +350,14 @@ jobs:
             working-directory: ./python
             run: |
                     source .env/bin/activate
-                    cd python/tests/tests_server_modules
-                    pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --override-ini=addopts= --html=pytest_report.html --self-contained-html
+                    cd python/tests/
+                    pytest --asyncio-mode=auto --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
 
-  
+          - name: Upload test reports
+            if: always()
+            continue-on-error: true
+            uses: actions/upload-artifact@v4
+            with:
+                name: smoke-test-report-amazon-linux
+                path: |
+                    python/python/tests/pytest_report.html
