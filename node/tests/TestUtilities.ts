@@ -1217,6 +1217,8 @@ export async function transactionTest(
 
     baseTransaction.xack(key9, groupName1, ["0-3"]);
     responseData.push(["xack(key9, groupName1, ['0-3'])", 0]);
+    baseTransaction.xgroupSetId(key9, groupName1, "0-2");
+    responseData.push(["xgroupSetId(key9, groupName1, '0-2')", "OK"]);
     baseTransaction.xgroupDelConsumer(key9, groupName1, consumer);
     responseData.push(["xgroupDelConsumer(key9, groupName1, consumer)", 1]);
     baseTransaction.xgroupDestroy(key9, groupName1);

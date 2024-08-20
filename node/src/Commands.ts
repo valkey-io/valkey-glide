@@ -3953,3 +3953,22 @@ export function createXAck(
 ): command_request.Command {
     return createCommand(RequestType.XAck, [key, group, ...ids]);
 }
+
+/**
+ * @internal
+ */
+export function createXGroupSetid(
+    key: string,
+    groupName: string,
+    id: string,
+    entriesRead?: number,
+): command_request.Command {
+    const args = [key, groupName, id];
+
+    if (entriesRead !== undefined) {
+        args.push("ENTRIESREAD");
+        args.push(entriesRead.toString());
+    }
+
+    return createCommand(RequestType.XGroupSetId, args);
+}
