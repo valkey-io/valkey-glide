@@ -1521,7 +1521,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan and sscan empty set, negative cursor, negative count, and non-hash key exception tests`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
@@ -1538,13 +1538,23 @@ export function runBaseTests(config: {
                 expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Negative cursor
-                result = await client.hscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    result = await client.hscan(key1, "-1");
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual([]);
 
-                result = await client.sscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                    result = await client.sscan(key1, "-1");
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual([]);
+                } else {
+                    await expect(client.hscan(key1, "-1")).rejects.toThrow(
+                        RequestError,
+                    );
+
+                    await expect(client.sscan(key1, "-1")).rejects.toThrow(
+                        RequestError,
+                    );
+                }
 
                 // Exceptions
                 // Non-hash key
@@ -1965,16 +1975,22 @@ export function runBaseTests(config: {
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const valueList = ["value4", "value3", "value2", "value1"];
-                expect(await client.lpush(key, valueList)).toEqual(4);
-                expect(await client.lpop(key)).toEqual("value1");
-                expect(await client.lrange(key, 0, -1)).toEqual([
+                const key1 = uuidv4();
+                const key2 = Buffer.from(uuidv4());
+                const valueList1 = ["value4", "value3", "value2", "value1"];
+                const valueList2 = ["value7", "value6", "value5"];
+                const encodedValues = [
+                    Buffer.from("value6"),
+                    Buffer.from("value7"),
+                ];
+                expect(await client.lpush(key1, valueList1)).toEqual(4);
+                expect(await client.lpop(key1)).toEqual("value1");
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "value2",
                     "value3",
                     "value4",
                 ]);
-                expect(await client.lpopCount(key, 2)).toEqual([
+                expect(await client.lpopCount(key1, 2)).toEqual([
                     "value2",
                     "value3",
                 ]);
@@ -1982,6 +1998,22 @@ export function runBaseTests(config: {
                     [],
                 );
                 expect(await client.lpop("nonExistingKey")).toEqual(null);
+                expect(await client.lpush(key2, valueList2)).toEqual(3);
+                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value5"),
+                );
+                expect(await client.lrange(key2, 0, -1, Decoder.Bytes)).toEqual(
+                    encodedValues,
+                );
+                expect(await client.lpopCount(key2, 2, Decoder.Bytes)).toEqual(
+                    encodedValues,
+                );
+                expect(
+                    await client.lpush(key2, [Buffer.from("value8")]),
+                ).toEqual(1);
+                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value8"),
+                );
             }, protocol);
         },
         config.timeout,
@@ -4786,6 +4818,418 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter basic test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                const resultZinter = await client.zinter([key1, key2]);
+                const expectedZinter = ["one", "two"];
+                expect(resultZinter).toEqual(expectedZinter);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter with scores basic test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                const resultZinterWithScores = await client.zinterWithScores([
+                    key1,
+                    key2,
+                ]);
+                const expectedZinterWithScores = {
+                    one: 2.5,
+                    two: 4.5,
+                };
+                expect(resultZinterWithScores).toEqual(
+                    expectedZinterWithScores,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter with scores with max aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Intersection results are aggregated by the MAX score of elements
+                const zinterWithScoresResults = await client.zinterWithScores(
+                    [key1, key2],
+                    "MAX",
+                );
+                const expectedMapMax = {
+                    one: 1.5,
+                    two: 2.5,
+                };
+                expect(zinterWithScoresResults).toEqual(expectedMapMax);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter with scores with min aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Intersection results are aggregated by the MIN score of elements
+                const zinterWithScoresResults = await client.zinterWithScores(
+                    [key1, key2],
+                    "MIN",
+                );
+                const expectedMapMin = {
+                    one: 1.0,
+                    two: 2.0,
+                };
+                expect(zinterWithScoresResults).toEqual(expectedMapMin);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter with scores with sum aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Intersection results are aggregated by the SUM score of elements
+                const zinterWithScoresResults = await client.zinterWithScores(
+                    [key1, key2],
+                    "SUM",
+                );
+                const expectedMapSum = {
+                    one: 2.5,
+                    two: 4.5,
+                };
+                expect(zinterWithScoresResults).toEqual(expectedMapSum);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter with scores with weights and aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Intersection results are aggregated by the SUM score of elements with weights
+                const zinterWithScoresResults = await client.zinterWithScores(
+                    [
+                        [key1, 3],
+                        [key2, 2],
+                    ],
+                    "SUM",
+                );
+                const expectedMapSum = {
+                    one: 6,
+                    two: 11,
+                };
+                expect(zinterWithScoresResults).toEqual(expectedMapSum);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinter empty test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+
+                // Non existing key zinter
+                expect(
+                    await client.zinter([key1, "{testKey}-non_existing_key"]),
+                ).toEqual([]);
+
+                // Non existing key zinterWithScores
+                expect(
+                    await client.zinterWithScores([
+                        key1,
+                        "{testKey}-non_existing_key",
+                    ]),
+                ).toEqual({});
+
+                // Empty list check zinter
+                await expect(client.zinter([])).rejects.toThrow();
+
+                // Empty list check zinterWithScores
+                await expect(client.zinterWithScores([])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion basic test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                const resultZunion = await client.zunion([key1, key2]);
+                const expectedZunion = ["one", "two", "three"];
+
+                expect(resultZunion.sort()).toEqual(expectedZunion.sort());
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion with scores basic test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                const resultZunionWithScores = await client.zunionWithScores([
+                    key1,
+                    key2,
+                ]);
+                const expectedZunionWithScores = {
+                    one: 2.5,
+                    two: 4.5,
+                    three: 3.5,
+                };
+                expect(resultZunionWithScores).toEqual(
+                    expectedZunionWithScores,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion with scores with max aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Union results are aggregated by the MAX score of elements
+                const zunionWithScoresResults = await client.zunionWithScores(
+                    [key1, key2],
+                    "MAX",
+                );
+                const expectedMapMax = {
+                    one: 1.5,
+                    two: 2.5,
+                    three: 3.5,
+                };
+                expect(zunionWithScoresResults).toEqual(expectedMapMax);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion with scores with min aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Union results are aggregated by the MIN score of elements
+                const zunionWithScoresResults = await client.zunionWithScores(
+                    [key1, key2],
+                    "MIN",
+                );
+                const expectedMapMin = {
+                    one: 1.0,
+                    two: 2.0,
+                    three: 3.5,
+                };
+                expect(zunionWithScoresResults).toEqual(expectedMapMin);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion with scores with sum aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Union results are aggregated by the SUM score of elements
+                const zunionWithScoresResults = await client.zunionWithScores(
+                    [key1, key2],
+                    "SUM",
+                );
+                const expectedMapSum = {
+                    one: 2.5,
+                    two: 4.5,
+                    three: 3.5,
+                };
+                expect(zunionWithScoresResults).toEqual(expectedMapSum);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion with scores with weights and aggregation test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+                const key2 = "{testKey}:2-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+                expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+                // Union results are aggregated by the SUM score of elements with weights
+                const zunionWithScoresResults = await client.zunionWithScores(
+                    [
+                        [key1, 3],
+                        [key2, 2],
+                    ],
+                    "SUM",
+                );
+                const expectedMapSum = {
+                    one: 6,
+                    two: 11,
+                    three: 7,
+                };
+                expect(zunionWithScoresResults).toEqual(expectedMapSum);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunion empty test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                if (cluster.checkIfServerVersionLessThan("6.2.0")) return;
+                const key1 = "{testKey}:1-" + uuidv4();
+
+                const membersScores1 = { one: 1.0, two: 2.0 };
+
+                expect(await client.zadd(key1, membersScores1)).toEqual(2);
+
+                // Non existing key zunion
+                expect(
+                    await client.zunion([key1, "{testKey}-non_existing_key"]),
+                ).toEqual(["one", "two"]);
+
+                // Non existing key zunionWithScores
+                expect(
+                    await client.zunionWithScores([
+                        key1,
+                        "{testKey}-non_existing_key",
+                    ]),
+                ).toEqual(membersScores1);
+
+                // Empty list check zunion
+                await expect(client.zunion([])).rejects.toThrow();
+
+                // Empty list check zunionWithScores
+                await expect(client.zunionWithScores([])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `type test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -6288,6 +6732,8 @@ export function runBaseTests(config: {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const key3 = "{key}-3" + uuidv4();
+                const key4 = "{key}-4" + uuidv4();
+                const key5 = "{key}-5" + uuidv4();
                 const nonExistingkey = "{nonExistingkey}-" + uuidv4();
                 const value = "orange";
                 const valueEncode = Buffer.from(value);
@@ -6298,7 +6744,7 @@ export function runBaseTests(config: {
                 expect(await client.dump(nonExistingkey)).toBeNull();
 
                 // Dump existing key
-                const data = (await client.dump(key1)) as Buffer;
+                let data = (await client.dump(key1)) as Buffer;
                 expect(data).not.toBeNull();
 
                 // Restore to a new key without option
@@ -6386,6 +6832,56 @@ export function runBaseTests(config: {
                 await expect(
                     client.restore(key2, 0, valueEncode, { replace: true }),
                 ).rejects.toThrow("DUMP payload version or checksum are wrong");
+
+                // Transaction tests
+                let response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction().dump(key1),
+                              Decoder.Bytes,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction().dump(key1),
+                              { decoder: Decoder.Bytes },
+                          );
+                expect(response?.[0]).not.toBeNull();
+                data = response?.[0] as Buffer;
+
+                // Restore with `String` exec decoder
+                response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              Decoder.String,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction()
+                                  .restore(key4, 0, data)
+                                  .get(key4),
+                              { decoder: Decoder.String },
+                          );
+                expect(response?.[0]).toEqual("OK");
+                expect(response?.[1]).toEqual(value);
+
+                // Restore with `Bytes` exec decoder
+                response =
+                    client instanceof GlideClient
+                        ? await client.exec(
+                              new Transaction()
+                                  .restore(key5, 0, data)
+                                  .get(key5),
+                              Decoder.Bytes,
+                          )
+                        : await client.exec(
+                              new ClusterTransaction()
+                                  .restore(key5, 0, data)
+                                  .get(key5),
+                              { decoder: Decoder.Bytes },
+                          );
+                expect(response?.[0]).toEqual("OK");
+                expect(response?.[1]).toEqual(valueEncode);
             }, protocol);
         },
         config.timeout,
@@ -8043,7 +8539,7 @@ export function runBaseTests(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscan test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
@@ -8074,9 +8570,19 @@ export function runBaseTests(config: {
                 expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Negative cursor
-                result = await client.zscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    result = await client.zscan(key1, "-1");
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual([]);
+                } else {
+                    try {
+                        expect(await client.zscan(key1, "-1")).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "ResponseError: invalid cursor",
+                        );
+                    }
+                }
 
                 // Result contains the whole set
                 expect(await client.zadd(key1, charMap)).toEqual(
@@ -9041,6 +9547,108 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xgroupSetId test %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                const key = "testKey" + uuidv4();
+                const nonExistingKey = "group" + uuidv4();
+                const stringKey = "testKey" + uuidv4();
+                const groupName = uuidv4();
+                const consumerName = uuidv4();
+                const streamid0 = "0";
+                const streamid1_0 = "1-0";
+                const streamid1_1 = "1-1";
+                const streamid1_2 = "1-2";
+
+                // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
+                expect(
+                    await client.xadd(key, [["f0", "v0"]], { id: streamid1_0 }),
+                ).toBe(streamid1_0);
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], { id: streamid1_1 }),
+                ).toBe(streamid1_1);
+                expect(
+                    await client.xadd(key, [["f2", "v2"]], { id: streamid1_2 }),
+                ).toBe(streamid1_2);
+
+                expect(
+                    await client.xgroupCreate(key, groupName, streamid0),
+                ).toBe("OK");
+
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({
+                    [key]: {
+                        [streamid1_0]: [["f0", "v0"]],
+                        [streamid1_1]: [["f1", "v1"]],
+                        [streamid1_2]: [["f2", "v2"]],
+                    },
+                });
+
+                // Sanity check: xreadgroup should not return more entries since they're all already in the
+                // Pending Entries List.
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toBeNull();
+
+                // Reset the last delivered ID for the consumer group to "1-1"
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(
+                        await client.xgroupSetId(key, groupName, streamid1_1),
+                    ).toBe("OK");
+                } else {
+                    expect(
+                        await client.xgroupSetId(
+                            key,
+                            groupName,
+                            streamid1_1,
+                            1,
+                        ),
+                    ).toBe("OK");
+                }
+
+                // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
+                const newResult = await client.xreadgroup(
+                    groupName,
+                    consumerName,
+                    { [key]: ">" },
+                );
+                expect(newResult).toEqual({
+                    [key]: {
+                        [streamid1_2]: [["f2", "v2"]],
+                    },
+                });
+
+                // An error is raised if XGROUP SETID is called with a non-existing key
+                await expect(
+                    client.xgroupSetId(nonExistingKey, groupName, streamid0),
+                ).rejects.toThrow(RequestError);
+
+                // An error is raised if XGROUP SETID is called with a non-existing group
+                await expect(
+                    client.xgroupSetId(key, "non_existing_group", streamid0),
+                ).rejects.toThrow(RequestError);
+
+                // Setting the ID to a non-existing ID is allowed
+                expect(await client.xgroupSetId(key, groupName, "99-99")).toBe(
+                    "OK",
+                );
+
+                // key exists, but is not a stream
+                expect(await client.set(stringKey, "xgroup setid")).toBe("OK");
+                await expect(
+                    client.xgroupSetId(stringKey, groupName, streamid1_0),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xpending test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
@@ -9366,6 +9974,119 @@ export function runBaseTests(config: {
                 expect(await client.set(stringKey, "foo")).toEqual("OK");
                 await expect(
                     client.xautoclaim(stringKey, "_", "_", 0, "_"),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xack test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = "{testKey}:1-" + uuidv4();
+                const nonExistingKey = "{testKey}:2-" + uuidv4();
+                const string_key = "{testKey}:3-" + uuidv4();
+                const groupName = uuidv4();
+                const consumerName = uuidv4();
+                const stream_id0 = "0";
+                const stream_id1_0 = "1-0";
+                const stream_id1_1 = "1-1";
+                const stream_id1_2 = "1-2";
+
+                // setup: add 2 entries to the stream, create consumer group and read to mark them as pending
+                expect(
+                    await client.xadd(key, [["f0", "v0"]], {
+                        id: stream_id1_0,
+                    }),
+                ).toEqual(stream_id1_0);
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], {
+                        id: stream_id1_1,
+                    }),
+                ).toEqual(stream_id1_1);
+                expect(
+                    await client.xgroupCreate(key, groupName, stream_id0),
+                ).toBe("OK");
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({
+                    [key]: {
+                        [stream_id1_0]: [["f0", "v0"]],
+                        [stream_id1_1]: [["f1", "v1"]],
+                    },
+                });
+
+                // add one more entry
+                expect(
+                    await client.xadd(key, [["f2", "v2"]], {
+                        id: stream_id1_2,
+                    }),
+                ).toEqual(stream_id1_2);
+
+                // acknowledge the first 2 entries
+                expect(
+                    await client.xack(key, groupName, [
+                        stream_id1_0,
+                        stream_id1_1,
+                    ]),
+                ).toBe(2);
+
+                // attempt to acknowledge the first 2 entries again, returns 0 since they were already acknowledged
+                expect(
+                    await client.xack(key, groupName, [
+                        stream_id1_0,
+                        stream_id1_1,
+                    ]),
+                ).toBe(0);
+
+                // read the last unacknowledged entry
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({ [key]: { [stream_id1_2]: [["f2", "v2"]] } });
+
+                // deleting the consumer, returns 1 since the last entry still hasn't been acknowledged
+                expect(
+                    await client.xgroupDelConsumer(
+                        key,
+                        groupName,
+                        consumerName,
+                    ),
+                ).toBe(1);
+
+                // attempt to acknowledge a non-existing key, returns 0
+                expect(
+                    await client.xack(nonExistingKey, groupName, [
+                        stream_id1_0,
+                    ]),
+                ).toBe(0);
+
+                // attempt to acknowledge a non-existing group name, returns 0
+                expect(
+                    await client.xack(key, "nonExistingGroup", [stream_id1_0]),
+                ).toBe(0);
+
+                // attempt to acknowledge a non-existing ID, returns 0
+                expect(await client.xack(key, groupName, ["99-99"])).toBe(0);
+
+                // invalid argument - ID list must not be empty
+                await expect(client.xack(key, groupName, [])).rejects.toThrow(
+                    RequestError,
+                );
+
+                // invalid argument - invalid stream ID format
+                await expect(
+                    client.xack(key, groupName, ["invalid stream ID format"]),
+                ).rejects.toThrow(RequestError);
+
+                // key exists, but is not a stream
+                expect(await client.set(string_key, "xack")).toBe("OK");
+                await expect(
+                    client.xack(string_key, groupName, [stream_id1_0]),
                 ).rejects.toThrow(RequestError);
             }, protocol);
         },

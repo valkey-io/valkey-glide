@@ -30,7 +30,7 @@ import { RedisCluster } from "../../utils/TestUtils.js";
 import {
     FlushMode,
     FunctionRestorePolicy,
-    FunctionStatsResponse,
+    FunctionStatsSingleResponse,
     GeoUnit,
     SortOrder,
 } from "../build-ts/src/Commands";
@@ -406,6 +406,10 @@ describe("GlideClusterClient", () => {
                         { radius: 5, unit: GeoUnit.METERS },
                     ),
                     client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
+                    client.zinter(["abc", "zxy", "lkn"]),
+                    client.zinterWithScores(["abc", "zxy", "lkn"]),
+                    client.zunion(["abc", "zxy", "lkn"]),
+                    client.zunionWithScores(["abc", "zxy", "lkn"]),
                 );
             }
 
@@ -829,7 +833,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             0,
                                             0,
@@ -871,7 +875,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             1,
                                             1,
@@ -962,7 +966,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             1,
                                             2,

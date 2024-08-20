@@ -17,7 +17,7 @@ import {
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
-    FunctionStatsResponse,
+    FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
     SortClusterOptions,
@@ -935,11 +935,13 @@ export class GlideClusterClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
+    
+     *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param route - The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all primary nodes.
+     * @param route - The command will be routed automatically to all nodes, unless `route` is provided, in which
+     *       case the client will route the command to the nodes defined by `route`.
      * @returns A `Record` with two keys:
      *     - `"running_script"` with information about the running script.
      *     - `"engines"` with information about available engines and their stats.
@@ -981,7 +983,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionStats(
         route?: Routes,
-    ): Promise<ClusterResponse<FunctionStatsResponse>> {
+    ): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
         return this.createWritePromise(createFunctionStats(), {
             route: toProtobufRoute(route),
         });
@@ -995,7 +997,7 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all primary nodes.
+     *     If not defined, the command will be routed to all nodes.
      * @returns `OK` if function is terminated. Otherwise, throws an error.
      *
      * @example
