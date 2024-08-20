@@ -3698,7 +3698,9 @@ export class BaseClient {
 
     /**
      * Returns the original source code of a script in the script cache.
-     * See {@link https://valkey.io/commands/script-show} for more details.
+     *
+     * @see {@link https://valkey.io/commands/script-show|valkey.io} for more details.
+     * @remarks Since Valkey version 8.0.0.
      *
      * @param sha1 - The SHA1 digest of the script.
      * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
@@ -3710,8 +3712,6 @@ export class BaseClient {
      * const scriptSource = await client.scriptShow(scriptHash);
      * console.log(scriptSource); // Output: "return { KEYS[1], ARGV[1] }"
      * ```
-     *
-     * @remarks Since Valkey version 8.0.0.
      */
     public async scriptShow(
         sha1: GlideString,
