@@ -14249,11 +14249,11 @@ public class SharedCommandTests {
         // Setup test data - use a large number of entries to force an iterative cursor.
         Map<GlideString, Double> numberMap = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap.put(gs(String.valueOf(i)), i);
+            numberMap.put(gs("member" + String.valueOf(i)), i);
         }
         Map<String, Double> numberMap_strings = new HashMap<>();
         for (Double i = 0.0; i < 50000; i++) {
-            numberMap_strings.put(String.valueOf(i), i);
+            numberMap_strings.put("member" + String.valueOf(i), i);
         }
 
         GlideString[] charMembers = new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e")};
@@ -14396,7 +14396,7 @@ public class SharedCommandTests {
                         .zscan(
                                 key1,
                                 initialCursor,
-                                ZScanOptionsBinary.builder().matchPattern(gs("1*")).count(20L).build())
+                                ZScanOptionsBinary.builder().matchPattern(gs("member1*")).count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
@@ -14409,7 +14409,6 @@ public class SharedCommandTests {
             assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
             // Cast the result collection to a String array
             Object[] fieldsArray = (Object[]) result[resultCollectionIndex];
-            System.out.println(Arrays.toString(fieldsArray));
             // Convert Object array to Stream for processing
             Stream<Object> stream = Arrays.stream(fieldsArray);
 
