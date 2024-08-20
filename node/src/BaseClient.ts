@@ -171,6 +171,7 @@ import {
     createUnlink,
     createWait,
     createWatch,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -196,6 +197,7 @@ import {
     createZDiffStore,
     createZDiffWithScores,
     createZIncrBy,
+    createZInter,
     createZInterCard,
     createZInterstore,
     createZLexCount,
@@ -216,6 +218,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnion,
     createZUnionStore,
 } from "./Commands";
 import {
@@ -1108,7 +1111,7 @@ export class BaseClient {
     /**
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
-     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
      *
      * @param key - The `key` to serialize.
      * @returns The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
@@ -1135,7 +1138,7 @@ export class BaseClient {
      * Create a `key` associated with a `value` that is obtained by deserializing the provided
      * serialized `value` (obtained via {@link dump}).
      *
-     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
      * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
      *
      * @param key - The `key` to create.
@@ -2028,7 +2031,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
-    public async lpush(key: string, elements: string[]): Promise<number> {
+    public async lpush(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
     }
 
@@ -2057,6 +2063,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      *
@@ -2074,8 +2082,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async lpop(key: string): Promise<string | null> {
-        return this.createWritePromise(createLPop(key));
+    public async lpop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createLPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -2084,6 +2095,8 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2102,10 +2115,13 @@ export class BaseClient {
      * ```
      */
     public async lpopCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[] | null> {
-        return this.createWritePromise(createLPop(key, count));
+        decoder?: Decoder,
+    ): Promise<GlideString[] | null> {
+        return this.createWritePromise(createLPop(key, count), {
+            decoder: decoder,
+        });
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -2118,6 +2134,8 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns list of elements in the specified range.
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
@@ -2145,11 +2163,14 @@ export class BaseClient {
      * ```
      */
     public async lrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createLRange(key, start, end));
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createLRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Returns the length of the list stored at `key`.
@@ -3808,7 +3829,7 @@ export class BaseClient {
     /**
      * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-     * To get the result directly, see `zinter_withscores`.
+     * To get the result directly, see {@link zinterWithScores}.
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
@@ -3817,7 +3838,8 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -3826,9 +3848,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
      * await client.zadd("key2", {"member1": 9.5})
      * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
      * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
     public async zinterstore(
@@ -3838,6 +3860,132 @@ export class BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @returns The resulting array of intersecting elements.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result = await client.zinter(["key1", "key2"]);
+     * console.log(result); // Output: ['member1']
+     * ```
+     */
+    public zinter(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZInter(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @returns The resulting sorted set with scores.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result1 = await client.zinterWithScores(["key1", "key2"]);
+     * console.log(result1); // Output: {'member1': 20} - "member1" with score of 20 is the result
+     * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
+     * console.log(result2); // Output: {'member1': 10.5} - "member1" with score of 10.5 is the result.
+     * ```
+     */
+    public zinterWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(
+            createZInter(keys, aggregationType, true),
+        );
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     * To get the scores as well, see {@link zunionWithScores}.
+     *
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @returns The resulting array of union elements.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result = await client.zunion(["key1", "key2"]);
+     * console.log(result); // Output: ['member1', 'member2']
+     * ```
+     */
+    public zunion(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZUnion(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
+     * To get the elements only, see {@link zunion}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @returns The resulting sorted set with scores.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result1 = await client.zunionWithScores(["key1", "key2"]);
+     * console.log(result1); // {'member1': 20, 'member2': 8.2}
+     * const result2 = await client.zunionWithScores(["key1", "key2"], "MAX");
+     * console.log(result2); // {'member1': 10.5, 'member2': 8.2}
+     * ```
+     */
+    public zunionWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(
+            createZUnion(keys, aggregationType, true),
         );
     }
 
@@ -5035,6 +5183,36 @@ export class BaseClient {
         primary: connection_request.ReadFrom.Primary,
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     * @returns The number of messages that were successfully acknowledged.
+     *
+     * @example
+     * ```typescript
+     *  <pre>{@code
+     * const entryId = await client.xadd("mystream", ["myfield", "mydata"]);
+     * // read messages from streamId
+     * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
+     * // acknowledge messages on stream
+     * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1L
+     * </pre>
+     * ```
+     */
+    public async xack(
+        key: string,
+        group: string,
+        ids: string[],
+    ): Promise<number> {
+        return this.createWritePromise(createXAck(key, group, ids));
+    }
 
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
