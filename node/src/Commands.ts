@@ -3965,7 +3965,7 @@ export function createXGroupSetid(
 ): command_request.Command {
     const args = [key, groupName, id];
 
-    if (entriesRead) {
+    if (entriesRead !== undefined) {
         args.push("ENTRIESREAD");
         args.push(entriesRead.toString());
     }

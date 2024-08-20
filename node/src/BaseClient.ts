@@ -5218,15 +5218,14 @@ export class BaseClient {
     /**
      * Sets the last delivered ID for a consumer group.
      *
-     * See https://valkey.io/commands/xgroup-setid for more details.
-     *
-     * since Valkey 7.0 and above
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
      *
      * @param key - The key of the stream.
      * @param groupName - The consumer group name.
      * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group. This option can only be specified if you are using Valkey
+     *      version 7.0.0 or above.
      * @returns `OK`.
      *
      * * @example
