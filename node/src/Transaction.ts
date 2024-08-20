@@ -256,6 +256,7 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
+    createXGroupSetid,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -2907,6 +2908,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public xack(key: string, group: string, ids: string[]): T {
         return this.addAndReturn(createXAck(key, group, ids));
+    }
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+    ): T {
+        return this.addAndReturn(
+            createXGroupSetid(key, groupName, id, entriesRead),
+        );
     }
 
     /**
