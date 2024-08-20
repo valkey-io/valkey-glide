@@ -51,15 +51,23 @@ export class RedisCluster {
     }
 
     private static async detectVersion(): Promise<string> {
-        return new Promise<string>((resolve, reject) =>
-            exec(`redis-server -v`, (error, stdout) => {
+        return new Promise<string>((resolve, reject) => {
+            // First, try with `valkey-server -v`
+            exec("valkey-server -v", (error, stdout) => {
                 if (error) {
-                    reject(error);
-                } else {
-                    resolve(stdout.split("v=")[1].split(" ")[0]);
+                    // If `valkey-server` fails, try `redis-server -v`
+                    exec("redis-server -v", (error, stdout) => {
+                        if (error) {
+                            reject(error);
+                        } else {
+                            resolve(stdout.split("v=")[1].split(" ")[0]);
+                        }
+                    });
                 }
-            })
-        );
+
+                resolve(stdout.split("v=")[1].split(" ")[0]);
+            });
+        });
     }
 
     public static createCluster(

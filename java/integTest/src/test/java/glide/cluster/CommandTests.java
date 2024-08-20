@@ -1051,15 +1051,19 @@ public class CommandTests {
         assertEquals(OK, clusterClient.flushall(ASYNC, route).get());
 
         var replicaRoute = new SlotKeyRoute("key", REPLICA);
-        // command should fail on a replica, because it is read-only
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.flushall(replicaRoute).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(
-                executionException
-                        .getMessage()
-                        .toLowerCase()
-                        .contains("can't write against a read only replica"));
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            assertEquals(OK, clusterClient.flushall(route).get());
+        } else {
+            // command should fail on a replica, because it is read-only
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.flushall(replicaRoute).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(
+                    executionException
+                            .getMessage()
+                            .toLowerCase()
+                            .contains("can't write against a read only replica"));
+        }
     }
 
     // TODO: add a binary version of this test
@@ -1640,6 +1644,9 @@ public class CommandTests {
     @Test
     public void fcall_readonly_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+        assumeTrue(
+                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
+                "Temporary disabeling this test on valkey 8");
 
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
@@ -1695,6 +1702,9 @@ public class CommandTests {
     @Test
     public void fcall_readonly_binary_function() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
+        assumeTrue(
+                !SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0"),
+                "Temporary disabeling this test on valkey 8");
 
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route

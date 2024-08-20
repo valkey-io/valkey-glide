@@ -1535,9 +1535,14 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan("-1").get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.scan("-1").get());
+        } else {
+            Object[] negativeResult = regularClient.scan("-1").get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // Add keys to the database using mset
         regularClient.mset(keys).get();
@@ -1589,9 +1594,14 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan(gs("-1")).get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.scan(gs("-1")).get());
+        } else {
+            Object[] negativeResult = regularClient.scan(gs("-1")).get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // Add keys to the database using mset
         regularClient.msetBinary(keys).get();
@@ -1652,9 +1662,16 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan("-1", options).get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            final ScanOptions finalOptions = options;
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class, () -> regularClient.scan("-1", finalOptions).get());
+        } else {
+            Object[] negativeResult = regularClient.scan("-1", options).get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // scan for strings by match pattern:
         options =
@@ -1734,9 +1751,16 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan(gs("-1"), options).get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            final ScanOptions finalOptions = options;
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class, () -> regularClient.scan(gs("-1"), finalOptions).get());
+        } else {
+            Object[] negativeResult = regularClient.scan(gs("-1"), options).get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // scan for strings by match pattern:
         options =

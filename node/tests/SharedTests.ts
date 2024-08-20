@@ -1464,7 +1464,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan and sscan empty set, negative cursor, negative count, and non-hash key exception tests`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
@@ -1481,13 +1481,23 @@ export function runBaseTests<Context>(config: {
                 expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Negative cursor
-                result = await client.hscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    result = await client.hscan(key1, "-1");
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual([]);
 
-                result = await client.sscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                    result = await client.sscan(key1, "-1");
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual([]);
+                } else {
+                    await expect(client.hscan(key1, "-1")).rejects.toThrow(
+                        RequestError,
+                    );
+
+                    await expect(client.sscan(key1, "-1")).rejects.toThrow(
+                        RequestError,
+                    );
+                }
 
                 // Exceptions
                 // Non-hash key
@@ -7525,7 +7535,7 @@ export function runBaseTests<Context>(config: {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscan test_%p`,
         async (protocol) => {
-            await runTest(async (client: BaseClient) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
                 const initialCursor = "0";
@@ -7556,9 +7566,19 @@ export function runBaseTests<Context>(config: {
                 expect(result[resultCollectionIndex]).toEqual([]);
 
                 // Negative cursor
-                result = await client.zscan(key1, "-1");
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                if (cluster.checkIfServerVersionLessThan("7.9.0")) {
+                    result = await client.zscan(key1, "-1");
+                    expect(result[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result[resultCollectionIndex]).toEqual([]);
+                } else {
+                    try {
+                        expect(await client.zscan(key1, "-1")).toThrow();
+                    } catch (e) {
+                        expect((e as Error).message).toMatch(
+                            "ResponseError: invalid cursor",
+                        );
+                    }
+                }
 
                 // Result contains the whole set
                 expect(await client.zadd(key1, charMap)).toEqual(
