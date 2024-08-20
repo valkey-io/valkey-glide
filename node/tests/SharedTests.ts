@@ -2099,8 +2099,8 @@ export function runBaseTests(config: {
 
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
-                const key1Encoded = Buffer.from("{key}-1"+uuidv4());
-                const key2Encoded = Buffer.from("{key}-2"+uuidv4());
+                const key1Encoded = Buffer.from("{key}-1" + uuidv4());
+                const key2Encoded = Buffer.from("{key}-2" + uuidv4());
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
@@ -2157,26 +2157,30 @@ export function runBaseTests(config: {
                         ListDirection.RIGHT,
                     ),
                 ).toEqual("4");
-                
+
                 expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
                 expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
                 // Move from RIGHT to LEFT with encoded return value
-                expect (await client.lmove(
-                    key1,
-                    key2,
-                    ListDirection.RIGHT,
-                    ListDirection.LEFT,
-                    Decoder.Bytes,
-                )).toEqual(Buffer.from("4"));
-                
+                expect(
+                    await client.lmove(
+                        key1,
+                        key2,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(Buffer.from("4"));
+
                 // Move from RIGHT to LEFT with encoded list keys
-                expect (await client.lmove(
-                    key1Encoded,
-                    key2Encoded,
-                    ListDirection.RIGHT,
-                    ListDirection.LEFT,
-                )).toEqual("2");
+                expect(
+                    await client.lmove(
+                        key1Encoded,
+                        key2Encoded,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual("2");
 
                 // Non-existing source key
                 expect(
@@ -2224,8 +2228,8 @@ export function runBaseTests(config: {
 
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
-                const key1Encoded = Buffer.from("{key}-1"+uuidv4());
-                const key2Encoded = Buffer.from("{key}-2"+uuidv4());
+                const key1Encoded = Buffer.from("{key}-1" + uuidv4());
+                const key2Encoded = Buffer.from("{key}-2" + uuidv4());
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
@@ -2297,25 +2301,28 @@ export function runBaseTests(config: {
                 expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
                 expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
-                // Move from RIGHT to LEFT with blocking and encoded return value 
+                // Move from RIGHT to LEFT with blocking and encoded return value
                 expect(
                     await client.blmove(
-                    key1,
-                    key2,
-                    ListDirection.RIGHT,
-                    ListDirection.LEFT,
-                    0.1,
-                    Decoder.Bytes,
-                )).toEqual(Buffer.from("4"));
+                        key1,
+                        key2,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        0.1,
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(Buffer.from("4"));
 
                 // Move from RIGHT to LEFT with encoded list keys
-                expect (await client.blmove(
-                    key1Encoded,
-                    key2Encoded,
-                    ListDirection.RIGHT,
-                    ListDirection.LEFT,
-                    0.1,
-                )).toEqual("2");
+                expect(
+                    await client.blmove(
+                        key1Encoded,
+                        key2Encoded,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual("2");
 
                 // Non-existing source key with blocking
                 expect(
@@ -5346,9 +5353,15 @@ export function runBaseTests(config: {
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
-                expect(await client.lindex(listName, 0, Decoder.Bytes)).toEqual(Buffer.from(listKey2Value));
-                expect(await client.lindex(listName, 1, Decoder.Bytes)).toEqual(Buffer.from(listKey1Value));
-                expect(await client.lindex(encodedListName, 0)).toEqual(listKey2Value);
+                expect(await client.lindex(listName, 0, Decoder.Bytes)).toEqual(
+                    Buffer.from(listKey2Value),
+                );
+                expect(await client.lindex(listName, 1, Decoder.Bytes)).toEqual(
+                    Buffer.from(listKey1Value),
+                );
+                expect(await client.lindex(encodedListName, 0)).toEqual(
+                    listKey2Value,
+                );
             }, protocol);
         },
         config.timeout,

@@ -2227,11 +2227,11 @@ export class BaseClient {
         destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
-        decoder?: Decoder
+        decoder?: Decoder,
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
-            { decoder : decoder }
+            { decoder: decoder },
         );
     }
 
@@ -2275,11 +2275,11 @@ export class BaseClient {
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
-        decoder?: Decoder
+        decoder?: Decoder,
     ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
-            { decoder: decoder }
+            { decoder: decoder },
         );
     }
 
@@ -5219,8 +5219,14 @@ export class BaseClient {
      * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
      * ```
      */
-    public async lindex(key: GlideString, index: number, decoder?: Decoder): Promise<GlideString | null> {
-        return this.createWritePromise(createLIndex(key, index), { decoder: decoder });
+    public async lindex(
+        key: GlideString,
+        index: number,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createLIndex(key, index), {
+            decoder: decoder,
+        });
     }
 
     /**
