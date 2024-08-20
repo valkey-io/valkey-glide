@@ -884,7 +884,7 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): command_request.Command {
+export function createLLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
 }
 
@@ -1881,10 +1881,10 @@ export enum InsertPosition {
  * @internal
  */
 export function createLInsert(
-    key: string,
+    key: GlideString,
     position: InsertPosition,
-    pivot: string,
-    element: string,
+    pivot: GlideString,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
