@@ -5377,11 +5377,13 @@ export class BaseClient {
      * ```
      */
     public async fcall(
-        func: string,
-        keys: string[],
-        args: string[],
-    ): Promise<string> {
-        return this.createWritePromise(createFCall(func, keys, args));
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): Promise<GlideString> {
+        return this.createWritePromise(createFCall(func, keys, args), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -5405,11 +5407,13 @@ export class BaseClient {
      * ```
      */
     public async fcallReadonly(
-        func: string,
-        keys: string[],
-        args: string[],
-    ): Promise<string> {
-        return this.createWritePromise(createFCallReadOnly(func, keys, args));
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): Promise<GlideString> {
+        return this.createWritePromise(createFCallReadOnly(func, keys, args), {
+            decoder: Decoder.String,
+        });
     }
 
     /**

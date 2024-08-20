@@ -2187,11 +2187,11 @@ export function createBLPop(
  * @internal
  */
 export function createFCall(
-    func: string,
-    keys: string[],
-    args: string[],
+    func: GlideString,
+    keys: GlideString[],
+    args: GlideString[],
 ): command_request.Command {
-    let params: string[] = [];
+    let params: GlideString[] = [];
     params = params.concat(func, keys.length.toString(), keys, args);
     return createCommand(RequestType.FCall, params);
 }
@@ -2200,11 +2200,11 @@ export function createFCall(
  * @internal
  */
 export function createFCallReadOnly(
-    func: string,
-    keys: string[],
-    args: string[],
+    func: GlideString,
+    keys: GlideString[],
+    args: GlideString[],
 ): command_request.Command {
-    let params: string[] = [];
+    let params: GlideString[] = [];
     params = params.concat(func, keys.length.toString(), keys, args);
     return createCommand(RequestType.FCallReadOnly, params);
 }
@@ -2213,7 +2213,7 @@ export function createFCallReadOnly(
  * @internal
  */
 export function createFunctionDelete(
-    libraryCode: string,
+    libraryCode: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.FunctionDelete, [libraryCode]);
 }
@@ -2233,7 +2233,7 @@ export function createFunctionFlush(mode?: FlushMode): command_request.Command {
  * @internal
  */
 export function createFunctionLoad(
-    libraryCode: string,
+    libraryCode: GlideString,
     replace?: boolean,
 ): command_request.Command {
     const args = replace ? ["REPLACE", libraryCode] : [libraryCode];
@@ -2243,7 +2243,7 @@ export function createFunctionLoad(
 /** Optional arguments for `FUNCTION LIST` command. */
 export type FunctionListOptions = {
     /** A wildcard pattern for matching library names. */
-    libNamePattern?: string;
+    libNamePattern?: GlideString;
     /** Specifies whether to request the library code from the server or not. */
     withCode?: boolean;
 };
@@ -2251,7 +2251,7 @@ export type FunctionListOptions = {
 /** Type of the response of `FUNCTION LIST` command. */
 export type FunctionListResponse = Record<
     string,
-    string | Record<string, string | string[]>[]
+    GlideString | Record<string, GlideString | GlideString[]>[]
 >[];
 
 /**
@@ -2260,7 +2260,7 @@ export type FunctionListResponse = Record<
 export function createFunctionList(
     options?: FunctionListOptions,
 ): command_request.Command {
-    const args: string[] = [];
+    const args: GlideString[] = [];
 
     if (options) {
         if (options.libNamePattern) {
@@ -2279,7 +2279,7 @@ export function createFunctionList(
 export type FunctionStatsResponse = Record<
     string,
     | null
-    | Record<string, string | string[] | number>
+    | Record<string, GlideString | GlideString[] | number>
     | Record<string, Record<string, number>>
 >;
 

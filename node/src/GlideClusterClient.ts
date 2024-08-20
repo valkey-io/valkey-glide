@@ -756,6 +756,7 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCall(func, [], args), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -785,6 +786,7 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCallReadOnly(func, [], args), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -807,10 +809,11 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionDelete(
-        libraryCode: string,
+        libraryCode: GlideString,
         route?: Routes,
-    ): Promise<string> {
+    ): Promise<GlideString> {
         return this.createWritePromise(createFunctionDelete(libraryCode), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -836,13 +839,16 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionLoad(
-        libraryCode: string,
+        libraryCode: GlideString,
         replace?: boolean,
         route?: Routes,
     ): Promise<string> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, replace),
-            { route: toProtobufRoute(route) },
+            {
+                decoder: Decoder.String,
+                route: toProtobufRoute(route),
+            },
         );
     }
 
@@ -866,8 +872,9 @@ export class GlideClusterClient extends BaseClient {
     public async functionFlush(
         mode?: FlushMode,
         route?: Routes,
-    ): Promise<string> {
+    ): Promise<GlideString> {
         return this.createWritePromise(createFunctionFlush(mode), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -907,6 +914,7 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<FunctionListResponse>> {
         return this.createWritePromise(createFunctionList(options), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -963,6 +971,7 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<FunctionStatsResponse>> {
         return this.createWritePromise(createFunctionStats(), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -985,6 +994,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionKill(route?: Routes): Promise<"OK"> {
         return this.createWritePromise(createFunctionKill(), {
+            decoder: Decoder.String,
             route: toProtobufRoute(route),
         });
     }
@@ -1038,7 +1048,10 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<"OK"> {
         return this.createWritePromise(
             createFunctionRestore(payload, options?.policy),
-            { decoder: Decoder.String, route: toProtobufRoute(options?.route) },
+            {
+                decoder: Decoder.String,
+                route: toProtobufRoute(options?.route),
+            },
         );
     }
 

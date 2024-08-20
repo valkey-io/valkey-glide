@@ -509,8 +509,12 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async functionDelete(libraryCode: string): Promise<string> {
-        return this.createWritePromise(createFunctionDelete(libraryCode));
+    public async functionDelete(
+        libraryCode: GlideString,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createFunctionDelete(libraryCode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -532,11 +536,12 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionLoad(
-        libraryCode: string,
+        libraryCode: GlideString,
         replace?: boolean,
-    ): Promise<string> {
+    ): Promise<GlideString> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, replace),
+            { decoder: Decoder.String },
         );
     }
 
@@ -555,8 +560,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async functionFlush(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFunctionFlush(mode));
+    public async functionFlush(mode?: FlushMode): Promise<GlideString> {
+        return this.createWritePromise(createFunctionFlush(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -590,7 +597,9 @@ export class GlideClient extends BaseClient {
     public async functionList(
         options?: FunctionListOptions,
     ): Promise<FunctionListResponse> {
-        return this.createWritePromise(createFunctionList(options));
+        return this.createWritePromise(createFunctionList(options), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -640,7 +649,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionStats(): Promise<FunctionStatsResponse> {
-        return this.createWritePromise(createFunctionStats());
+        return this.createWritePromise(createFunctionStats(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -657,7 +668,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async functionKill(): Promise<"OK"> {
-        return this.createWritePromise(createFunctionKill());
+        return this.createWritePromise(createFunctionKill(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
