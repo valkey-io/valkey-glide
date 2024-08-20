@@ -371,6 +371,7 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Execute a transaction by processing the queued commands.
+     * 
      * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki}} for details on Valkey Transactions.
      *
      * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
