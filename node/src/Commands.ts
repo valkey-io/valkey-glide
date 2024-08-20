@@ -847,8 +847,8 @@ export function createHGetAll(key: string): command_request.Command {
  * @internal
  */
 export function createLPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.LPush, [key].concat(elements));
 }
@@ -867,10 +867,11 @@ export function createLPushX(
  * @internal
  */
 export function createLPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
 
@@ -878,7 +879,7 @@ export function createLPop(
  * @internal
  */
 export function createLRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -1440,16 +1441,59 @@ export function createZInterstore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    const args = createZCmdArgs(keys, {
+        aggregationType,
+        withScores: false,
+        destination,
+    });
     return createCommand(RequestType.ZInterStore, args);
 }
 
-function createZCmdStoreArgs(
-    destination: string,
+/**
+ * @internal
+ */
+export function createZInter(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
+    withScores?: boolean,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
+    return createCommand(RequestType.ZInter, args);
+}
+
+/**
+ * @internal
+ */
+export function createZUnion(
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+    withScores?: boolean,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
+    return createCommand(RequestType.ZUnion, args);
+}
+
+/**
+ * @internal
+ * Helper function for Zcommands (ZInter, ZinterStore, ZUnion..) that arranges arguments in the server's required order.
+ */
+function createZCmdArgs(
+    keys: string[] | KeyWeight[],
+    options: {
+        aggregationType?: AggregationType;
+        withScores?: boolean;
+        destination?: string;
+    },
 ): string[] {
-    const args: string[] = [destination, keys.length.toString()];
+    const args = [];
+
+    const destination = options.destination;
+
+    if (destination) {
+        args.push(destination);
+    }
+
+    args.push(keys.length.toString());
 
     if (typeof keys[0] === "string") {
         args.push(...(keys as string[]));
@@ -1460,8 +1504,14 @@ function createZCmdStoreArgs(
         args.push("WEIGHTS", ...weights);
     }
 
+    const aggregationType = options.aggregationType;
+
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
+    }
+
+    if (options.withScores) {
+        args.push("WITHSCORES");
     }
 
     return args;
@@ -1549,7 +1599,7 @@ export function createZUnionStore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    const args = createZCmdArgs(keys, { destination, aggregationType });
     return createCommand(RequestType.ZUnionStore, args);
 }
 
@@ -2284,12 +2334,24 @@ export function createFunctionList(
     return createCommand(RequestType.FunctionList, args);
 }
 
-/** Type of the response of `FUNCTION STATS` command. */
-export type FunctionStatsResponse = Record<
+/** Response for `FUNCTION STATS` command on a single node.
+ *  The response is a map with 2 keys:
+ *  1. Information about the current running function/script (or null if none).
+ *  2. Details about the execution engines.
+ */
+export type FunctionStatsSingleResponse = Record<
     string,
     | null
-    | Record<string, string | string[] | number>
-    | Record<string, Record<string, number>>
+    | Record<string, string | string[] | number> // Running function/script information
+    | Record<string, Record<string, number>> // Execution engines information
+>;
+
+/** Full response for `FUNCTION STATS` command across multiple nodes.
+ *  It maps node addresses to the per-node response.
+ */
+export type FunctionStatsFullResponse = Record<
+    string, // Node address
+    FunctionStatsSingleResponse
 >;
 
 /** @internal */
@@ -2300,6 +2362,44 @@ export function createFunctionStats(): command_request.Command {
 /** @internal */
 export function createFunctionKill(): command_request.Command {
     return createCommand(RequestType.FunctionKill, []);
+}
+
+/** @internal */
+export function createFunctionDump(): command_request.Command {
+    return createCommand(RequestType.FunctionDump, []);
+}
+
+/**
+ * Option for `FUNCTION RESTORE` command: {@link GlideClient.functionRestore} and
+ * {@link GlideClusterClient.functionRestore}.
+ *
+ * @see {@link https://valkey.io/commands/function-restore/"|valkey.io} for more details.
+ */
+export enum FunctionRestorePolicy {
+    /**
+     * Appends the restored libraries to the existing libraries and aborts on collision. This is the
+     * default policy.
+     */
+    APPEND = "APPEND",
+    /** Deletes all existing libraries before restoring the payload. */
+    FLUSH = "FLUSH",
+    /**
+     * Appends the restored libraries to the existing libraries, replacing any existing ones in case
+     * of name collisions. Note that this policy doesn't prevent function name collisions, only
+     * libraries.
+     */
+    REPLACE = "REPLACE",
+}
+
+/** @internal */
+export function createFunctionRestore(
+    data: Buffer,
+    policy?: FunctionRestorePolicy,
+): command_request.Command {
+    return createCommand(
+        RequestType.FunctionRestore,
+        policy ? [data, policy] : [data],
+    );
 }
 
 /**
@@ -3850,4 +3950,34 @@ export function createGetEx(
     }
 
     return createCommand(RequestType.GetEx, args);
+}
+
+/**
+ * @internal
+ */
+export function createXAck(
+    key: string,
+    group: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XAck, [key, group, ...ids]);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupSetid(
+    key: string,
+    groupName: string,
+    id: string,
+    entriesRead?: number,
+): command_request.Command {
+    const args = [key, groupName, id];
+
+    if (entriesRead !== undefined) {
+        args.push("ENTRIESREAD");
+        args.push(entriesRead.toString());
+    }
+
+    return createCommand(RequestType.XGroupSetId, args);
 }

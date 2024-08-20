@@ -986,7 +986,9 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         var response = regularClient.functionStats().get();
-        checkFunctionStatsResponse(response, new String[0], 1, 1);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 1, 1);
+        }
 
         code =
                 generateLuaLibCode(
@@ -996,12 +998,16 @@ public class CommandTests {
         assertEquals(libName + "_2", regularClient.functionLoad(code, true).get());
 
         response = regularClient.functionStats().get();
-        checkFunctionStatsResponse(response, new String[0], 2, 3);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 2, 3);
+        }
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         response = regularClient.functionStats().get();
-        checkFunctionStatsResponse(response, new String[0], 0, 0);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
+        }
     }
 
     @Test
@@ -1019,7 +1025,9 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, true).get());
 
         var response = regularClient.functionStatsBinary().get();
-        checkFunctionStatsBinaryResponse(response, new GlideString[0], 1, 1);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 1, 1);
+        }
 
         code =
                 generateLuaLibCodeBinary(
@@ -1033,12 +1041,16 @@ public class CommandTests {
         assertEquals(gs(libName.toString() + "_2"), regularClient.functionLoad(code, true).get());
 
         response = regularClient.functionStatsBinary().get();
-        checkFunctionStatsBinaryResponse(response, new GlideString[0], 2, 3);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 2, 3);
+        }
 
         assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         response = regularClient.functionStatsBinary().get();
-        checkFunctionStatsBinaryResponse(response, new GlideString[0], 0, 0);
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 0, 0);
+        }
     }
 
     @Test
@@ -1535,9 +1547,14 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan("-1").get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.scan("-1").get());
+        } else {
+            Object[] negativeResult = regularClient.scan("-1").get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // Add keys to the database using mset
         regularClient.mset(keys).get();
@@ -1589,9 +1606,14 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan(gs("-1")).get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            ExecutionException executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.scan(gs("-1")).get());
+        } else {
+            Object[] negativeResult = regularClient.scan(gs("-1")).get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // Add keys to the database using mset
         regularClient.msetBinary(keys).get();
@@ -1652,9 +1674,16 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan("-1", options).get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            final ScanOptions finalOptions = options;
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class, () -> regularClient.scan("-1", finalOptions).get());
+        } else {
+            Object[] negativeResult = regularClient.scan("-1", options).get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // scan for strings by match pattern:
         options =
@@ -1734,9 +1763,16 @@ public class CommandTests {
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
-        Object[] negativeResult = regularClient.scan(gs("-1"), options).get();
-        assertEquals(initialCursor, negativeResult[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.9.0")) {
+            final ScanOptions finalOptions = options;
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class, () -> regularClient.scan(gs("-1"), finalOptions).get());
+        } else {
+            Object[] negativeResult = regularClient.scan(gs("-1"), options).get();
+            assertEquals(initialCursor, negativeResult[resultCursorIndex]);
+            assertDeepEquals(new String[] {}, negativeResult[resultCollectionIndex]);
+        }
 
         // scan for strings by match pattern:
         options =

@@ -16,7 +16,8 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
-    FunctionStatsResponse,
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
     SortClusterOptions,
@@ -35,10 +36,12 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionKill,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createInfo,
     createLastSave,
@@ -368,16 +371,19 @@ export class GlideClusterClient extends BaseClient {
 
     /**
      * Execute a transaction by processing the queued commands.
-     * @see {@link https://redis.io/topics/Transactions/|Valkey Glide Wiki} for details on Redis Transactions.
      *
-     * @param transaction - A ClusterTransaction object containing a list of commands to be executed.
-     * @param route - If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
-     *   If no key is found, the command will be sent to a random node.
-     *   If `route` is provided, the client will route the command to the nodes defined by `route`.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
+     *
+     * @param transaction - A {@link ClusterTransaction} object containing a list of commands to be executed.
+     * @param route - (Optional) If `route` is not provided, the transaction will be routed to the slot owner of the first key found in the transaction.
+     *     If no key is found, the command will be sent to a random node.
+     *     If `route` is provided, the client will route the command to the nodes defined by `route`.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of results corresponding to the execution of each command in the transaction.
-     *      If a command returns a value, it will be included in the list. If a command doesn't return a value,
-     *      the list entry will be null.
-     *      If the transaction failed due to a WATCH command, `exec` will return `null`.
+     *     If a command returns a value, it will be included in the list. If a command doesn't return a value,
+     *     the list entry will be `null`.
+     *     If the transaction failed due to a `WATCH` command, `exec` will return `null`.
      */
     public async exec(
         transaction: ClusterTransaction,
@@ -392,12 +398,12 @@ export class GlideClusterClient extends BaseClient {
                 route: toProtobufRoute(options?.route),
                 decoder: options?.decoder,
             },
-        ).then((result: ReturnType[] | null) => {
-            return this.processResultWithSetCommands(
+        ).then((result) =>
+            this.processResultWithSetCommands(
                 result,
                 transaction.setCommandsIndexes,
-            );
-        });
+            ),
+        );
     }
 
     /** Ping the Redis server.
@@ -748,7 +754,7 @@ export class GlideClusterClient extends BaseClient {
         func: string,
         args: string[],
         route?: Routes,
-    ): Promise<ReturnType> {
+    ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCall(func, [], args), {
             route: toProtobufRoute(route),
         });
@@ -777,7 +783,7 @@ export class GlideClusterClient extends BaseClient {
         func: string,
         args: string[],
         route?: Routes,
-    ): Promise<ReturnType> {
+    ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCallReadOnly(func, [], args), {
             route: toProtobufRoute(route),
         });
@@ -874,7 +880,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param options - Parameters to filter and request additional info.
      * @param route - The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to a random route.
+     *     If not defined, the command will be routed to a random node.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -909,11 +915,13 @@ export class GlideClusterClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
+    
+     *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param route - The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all primary nodes.
+     * @param route - The command will be routed automatically to all nodes, unless `route` is provided, in which
+     *       case the client will route the command to the nodes defined by `route`.
      * @returns A `Record` with two keys:
      *     - `"running_script"` with information about the running script.
      *     - `"engines"` with information about available engines and their stats.
@@ -955,7 +963,7 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionStats(
         route?: Routes,
-    ): Promise<ClusterResponse<FunctionStatsResponse>> {
+    ): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
         return this.createWritePromise(createFunctionStats(), {
             route: toProtobufRoute(route),
         });
@@ -969,7 +977,7 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to all primary nodes.
+     *     If not defined, the command will be routed to all nodes.
      * @returns `OK` if function is terminated. Otherwise, throws an error.
      *
      * @example
@@ -981,6 +989,59 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise(createFunctionKill(), {
             route: toProtobufRoute(route),
         });
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed a random node.
+     * @returns The serialized payload of all loaded libraries.
+     *
+     * @example
+     * ```typescript
+     * const data = await client.functionDump();
+     * // data can be used to restore loaded functions on any Valkey instance
+     * ```
+     */
+    public async functionDump(
+        route?: Routes,
+    ): Promise<ClusterResponse<Buffer>> {
+        return this.createWritePromise(createFunctionDump(), {
+            decoder: Decoder.Bytes,
+            route: toProtobufRoute(route),
+        });
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     *     {@link FunctionRestorePolicy.APPEND} is used by default.
+     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
+     *     If not defined, the command will be routed all primary nodes.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * await client.functionRestore(data, { policy: FunctionRestorePolicy.FLUSH, route: "allPrimaries" });
+     * ```
+     */
+    public async functionRestore(
+        payload: Buffer,
+        options?: { policy?: FunctionRestorePolicy; route?: Routes },
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createFunctionRestore(payload, options?.policy),
+            { decoder: Decoder.String, route: toProtobufRoute(options?.route) },
+        );
     }
 
     /**

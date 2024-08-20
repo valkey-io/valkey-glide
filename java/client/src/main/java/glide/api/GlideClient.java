@@ -444,19 +444,20 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, Map<String, Object>>> functionStats() {
+    public CompletableFuture<Map<String, Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(
                 FunctionStats,
                 new String[0],
-                response -> handleFunctionStatsResponse(handleMapResponse(response)));
+                response -> handleFunctionStatsResponse(response, false).getMultiValue());
     }
 
     @Override
-    public CompletableFuture<Map<GlideString, Map<GlideString, Object>>> functionStatsBinary() {
+    public CompletableFuture<Map<String, Map<GlideString, Map<GlideString, Object>>>>
+            functionStatsBinary() {
         return commandManager.submitNewCommand(
                 FunctionStats,
                 new GlideString[0],
-                response -> handleFunctionStatsBinaryResponse(handleBinaryStringMapResponse(response)));
+                response -> handleFunctionStatsBinaryResponse(response, false).getMultiValue());
     }
 
     @Override

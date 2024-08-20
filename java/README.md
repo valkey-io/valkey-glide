@@ -271,9 +271,19 @@ For more examples, you can refer to the test folder [unit tests](./client/src/te
 
 You can run benchmarks using `./gradlew run`. You can set arguments using the args flag like:
 
+Returns the command help output
 ```shell
 ./gradlew run --args="--help"
+```
+
+Runs all benchmark clients against a local instance with TLS enabled using data sizing 100 and 1000 bytes, 10 and 100 concurrent tasks, 1 and 5 parallel clients.
+```shell
 ./gradlew run --args="--resultsFile=output --dataSize \"100 1000\" --concurrentTasks \"10 100\" --clients all --host localhost --port 6279 --clientCount \"1 5\" --tls"
+```
+
+Runs GLIDE client against a local cluster instance on port 52756 using data sizing 4000 bytes, and 1000 concurrent tasks.
+```shell
+./gradlew run --args="--resultsFile=output --dataSize \"4000\" --concurrentTasks \"1000\" --clients glide --host 127.0.0.1 --port 52746 --clusterModeEnabled"
 ```
 
 The following arguments are accepted:
