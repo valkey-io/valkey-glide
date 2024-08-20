@@ -2333,7 +2333,7 @@ export function createFunctionList(
 export type FunctionStatsSingleResponse = Record<
     string,
     | null
-    | Record<string, string | string[] | number> // Running function/script information
+    | Record<string, GlideString | GlideString[] | number> // Running function/script information
     | Record<string, Record<string, number>> // Execution engines information
 >;
 

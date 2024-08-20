@@ -5546,6 +5546,8 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The invoked function's return value.
      *
      * @example
@@ -5558,9 +5560,10 @@ export class BaseClient {
         func: GlideString,
         keys: GlideString[],
         args: GlideString[],
+        decoder?: Decoder,
     ): Promise<GlideString> {
         return this.createWritePromise(createFCall(func, keys, args), {
-            decoder: Decoder.String,
+            decoder: decoder,
         });
     }
 
@@ -5575,6 +5578,8 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The invoked function's return value.
      *
      * @example
@@ -5588,9 +5593,10 @@ export class BaseClient {
         func: GlideString,
         keys: GlideString[],
         args: GlideString[],
+        decoder?: Decoder,
     ): Promise<GlideString> {
         return this.createWritePromise(createFCallReadOnly(func, keys, args), {
-            decoder: Decoder.String,
+            decoder: decoder,
         });
     }
 
