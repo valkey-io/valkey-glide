@@ -1948,16 +1948,22 @@ export function runBaseTests(config: {
         `lpush, lpop and lrange with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const valueList = ["value4", "value3", "value2", "value1"];
-                expect(await client.lpush(key, valueList)).toEqual(4);
-                expect(await client.lpop(key)).toEqual("value1");
-                expect(await client.lrange(key, 0, -1)).toEqual([
+                const key1 = uuidv4();
+                const key2 = Buffer.from(uuidv4());
+                const valueList1 = ["value4", "value3", "value2", "value1"];
+                const valueList2 = ["value7", "value6", "value5"];
+                const encodedValues = [
+                    Buffer.from("value6"),
+                    Buffer.from("value7"),
+                ];
+                expect(await client.lpush(key1, valueList1)).toEqual(4);
+                expect(await client.lpop(key1)).toEqual("value1");
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "value2",
                     "value3",
                     "value4",
                 ]);
-                expect(await client.lpopCount(key, 2)).toEqual([
+                expect(await client.lpopCount(key1, 2)).toEqual([
                     "value2",
                     "value3",
                 ]);
@@ -1965,6 +1971,22 @@ export function runBaseTests(config: {
                     [],
                 );
                 expect(await client.lpop("nonExistingKey")).toEqual(null);
+                expect(await client.lpush(key2, valueList2)).toEqual(3);
+                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value5"),
+                );
+                expect(await client.lrange(key2, 0, -1, Decoder.Bytes)).toEqual(
+                    encodedValues,
+                );
+                expect(await client.lpopCount(key2, 2, Decoder.Bytes)).toEqual(
+                    encodedValues,
+                );
+                expect(
+                    await client.lpush(key2, [Buffer.from("value8")]),
+                ).toEqual(1);
+                expect(await client.lpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value8"),
+                );
             }, protocol);
         },
         config.timeout,
