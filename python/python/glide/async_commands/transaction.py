@@ -4463,6 +4463,7 @@ class BaseTransaction:
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
+        no_scores: bool = False,
     ) -> TTransaction:
         """
         Iterates incrementally over a sorted set.
@@ -4474,26 +4475,30 @@ class BaseTransaction:
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings or byte string that match the pattern specified. If the sorted set is large enough for scan commands to return
+                strings or byte strings that match the pattern specified. If the sorted set is large enough for scan commands to return
                 only a subset of the sorted set then there could be a case where the result is empty although there are
                 items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
                 that it will only fetch and match `10` items from the list.
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the
                 sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
                 represent the results as compact single-allocation packed encoding.
+            no_scores (bool): If `True`, the command will not return scores associated with the members. Since Valkey "8.0.0".
 
         Returns:
             List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
-                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
-                returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-                of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
-                `String` pairs, where the value is at even indices and the score is at odd indices.
+            The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+            returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+            of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+            `String` pairs, where the value is at even indices and the score is at odd indices.
+            If `no_scores` is set to`True`, the second element will only contain the members without scores.
         """
         args = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
+        if no_scores:
+            args.append("NOSCORES")
 
         return self.append_command(RequestType.ZScan, args)
 
@@ -4503,6 +4508,7 @@ class BaseTransaction:
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
+        no_values: bool = False,
     ) -> TTransaction:
         """
         Iterates incrementally over a hash.
@@ -4514,13 +4520,14 @@ class BaseTransaction:
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings or bytes strings that match the pattern specified. If the hash is large enough for scan commands to return only a
+                strings or byte strings that match the pattern specified. If the hash is large enough for scan commands to return only a
                 subset of the hash then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the hash.
                 `COUNT` could be ignored until the hash is large enough for the `SCAN` commands to represent the results
                 as compact single-allocation packed encoding.
+            no_values (bool): If `True`, the command will not return values the fields in the hash. Since Valkey "8.0.0".
 
         Returns:
             List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
@@ -4528,12 +4535,15 @@ class BaseTransaction:
                 returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
                 hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
                 where the value is at even indices and the score is at odd indices.
+                If `no_values` is set to `True`, the second element will only contain the fields without the values.
         """
         args = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
+        if no_values:
+            args.append("NOVALUES")
 
         return self.append_command(RequestType.HScan, args)
 

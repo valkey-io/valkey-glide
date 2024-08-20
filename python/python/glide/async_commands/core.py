@@ -6117,6 +6117,7 @@ class CoreCommands(Protocol):
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
+        no_scores: bool = False,
     ) -> List[Union[bytes, List[bytes]]]:
         """
         Iterates incrementally over a sorted set.
@@ -6135,13 +6136,15 @@ class CoreCommands(Protocol):
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the
                 sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
                 represent the results as compact single-allocation packed encoding.
+            no_scores (bool): If `True`, the command will not return scores associated with the members. Since Valkey "8.0.0".
 
         Returns:
             List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
-                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
-                returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
-                of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
-                `String` pairs, where the value is at even indices and the score is at odd indices.
+            The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+            returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+            of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+            `String` pairs, where the value is at even indices and the score is at odd indices.
+            If `no_scores` is set to`True`, the second element will only contain the members without scores.
 
         Examples:
             # Assume "key" contains a sorted set with multiple members
@@ -6160,12 +6163,31 @@ class CoreCommands(Protocol):
             Members: [b'value 39', b'39', b'value 127', b'127', b'value 43', b'43', b'value 139', b'139', b'value 211', b'211']
             Cursor: 0
             Members: [b'value 55', b'55', b'value 24', b'24', b'value 90', b'90', b'value 113', b'113']
+
+            # Using no-score
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await client.zscan("key", "0", match="*", count=5, no_scores=True)
+            ...     new_cursor = str(result[0])
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor: 123
+            Members: [b'value 163', b'value 114', b'value 25', b'value 82', b'value 64']
+            Cursor: 47
+            Members: [b'value 39', b'value 127', b'value 43', b'value 139', b'value 211']
+            Cursor: 0
+            Members: [b'value 55', b'value 24', b'value 90', b'value 113']
         """
         args: List[TEncodable] = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
+        if no_scores:
+            args.append("NOSCORES")
 
         return cast(
             List[Union[bytes, List[bytes]]],
@@ -6178,6 +6200,7 @@ class CoreCommands(Protocol):
         cursor: TEncodable,
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
+        no_values: bool = False,
     ) -> List[Union[bytes, List[bytes]]]:
         """
         Iterates incrementally over a hash.
@@ -6196,6 +6219,7 @@ class CoreCommands(Protocol):
             count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the hash.
                 `COUNT` could be ignored until the hash is large enough for the `SCAN` commands to represent the results
                 as compact single-allocation packed encoding.
+            no_values (bool): If `True`, the command will not return values the fields in the hash. Since Valkey "8.0.0".
 
         Returns:
             List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
@@ -6203,6 +6227,7 @@ class CoreCommands(Protocol):
                 returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
                 hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
                 where the value is at even indices and the score is at odd indices.
+                If `no_values` is set to `True`, the second element will only contain the fields without the values.
 
         Examples:
             # Assume "key" contains a hash with multiple members
@@ -6221,12 +6246,31 @@ class CoreCommands(Protocol):
             Members: [b'field 63', b'value 63', b'field 293', b'value 293', b'field 162', b'value 162']
             Cursor: 0
             Members: [b'field 420', b'value 420', b'field 221', b'value 221']
+
+            # Use no-values
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await client.hscan("key", "0", match="*", count=3, no_values=True)
+            ...     new_cursor = str(result [0])
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor: 1
+            Members: [b'field 79',b'field 20', b'field 115']
+            Cursor: 39
+            Members: [b'field 63', b'field 293', b'field 162']
+            Cursor: 0
+            Members: [b'field 420', b'field 221']
         """
         args: List[TEncodable] = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
+        if no_values:
+            args.append("NOVALUES")
 
         return cast(
             List[Union[bytes, List[bytes]]],

@@ -7055,7 +7055,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
      *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
      *     </code>. The array in the second element is always a flattened series of <code>String
-     *     </code> pairs, where the value is at even indices and the score is at odd indices.
+     *     </code> pairs, where the value is at even indices and the score is at odd indices. If
+     *     options.noScores is to <code>true</code>, the second element will only contain the members
+     *     without scores.
      */
     public <ArgType> T zscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull ZScanOptions zScanOptions) {
@@ -7102,7 +7104,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the <code>cursor</code> returned on the last iteration of the result. The second element is
      *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
      *     in the second element is always a flattened series of <code>String</code> pairs, where the
-     *     key is at even indices and the value is at odd indices.
+     *     key is at even indices and the value is at odd indices. If options.noValues is set to
+     *     <code>true</code>, the second element will only contain the fields without the values.
      */
     public <ArgType> T hscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull HScanOptions hScanOptions) {

@@ -2,6 +2,11 @@
 package glide.api.models.commands.scan;
 
 import glide.api.commands.HashBaseCommands;
+import glide.api.models.GlideString;
+import glide.utils.ArgsBuilder;
+import java.util.Arrays;
+import java.util.Objects;
+import lombok.Builder;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -10,4 +15,51 @@ import lombok.experimental.SuperBuilder;
  * @see <a href="https://valkey.io/commands/hscan/">valkey.io</a>
  */
 @SuperBuilder
-public class HScanOptions extends BaseScanOptions {}
+public class HScanOptions extends BaseScanOptions {
+
+    /** Option string to include in the HSCAN command when values are not included. */
+    public static final String NO_VALUES_API = "NOVALUES";
+
+    /**
+     * When set to true, the command will not include values in the results. This option is available
+     * from Redis version 8.0.0 and above.
+     */
+    @Builder.Default protected boolean noValues = false;
+
+    @Override
+    public String[] toArgs() {
+        return Arrays.stream(toGlideStringArgs()).map(GlideString::getString).toArray(String[]::new);
+    }
+
+    /**
+     * Creates the arguments to be used in <code>HSCAN</code> commands.
+     *
+     * @return a GlideString array that holds the options and their arguments.
+     */
+    @Override
+    public GlideString[] toGlideStringArgs() {
+        ArgsBuilder builder = new ArgsBuilder();
+
+        // Add options from the superclass
+        GlideString[] superArgs = super.toGlideStringArgs();
+        for (GlideString arg : superArgs) {
+            builder.add(arg);
+        }
+
+        // Add the noValues option if applicable
+        if (noValues) {
+            builder.add(NO_VALUES_API);
+        }
+
+        return builder.toArray();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof HScanOptions)) return false;
+        if (!super.equals(o)) return false;
+        HScanOptions that = (HScanOptions) o;
+        return Objects.equals(noValues, that.noValues);
+    }
+}

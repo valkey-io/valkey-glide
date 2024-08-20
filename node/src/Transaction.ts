@@ -41,6 +41,7 @@ import {
     GeoSearchStoreResultOptions,
     GeoUnit,
     GeospatialData,
+    HScanOptions,
     InfoOptions,
     InsertPosition,
     KeyWeight,
@@ -996,15 +997,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - (Optional) The {@link BaseScanOptions}.
+     * @param options - (Optional) The {@link HScanOptions}.
      *
-     * Command Response -  An array of the `cursor` and the subset of the hash held by `key`.
+     * Command Response - An array of the `cursor` and the subset of the hash held by `key`.
      * The first element is always the `cursor` for the next iteration of results. `"0"` will be the `cursor`
      * returned on the last iteration of the hash. The second element is always an array of the subset of the
      * hash held in `key`. The array in the second element is always a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
+     * If options.noValues is set to `true`, the second element will only contain the fields without the values.
      */
-    public hscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public hscan(key: string, cursor: string, options?: HScanOptions): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
@@ -3675,19 +3677,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of
      *      the search.
-     * @param options - (Optional) The `zscan` options - see {@link BaseScanOptions}
+     * @param options - (Optional) The `zscan` options - see {@link ZScanOptions}
      *
      * Command Response - An `Array` of the `cursor` and the subset of the sorted set held by `key`.
      *      The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
      *      returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
      *      of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
      *      `String` pairs, where the value is at even indices and the score is at odd indices.
+     *      If options.noScores is to `true`, the second element will only contain the members without scores.
      */
-    public zscan(
-        key: GlideString,
-        cursor: string,
-        options?: BaseScanOptions,
-    ): T {
+    public zscan(key: GlideString, cursor: string, options?: ZScanOptions): T {
         return this.addAndReturn(createZScan(key, cursor, options));
     }
 

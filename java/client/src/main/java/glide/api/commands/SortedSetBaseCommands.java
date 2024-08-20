@@ -2790,7 +2790,8 @@ public interface SortedSetBaseCommands {
      *     <code>
      *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
      *     second element is always a flattened series of <code>String</code> pairs, where the value
-     *     is at even indices and the score is at odd indices.
+     *     is at even indices and the score is at odd indices. If options.noScores is to <code>true
+     *     </code>, the second element will only contain the members without scores.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 member-score pairs
@@ -2827,7 +2828,8 @@ public interface SortedSetBaseCommands {
      *     <code>
      *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
      *     second element is always a flattened series of <code>String</code> pairs, where the value
-     *     is at even indices and the score is at odd indices.
+     *     is at even indices and the score is at odd indices. If options.noScores is to <code>true
+     *     </code>, the second element will only contain the members without scores.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 member-score pairs
