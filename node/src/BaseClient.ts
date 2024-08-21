@@ -2189,7 +2189,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
      * ```
      */
-    public async llen(key: string): Promise<number> {
+    public async llen(key: GlideString): Promise<number> {
         return this.createWritePromise(createLLen(key));
     }
 
@@ -2205,6 +2205,8 @@ export class BaseClient {
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The popped element, or `null` if `source` does not exist.
      *
      * @example
@@ -2223,13 +2225,15 @@ export class BaseClient {
      * ```
      */
     public async lmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
-    ): Promise<string | null> {
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
+            { decoder: decoder },
         );
     }
 
@@ -2249,6 +2253,8 @@ export class BaseClient {
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
      * @example
@@ -2266,14 +2272,16 @@ export class BaseClient {
      * ```
      */
     public async blmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
-    ): Promise<string | null> {
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
+            { decoder: decoder },
         );
     }
 
@@ -5258,6 +5266,8 @@ export class BaseClient {
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - The element at `index` in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      *
@@ -5275,8 +5285,14 @@ export class BaseClient {
      * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
      * ```
      */
-    public async lindex(key: string, index: number): Promise<string | null> {
-        return this.createWritePromise(createLIndex(key, index));
+    public async lindex(
+        key: GlideString,
+        index: number,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createLIndex(key, index), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -5300,10 +5316,10 @@ export class BaseClient {
      * ```
      */
     public async linsert(
-        key: string,
+        key: GlideString,
         position: InsertPosition,
-        pivot: string,
-        element: string,
+        pivot: GlideString,
+        element: GlideString,
     ): Promise<number> {
         return this.createWritePromise(
             createLInsert(key, position, pivot, element),
