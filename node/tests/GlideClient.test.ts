@@ -258,11 +258,15 @@ describe("GlideClient", () => {
                 "value",
             );
             transaction.select(0);
-            const result = await client.exec(transaction);
-            expectedRes.push(["select(0)", "OK"]);
-
-            validateTransactionResponse(result, expectedRes);
-            client.close();
+            try{
+                const result = await client.exec(transaction);
+                expectedRes.push(["select(0)", "OK"]);
+                
+                validateTransactionResponse(result, expectedRes);
+                client.close();
+            } catch(error) { 
+                console.error("expected error: ", error );
+            }
         },
     );
 

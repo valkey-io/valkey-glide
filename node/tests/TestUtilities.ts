@@ -544,6 +544,10 @@ export async function encodableTransactionTest(
 ): Promise<[string, ReturnType][]> {
     const key = "{key}" + uuidv4(); // string
     const value = "value";
+    const dumpKey = "dumpKey";
+    const dumpResult = Buffer.from([
+        0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
+    ]);
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, ReturnType][] = [];
 
@@ -552,6 +556,21 @@ export async function encodableTransactionTest(
     baseTransaction.get(key);
     responseData.push(["get(key)", valueEncodedResponse]);
 
+    baseTransaction.set(dumpKey, value);
+    responseData.push(["set(dumpKey, value)", "OK"]);
+    baseTransaction.customCommand(["DUMP", dumpKey]);
+    responseData.push(['customCommand(["DUMP", dumpKey])', dumpResult]);
+    baseTransaction.del([dumpKey]);
+    responseData.push(["del(dumpKey)", 1]);
+    baseTransaction.get(dumpKey);
+    responseData.push(["get(dumpKey)", null]);
+    baseTransaction.customCommand(["RESTORE", dumpKey, "0", dumpResult]);
+    responseData.push([
+        'customCommand(["RESTORE", dumpKey, "0", dumpResult])',
+        "OK",
+    ]);
+    baseTransaction.get(dumpKey);
+    responseData.push(["get(dumpKey)", Buffer.from(value)]);
     return responseData;
 }
 

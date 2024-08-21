@@ -680,23 +680,28 @@ export class BaseClient {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns: T) => {
-                    if (resolveAns instanceof PointerResponse) {
-                        if (typeof resolveAns === "number") {
-                            resolveAns = valueFromSplitPointer(
-                                0,
-                                resolveAns,
-                                stringDecoder,
-                            ) as T;
-                        } else {
-                            resolveAns = valueFromSplitPointer(
-                                resolveAns.high!,
-                                resolveAns.low!,
-                                stringDecoder,
-                            ) as T;
+                    try {
+                        if (resolveAns instanceof PointerResponse) {
+                            if (typeof resolveAns === "number") {
+                                resolveAns = valueFromSplitPointer(
+                                    0,
+                                    resolveAns,
+                                    stringDecoder,
+                                ) as T;
+                            } else {
+                                resolveAns = valueFromSplitPointer(
+                                    resolveAns.high!,
+                                    resolveAns.low!,
+                                    stringDecoder,
+                                ) as T;
+                            }
                         }
-                    }
 
-                    resolve(resolveAns);
+                        resolve(resolveAns);
+                    } catch (err) {
+                        console.log(err);
+                        reject(err);
+                    }
                 },
                 reject,
             ];

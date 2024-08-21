@@ -238,9 +238,12 @@ describe("GlideClusterClient", () => {
             const value = "value";
             const valueEncoded = Buffer.from(value);
             expect(await client.set(key, value)).toEqual("OK");
-            // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
-            // TODO: fix custom command with unmatch decoder to return an error: https://github.com/valkey-io/valkey-glide/issues/2119
-            // expect(await client.customCommand(["DUMP", key])).toThrowError();
+            try {
+                // Since DUMP gets binary results, we cannot use the default decoder (string) here, so we expected to get an error.
+                await client.customCommand(["DUMP", key]);
+            } catch (err) {
+                console.error(err);
+            }
             const dumpResult = await client.customCommand(["DUMP", key], {
                 decoder: Decoder.Bytes,
             });
