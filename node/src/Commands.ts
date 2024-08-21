@@ -884,7 +884,7 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): command_request.Command {
+export function createLLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
 }
 
@@ -906,8 +906,8 @@ export enum ListDirection {
  * @internal
  */
 export function createLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
 ): command_request.Command {
@@ -923,8 +923,8 @@ export function createLMove(
  * @internal
  */
 export function createBLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
     timeout: number,
@@ -979,8 +979,8 @@ export function createLRem(
  * @internal
  */
 export function createRPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
@@ -999,10 +999,11 @@ export function createRPushX(
  * @internal
  */
 export function createRPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
 
@@ -1857,7 +1858,7 @@ export function createStrlen(key: string): command_request.Command {
  * @internal
  */
 export function createLIndex(
-    key: string,
+    key: GlideString,
     index: number,
 ): command_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
@@ -1881,10 +1882,10 @@ export enum InsertPosition {
  * @internal
  */
 export function createLInsert(
-    key: string,
+    key: GlideString,
     position: InsertPosition,
-    pivot: string,
-    element: string,
+    pivot: GlideString,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
@@ -2215,7 +2216,7 @@ export function createPublish(
  * @internal
  */
 export function createBRPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
@@ -2226,7 +2227,7 @@ export function createBRPop(
  * @internal
  */
 export function createBLPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
