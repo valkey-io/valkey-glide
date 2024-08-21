@@ -255,15 +255,19 @@ export class GlideClient extends BaseClient {
         });
     }
 
-    /** Get information and statistics about the Redis server.
+    /**
+     * Gets information and statistics about the server.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
-     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
-     *  When no parameter is provided, the default option is assumed.
-     * @returns a string containing the information for the sections requested.
+     * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
+     *     When no parameter is provided, the {@link InfoOptions.default|default option} is assumed.
+     * @returns A string containing the information for the sections requested.
      */
-    public async info(options?: InfoOptions[]): Promise<string> {
-        return this.createWritePromise(createInfo(options));
+    public async info(sections?: InfoOptions[]): Promise<string> {
+        return this.createWritePromise(createInfo(sections), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Change the currently selected Redis database.
@@ -299,7 +303,9 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createClientGetName());
     }
 
-    /** Rewrite the configuration file with the current configuration.
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
      * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
      *
      * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
@@ -312,10 +318,13 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async configRewrite(): Promise<"OK"> {
-        return this.createWritePromise(createConfigRewrite());
+        return this.createWritePromise(createConfigRewrite(), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+    /**
+     * Resets the statistics reported by the server using the `INFO` and `LATENCY HISTOGRAM` commands.
      *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
@@ -329,7 +338,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async configResetStat(): Promise<"OK"> {
-        return this.createWritePromise(createConfigResetStat());
+        return this.createWritePromise(createConfigResetStat(), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Returns the current connection id.
@@ -341,11 +352,14 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createClientId());
     }
 
-    /** Reads the configuration parameters of a running Redis server.
+    /**
+     * Reads the configuration parameters of the running server.
      *
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      *
      * @returns A map of values corresponding to the configuration parameters.
      *
@@ -358,15 +372,18 @@ export class GlideClient extends BaseClient {
      */
     public async configGet(
         parameters: string[],
-    ): Promise<Record<string, string>> {
-        return this.createWritePromise(createConfigGet(parameters));
+        decoder?: Decoder,
+    ): Promise<Record<string, GlideString>> {
+        return this.createWritePromise(createConfigGet(parameters), {
+            decoder: decoder,
+        });
     }
 
     /**
-     * Set configuration parameters to the specified values.
+     * Sets configuration parameters to the specified values.
      *
      * @see {@link  https://valkey.io/commands/config-set/|valkey.io} for details.
-     * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
+     * @param parameters - A map consisting of configuration parameters and their respective values to set.
      * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
@@ -376,8 +393,12 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async configSet(parameters: Record<string, string>): Promise<"OK"> {
-        return this.createWritePromise(createConfigSet(parameters));
+    public async configSet(
+        parameters: Record<string, GlideString>,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createConfigSet(parameters), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Echoes the provided `message` back.
@@ -397,22 +418,24 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createEcho(message));
     }
 
-    /** Returns the server time
+    /**
+     * Returns the server time.
+     *
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
-     * @returns - The current server time as a two items `array`:
-     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
-     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     * @returns The current server time as a two items `array`:
+     * - A Unix timestamp,
+     * - The amount of microseconds already elapsed in the current second.
      *
      * @example
      * ```typescript
-     * // Example usage of time command
-     * const result = await client.time();
-     * console.log(result); // Output: ['1710925775', '913580']
+     * console.log(await client.time()); // Output: ['1710925775', '913580']
      * ```
      */
     public async time(): Promise<[string, string]> {
-        return this.createWritePromise(createTime());
+        return this.createWritePromise(createTime(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -481,7 +504,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for more details.
      *
-     * @param options - The LOLWUT options
+     * @param options - (Optional) The LOLWUT options - see {@link LolwutOptions}.
      * @returns A piece of generative computer art along with the current server version.
      *
      * @example
@@ -491,7 +514,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async lolwut(options?: LolwutOptions): Promise<string> {
-        return this.createWritePromise(createLolwut(options));
+        return this.createWritePromise(createLolwut(options), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -709,7 +734,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/flushall/|valkey.io} for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns `OK`.
      *
      * @example
@@ -718,8 +743,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async flushall(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFlushAll(mode));
+    public async flushall(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createFlushAll(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -727,7 +754,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for more details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      * @returns `OK`.
      *
      * @example
@@ -736,8 +763,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async flushdb(mode?: FlushMode): Promise<string> {
-        return this.createWritePromise(createFlushDB(mode));
+    public async flushdb(mode?: FlushMode): Promise<"OK"> {
+        return this.createWritePromise(createFlushDB(mode), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -880,6 +909,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/lastsave/|valkey.io} for more details.
      *
      * @returns `UNIX TIME` of the last DB save executed with success.
+     *
      * @example
      * ```typescript
      * const timestamp = await client.lastsave();

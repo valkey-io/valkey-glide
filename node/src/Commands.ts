@@ -10,7 +10,7 @@ import { BaseClient, Decoder } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "src/GlideClusterClient";
+import { GlideClusterClient, Routes } from "src/GlideClusterClient";
 import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
@@ -88,6 +88,42 @@ function createCommand(
 
     return singleCommand;
 }
+
+/** An extension to command option types with {@link Decoder}. */
+export type DecoderOption = {
+    /**
+     * {@link Decoder} type which defines how to handle the response.
+     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     */
+    decoder?: Decoder;
+};
+
+/** An extension to command option types with {@link Routes} for commands which are routed by default to all nodes. */
+export type AllNodesOrRouteOption = {
+    /**
+     * The command will be routed to all nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
+};
+
+/** An extension to command option types with {@link Routes} for commands which are routed by default to all primary nodes. */
+export type AllPrimaryNodesOrRouteOption = {
+    /**
+     * The command will be routed to all primary nodes, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
+};
+
+/** An extension to command option types with {@link Routes} for commands which are routed by default a random node. */
+export type RandomNodeOrRouteOption = {
+    /**
+     * The command will be routed to a random node, unless `route` is provided, in which
+     *     case the client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
+};
 
 /**
  * @internal
@@ -390,7 +426,7 @@ export function createConfigGet(parameters: string[]): command_request.Command {
  * @internal
  */
 export function createConfigSet(
-    parameters: Record<string, string>,
+    parameters: Record<string, GlideString>,
 ): command_request.Command {
     return createCommand(
         RequestType.ConfigSet,
@@ -2876,6 +2912,7 @@ export function createObjectRefcount(key: string): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
 }
 
+/** Additional parameters for `LOLWUT` command. */
 export type LolwutOptions = {
     /**
      * An optional argument that can be used to specify the version of computer art to generate.
@@ -2883,16 +2920,10 @@ export type LolwutOptions = {
     version?: number;
     /**
      * An optional argument that can be used to specify the output:
-     *  For version `5`, those are length of the line, number of squares per row, and number of squares per column.
-     *  For version `6`, those are number of columns and number of lines.
+     * - For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+     * - For version `6`, those are number of columns and number of lines.
      */
     parameters?: number[];
-    /**
-     * An optional argument specifies the type of decoding.
-     *  Use Decoder.String to get the response as a String.
-     *  Use Decoder.Bytes to get the response in a buffer.
-     */
-    decoder?: Decoder;
 };
 
 /**
