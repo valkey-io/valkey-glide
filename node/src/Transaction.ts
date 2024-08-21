@@ -337,7 +337,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      */
     public getex(
-        key: string,
+        key: GlideString,
         options?: "persist" | { type: TimeUnit; duration: number },
     ): T {
         return this.addAndReturn(createGetEx(key, options));
@@ -386,7 +386,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `value` isn't set because of `onlyIfExists` or `onlyIfDoesNotExist` conditions, return null.
      * If `returnOldValue` is set, return the old value as a string.
      */
-    public set(key: string, value: string, options?: SetOptions): T {
+    public set(key: GlideString, value: GlideString, options?: SetOptions): T {
         return this.addAndReturn(createSet(key, value, options));
     }
 
@@ -545,7 +545,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the increment.
      */
-    public incr(key: string): T {
+    public incr(key: GlideString): T {
         return this.addAndReturn(createIncr(key));
     }
 
@@ -557,7 +557,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the increment.
      */
-    public incrBy(key: string, amount: number): T {
+    public incrBy(key: GlideString, amount: number): T {
         return this.addAndReturn(createIncrBy(key, amount));
     }
 
@@ -572,7 +572,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the value of `key` after the increment.
      *
      */
-    public incrByFloat(key: string, amount: number): T {
+    public incrByFloat(key: GlideString, amount: number): T {
         return this.addAndReturn(createIncrByFloat(key, amount));
     }
 
@@ -594,7 +594,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the decrement.
      */
-    public decr(key: string): T {
+    public decr(key: GlideString): T {
         return this.addAndReturn(createDecr(key));
     }
 
@@ -606,7 +606,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `key` after the decrement.
      */
-    public decrBy(key: string, amount: number): T {
+    public decrBy(key: GlideString, amount: number): T {
         return this.addAndReturn(createDecrBy(key, amount));
     }
 
@@ -2167,7 +2167,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The length of the string value stored at `key`
      * If `key` does not exist, it is treated as an empty string, and the command returns 0.
      */
-    public strlen(key: string): T {
+    public strlen(key: GlideString): T {
         return this.addAndReturn(createStrlen(key));
     }
 
@@ -3667,7 +3667,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      */
-    public lcs(key1: string, key2: string): T {
+    public lcs(key1: GlideString, key2: GlideString): T {
         return this.addAndReturn(createLCS(key1, key2));
     }
 
@@ -3682,7 +3682,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The total length of all the longest common subsequences between the 2 strings.
      */
-    public lcsLen(key1: string, key2: string): T {
+    public lcsLen(key1: GlideString, key2: GlideString): T {
         return this.addAndReturn(createLCS(key1, key2, { len: true }));
     }
 
@@ -3695,8 +3695,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - Additional parameters:
+     * - withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
+     * - minMatchLen - (Optional) The minimum length of matches to include in the result.
      *
      * Command Response - A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
@@ -3710,8 +3711,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     See example of {@link BaseClient.lcsIdx|lcsIdx} for more details.
      */
     public lcsIdx(
-        key1: string,
-        key2: string,
+        key1: GlideString,
+        key2: GlideString,
         options?: { withMatchLen?: boolean; minMatchLen?: number },
     ): T {
         return this.addAndReturn(createLCS(key1, key2, { idx: options ?? {} }));
@@ -3754,7 +3755,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the string stored at `key` after it was modified.
      */
-    public setrange(key: string, offset: number, value: string): T {
+    public setrange(key: GlideString, offset: number, value: GlideString): T {
         return this.addAndReturn(createSetRange(key, offset, value));
     }
 

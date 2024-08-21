@@ -348,7 +348,7 @@ export function createMSetNX(
 /**
  * @internal
  */
-export function createIncr(key: string): command_request.Command {
+export function createIncr(key: GlideString): command_request.Command {
     return createCommand(RequestType.Incr, [key]);
 }
 
@@ -356,7 +356,7 @@ export function createIncr(key: string): command_request.Command {
  * @internal
  */
 export function createIncrBy(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.IncrBy, [key, amount.toString()]);
@@ -366,7 +366,7 @@ export function createIncrBy(
  * @internal
  */
 export function createIncrByFloat(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.IncrByFloat, [key, amount.toString()]);
@@ -442,7 +442,7 @@ export function createHSetNX(
 /**
  * @internal
  */
-export function createDecr(key: string): command_request.Command {
+export function createDecr(key: GlideString): command_request.Command {
     return createCommand(RequestType.Decr, [key]);
 }
 
@@ -450,7 +450,7 @@ export function createDecr(key: string): command_request.Command {
  * @internal
  */
 export function createDecrBy(
-    key: string,
+    key: GlideString,
     amount: number,
 ): command_request.Command {
     return createCommand(RequestType.DecrBy, [key, amount.toString()]);
@@ -1850,7 +1850,7 @@ export function createType(key: GlideString): command_request.Command {
 /**
  * @internal
  */
-export function createStrlen(key: string): command_request.Command {
+export function createStrlen(key: GlideString): command_request.Command {
     return createCommand(RequestType.Strlen, [key]);
 }
 
@@ -3679,8 +3679,8 @@ export function createLastSave(): command_request.Command {
 
 /** @internal */
 export function createLCS(
-    key1: string,
-    key2: string,
+    key1: GlideString,
+    key2: GlideString,
     options?: {
         len?: boolean;
         idx?: { withMatchLen?: boolean; minMatchLen?: number };
@@ -3792,9 +3792,9 @@ export function createZScan(
 
 /** @internal */
 export function createSetRange(
-    key: string,
+    key: GlideString,
     offset: number,
-    value: string,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SetRange, [key, offset.toString(), value]);
 }
@@ -3942,7 +3942,7 @@ export enum TimeUnit {
  * @internal
  */
 export function createGetEx(
-    key: string,
+    key: GlideString,
     options?: "persist" | { type: TimeUnit; duration: number },
 ): command_request.Command {
     const args = [key];

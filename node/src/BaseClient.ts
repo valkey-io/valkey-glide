@@ -987,9 +987,11 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param key - The key to retrieve from the database.
-     * @param options - (Optional) Set expiriation to the given key.
-     *                  "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
-     *                  Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * @param options - (Optional) Additional Parameters:
+     * - Set expiriation to the given key:
+     * "persist" will retain the time to live associated with the key. Equivalent to `PERSIST` in the VALKEY API.
+     * Otherwise, a {@link TimeUnit} and duration of the expire time should be specified.
+     * - {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns If `key` exists, returns the value of `key` as a `string`. Otherwise, return `null`.
      *
      * @example
@@ -999,10 +1001,15 @@ export class BaseClient {
      * ```
      */
     public async getex(
-        key: string,
-        options?: "persist" | { type: TimeUnit; duration: number },
+        key: GlideString,
+        options?: {
+            cmdOptions: "persist" | { type: TimeUnit; duration: number };
+            decoder?: Decoder;
+        },
     ): Promise<string | null> {
-        return this.createWritePromise(createGetEx(key, options));
+        return this.createWritePromise(createGetEx(key, options?.cmdOptions), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1284,6 +1291,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/incr/|valkey.io} for details.
      *
      * @param key - The key to increment its value.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value of `key` after the increment.
      *
      * @example
@@ -1294,8 +1302,8 @@ export class BaseClient {
      * console.log(result); // Output: 11
      * ```
      */
-    public async incr(key: string): Promise<number> {
-        return this.createWritePromise(createIncr(key));
+    public async incr(key: GlideString, decoder?: Decoder): Promise<number> {
+        return this.createWritePromise(createIncr(key), { decoder: decoder });
     }
 
     /** Increments the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1303,6 +1311,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/incrby/|valkey.io} for details.
      *
      * @param key - The key to increment its value.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @param amount - The amount to increment.
      * @returns the value of `key` after the increment.
      *
@@ -1314,8 +1323,14 @@ export class BaseClient {
      * console.log(result); // Output: 15
      * ```
      */
-    public async incrBy(key: string, amount: number): Promise<number> {
-        return this.createWritePromise(createIncrBy(key, amount));
+    public async incrBy(
+        key: GlideString,
+        amount: number,
+        decoder?: Decoder,
+    ): Promise<number> {
+        return this.createWritePromise(createIncrBy(key, amount), {
+            decoder: decoder,
+        });
     }
 
     /** Increment the string representing a floating point number stored at `key` by `amount`.
@@ -1326,6 +1341,7 @@ export class BaseClient {
      *
      * @param key - The key to increment its value.
      * @param amount - The amount to increment.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value of `key` after the increment.
      *
      * @example
@@ -1336,8 +1352,14 @@ export class BaseClient {
      * console.log(result); // Output: 13.0
      * ```
      */
-    public async incrByFloat(key: string, amount: number): Promise<number> {
-        return this.createWritePromise(createIncrByFloat(key, amount));
+    public async incrByFloat(
+        key: GlideString,
+        amount: number,
+        decoder?: Decoder,
+    ): Promise<number> {
+        return this.createWritePromise(createIncrByFloat(key, amount), {
+            decoder: decoder,
+        });
     }
 
     /** Decrements the number stored at `key` by one. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1345,6 +1367,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/decr/|valkey.io} for details.
      *
      * @param key - The key to decrement its value.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value of `key` after the decrement.
      *
      * @example
@@ -1355,8 +1378,8 @@ export class BaseClient {
      * console.log(result); // Output: 9
      * ```
      */
-    public async decr(key: string): Promise<number> {
-        return this.createWritePromise(createDecr(key));
+    public async decr(key: GlideString, decoder?: Decoder): Promise<number> {
+        return this.createWritePromise(createDecr(key), { decoder: decoder });
     }
 
     /** Decrements the number stored at `key` by `amount`. If `key` does not exist, it is set to 0 before performing the operation.
@@ -1365,6 +1388,7 @@ export class BaseClient {
      *
      * @param key - The key to decrement its value.
      * @param amount - The amount to decrement.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns the value of `key` after the decrement.
      *
      * @example
@@ -1375,8 +1399,14 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async decrBy(key: string, amount: number): Promise<number> {
-        return this.createWritePromise(createDecrBy(key, amount));
+    public async decrBy(
+        key: GlideString,
+        amount: number,
+        decoder?: Decoder,
+    ): Promise<number> {
+        return this.createWritePromise(createDecrBy(key, amount), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -4163,7 +4193,7 @@ export class BaseClient {
      * console.log(len2); // Output: 0
      * ```
      */
-    public async strlen(key: string): Promise<number> {
+    public async strlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createStrlen(key));
     }
 
@@ -6231,6 +6261,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A `String` containing all the longest common subsequence combined between the 2 strings.
      *     An empty `String` is returned if the keys do not exist or have no common subsequences.
      *
@@ -6241,8 +6272,14 @@ export class BaseClient {
      * console.log(result); // Output: 'acd'
      * ```
      */
-    public async lcs(key1: string, key2: string): Promise<string> {
-        return this.createWritePromise(createLCS(key1, key2));
+    public async lcs(
+        key1: GlideString,
+        key2: GlideString,
+        decoder?: Decoder,
+    ): Promise<string> {
+        return this.createWritePromise(createLCS(key1, key2), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -6254,6 +6291,7 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns The total length of all the longest common subsequences between the 2 strings.
      *
      * @example
@@ -6263,8 +6301,14 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public async lcsLen(key1: string, key2: string): Promise<number> {
-        return this.createWritePromise(createLCS(key1, key2, { len: true }));
+    public async lcsLen(
+        key1: GlideString,
+        key2: GlideString,
+        decoder?: Decoder,
+    ): Promise<number> {
+        return this.createWritePromise(createLCS(key1, key2, { len: true }), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -6277,8 +6321,10 @@ export class BaseClient {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * @param minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options- Additional parameters:
+     * - withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
+     * - minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * - decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two
      *     keys, "matches" and "len":
@@ -6314,12 +6360,17 @@ export class BaseClient {
      * ```
      */
     public async lcsIdx(
-        key1: string,
-        key2: string,
-        options?: { withMatchLen?: boolean; minMatchLen?: number },
+        key1: GlideString,
+        key2: GlideString,
+        options?: {
+            withMatchLen?: boolean;
+            minMatchLen?: number;
+            decoder?: Decoder;
+        },
     ): Promise<Record<string, (number | [number, number])[][] | number>> {
         return this.createWritePromise(
             createLCS(key1, key2, { idx: options ?? {} }),
+            { decoder: options?.decoder },
         );
     }
 
@@ -6421,9 +6472,9 @@ export class BaseClient {
      * ```
      */
     public async setrange(
-        key: string,
+        key: GlideString,
         offset: number,
-        value: string,
+        value: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createSetRange(key, offset, value));
     }
