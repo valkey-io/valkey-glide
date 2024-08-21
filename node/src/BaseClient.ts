@@ -180,6 +180,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -220,7 +221,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import {
     ClosingError,
@@ -2504,7 +2504,10 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public async sadd(key: string, members: string[]): Promise<number> {
+    public async sadd(
+        key: GlideString,
+        members: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createSAdd(key, members));
     }
 
@@ -2524,7 +2527,10 @@ export class BaseClient {
      * console.log(result); // Output: 2
      * ```
      */
-    public async srem(key: string, members: string[]): Promise<number> {
+    public async srem(
+        key: GlideString,
+        members: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createSRem(key, members));
     }
 
@@ -2577,6 +2583,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/smembers/|valkey.io} for details.
      *
      * @param key - The key to return its members.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A `Set` containing all members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns an empty `Set`.
      *
@@ -2587,10 +2595,13 @@ export class BaseClient {
      * console.log(result); // Output: Set {'member1', 'member2', 'member3'}
      * ```
      */
-    public async smembers(key: string): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSMembers(key)).then(
-            (smembes) => new Set<string>(smembes),
-        );
+    public async smembers(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(createSMembers(key), {
+            decoder: decoder,
+        }).then((smembes) => new Set<GlideString>(smembes));
     }
 
     /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
@@ -2873,6 +2884,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/spop/|valkey.io} for details.
      *
      * @param key - The key of the set.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns the value of the popped member.
      * If `key` does not exist, null will be returned.
      *
@@ -2890,8 +2903,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async spop(key: string): Promise<string | null> {
-        return this.createWritePromise(createSPop(key));
+    public async spop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createSPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
@@ -2900,6 +2916,8 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param count - The count of the elements to pop from the set.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A `Set` containing the popped elements, depending on the set's length.
      * If `key` does not exist, an empty `Set` will be returned.
      *
@@ -2917,10 +2935,14 @@ export class BaseClient {
      * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public async spopCount(key: string, count: number): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSPop(key, count)).then(
-            (spop) => new Set<string>(spop),
-        );
+    public async spopCount(
+        key: GlideString,
+        count: number,
+        decoder?: Decoder,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(createSPop(key, count), {
+            decoder: decoder,
+        }).then((spop) => new Set<GlideString>(spop));
     }
 
     /**
