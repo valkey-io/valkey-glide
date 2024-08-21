@@ -275,7 +275,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
-     * @returns A simple `"OK"` response.
+     * @returns A simple "OK" response.
      *
      * @example
      * ```typescript
