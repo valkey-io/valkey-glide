@@ -98,29 +98,11 @@ export type DecoderOption = {
     decoder?: Decoder;
 };
 
-/** An extension to command option types with {@link Routes} for commands which are routed by default to all nodes. */
-export type AllNodesOrRouteOption = {
+/** An extension to command option types with {@link Routes}. */
+export type RouteOption = {
     /**
-     * The command will be routed to all nodes, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
-     */
-    route?: Routes;
-};
-
-/** An extension to command option types with {@link Routes} for commands which are routed by default to all primary nodes. */
-export type AllPrimaryNodesOrRouteOption = {
-    /**
-     * The command will be routed to all primary nodes, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
-     */
-    route?: Routes;
-};
-
-/** An extension to command option types with {@link Routes} for commands which are routed by default a random node. */
-export type RandomNodeOrRouteOption = {
-    /**
-     * The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * Specifies the routing configuration for the command.
+     *     The client will route the command to the nodes defined by `route`.
      */
     route?: Routes;
 };
