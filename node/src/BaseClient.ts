@@ -5452,9 +5452,7 @@ export class BaseClient {
         key: GlideString,
         elements: GlideString[],
     ): Promise<number> {
-        return this.createWritePromise(createPfAdd(key, elements), {
-            decoder: Decoder.String,
-        });
+        return this.createWritePromise(createPfAdd(key, elements));
     }
 
     /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
@@ -5473,9 +5471,7 @@ export class BaseClient {
      * ```
      */
     public async pfcount(keys: GlideString[]): Promise<number> {
-        return this.createWritePromise(createPfCount(keys), {
-            decoder: Decoder.String,
-        });
+        return this.createWritePromise(createPfCount(keys));
     }
 
     /**
