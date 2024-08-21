@@ -1986,6 +1986,7 @@ export function createZLexCount(
     return createCommand(RequestType.ZLexCount, args);
 }
 
+/** @internal */
 export function createZRank(
     key: string,
     member: string,
@@ -2496,8 +2497,8 @@ export enum FlushMode {
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
-     * until the server has the required number of entries. Equivalent to `BLOCK`
-     * in the Redis API.
+     * until the server has the required number of entries. A value of `0` will block indefinitely.
+     * Equivalent to `BLOCK` in the Redis API.
      */
     block?: number;
     /**
@@ -3060,11 +3061,11 @@ export type LPosOptions = {
  * @internal
  */
 export function createLPos(
-    key: string,
-    element: string,
+    key: GlideString,
+    element: GlideString,
     options?: LPosOptions,
 ): command_request.Command {
-    const args: string[] = [key, element];
+    const args: GlideString[] = [key, element];
 
     if (options) {
         if (options.rank !== undefined) {
@@ -3356,13 +3357,25 @@ function convertGeoSearchOptionsToArgs(
     }
 
     if (resultOptions) {
-        if ("withCoord" in resultOptions && resultOptions.withCoord)
+        if (
+            "withCoord" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withCoord
+        )
             args.push("WITHCOORD");
-        if ("withDist" in resultOptions && resultOptions.withDist)
+        if (
+            "withDist" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withDist
+        )
             args.push("WITHDIST");
-        if ("withHash" in resultOptions && resultOptions.withHash)
+        if (
+            "withHash" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withHash
+        )
             args.push("WITHHASH");
-        if ("storeDist" in resultOptions && resultOptions.storeDist)
+        if (
+            "storeDist" in resultOptions &&
+            (resultOptions as GeoSearchStoreResultOptions).storeDist
+        )
             args.push("STOREDIST");
 
         if (resultOptions.count) {
