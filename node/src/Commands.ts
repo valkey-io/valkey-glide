@@ -884,7 +884,7 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): command_request.Command {
+export function createLLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
 }
 
@@ -906,8 +906,8 @@ export enum ListDirection {
  * @internal
  */
 export function createLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
 ): command_request.Command {
@@ -923,8 +923,8 @@ export function createLMove(
  * @internal
  */
 export function createBLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
     timeout: number,
@@ -1857,7 +1857,7 @@ export function createStrlen(key: string): command_request.Command {
  * @internal
  */
 export function createLIndex(
-    key: string,
+    key: GlideString,
     index: number,
 ): command_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
@@ -1881,10 +1881,10 @@ export enum InsertPosition {
  * @internal
  */
 export function createLInsert(
-    key: string,
+    key: GlideString,
     position: InsertPosition,
-    pivot: string,
-    element: string,
+    pivot: GlideString,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
