@@ -591,6 +591,7 @@ export function runBaseTests(config: {
                 const key2 = `{key}-${uuidv4()}`;
                 const key3 = `{key}-${uuidv4()}`;
                 const keys = [key1, key2];
+                const binaryEncoded = [Buffer.from(key1), Buffer.from(key2)];
                 const destination = `{key}-${uuidv4()}`;
                 const nonExistingKey1 = `{key}-${uuidv4()}`;
                 const nonExistingKey2 = `{key}-${uuidv4()}`;
@@ -611,7 +612,11 @@ export function runBaseTests(config: {
                 ).toEqual(6);
                 expect(await client.get(destination)).toEqual("`bc`ab");
                 expect(
-                    await client.bitop(BitwiseOperation.OR, destination, keys),
+                    await client.bitop(
+                        BitwiseOperation.OR,
+                        destination,
+                        binaryEncoded,
+                    ),
                 ).toEqual(6);
                 expect(await client.get(destination)).toEqual("goofev");
 
@@ -725,7 +730,7 @@ export function runBaseTests(config: {
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.getbit(key, 1)).toEqual(1);
                 // When offset is beyond the string length, the string is assumed to be a contiguous space with 0 bits.
-                expect(await client.getbit(key, 1000)).toEqual(0);
+                expect(await client.getbit(Buffer.from(key), 1000)).toEqual(0);
                 // When key does not exist it is assumed to be an empty string, so offset is always out of range and the
                 // value is also assumed to be a contiguous space with 0 bits.
                 expect(await client.getbit(nonExistingKey, 1)).toEqual(0);
@@ -753,7 +758,7 @@ export function runBaseTests(config: {
                 const setKey = `{key}-${uuidv4()}`;
 
                 expect(await client.setbit(key, 1, 1)).toEqual(0);
-                expect(await client.setbit(key, 1, 0)).toEqual(1);
+                expect(await client.setbit(Buffer.from(key), 1, 0)).toEqual(1);
 
                 // invalid argument - offset can't be negative
                 await expect(client.setbit(key, -1, 1)).rejects.toThrow(
@@ -786,9 +791,12 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key, value)).toEqual("OK");
                 expect(await client.bitpos(key, 0)).toEqual(0);
-                expect(await client.bitpos(key, 1)).toEqual(2);
+                expect(await client.bitpos(Buffer.from(key), 1)).toEqual(2);
                 expect(await client.bitpos(key, 1, 1)).toEqual(9);
                 expect(await client.bitposInterval(key, 0, 3, 5)).toEqual(24);
+                expect(
+                    await client.bitposInterval(Buffer.from(key), 0, 3, 5),
+                ).toEqual(24);
 
                 // -1 is returned if start > end
                 expect(await client.bitposInterval(key, 0, 1, 0)).toEqual(-1);
@@ -947,7 +955,7 @@ export function runBaseTests(config: {
 
                 // INCRBY tests
                 expect(
-                    await client.bitfield(key1, [
+                    await client.bitfield(Buffer.from(key1), [
                         // binary value becomes:
                         // 0(11)00011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
                         new BitFieldIncrBy(u2, offset1, 1),
@@ -1104,7 +1112,7 @@ export function runBaseTests(config: {
                 // offset is greater than current length of string: the operation is performed like the missing part all
                 // consists of bits set to 0.
                 expect(
-                    await client.bitfieldReadOnly(key, [
+                    await client.bitfieldReadOnly(Buffer.from(key), [
                         new BitFieldGet(
                             new UnsignedEncoding(3),
                             new BitOffset(100),
@@ -7884,7 +7892,10 @@ export function runBaseTests(config: {
                 expect(await client.set(key1, value)).toEqual("OK");
                 expect(await client.bitcount(key1)).toEqual(26);
                 expect(
-                    await client.bitcount(key1, { start: 1, end: 1 }),
+                    await client.bitcount(Buffer.from(key1), {
+                        start: 1,
+                        end: 1,
+                    }),
                 ).toEqual(6);
                 expect(
                     await client.bitcount(key1, { start: 0, end: -5 }),
