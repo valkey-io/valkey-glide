@@ -827,7 +827,7 @@ describe("GlideClusterClient", () => {
                                 );
 
                                 let functionStats =
-                                    await client.functionStats(route);
+                                    await client.functionStats({route: route});
                                 checkClusterResponse(
                                     functionStats as object,
                                     singleNodeRoute,
@@ -869,7 +869,7 @@ describe("GlideClusterClient", () => {
                                         ),
                                 );
                                 functionStats =
-                                    await client.functionStats(route);
+                                    await client.functionStats({route: route});
                                 checkClusterResponse(
                                     functionStats as object,
                                     singleNodeRoute,
@@ -886,7 +886,7 @@ describe("GlideClusterClient", () => {
                                 let fcall = await client.fcallWithRoute(
                                     funcName,
                                     ["one", "two"],
-                                    route,
+                                    {route: route},
                                 );
                                 checkClusterResponse(
                                     fcall as object,
@@ -896,7 +896,7 @@ describe("GlideClusterClient", () => {
                                 fcall = await client.fcallReadonlyWithRoute(
                                     funcName,
                                     ["one", "two"],
-                                    route,
+                                    {route: route},
                                 );
                                 checkClusterResponse(
                                     fcall as object,
@@ -913,7 +913,7 @@ describe("GlideClusterClient", () => {
 
                                 // re-load library with replace
                                 expect(
-                                    await client.functionLoad(code, true),
+                                    await client.functionLoad(code, {replace: true}),
                                 ).toEqual(libName);
 
                                 // overwrite lib with new code
@@ -928,7 +928,7 @@ describe("GlideClusterClient", () => {
                                     true,
                                 );
                                 expect(
-                                    await client.functionLoad(newCode, true),
+                                    await client.functionLoad(newCode, {replace: true}),
                                 ).toEqual(libName);
 
                                 functionList = await client.functionList(
@@ -960,7 +960,7 @@ describe("GlideClusterClient", () => {
                                         ),
                                 );
                                 functionStats =
-                                    await client.functionStats(route);
+                                    await client.functionStats({route: route});
                                 checkClusterResponse(
                                     functionStats as object,
                                     singleNodeRoute,
@@ -976,7 +976,7 @@ describe("GlideClusterClient", () => {
                                 fcall = await client.fcallWithRoute(
                                     func2Name,
                                     ["one", "two"],
-                                    route,
+                                    {route: route},
                                 );
                                 checkClusterResponse(
                                     fcall as object,
@@ -987,7 +987,7 @@ describe("GlideClusterClient", () => {
                                 fcall = await client.fcallReadonlyWithRoute(
                                     func2Name,
                                     ["one", "two"],
-                                    route,
+                                    {route: route},
                                 );
                                 checkClusterResponse(
                                     fcall as object,
@@ -1045,8 +1045,7 @@ describe("GlideClusterClient", () => {
                                 expect(
                                     await client.functionLoad(
                                         code,
-                                        undefined,
-                                        route,
+                                        {route: route},
                                     ),
                                 ).toEqual(libName);
 
@@ -1076,8 +1075,7 @@ describe("GlideClusterClient", () => {
                                 expect(
                                     await client.functionLoad(
                                         code,
-                                        undefined,
-                                        route,
+                                        {route: route}
                                     ),
                                 ).toEqual(libName);
                             } finally {
@@ -1129,8 +1127,7 @@ describe("GlideClusterClient", () => {
                                 expect(
                                     await client.functionLoad(
                                         code,
-                                        undefined,
-                                        route,
+                                        {route: route}
                                     ),
                                 ).toEqual(libName);
 
@@ -1207,15 +1204,14 @@ describe("GlideClusterClient", () => {
                                 expect(
                                     await client.functionLoad(
                                         code,
-                                        true,
-                                        route,
+                                        {replace: true, route: route}
                                     ),
                                 ).toEqual(libName);
 
                                 try {
                                     // call the function without await
                                     const promise = testClient
-                                        .fcallWithRoute(funcName, [], route)
+                                        .fcallWithRoute(funcName, [], {route: route})
                                         .catch((e) =>
                                             expect(
                                                 (e as Error).message,
@@ -1307,8 +1303,7 @@ describe("GlideClusterClient", () => {
                             expect(
                                 await client.functionLoad(
                                     code,
-                                    undefined,
-                                    route,
+                                    {route: route}
                                 ),
                             ).toEqual(name1);
 
@@ -1373,8 +1368,7 @@ describe("GlideClusterClient", () => {
                             expect(
                                 await client.functionLoad(
                                     code,
-                                    undefined,
-                                    route,
+                                    {route: route}
                                 ),
                             ).toEqual(name2);
 
@@ -1405,7 +1399,7 @@ describe("GlideClusterClient", () => {
                             let res = await client.fcallWithRoute(
                                 name1,
                                 ["meow", "woem"],
-                                route,
+                                {route: route}
                             );
 
                             if (singleNodeRoute) {
@@ -1419,7 +1413,7 @@ describe("GlideClusterClient", () => {
                             res = await client.fcallWithRoute(
                                 name2,
                                 ["meow", "woem"],
-                                route,
+                                {route: route}
                             );
 
                             if (singleNodeRoute) {
@@ -1477,7 +1471,7 @@ describe("GlideClusterClient", () => {
 
                         // load the lib
                         expect(
-                            await client.functionLoad(code, true, route),
+                            await client.functionLoad(code, {replace: true, route: route}),
                         ).toEqual(libName);
 
                         let promise = null;

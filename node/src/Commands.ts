@@ -89,6 +89,15 @@ function createCommand(
     return singleCommand;
 }
 
+/** An extension to command option types. */
+export type DecoderOption = {
+    /**
+     * {@link Decoder} type which defines how to handle the response.
+     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     */
+    decoder?: Decoder;
+};
+
 /**
  * @internal
  */
