@@ -22,13 +22,16 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    ReturnType,
     Routes,
     ScoreFilter,
+    SlotKeyTypes,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import {
     FlushMode,
-    FunctionStatsResponse,
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse,
     GeoUnit,
     SortOrder,
 } from "../build-ts/src/Commands";
@@ -50,9 +53,6 @@ import {
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
-type Context = {
-    client: GlideClusterClient;
-};
 
 const TIMEOUT = 50000;
 
@@ -81,25 +81,22 @@ describe("GlideClusterClient", () => {
         }
     });
 
-    runBaseTests<Context>({
-        init: async (protocol, clientName?) => {
-            const options = getClientConfigurationOption(
+    runBaseTests({
+        init: async (protocol, configOverrides) => {
+            const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
+                configOverrides,
             );
-            options.protocol = protocol;
-            options.clientName = clientName;
+
             testsFailed += 1;
-            client = await GlideClusterClient.createClient(options);
+            client = await GlideClusterClient.createClient(config);
             return {
-                context: {
-                    client,
-                },
                 client,
                 cluster,
             };
         },
-        close: (context: Context, testSucceeded: boolean) => {
+        close: (testSucceeded: boolean) => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }
@@ -373,6 +370,7 @@ describe("GlideClusterClient", () => {
                 client.sinter(["abc", "zxy", "lkn"]),
                 client.sinterstore("abc", ["zxy", "lkn"]),
                 client.zinterstore("abc", ["zxy", "lkn"]),
+                client.zunionstore("abc", ["zxy", "lkn"]),
                 client.sunionstore("abc", ["zxy", "lkn"]),
                 client.sunion(["abc", "zxy", "lkn"]),
                 client.pfcount(["abc", "zxy", "lkn"]),
@@ -385,6 +383,8 @@ describe("GlideClusterClient", () => {
                 client.blmpop(["abc", "def"], ListDirection.RIGHT, 0.1, 1),
                 client.bzpopmax(["abc", "def"], 0.5),
                 client.bzpopmin(["abc", "def"], 0.5),
+                client.xread({ abc: "0-0", zxy: "0-0", lkn: "0-0" }),
+                client.xreadgroup("_", "_", { abc: ">", zxy: ">", lkn: ">" }),
             ];
 
             if (gte(cluster.getVersion(), "6.2.0")) {
@@ -407,6 +407,10 @@ describe("GlideClusterClient", () => {
                         { radius: 5, unit: GeoUnit.METERS },
                     ),
                     client.zrangeStore("abc", "zyx", { start: 0, stop: -1 }),
+                    client.zinter(["abc", "zxy", "lkn"]),
+                    client.zinterWithScores(["abc", "zxy", "lkn"]),
+                    client.zunion(["abc", "zxy", "lkn"]),
+                    client.zunionWithScores(["abc", "zxy", "lkn"]),
                 );
             }
 
@@ -830,7 +834,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             0,
                                             0,
@@ -872,7 +876,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             1,
                                             1,
@@ -963,7 +967,7 @@ describe("GlideClusterClient", () => {
                                     singleNodeRoute,
                                     (value) =>
                                         checkFunctionStatsResponse(
-                                            value as FunctionStatsResponse,
+                                            value as FunctionStatsSingleResponse,
                                             [],
                                             1,
                                             2,
@@ -1168,7 +1172,7 @@ describe("GlideClusterClient", () => {
                             const config = getClientConfigurationOption(
                                 cluster.getAddresses(),
                                 protocol,
-                                10000,
+                                { requestTimeout: 10000 },
                             );
                             const client =
                                 await GlideClusterClient.createClient(config);
@@ -1259,6 +1263,178 @@ describe("GlideClusterClient", () => {
                         },
                         TIMEOUT,
                     );
+
+                    it("function dump function restore %p", async () => {
+                        if (cluster.checkIfServerVersionLessThan("7.0.0"))
+                            return;
+
+                        const config = getClientConfigurationOption(
+                            cluster.getAddresses(),
+                            protocol,
+                        );
+                        const client =
+                            await GlideClusterClient.createClient(config);
+                        const route: Routes = singleNodeRoute
+                            ? { type: "primarySlotKey", key: "1" }
+                            : "allPrimaries";
+                        expect(
+                            await client.functionFlush(FlushMode.SYNC, route),
+                        ).toEqual("OK");
+
+                        try {
+                            // dumping an empty lib
+                            let response = await client.functionDump(route);
+
+                            if (singleNodeRoute) {
+                                expect(response.byteLength).toBeGreaterThan(0);
+                            } else {
+                                Object.values(response).forEach((d: Buffer) =>
+                                    expect(d.byteLength).toBeGreaterThan(0),
+                                );
+                            }
+
+                            const name1 = "Foster";
+                            const name2 = "Dogster";
+                            // function $name1 returns first argument
+                            // function $name2 returns argument array len
+                            let code = generateLuaLibCode(
+                                name1,
+                                new Map([
+                                    [name1, "return args[1]"],
+                                    [name2, "return #args"],
+                                ]),
+                                false,
+                            );
+                            expect(
+                                await client.functionLoad(
+                                    code,
+                                    undefined,
+                                    route,
+                                ),
+                            ).toEqual(name1);
+
+                            const flist = await client.functionList(
+                                { withCode: true },
+                                route,
+                            );
+                            response = await client.functionDump(route);
+                            const dump = (
+                                singleNodeRoute
+                                    ? response
+                                    : Object.values(response)[0]
+                            ) as Buffer;
+
+                            // restore without cleaning the lib and/or overwrite option causes an error
+                            await expect(
+                                client.functionRestore(dump, { route: route }),
+                            ).rejects.toThrow(
+                                `Library ${name1} already exists`,
+                            );
+
+                            // APPEND policy also fails for the same reason (name collision)
+                            await expect(
+                                client.functionRestore(dump, {
+                                    policy: FunctionRestorePolicy.APPEND,
+                                    route: route,
+                                }),
+                            ).rejects.toThrow(
+                                `Library ${name1} already exists`,
+                            );
+
+                            // REPLACE policy succeeds
+                            expect(
+                                await client.functionRestore(dump, {
+                                    policy: FunctionRestorePolicy.REPLACE,
+                                    route: route,
+                                }),
+                            ).toEqual("OK");
+                            // but nothing changed - all code overwritten
+                            expect(
+                                await client.functionList(
+                                    { withCode: true },
+                                    route,
+                                ),
+                            ).toEqual(flist);
+
+                            // create lib with another name, but with the same function names
+                            expect(
+                                await client.functionFlush(
+                                    FlushMode.SYNC,
+                                    route,
+                                ),
+                            ).toEqual("OK");
+                            code = generateLuaLibCode(
+                                name2,
+                                new Map([
+                                    [name1, "return args[1]"],
+                                    [name2, "return #args"],
+                                ]),
+                                false,
+                            );
+                            expect(
+                                await client.functionLoad(
+                                    code,
+                                    undefined,
+                                    route,
+                                ),
+                            ).toEqual(name2);
+
+                            // REPLACE policy now fails due to a name collision
+                            await expect(
+                                client.functionRestore(dump, { route: route }),
+                            ).rejects.toThrow(
+                                new RegExp(
+                                    `Function ${name1}|${name2} already exists`,
+                                ),
+                            );
+
+                            // FLUSH policy succeeds, but deletes the second lib
+                            expect(
+                                await client.functionRestore(dump, {
+                                    policy: FunctionRestorePolicy.FLUSH,
+                                    route: route,
+                                }),
+                            ).toEqual("OK");
+                            expect(
+                                await client.functionList(
+                                    { withCode: true },
+                                    route,
+                                ),
+                            ).toEqual(flist);
+
+                            // call restored functions
+                            let res = await client.fcallWithRoute(
+                                name1,
+                                ["meow", "woem"],
+                                route,
+                            );
+
+                            if (singleNodeRoute) {
+                                expect(res).toEqual("meow");
+                            } else {
+                                Object.values(
+                                    res as Record<string, ReturnType>,
+                                ).forEach((r) => expect(r).toEqual("meow"));
+                            }
+
+                            res = await client.fcallWithRoute(
+                                name2,
+                                ["meow", "woem"],
+                                route,
+                            );
+
+                            if (singleNodeRoute) {
+                                expect(res).toEqual(2);
+                            } else {
+                                Object.values(
+                                    res as Record<string, ReturnType>,
+                                ).forEach((r) => expect(r).toEqual(2));
+                            }
+                        } finally {
+                            expect(await client.functionFlush()).toEqual("OK");
+                            client.close();
+                        }
+                    });
                 },
             );
             it(
@@ -1269,7 +1445,7 @@ describe("GlideClusterClient", () => {
                     const config = getClientConfigurationOption(
                         cluster.getAddresses(),
                         protocol,
-                        10000,
+                        { requestTimeout: 10000 },
                     );
                     const client =
                         await GlideClusterClient.createClient(config);
@@ -1355,6 +1531,53 @@ describe("GlideClusterClient", () => {
                 },
                 TIMEOUT,
             );
+            it("function dump function restore in transaction", async () => {
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+                const config = getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                );
+                const client = await GlideClusterClient.createClient(config);
+                const route: SlotKeyTypes = {
+                    key: uuidv4(),
+                    type: "primarySlotKey",
+                };
+                expect(await client.functionFlush()).toEqual("OK");
+
+                try {
+                    const name1 = "Foster";
+                    const name2 = "Dogster";
+                    // function returns first argument
+                    const code = generateLuaLibCode(
+                        name1,
+                        new Map([[name2, "return args[1]"]]),
+                        false,
+                    );
+                    expect(
+                        await client.functionLoad(code, true, route),
+                    ).toEqual(name1);
+
+                    // Verify functionDump
+                    let transaction = new ClusterTransaction().functionDump();
+                    const result = await client.exec(transaction, {
+                        decoder: Decoder.Bytes,
+                        route: route,
+                    });
+                    const data = result?.[0] as Buffer;
+
+                    // Verify functionRestore
+                    transaction = new ClusterTransaction()
+                        .functionRestore(data, FunctionRestorePolicy.REPLACE)
+                        .fcall(name2, [], ["meow"]);
+                    expect(
+                        await client.exec(transaction, { route: route }),
+                    ).toEqual(["OK", "meow"]);
+                } finally {
+                    expect(await client.functionFlush()).toEqual("OK");
+                    client.close();
+                }
+            });
         },
     );
 

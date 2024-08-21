@@ -27,7 +27,8 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -46,6 +47,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreFilter,
     SearchOrigin,
@@ -56,6 +58,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -84,6 +87,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createEcho,
     createExists,
     createExpire,
@@ -94,9 +98,11 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createGeoAdd,
     createGeoDist,
@@ -115,6 +121,7 @@ import {
     createHGetAll,
     createHIncrBy,
     createHIncrByFloat,
+    createHKeys,
     createHLen,
     createHMGet,
     createHRandField,
@@ -172,6 +179,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -202,6 +210,7 @@ import {
     createType,
     createUnlink,
     createWait,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -211,11 +220,14 @@ import {
     createXGroupDelConsumer,
     createXGroupDestroy,
     createXInfoConsumers,
+    createXInfoGroups,
     createXInfoStream,
     createXLen,
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
+    createXRevRange,
     createXTrim,
     createZAdd,
     createZCard,
@@ -224,6 +236,7 @@ import {
     createZDiffStore,
     createZDiffWithScores,
     createZIncrBy,
+    createZInter,
     createZInterCard,
     createZInterstore,
     createZLexCount,
@@ -244,6 +257,9 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnion,
+    createZUnionStore,
+    createXGroupSetid,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -408,6 +424,43 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public del(keys: string[]): T {
         return this.addAndReturn(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * @param key - The `key` to serialize.
+     *
+     * Command Response - The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
+     */
+    public dump(key: GlideString): T {
+        return this.addAndReturn(createDump(key));
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
+     *
+     * @param key - The `key` to create.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value to deserialize and assign to `key`.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
+     *
+     * Command Response - Return "OK" if the `key` was successfully restored with a `value`.
+     */
+    public restore(
+        key: GlideString,
+        ttl: number,
+        value: Buffer,
+        options?: RestoreOptions,
+    ): T {
+        return this.addAndReturn(createRestore(key, ttl, value, options));
     }
 
     /** Get the name of the connection on which the transaction is being executed.
@@ -740,6 +793,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public hset(key: string, fieldValueMap: Record<string, string>): T {
         return this.addAndReturn(createHSet(key, fieldValueMap));
+    }
+
+    /**
+     * Returns all field names in the hash stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/hkeys/|valkey.io} for details.
+     *
+     * @param key - The key of the hash.
+     *
+     * Command Response - A list of field names for the hash, or an empty list when the key does not exist.
+     */
+    public hkeys(key: string): T {
+        return this.addAndReturn(createHKeys(key));
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -1752,6 +1818,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see {@link zunionWithScores}.
+     *
+     * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *        string[] - for keys only.
+     *        KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     *
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public zunionstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(
+            createZUnionStore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for details.
@@ -1871,11 +1961,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for details.
      *
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zinterstore(
@@ -1886,6 +1980,88 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - The resulting array of intersecting elements.
+     */
+    public zinter(keys: string[]): T {
+        return this.addAndReturn(createZInter(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
+     * Command Response - The resulting sorted set with scores.
+     */
+    public zinterWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(createZInter(keys, aggregationType, true));
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     * To get the scores as well, see {@link zunionWithScores}.
+     *
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - The resulting array of union elements.
+     */
+    public zunion(keys: string[]): T {
+        return this.addAndReturn(createZUnion(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
+     * To get the elements only, see {@link zunion}.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
+     * Command Response - The resulting sorted set with scores.
+     */
+    public zunionWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(createZUnion(keys, aggregationType, true));
     }
 
     /**
@@ -2317,6 +2493,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createXInfoStream(key, fullOptions ?? false));
     }
 
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+     *
+     * @see {@link https://valkey.io/commands/xinfo-groups/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     *
+     * Command Response -  An `Array` of `Records`, where each mapping represents the
+     *     attributes of a consumer group for the stream at `key`.
+     */
+    public xinfoGroups(key: string): T {
+        return this.addAndReturn(createXInfoGroups(key));
+    }
+
     /** Returns the server time.
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
@@ -2345,7 +2535,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
      *
-     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      */
     public xrange(
         key: string,
@@ -2357,19 +2547,74 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to {@link xrange} but returns the
+     * entries in reverse order.
+     *
+     * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param start - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     *
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     */
+    public xrevrange(
+        key: string,
+        end: Boundary<string>,
+        start: Boundary<string>,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createXRevRange(key, end, start, count));
+    }
+
+    /**
      * Reads entries from the given streams.
+     *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
      *
-     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     *
+     * Command Response - A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**
@@ -2649,6 +2894,46 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createXGroupDelConsumer(key, groupName, consumerName),
+        );
+    }
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of messages that were successfully acknowledged.
+     */
+    public xack(key: string, group: string, ids: string[]): T {
+        return this.addAndReturn(createXAck(key, group, ids));
+    }
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+    ): T {
+        return this.addAndReturn(
+            createXGroupSetid(key, groupName, id, entriesRead),
         );
     }
 
@@ -2942,13 +3227,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     * Command Response - A `Record` of type {@link FunctionStatsSingleResponse} with two keys:
      *
      * - `"running_script"` with information about the running script.
      * - `"engines"` with information about available engines and their stats.
      */
     public functionStats(): T {
         return this.addAndReturn(createFunctionStats());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     * @remarks To execute a transaction with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * Command Response - The serialized payload of all loaded libraries.
+     */
+    public functionDump(): T {
+        return this.addAndReturn(createFunctionDump());
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries.
+     *
+     * Command Response - `"OK"`.
+     */
+    public functionRestore(payload: Buffer, policy?: FunctionRestorePolicy): T {
+        return this.addAndReturn(createFunctionRestore(payload, policy));
     }
 
     /**
@@ -3334,6 +3647,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     - `"matches"` is mapped to a three dimensional array of integers that stores pairs
      *           of indices that represent the location of the common subsequences in the strings held
      *           by `key1` and `key2`.
+     *
+     *     See example of {@link BaseClient.lcsIdx|lcsIdx} for more details.
      */
     public lcsIdx(
         key1: string,
