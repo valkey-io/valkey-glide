@@ -3300,12 +3300,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param options - (Optional) The LPOS options - see {@link LPosOptions}.
      *
      * Command Response - The index of `element`, or `null` if `element` is not in the list. If the `count`
      * option is specified, then the function returns an `array` of indices of matching elements within the list.
      */
-    public lpos(key: string, element: string, options?: LPosOptions): T {
+    public lpos(
+        key: GlideString,
+        element: GlideString,
+        options?: LPosOptions,
+    ): T {
         return this.addAndReturn(createLPos(key, element, options));
     }
 
