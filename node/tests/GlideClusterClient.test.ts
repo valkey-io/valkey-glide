@@ -1556,7 +1556,10 @@ describe("GlideClusterClient", () => {
                         false,
                     );
                     expect(
-                        await client.functionLoad(code, { replace: true, route: route }),
+                        await client.functionLoad(code, {
+                            replace: true,
+                            route: route,
+                        }),
                     ).toEqual(name1);
 
                     // Verify functionDump
