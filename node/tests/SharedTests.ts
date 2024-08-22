@@ -8,7 +8,6 @@
 // represents a running server instance. See first 2 test cases as examples.
 
 import { expect, it } from "@jest/globals";
-import { GlideString } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClientConfiguration,
@@ -46,7 +45,7 @@ import {
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
-    parseInfoResponse,
+    parseInfoResponse
 } from "../";
 import { RedisCluster } from "../../utils/TestUtils";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
@@ -8969,7 +8968,7 @@ export function runBaseTests(config: {
                 const key1 = "{geo-bin}-1-" + uuidv4();
                 const key2 = "{geo-bin}-2-" + uuidv4();
 
-                const members: GlideString[] = [
+                const members = [
                     "Catania",
                     Buffer.from("Palermo"),
                     "edge2",
@@ -8988,10 +8987,7 @@ export function runBaseTests(config: {
                     membersGeoData.push({ longitude: lon, latitude: lat });
                 }
 
-                const membersToCoordinates = new Map<
-                    GlideString,
-                    GeospatialData
-                >();
+                const membersToCoordinates = new Map();
 
                 for (let i = 0; i < members.length; i++) {
                     membersToCoordinates.set(members[i], membersGeoData[i]);
