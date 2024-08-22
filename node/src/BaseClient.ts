@@ -5686,7 +5686,7 @@ export class BaseClient {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param options - (Optional) The LPOS options - see {@link LPosOptions}.
      * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
      * is specified, then the function returns an `array` of indices of matching elements within the list.
      *
@@ -5698,8 +5698,8 @@ export class BaseClient {
      * ```
      */
     public async lpos(
-        key: string,
-        element: string,
+        key: GlideString,
+        element: GlideString,
         options?: LPosOptions,
     ): Promise<number | number[] | null> {
         return this.createWritePromise(createLPos(key, element, options));

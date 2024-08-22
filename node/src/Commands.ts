@@ -3070,11 +3070,11 @@ export type LPosOptions = {
  * @internal
  */
 export function createLPos(
-    key: string,
-    element: string,
+    key: GlideString,
+    element: GlideString,
     options?: LPosOptions,
 ): command_request.Command {
-    const args: string[] = [key, element];
+    const args: GlideString[] = [key, element];
 
     if (options) {
         if (options.rank !== undefined) {
