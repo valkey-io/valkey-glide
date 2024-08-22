@@ -45,7 +45,7 @@ import {
     Transaction,
     UnsignedEncoding,
     UpdateByScore,
-    parseInfoResponse
+    parseInfoResponse,
 } from "../";
 import { RedisCluster } from "../../utils/TestUtils";
 import { SingleNodeRoute } from "../build-ts/src/GlideClusterClient";
