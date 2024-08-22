@@ -591,7 +591,7 @@ export function runBaseTests(config: {
                 const key2 = `{key}-${uuidv4()}`;
                 const key3 = `{key}-${uuidv4()}`;
                 const keys = [key1, key2];
-                const binaryEncoded = [Buffer.from(key1), Buffer.from(key2)];
+                const keysEncoded = [Buffer.from(key1), Buffer.from(key2)];
                 const destination = `{key}-${uuidv4()}`;
                 const nonExistingKey1 = `{key}-${uuidv4()}`;
                 const nonExistingKey2 = `{key}-${uuidv4()}`;
@@ -615,7 +615,7 @@ export function runBaseTests(config: {
                     await client.bitop(
                         BitwiseOperation.OR,
                         destination,
-                        binaryEncoded,
+                        keysEncoded,
                     ),
                 ).toEqual(6);
                 expect(await client.get(destination)).toEqual("goofev");
