@@ -36,6 +36,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    ReturnType,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -2081,6 +2082,7 @@ export function runBaseTests(config: {
                 const valueList = ["value4", "value3", "value2", "value1"];
                 expect(await client.lpush(key1, valueList)).toEqual(4);
                 expect(await client.llen(key1)).toEqual(4);
+                expect(await client.llen(Buffer.from(key1))).toEqual(4);
 
                 expect(await client.llen("nonExistingKey")).toEqual(0);
 
@@ -2108,12 +2110,16 @@ export function runBaseTests(config: {
 
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
+                const key1Encoded = Buffer.from("{key}-1" + uuidv4());
+                const key2Encoded = Buffer.from("{key}-2" + uuidv4());
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
                 // Initialize the tests
                 expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
                 expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
+                expect(await client.lpush(key1Encoded, lpushArgs1)).toEqual(2);
+                expect(await client.lpush(key2Encoded, lpushArgs2)).toEqual(2);
 
                 // Move from LEFT to LEFT
                 expect(
@@ -2166,6 +2172,27 @@ export function runBaseTests(config: {
                 expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
                 expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
 
+                // Move from RIGHT to LEFT with encoded return value
+                expect(
+                    await client.lmove(
+                        key1,
+                        key2,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(Buffer.from("4"));
+
+                // Move from RIGHT to LEFT with encoded list keys
+                expect(
+                    await client.lmove(
+                        key1Encoded,
+                        key2Encoded,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual("2");
+
                 // Non-existing source key
                 expect(
                     await client.lmove(
@@ -2212,12 +2239,16 @@ export function runBaseTests(config: {
 
                 const key1 = "{key}-1" + uuidv4();
                 const key2 = "{key}-2" + uuidv4();
+                const key1Encoded = Buffer.from("{key}-1" + uuidv4());
+                const key2Encoded = Buffer.from("{key}-2" + uuidv4());
                 const lpushArgs1 = ["2", "1"];
                 const lpushArgs2 = ["4", "3"];
 
                 // Initialize the tests
                 expect(await client.lpush(key1, lpushArgs1)).toEqual(2);
                 expect(await client.lpush(key2, lpushArgs2)).toEqual(2);
+                expect(await client.lpush(key1Encoded, lpushArgs1)).toEqual(2);
+                expect(await client.lpush(key2Encoded, lpushArgs2)).toEqual(2);
 
                 // Move from LEFT to LEFT with blocking
                 expect(
@@ -2280,6 +2311,29 @@ export function runBaseTests(config: {
 
                 expect(await client.lrange(key2, 0, -1)).toEqual(["1", "3"]);
                 expect(await client.lrange(key1, 0, -1)).toEqual(["2", "4"]);
+
+                // Move from RIGHT to LEFT with blocking and encoded return value
+                expect(
+                    await client.blmove(
+                        key1,
+                        key2,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        0.1,
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(Buffer.from("4"));
+
+                // Move from RIGHT to LEFT with encoded list keys
+                expect(
+                    await client.blmove(
+                        key1Encoded,
+                        key2Encoded,
+                        ListDirection.RIGHT,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual("2");
 
                 // Non-existing source key with blocking
                 expect(
@@ -2441,15 +2495,32 @@ export function runBaseTests(config: {
         `rpush and rpop with existing and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                const valueList = ["value1", "value2", "value3", "value4"];
-                expect(await client.rpush(key, valueList)).toEqual(4);
-                expect(await client.rpop(key)).toEqual("value4");
-                expect(await client.rpopCount(key, 2)).toEqual([
+                const key1 = uuidv4();
+                const key2 = Buffer.from(uuidv4());
+                const valueList1 = ["value1", "value2", "value3", "value4"];
+                const valueList2 = ["value5", "value6", "value7"];
+                expect(await client.rpush(key1, valueList1)).toEqual(4);
+                expect(await client.rpop(key1)).toEqual("value4");
+                expect(await client.rpopCount(key1, 2)).toEqual([
                     "value3",
                     "value2",
                 ]);
                 expect(await client.rpop("nonExistingKey")).toEqual(null);
+
+                expect(await client.rpush(key2, valueList2)).toEqual(3);
+                expect(await client.rpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value7"),
+                );
+                expect(await client.rpopCount(key2, 2, Decoder.Bytes)).toEqual([
+                    Buffer.from("value6"),
+                    Buffer.from("value5"),
+                ]);
+                expect(
+                    await client.rpush(key2, [Buffer.from("value8")]),
+                ).toEqual(1);
+                expect(await client.rpop(key2, Decoder.Bytes)).toEqual(
+                    Buffer.from("value8"),
+                );
             }, protocol);
         },
         config.timeout,
@@ -5291,6 +5362,7 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const listName = uuidv4();
+                const encodedListName = Buffer.from(uuidv4());
                 const listKey1Value = uuidv4();
                 const listKey2Value = uuidv4();
                 expect(
@@ -5299,10 +5371,25 @@ export function runBaseTests(config: {
                         listKey2Value,
                     ]),
                 ).toEqual(2);
+                expect(
+                    await client.lpush(encodedListName, [
+                        Buffer.from(listKey1Value),
+                        Buffer.from(listKey2Value),
+                    ]),
+                ).toEqual(2);
                 expect(await client.lindex(listName, 0)).toEqual(listKey2Value);
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
+                expect(await client.lindex(listName, 0, Decoder.Bytes)).toEqual(
+                    Buffer.from(listKey2Value),
+                );
+                expect(await client.lindex(listName, 1, Decoder.Bytes)).toEqual(
+                    Buffer.from(listKey1Value),
+                );
+                expect(await client.lindex(encodedListName, 0)).toEqual(
+                    listKey2Value,
+                );
             }, protocol);
         },
         config.timeout,
@@ -5313,6 +5400,8 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key2Encoded = Buffer.from(key2);
                 const stringKey = uuidv4();
                 const nonExistingKey = uuidv4();
 
@@ -5360,6 +5449,35 @@ export function runBaseTests(config: {
                         "elem",
                     ),
                 ).toEqual(0);
+
+                // key, pivot and element as buffers
+                expect(await client.lpush(key2, ["4", "3", "2", "1"])).toEqual(
+                    4,
+                );
+                expect(
+                    await client.linsert(
+                        key2Encoded,
+                        InsertPosition.Before,
+                        Buffer.from("2"),
+                        Buffer.from("1.5"),
+                    ),
+                ).toEqual(5);
+                expect(
+                    await client.linsert(
+                        key2Encoded,
+                        InsertPosition.After,
+                        Buffer.from("3"),
+                        Buffer.from("3.5"),
+                    ),
+                ).toEqual(6);
+                expect(await client.lrange(key2Encoded, 0, -1)).toEqual([
+                    "1",
+                    "1.5",
+                    "2",
+                    "3",
+                    "3.5",
+                    "4",
+                ]);
 
                 // key exists, but it is not a list
                 expect(await client.set(stringKey, "value")).toEqual("OK");
@@ -5650,6 +5768,10 @@ export function runBaseTests(config: {
                     "brpop-test",
                     "baz",
                 ]);
+                // Test encoded value
+                expect(
+                    await client.brpop(["brpop-test"], 0.1, Decoder.Bytes),
+                ).toEqual([Buffer.from("brpop-test"), Buffer.from("bar")]);
                 // Delete all values from list
                 expect(await client.del(["brpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
@@ -5687,6 +5809,10 @@ export function runBaseTests(config: {
                     "blpop-test",
                     "foo",
                 ]);
+                // Test decoded value
+                expect(
+                    await client.blpop(["blpop-test"], 0.1, Decoder.Bytes),
+                ).toEqual([Buffer.from("blpop-test"), Buffer.from("bar")]);
                 // Delete all values from list
                 expect(await client.del(["blpop-test"])).toEqual(1);
                 // Test null return when key doesn't exist
@@ -9503,6 +9629,108 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `xgroupSetId test %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster: RedisCluster) => {
+                const key = "testKey" + uuidv4();
+                const nonExistingKey = "group" + uuidv4();
+                const stringKey = "testKey" + uuidv4();
+                const groupName = uuidv4();
+                const consumerName = uuidv4();
+                const streamid0 = "0";
+                const streamid1_0 = "1-0";
+                const streamid1_1 = "1-1";
+                const streamid1_2 = "1-2";
+
+                // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
+                expect(
+                    await client.xadd(key, [["f0", "v0"]], { id: streamid1_0 }),
+                ).toBe(streamid1_0);
+                expect(
+                    await client.xadd(key, [["f1", "v1"]], { id: streamid1_1 }),
+                ).toBe(streamid1_1);
+                expect(
+                    await client.xadd(key, [["f2", "v2"]], { id: streamid1_2 }),
+                ).toBe(streamid1_2);
+
+                expect(
+                    await client.xgroupCreate(key, groupName, streamid0),
+                ).toBe("OK");
+
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toEqual({
+                    [key]: {
+                        [streamid1_0]: [["f0", "v0"]],
+                        [streamid1_1]: [["f1", "v1"]],
+                        [streamid1_2]: [["f2", "v2"]],
+                    },
+                });
+
+                // Sanity check: xreadgroup should not return more entries since they're all already in the
+                // Pending Entries List.
+                expect(
+                    await client.xreadgroup(groupName, consumerName, {
+                        [key]: ">",
+                    }),
+                ).toBeNull();
+
+                // Reset the last delivered ID for the consumer group to "1-1"
+                if (cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    expect(
+                        await client.xgroupSetId(key, groupName, streamid1_1),
+                    ).toBe("OK");
+                } else {
+                    expect(
+                        await client.xgroupSetId(
+                            key,
+                            groupName,
+                            streamid1_1,
+                            1,
+                        ),
+                    ).toBe("OK");
+                }
+
+                // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
+                const newResult = await client.xreadgroup(
+                    groupName,
+                    consumerName,
+                    { [key]: ">" },
+                );
+                expect(newResult).toEqual({
+                    [key]: {
+                        [streamid1_2]: [["f2", "v2"]],
+                    },
+                });
+
+                // An error is raised if XGROUP SETID is called with a non-existing key
+                await expect(
+                    client.xgroupSetId(nonExistingKey, groupName, streamid0),
+                ).rejects.toThrow(RequestError);
+
+                // An error is raised if XGROUP SETID is called with a non-existing group
+                await expect(
+                    client.xgroupSetId(key, "non_existing_group", streamid0),
+                ).rejects.toThrow(RequestError);
+
+                // Setting the ID to a non-existing ID is allowed
+                expect(await client.xgroupSetId(key, groupName, "99-99")).toBe(
+                    "OK",
+                );
+
+                // key exists, but is not a stream
+                expect(await client.set(stringKey, "xgroup setid")).toBe("OK");
+                await expect(
+                    client.xgroupSetId(stringKey, groupName, streamid1_0),
+                ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `xpending test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient, cluster) => {
@@ -10244,6 +10472,82 @@ export function runBaseTests(config: {
                 await expect(
                     client.xgroupDestroy(stringKey, groupName1),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands never time out %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key1 = "{blocking}-1-" + uuidv4();
+                const key2 = "{blocking}-2-" + uuidv4();
+                const key3 = "{blocking}-3-" + uuidv4(); // stream
+                const keyz = [key1, key2];
+
+                // create a group and a stream, so `xreadgroup` won't fail on missing group
+                await client.xgroupCreate(key3, "group", "0", {
+                    mkStream: true,
+                });
+
+                const promiseList: [string, Promise<ReturnType>][] = [
+                    ["bzpopmax", client.bzpopmax(keyz, 0)],
+                    ["bzpopmin", client.bzpopmin(keyz, 0)],
+                    ["blpop", client.blpop(keyz, 0)],
+                    ["brpop", client.brpop(keyz, 0)],
+                    ["xread", client.xread({ [key3]: "0-0" }, { block: 0 })],
+                    [
+                        "xreadgroup",
+                        client.xreadgroup(
+                            "group",
+                            "consumer",
+                            { [key3]: "0-0" },
+                            { block: 0 },
+                        ),
+                    ],
+                    ["wait", client.wait(42, 0)],
+                ];
+
+                if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    promiseList.push([
+                        "blmove",
+                        client.blmove(
+                            key1,
+                            key2,
+                            ListDirection.LEFT,
+                            ListDirection.LEFT,
+                            0,
+                        ),
+                    ]);
+                }
+
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    promiseList.push(
+                        ["blmpop", client.blmpop(keyz, ListDirection.LEFT, 0)],
+                        ["bzmpop", client.bzmpop(keyz, ScoreFilter.MAX, 0)],
+                    );
+                }
+
+                try {
+                    for (const [name, promise] of promiseList) {
+                        const timeoutPromise = new Promise((resolve) => {
+                            setTimeout(resolve, 500, "timeOutPromiseWins");
+                        });
+                        // client has default request timeout 250 ms, we run all commands with infinite blocking
+                        // we expect that all commands will still await for the response even after 500 ms
+                        expect(
+                            await Promise.race([
+                                promise.finally(() =>
+                                    fail(`${name} didn't block infintely`),
+                                ),
+                                timeoutPromise,
+                            ]),
+                        ).toEqual("timeOutPromiseWins");
+                    }
+                } finally {
+                    client.close();
+                }
             }, protocol);
         },
         config.timeout,

@@ -15,7 +15,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     GlideClient,
-    ListDirection,
     ProtocolVersion,
     RequestError,
     Transaction,
@@ -128,46 +127,6 @@ describe("GlideClient", () => {
                 expect.not.stringContaining("# Latencystats"),
             );
         },
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "check that blocking commands returns never timeout_%p",
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol, {
-                    requestTimeout: 300,
-                }),
-            );
-
-            const promiseList = [
-                client.blmove(
-                    "source",
-                    "destination",
-                    ListDirection.LEFT,
-                    ListDirection.LEFT,
-                    0.1,
-                ),
-                client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
-                client.bzpopmax(["key1", "key2"], 0),
-                client.bzpopmin(["key1", "key2"], 0),
-            ];
-
-            try {
-                for (const promise of promiseList) {
-                    const timeoutPromise = new Promise((resolve) => {
-                        setTimeout(resolve, 500);
-                    });
-                    await Promise.race([promise, timeoutPromise]);
-                }
-            } finally {
-                for (const promise of promiseList) {
-                    await Promise.resolve([promise]);
-                }
-
-                client.close();
-            }
-        },
-        5000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
@@ -1104,6 +1063,46 @@ describe("GlideClient", () => {
                 expect(await client.fcall(name2, [], ["meow", "woem"])).toEqual(
                     2,
                 );
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function dump function restore in transaction %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            const client = await GlideClient.createClient(config);
+            expect(await client.functionFlush()).toEqual("OK");
+
+            try {
+                const name1 = "Foster";
+                const name2 = "Dogster";
+                // function returns first argument
+                const code = generateLuaLibCode(
+                    name1,
+                    new Map([[name2, "return args[1]"]]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name1);
+
+                // Verify functionDump
+                let transaction = new Transaction().functionDump();
+                const result = await client.exec(transaction, Decoder.Bytes);
+                const data = result?.[0] as Buffer;
+
+                // Verify functionRestore
+                transaction = new Transaction()
+                    .functionRestore(data, FunctionRestorePolicy.REPLACE)
+                    .fcall(name2, [], ["meow"]);
+                expect(await client.exec(transaction)).toEqual(["OK", "meow"]);
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 client.close();

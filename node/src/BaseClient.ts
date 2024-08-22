@@ -180,6 +180,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -276,7 +277,7 @@ export type GlideString = string | Buffer;
 /**
  * Enum representing the different types of decoders.
  */
-export const enum Decoder {
+export enum Decoder {
     /**
      * Decodes the response into a buffer array.
      */
@@ -936,7 +937,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
@@ -987,7 +989,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getdel/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
@@ -1017,7 +1020,8 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1189,7 +1193,8 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1577,7 +1582,8 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1644,7 +1650,7 @@ export class BaseClient {
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
      */
-    public hkeys(key: string): Promise<string[]> {
+    public async hkeys(key: string): Promise<string[]> {
         return this.createWritePromise(createHKeys(key));
     }
 
@@ -1853,7 +1859,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -2188,7 +2195,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
      * ```
      */
-    public async llen(key: string): Promise<number> {
+    public async llen(key: GlideString): Promise<number> {
         return this.createWritePromise(createLLen(key));
     }
 
@@ -2204,6 +2211,8 @@ export class BaseClient {
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The popped element, or `null` if `source` does not exist.
      *
      * @example
@@ -2222,13 +2231,15 @@ export class BaseClient {
      * ```
      */
     public async lmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
-    ): Promise<string | null> {
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
+            { decoder: decoder },
         );
     }
 
@@ -2248,6 +2259,8 @@ export class BaseClient {
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
      * @example
@@ -2265,14 +2278,16 @@ export class BaseClient {
      * ```
      */
     public async blmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
-    ): Promise<string | null> {
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
+            { decoder: decoder },
         );
     }
 
@@ -2380,7 +2395,10 @@ export class BaseClient {
      * console.log(result); // Output: 1
      * ```
      */
-    public async rpush(key: string, elements: string[]): Promise<number> {
+    public async rpush(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
     }
 
@@ -2409,6 +2427,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      *
@@ -2426,8 +2446,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async rpop(key: string): Promise<string | null> {
-        return this.createWritePromise(createRPop(key));
+    public async rpop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createRPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -2436,6 +2459,8 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2454,10 +2479,13 @@ export class BaseClient {
      * ```
      */
     public async rpopCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[] | null> {
-        return this.createWritePromise(createRPop(key, count));
+        decoder?: Decoder,
+    ): Promise<GlideString[] | null> {
+        return this.createWritePromise(createRPop(key, count), {
+            decoder: decoder,
+        });
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
@@ -3885,7 +3913,7 @@ export class BaseClient {
      * console.log(result); // Output: ['member1']
      * ```
      */
-    public zinter(keys: string[]): Promise<string[]> {
+    public async zinter(keys: string[]): Promise<string[]> {
         return this.createWritePromise(createZInter(keys));
     }
 
@@ -3917,7 +3945,7 @@ export class BaseClient {
      * console.log(result2); // Output: {'member1': 10.5} - "member1" with score of 10.5 is the result.
      * ```
      */
-    public zinterWithScores(
+    public async zinterWithScores(
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<Record<string, number>> {
@@ -3949,7 +3977,7 @@ export class BaseClient {
      * console.log(result); // Output: ['member1', 'member2']
      * ```
      */
-    public zunion(keys: string[]): Promise<string[]> {
+    public async zunion(keys: string[]): Promise<string[]> {
         return this.createWritePromise(createZUnion(keys));
     }
 
@@ -3980,7 +4008,7 @@ export class BaseClient {
      * console.log(result2); // {'member1': 10.5, 'member2': 8.2}
      * ```
      */
-    public zunionWithScores(
+    public async zunionWithScores(
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<Record<string, number>> {
@@ -4640,7 +4668,7 @@ export class BaseClient {
      * // }
      * ```
      */
-    public xreadgroup(
+    public async xreadgroup(
         group: string,
         consumer: string,
         keys_and_ids: Record<string, string>,
@@ -5214,6 +5242,40 @@ export class BaseClient {
         return this.createWritePromise(createXAck(key, group, ids));
     }
 
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns `"OK"`.
+     *
+     * * @example
+     * ```typescript
+     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", 1L)); // Output is "OK"
+     * ```
+     */
+    public async xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+        decoder?: Decoder,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createXGroupSetid(key, groupName, id, entriesRead),
+            {
+                decoder: decoder,
+            },
+        );
+    }
+
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of the list.
@@ -5223,6 +5285,8 @@ export class BaseClient {
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - The element at `index` in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      *
@@ -5240,8 +5304,14 @@ export class BaseClient {
      * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
      * ```
      */
-    public async lindex(key: string, index: number): Promise<string | null> {
-        return this.createWritePromise(createLIndex(key, index));
+    public async lindex(
+        key: GlideString,
+        index: number,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createLIndex(key, index), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -5265,10 +5335,10 @@ export class BaseClient {
      * ```
      */
     public async linsert(
-        key: string,
+        key: GlideString,
         position: InsertPosition,
-        pivot: string,
-        element: string,
+        pivot: GlideString,
+        element: GlideString,
     ): Promise<number> {
         return this.createWritePromise(
             createLInsert(key, position, pivot, element),
@@ -5351,6 +5421,8 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5362,10 +5434,13 @@ export class BaseClient {
      * ```
      */
     public async brpop(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBRPop(keys, timeout));
+        decoder?: Decoder,
+    ): Promise<[GlideString, GlideString] | null> {
+        return this.createWritePromise(createBRPop(keys, timeout), {
+            decoder: decoder,
+        });
     }
 
     /** Blocking list pop primitive.
@@ -5379,6 +5454,8 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5389,10 +5466,13 @@ export class BaseClient {
      * ```
      */
     public async blpop(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBLPop(keys, timeout));
+        decoder?: Decoder,
+    ): Promise<[GlideString, GlideString] | null> {
+        return this.createWritePromise(createBLPop(keys, timeout), {
+            decoder: decoder,
+        });
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.

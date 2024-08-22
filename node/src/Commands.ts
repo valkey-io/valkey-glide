@@ -893,7 +893,7 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): command_request.Command {
+export function createLLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
 }
 
@@ -915,8 +915,8 @@ export enum ListDirection {
  * @internal
  */
 export function createLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
 ): command_request.Command {
@@ -932,8 +932,8 @@ export function createLMove(
  * @internal
  */
 export function createBLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
     timeout: number,
@@ -988,8 +988,8 @@ export function createLRem(
  * @internal
  */
 export function createRPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
@@ -1008,10 +1008,11 @@ export function createRPushX(
  * @internal
  */
 export function createRPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
 
@@ -1866,7 +1867,7 @@ export function createStrlen(key: string): command_request.Command {
  * @internal
  */
 export function createLIndex(
-    key: string,
+    key: GlideString,
     index: number,
 ): command_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
@@ -1890,10 +1891,10 @@ export enum InsertPosition {
  * @internal
  */
 export function createLInsert(
-    key: string,
+    key: GlideString,
     position: InsertPosition,
-    pivot: string,
-    element: string,
+    pivot: GlideString,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
@@ -1994,6 +1995,7 @@ export function createZLexCount(
     return createCommand(RequestType.ZLexCount, args);
 }
 
+/** @internal */
 export function createZRank(
     key: string,
     member: string,
@@ -2224,7 +2226,7 @@ export function createPublish(
  * @internal
  */
 export function createBRPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
@@ -2235,7 +2237,7 @@ export function createBRPop(
  * @internal
  */
 export function createBLPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
@@ -2504,8 +2506,8 @@ export enum FlushMode {
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
-     * until the server has the required number of entries. Equivalent to `BLOCK`
-     * in the Redis API.
+     * until the server has the required number of entries. A value of `0` will block indefinitely.
+     * Equivalent to `BLOCK` in the Redis API.
      */
     block?: number;
     /**
@@ -3364,13 +3366,25 @@ function convertGeoSearchOptionsToArgs(
     }
 
     if (resultOptions) {
-        if ("withCoord" in resultOptions && resultOptions.withCoord)
+        if (
+            "withCoord" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withCoord
+        )
             args.push("WITHCOORD");
-        if ("withDist" in resultOptions && resultOptions.withDist)
+        if (
+            "withDist" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withDist
+        )
             args.push("WITHDIST");
-        if ("withHash" in resultOptions && resultOptions.withHash)
+        if (
+            "withHash" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withHash
+        )
             args.push("WITHHASH");
-        if ("storeDist" in resultOptions && resultOptions.storeDist)
+        if (
+            "storeDist" in resultOptions &&
+            (resultOptions as GeoSearchStoreResultOptions).storeDist
+        )
             args.push("STOREDIST");
 
         if (resultOptions.count) {
@@ -3961,4 +3975,23 @@ export function createXAck(
     ids: string[],
 ): command_request.Command {
     return createCommand(RequestType.XAck, [key, group, ...ids]);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupSetid(
+    key: string,
+    groupName: string,
+    id: string,
+    entriesRead?: number,
+): command_request.Command {
+    const args = [key, groupName, id];
+
+    if (entriesRead !== undefined) {
+        args.push("ENTRIESREAD");
+        args.push(entriesRead.toString());
+    }
+
+    return createCommand(RequestType.XGroupSetId, args);
 }
