@@ -724,8 +724,8 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         replace?: boolean,
     ): Promise<boolean> {
         return this.createWritePromise(
@@ -1235,7 +1235,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements.
      *
      * @example
@@ -1246,10 +1246,12 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async sort(
-        key: string,
-        options?: SortClusterOptions,
-    ): Promise<string[]> {
-        return this.createWritePromise(createSort(key, options));
+        key: GlideString,
+        options?: SortClusterOptions & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createSort(key, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1263,7 +1265,7 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - (Optional) {@link SortClusterOptions}.
+     * @param options - (Optional) {@link SortClusterOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements
      *
      * @example
@@ -1274,10 +1276,12 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async sortReadOnly(
-        key: string,
-        options?: SortClusterOptions,
-    ): Promise<string[]> {
-        return this.createWritePromise(createSortReadOnly(key, options));
+        key: GlideString,
+        options?: SortClusterOptions & DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createSortReadOnly(key, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /**
@@ -1306,8 +1310,8 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async sortStore(
-        key: string,
-        destination: string,
+        key: GlideString,
+        destination: GlideString,
         options?: SortClusterOptions,
     ): Promise<number> {
         return this.createWritePromise(createSort(key, options, destination));
@@ -1322,6 +1326,7 @@ export class GlideClusterClient extends BaseClient {
      * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
      * @returns `UNIX TIME` of the last DB save executed with success.
+     *
      * @example
      * ```typescript
      * const timestamp = await client.lastsave();
@@ -1337,10 +1342,11 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns a random existing key name.
      *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
      * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for details.
      *
-     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
-     *      in which case the client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns A random existing key name.
      *
      * @example
@@ -1349,9 +1355,12 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name.
      * ```
      */
-    public async randomKey(route?: Routes): Promise<string | null> {
+    public async randomKey(
+        options?: DecoderOption & RouteOption,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
+            decoder: options?.decoder,
         });
     }
 

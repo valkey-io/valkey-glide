@@ -417,14 +417,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createInfo(options));
     }
 
-    /** Remove the specified keys. A key is ignored if it does not exist.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
+     *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
      * @param keys - A list of keys to be deleted from the database.
      *
-     * Command Response - the number of keys that were removed.
+     * Command Response - The number of keys that were removed.
      */
-    public del(keys: string[]): T {
+    public del(keys: GlideString[]): T {
         return this.addAndReturn(createDel(keys));
     }
 
@@ -1528,63 +1530,75 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSRandMember(key, count));
     }
 
-    /** Returns the number of keys in `keys` that exist in the database.
+    /**
+     * Returns the number of keys in `keys` that exist in the database.
+     *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
      * @param keys - The keys list to check.
      *
      * Command Response - the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
-     * it will be counted multiple times.
+     *     it will be counted multiple times.
      */
-    public exists(keys: string[]): T {
+    public exists(keys: GlideString[]): T {
         return this.addAndReturn(createExists(keys));
     }
 
-    /** Removes the specified keys. A key is ignored if it does not exist.
-     * This command, similar to DEL, removes specified keys and ignores non-existent ones.
-     * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
+     * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
+     *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
      * @param keys - The keys we wanted to unlink.
      *
-     * Command Response - the number of keys that were unlinked.
+     * Command Response - The number of keys that were unlinked.
      */
-    public unlink(keys: string[]): T {
+    public unlink(keys: GlideString[]): T {
         return this.addAndReturn(createUnlink(keys));
     }
 
-    /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/expire/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
-    public expire(key: string, seconds: number, option?: ExpireOptions): T {
+    public expire(
+        key: GlideString,
+        seconds: number,
+        option?: ExpireOptions,
+    ): T {
         return this.addAndReturn(createExpire(key, seconds, option));
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/expireat/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
     public expireAt(
-        key: string,
+        key: GlideString,
         unixSeconds: number,
         option?: ExpireOptions,
     ): T {
@@ -1602,46 +1616,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
-    public expireTime(key: string): T {
+    public expireTime(key: GlideString): T {
         return this.addAndReturn(createExpireTime(key));
     }
 
-    /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/pexpire/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
     public pexpire(
-        key: string,
+        key: GlideString,
         milliseconds: number,
         option?: ExpireOptions,
     ): T {
         return this.addAndReturn(createPExpire(key, milliseconds, option));
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/pexpireat/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
     public pexpireAt(
-        key: string,
+        key: GlideString,
         unixMilliseconds: number,
         option?: ExpireOptions,
     ): T {
@@ -1660,18 +1678,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
-    public pexpireTime(key: string): T {
+    public pexpireTime(key: GlideString): T {
         return this.addAndReturn(createPExpireTime(key));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout.
+     *
      * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
      * @param key - The key to return its timeout.
      *
      * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
      */
-    public ttl(key: string): T {
+    public ttl(key: GlideString): T {
         return this.addAndReturn(createTTL(key));
     }
 
@@ -2116,14 +2136,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRandMember(key, count, true));
     }
 
-    /** Returns the string representation of the type of the value stored at `key`.
+    /**
+     * Returns the string representation of the type of the value stored at `key`.
+     *
      * @see {@link https://valkey.io/commands/type/|valkey.io} for details.
      *
      * @param key - The key to check its data type.
      *
      * Command Response - If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
      */
-    public type(key: string): T {
+    public type(key: GlideString): T {
         return this.addAndReturn(createType(key));
     }
 
@@ -2222,14 +2244,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createEcho(message));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     *
      * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
      * @param key - The key to return its timeout.
      *
      * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
      */
-    public pttl(key: string): T {
+    public pttl(key: GlideString): T {
         return this.addAndReturn(createPTTL(key));
     }
 
@@ -2378,15 +2402,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRevRankWithScore(key, member));
     }
 
-    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+    /**
+     * Removes the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
+     *
      * @see {@link https://valkey.io/commands/persist/|valkey.io} for details.
      *
      * @param key - The key to remove the existing timeout on.
      *
      * Command Response - `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
      */
-    public persist(key: string): T {
+    public persist(key: GlideString): T {
         return this.addAndReturn(createPersist(key));
     }
 
@@ -2948,8 +2974,6 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
-     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      *
      * @see {@link https://valkey.io/commands/rename/|valkey.io} for details.
      *
@@ -2958,23 +2982,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
      */
-    public rename(key: string, newKey: string): T {
+    public rename(key: GlideString, newKey: GlideString): T {
         return this.addAndReturn(createRename(key, newKey));
     }
 
     /**
      * Renames `key` to `newkey` if `newkey` does not yet exist.
-     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      *
      * @see {@link https://valkey.io/commands/renamenx/|valkey.io} for details.
      *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
+     *
      * Command Response - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
-     * If `key` does not exist, an error is thrown.
+     *     If `key` does not exist, an error is thrown.
      */
-    public renamenx(key: string, newKey: string): T {
+    public renamenx(key: GlideString, newKey: GlideString): T {
         return this.addAndReturn(createRenameNX(key, newKey));
     }
 
@@ -3056,27 +3079,31 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createPfMerge(destination, sourceKeys));
     }
 
-    /** Returns the internal encoding for the Redis object stored at `key`.
+    /**
+     * Returns the internal encoding for the Redis object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the internal encoding of.
+     *
      * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
      *     Otherwise, returns None.
      */
-    public objectEncoding(key: string): T {
+    public objectEncoding(key: GlideString): T {
         return this.addAndReturn(createObjectEncoding(key));
     }
 
-    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+    /**
+     * Returns the logarithmic access frequency counter of a Redis object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     *
      * Command Response - If `key` exists, returns the logarithmic access frequency counter of
      *     the object stored at `key` as a `number`. Otherwise, returns `null`.
      */
-    public objectFreq(key: string): T {
+    public objectFreq(key: GlideString): T {
         return this.addAndReturn(createObjectFreq(key));
     }
 
@@ -3089,7 +3116,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
      */
-    public objectIdletime(key: string): T {
+    public objectIdletime(key: GlideString): T {
         return this.addAndReturn(createObjectIdletime(key));
     }
 
@@ -3101,9 +3128,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The `key` of the object to get the reference count of.
      *
      * Command Response - If `key` exists, returns the reference count of the object stored at `key` as a `number`.
-     * Otherwise, returns `null`.
+     *     Otherwise, returns `null`.
      */
-    public objectRefcount(key: string): T {
+    public objectRefcount(key: GlideString): T {
         return this.addAndReturn(createObjectRefcount(key));
     }
 
@@ -3308,12 +3335,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param options - (Optional) The LPOS options - see {@link LPosOptions}.
      *
      * Command Response - The index of `element`, or `null` if `element` is not in the list. If the `count`
      * option is specified, then the function returns an `array` of indices of matching elements within the list.
      */
-    public lpos(key: string, element: string, options?: LPosOptions): T {
+    public lpos(
+        key: GlideString,
+        element: GlideString,
+        options?: LPosOptions,
+    ): T {
         return this.addAndReturn(createLPos(key, element, options));
     }
 
@@ -3675,7 +3706,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of keys that were updated. A key is ignored if it doesn't exist.
      */
-    public touch(keys: string[]): T {
+    public touch(keys: GlideString[]): T {
         return this.addAndReturn(createTouch(keys));
     }
 
@@ -3861,7 +3892,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * Command Response - An `Array` of sorted elements.
      */
-    public sort(key: string, options?: SortOptions): Transaction {
+    public sort(key: GlideString, options?: SortOptions): Transaction {
         return this.addAndReturn(createSort(key, options));
     }
 
@@ -3880,7 +3911,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * Command Response - An `Array` of sorted elements
      */
-    public sortReadOnly(key: string, options?: SortOptions): Transaction {
+    public sortReadOnly(key: GlideString, options?: SortOptions): Transaction {
         return this.addAndReturn(createSortReadOnly(key, options));
     }
 
@@ -3902,8 +3933,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - The number of elements in the sorted key stored at `destination`.
      */
     public sortStore(
-        key: string,
-        destination: string,
+        key: GlideString,
+        destination: GlideString,
         options?: SortOptions,
     ): Transaction {
         return this.addAndReturn(createSort(key, options, destination));
@@ -3928,8 +3959,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
      */
     public copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         options?: { destinationDB?: number; replace?: boolean },
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
@@ -3946,7 +3977,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
      *     database or does not exist in the source database.
      */
-    public move(key: string, dbIndex: number): Transaction {
+    public move(key: GlideString, dbIndex: number): Transaction {
         return this.addAndReturn(createMove(key, dbIndex));
     }
 
@@ -3994,7 +4025,10 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * Command Response - An `Array` of sorted elements.
      */
-    public sort(key: string, options?: SortClusterOptions): ClusterTransaction {
+    public sort(
+        key: GlideString,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
         return this.addAndReturn(createSort(key, options));
     }
 
@@ -4015,7 +4049,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - An `Array` of sorted elements
      */
     public sortReadOnly(
-        key: string,
+        key: GlideString,
         options?: SortClusterOptions,
     ): ClusterTransaction {
         return this.addAndReturn(createSortReadOnly(key, options));
@@ -4039,8 +4073,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - The number of elements in the sorted key stored at `destination`.
      */
     public sortStore(
-        key: string,
-        destination: string,
+        key: GlideString,
+        destination: GlideString,
         options?: SortClusterOptions,
     ): ClusterTransaction {
         return this.addAndReturn(createSort(key, options, destination));
@@ -4061,8 +4095,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
      */
     public copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         replace?: boolean,
     ): ClusterTransaction {
         return this.addAndReturn(
