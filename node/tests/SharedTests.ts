@@ -8969,6 +8969,111 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geo commands binary %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{geo-bin}-1-" + uuidv4();
+                const key2 = "{geo-bin}-2-" + uuidv4();
+
+                const members = [
+                    "Catania",
+                    Buffer.from("Palermo"),
+                    "edge2",
+                    "edge1",
+                ];
+                const membersCoordinates: [number, number][] = [
+                    [15.087269, 37.502669],
+                    [13.361389, 38.115556],
+                    [17.24151, 38.788135],
+                    [12.758489, 38.788135],
+                ];
+
+                const membersGeoData: GeospatialData[] = [];
+
+                for (const [lon, lat] of membersCoordinates) {
+                    membersGeoData.push({ longitude: lon, latitude: lat });
+                }
+
+                const membersToCoordinates = new Map();
+
+                for (let i = 0; i < members.length; i++) {
+                    membersToCoordinates.set(members[i], membersGeoData[i]);
+                }
+
+                // geoadd
+                expect(
+                    await client.geoadd(
+                        Buffer.from(key1),
+                        membersToCoordinates,
+                    ),
+                ).toBe(4);
+                // geopos
+                const geopos = await client.geopos(Buffer.from(key1), [
+                    "Palermo",
+                    Buffer.from("Catania"),
+                    "New York",
+                ]);
+                // inner array is possibly null, we need a null check or a cast
+                expect(geopos[0]?.[0]).toBeCloseTo(13.361389, 5);
+                expect(geopos[0]?.[1]).toBeCloseTo(38.115556, 5);
+                expect(geopos[1]?.[0]).toBeCloseTo(15.087269, 5);
+                expect(geopos[1]?.[1]).toBeCloseTo(37.502669, 5);
+                expect(geopos[2]).toBeNull();
+                // geohash
+                const geohash = await client.geohash(Buffer.from(key1), [
+                    "Palermo",
+                    Buffer.from("Catania"),
+                    "New York",
+                ]);
+                expect(geohash).toEqual(["sqc8b49rny0", "sqdtr74hyu0", null]);
+                // geodist
+                expect(
+                    await client.geodist(
+                        Buffer.from(key1),
+                        Buffer.from("Palermo"),
+                        "Catania",
+                    ),
+                ).toBeCloseTo(166274.1516, 5);
+
+                // geosearch with binary decoder
+                let searchResult = await client.geosearch(
+                    Buffer.from(key1),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    { decoder: Decoder.Bytes },
+                );
+                // using set to compare, because results are reordrered
+                expect(new Set(searchResult)).toEqual(
+                    new Set(members.map((m) => Buffer.from(m))),
+                );
+                // repeat geosearch with string decoder
+                searchResult = await client.geosearch(
+                    Buffer.from(key1),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                );
+                // using set to compare, because results are reordrered
+                expect(new Set(searchResult)).toEqual(
+                    new Set(members.map((m) => m.toString())),
+                );
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        Buffer.from(key2),
+                        Buffer.from(key1),
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    ),
+                ).toEqual(4);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(searchResult);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `touch test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

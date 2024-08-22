@@ -89,6 +89,15 @@ function createCommand(
     return singleCommand;
 }
 
+/** An extension to command option types. */
+export type DecoderOption = {
+    /**
+     * {@link Decoder} type which defines how to handle the response.
+     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     */
+    decoder?: Decoder;
+};
+
 /**
  * @internal
  */
@@ -3095,7 +3104,8 @@ export function createDBSize(): command_request.Command {
 }
 
 /**
- * An optional condition to the {@link BaseClient.geoadd} command.
+ * An optional condition to the {@link BaseClient.geoadd | geoadd},
+ * {@link BaseClient.zadd | zadd} and {@link BaseClient.set | set} commands.
  */
 export enum ConditionalChange {
     /**
@@ -3140,11 +3150,11 @@ export type GeoAddOptions = {
  * @internal
  */
 export function createGeoAdd(
-    key: string,
-    membersToGeospatialData: Map<string, GeospatialData>,
+    key: GlideString,
+    membersToGeospatialData: Map<GlideString, GeospatialData>,
     options?: GeoAddOptions,
 ): command_request.Command {
-    let args: string[] = [key];
+    let args: GlideString[] = [key];
 
     if (options) {
         if (options.updateMode) {
@@ -3182,8 +3192,8 @@ export enum GeoUnit {
  * @internal
  */
 export function createGeoPos(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.GeoPos, [key].concat(members));
 }
@@ -3192,12 +3202,12 @@ export function createGeoPos(
  * @internal
  */
 export function createGeoDist(
-    key: string,
-    member1: string,
-    member2: string,
+    key: GlideString,
+    member1: GlideString,
+    member2: GlideString,
     geoUnit?: GeoUnit,
 ): command_request.Command {
-    const args: string[] = [key, member1, member2];
+    const args = [key, member1, member2];
 
     if (geoUnit) {
         args.push(geoUnit);
@@ -3210,10 +3220,10 @@ export function createGeoDist(
  * @internal
  */
 export function createGeoHash(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
-    const args: string[] = [key].concat(members);
+    const args = [key].concat(members);
     return createCommand(RequestType.GeoHash, args);
 }
 
@@ -3294,12 +3304,12 @@ export type CoordOrigin = {
 /** The search origin represented by an existing member. */
 export type MemberOrigin = {
     /** Member (location) name stored in the sorted set to use as a search pivot. */
-    member: string;
+    member: GlideString;
 };
 
 /** @internal */
 export function createGeoSearch(
-    key: string,
+    key: GlideString,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchResultOptions,
@@ -3312,8 +3322,8 @@ export function createGeoSearch(
 
 /** @internal */
 export function createGeoSearchStore(
-    destination: string,
-    source: string,
+    destination: GlideString,
+    source: GlideString,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchStoreResultOptions,
@@ -3328,8 +3338,8 @@ function convertGeoSearchOptionsToArgs(
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchCommonResultOptions,
-): string[] {
-    let args: string[] = [];
+): GlideString[] {
+    let args: GlideString[] = [];
 
     if ("position" in searchFrom) {
         args = args.concat(
