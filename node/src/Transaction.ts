@@ -27,7 +27,8 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -46,6 +47,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreFilter,
     SearchOrigin,
@@ -85,6 +87,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createEcho,
     createExists,
     createExpire,
@@ -95,9 +98,11 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createGeoAdd,
     createGeoDist,
@@ -174,6 +179,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -204,6 +210,7 @@ import {
     createType,
     createUnlink,
     createWait,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -212,6 +219,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -229,6 +237,7 @@ import {
     createZDiffStore,
     createZDiffWithScores,
     createZIncrBy,
+    createZInter,
     createZInterCard,
     createZInterstore,
     createZLexCount,
@@ -249,6 +258,7 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnion,
     createZUnionStore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
@@ -416,6 +426,43 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public del(keys: GlideString[]): T {
         return this.addAndReturn(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * @param key - The `key` to serialize.
+     *
+     * Command Response - The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
+     */
+    public dump(key: GlideString): T {
+        return this.addAndReturn(createDump(key));
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
+     *
+     * @param key - The `key` to create.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value to deserialize and assign to `key`.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
+     *
+     * Command Response - Return "OK" if the `key` was successfully restored with a `value`.
+     */
+    public restore(
+        key: GlideString,
+        ttl: number,
+        value: Buffer,
+        options?: RestoreOptions,
+    ): T {
+        return this.addAndReturn(createRestore(key, ttl, value, options));
     }
 
     /** Get the name of the connection on which the transaction is being executed.
@@ -1934,11 +1981,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for details.
      *
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zinterstore(
@@ -1949,6 +2000,88 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - The resulting array of intersecting elements.
+     */
+    public zinter(keys: string[]): T {
+        return this.addAndReturn(createZInter(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
+     * Command Response - The resulting sorted set with scores.
+     */
+    public zinterWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(createZInter(keys, aggregationType, true));
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     * To get the scores as well, see {@link zunionWithScores}.
+     *
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - The resulting array of union elements.
+     */
+    public zunion(keys: string[]): T {
+        return this.addAndReturn(createZUnion(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
+     * To get the elements only, see {@link zunion}.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
+     * Command Response - The resulting sorted set with scores.
+     */
+    public zunionWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(createZUnion(keys, aggregationType, true));
     }
 
     /**
@@ -2791,6 +2924,46 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of messages that were successfully acknowledged.
+     */
+    public xack(key: string, group: string, ids: string[]): T {
+        return this.addAndReturn(createXAck(key, group, ids));
+    }
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+    ): T {
+        return this.addAndReturn(
+            createXGroupSetid(key, groupName, id, entriesRead),
+        );
+    }
+
+    /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
      *
@@ -2867,7 +3040,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
      *     altered, then returns `1`. Otherwise, returns `0`.
      */
-    public pfadd(key: string, elements: string[]): T {
+    public pfadd(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
     }
 
@@ -2880,7 +3053,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The approximated cardinality of given HyperLogLog data structures.
      *     The cardinality of a key that does not exist is `0`.
      */
-    public pfcount(keys: string[]): T {
+    public pfcount(keys: GlideString[]): T {
         return this.addAndReturn(createPfCount(keys));
     }
 
@@ -2894,7 +3067,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
      * Command Response - A simple "OK" response.
      */
-    public pfmerge(destination: string, sourceKeys: string[]): T {
+    public pfmerge(destination: GlideString, sourceKeys: GlideString[]): T {
         return this.addAndReturn(createPfMerge(destination, sourceKeys));
     }
 
@@ -3081,13 +3254,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     * Command Response - A `Record` of type {@link FunctionStatsSingleResponse} with two keys:
      *
      * - `"running_script"` with information about the running script.
      * - `"engines"` with information about available engines and their stats.
      */
     public functionStats(): T {
         return this.addAndReturn(createFunctionStats());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     * @remarks To execute a transaction with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * Command Response - The serialized payload of all loaded libraries.
+     */
+    public functionDump(): T {
+        return this.addAndReturn(createFunctionDump());
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries.
+     *
+     * Command Response - `"OK"`.
+     */
+    public functionRestore(payload: Buffer, policy?: FunctionRestorePolicy): T {
+        return this.addAndReturn(createFunctionRestore(payload, policy));
     }
 
     /**
@@ -3179,8 +3380,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *    `true` in the options, returns the number of elements updated in the sorted set.
      */
     public geoadd(
-        key: string,
-        membersToGeospatialData: Map<string, GeospatialData>,
+        key: GlideString,
+        membersToGeospatialData: Map<GlideString, GeospatialData>,
         options?: GeoAddOptions,
     ): T {
         return this.addAndReturn(
@@ -3220,7 +3421,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * - The coordinates as a two item `array` of floating point `number`s.
      */
     public geosearch(
-        key: string,
+        key: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchResultOptions,
@@ -3254,8 +3455,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public geosearchstore(
-        destination: string,
-        source: string,
+        destination: GlideString,
+        source: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchStoreResultOptions,
@@ -3284,7 +3485,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     given members. The order of the returned positions matches the order of the input members.
      *     If a member does not exist, its position will be `null`.
      */
-    public geopos(key: string, members: string[]): T {
+    public geopos(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createGeoPos(key, members));
     }
 
@@ -3387,9 +3588,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     or if the key does not exist.
      */
     public geodist(
-        key: string,
-        member1: string,
-        member2: string,
+        key: GlideString,
+        member1: GlideString,
+        member2: GlideString,
         geoUnit?: GeoUnit,
     ): T {
         return this.addAndReturn(createGeoDist(key, member1, member2, geoUnit));
@@ -3406,7 +3607,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      */
-    public geohash(key: string, members: string[]): T {
+    public geohash(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createGeoHash(key, members));
     }
 

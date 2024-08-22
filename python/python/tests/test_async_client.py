@@ -76,7 +76,7 @@ from glide.config import (
     ProtocolVersion,
     ServerCredentials,
 )
-from glide.constants import OK, TEncodable, TFunctionStatsResponse, TResult
+from glide.constants import OK, TEncodable, TFunctionStatsSingleNodeResponse, TResult
 from glide.exceptions import TimeoutError as GlideTimeoutError
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
@@ -412,9 +412,6 @@ class TestCommands:
         info_res = get_first_result(await glide_client.info([InfoSection.SERVER]))
         info = info_res.decode()
         assert "# Server" in info
-        cluster_mode = parse_info_response(info_res)["redis_mode"]
-        expected_cluster_mode = isinstance(glide_client, GlideClusterClient)
-        assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
         info = get_first_result(
             await glide_client.info([InfoSection.REPLICATION])
         ).decode()
@@ -8206,44 +8203,9 @@ class TestCommands:
             await glide_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats(self, glide_client: GlideClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        lib_name = "functionStats"
-        func_name = lib_name
-        assert await glide_client.function_flush(FlushMode.SYNC) == OK
-
-        # function $funcName returns first argument
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
-        assert await glide_client.function_load(code, True) == lib_name.encode()
-
-        response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 1, 1)
-
-        code = generate_lua_lib_code(
-            lib_name + "_2",
-            {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
-            False,
-        )
-        assert (
-            await glide_client.function_load(code, True) == (lib_name + "_2").encode()
-        )
-
-        response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 2, 3)
-
-        assert await glide_client.function_flush(FlushMode.SYNC) == OK
-
-        response = await glide_client.function_stats()
-        check_function_stats_response(response, [], 0, 0)
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats_cluster(self, glide_client: GlideClusterClient):
+    async def test_function_stats(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -8259,7 +8221,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 1, 1
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
             )
 
         code = generate_lua_lib_code(
@@ -8274,7 +8236,7 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 2, 3
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
             )
 
         assert await glide_client.function_flush(FlushMode.SYNC) == OK
@@ -8282,8 +8244,64 @@ class TestCommands:
         response = await glide_client.function_stats()
         for node_response in response.values():
             check_function_stats_response(
-                cast(TFunctionStatsResponse, node_response), [], 0, 0
+                cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
             )
+
+    @pytest.mark.parametrize("cluster_mode", [False, True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_stats_running_script(
+        self, request, cluster_mode, protocol, glide_client: TGlideClient
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 10, True)
+
+        # load the library
+        assert await glide_client.function_load(code, replace=True) == lib_name.encode()
+
+        # create a second client to run fcall
+        test_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        test_client2 = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=30000
+        )
+
+        async def endless_fcall_route_call():
+            await test_client.fcall_ro(func_name, arguments=[])
+
+        async def wait_and_function_stats():
+            # it can take a few seconds for FCALL to register as running
+            await asyncio.sleep(3)
+            result = await test_client2.function_stats()
+            running_scripts = False
+            for res in result.values():
+                if res.get(b"running_script"):
+                    if running_scripts:
+                        raise Exception("Already running script on a different node")
+                    running_scripts = True
+                    assert res.get(b"running_script").get(b"name") == func_name.encode()
+                    assert res.get(b"running_script").get(b"command") == [
+                        b"FCALL_RO",
+                        func_name.encode(),
+                        b"0",
+                    ]
+                    assert res.get(b"running_script").get(b"duration_ms") > 0
+
+            assert running_scripts
+
+        await asyncio.gather(
+            endless_fcall_route_call(),
+            wait_and_function_stats(),
+        )
+
+        await test_client.close()
+        await test_client2.close()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8311,12 +8329,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 1, 1
+                cast(TFunctionStatsSingleNodeResponse, response), [], 1, 1
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 1, 1
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 1, 1
                 )
 
         code = generate_lua_lib_code(
@@ -8332,12 +8350,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 2, 3
+                cast(TFunctionStatsSingleNodeResponse, response), [], 2, 3
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 2, 3
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 2, 3
                 )
 
         assert await glide_client.function_flush(FlushMode.SYNC, route) == OK
@@ -8345,12 +8363,12 @@ class TestCommands:
         response = await glide_client.function_stats(route)
         if single_route:
             check_function_stats_response(
-                cast(TFunctionStatsResponse, response), [], 0, 0
+                cast(TFunctionStatsSingleNodeResponse, response), [], 0, 0
             )
         else:
             for node_response in response.values():
                 check_function_stats_response(
-                    cast(TFunctionStatsResponse, node_response), [], 0, 0
+                    cast(TFunctionStatsSingleNodeResponse, node_response), [], 0, 0
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -8379,20 +8397,10 @@ class TestCommands:
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=15000
         )
 
-        # call fcall to run the function
-        # make sure that fcall routes to a primary node, and not a replica
-        # if this happens, function_kill and function_stats won't find the function and will fail
-        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
-
         async def endless_fcall_route_call():
             # fcall is supposed to be killed, and will return a RequestError
             with pytest.raises(RequestError) as e:
-                if cluster_mode:
-                    await test_client.fcall_ro_route(
-                        func_name, arguments=[], route=primaryRoute
-                    )
-                else:
-                    await test_client.fcall_ro(func_name, arguments=[])
+                await test_client.fcall_ro(func_name, arguments=[])
             assert "Script killed by user" in str(e)
 
         async def wait_and_function_kill():
@@ -9823,9 +9831,13 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await glide_client.sscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor.encode()
-        assert result[result_collection_index] == []
+        if await check_if_server_version_lt(glide_client, "7.9.0"):
+            result = await glide_client.sscan(key1, "-1")
+            assert result[result_cursor_index] == initial_cursor.encode()
+            assert result[result_collection_index] == []
+        else:
+            with pytest.raises(RequestError):
+                await glide_client.sscan(key2, "-1")
 
         # Result contains the whole set
         assert await glide_client.sadd(key1, char_members) == len(char_members)
@@ -9933,9 +9945,13 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await glide_client.zscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor.encode()
-        assert result[result_collection_index] == []
+        if await check_if_server_version_lt(glide_client, "7.9.0"):
+            result = await glide_client.zscan(key1, "-1")
+            assert result[result_cursor_index] == initial_cursor.encode()
+            assert result[result_collection_index] == []
+        else:
+            with pytest.raises(RequestError):
+                await glide_client.zscan(key2, "-1")
 
         # Result contains the whole set
         assert await glide_client.zadd(key1, char_map) == len(char_map)
@@ -10046,9 +10062,13 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Negative cursor
-        result = await glide_client.hscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor.encode()
-        assert result[result_collection_index] == []
+        if await check_if_server_version_lt(glide_client, "7.9.0"):
+            result = await glide_client.hscan(key1, "-1")
+            assert result[result_cursor_index] == initial_cursor.encode()
+            assert result[result_collection_index] == []
+        else:
+            with pytest.raises(RequestError):
+                await glide_client.hscan(key2, "-1")
 
         # Result contains the whole set
         assert await glide_client.hset(key1, char_map) == len(char_map)

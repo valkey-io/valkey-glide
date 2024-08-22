@@ -18,7 +18,7 @@ import {
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
-    FunctionStatsResponse,
+    FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
     SortOptions,
@@ -230,7 +230,8 @@ export class GlideClient extends BaseClient {
      * @param message - An optional message to include in the PING command.
      * If not provided, the server will respond with "PONG".
      * If provided, the server will respond with a copy of the message.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
@@ -598,55 +599,54 @@ export class GlideClient extends BaseClient {
      * Returns information about the function that's currently running and information about the
      * available execution engines.
      *
+     * FUNCTION STATS runs on all nodes of the server, including primary and replicas.
+     * The response includes a mapping from node address to the command response for that node.
+     *
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @returns A `Record` with two keys:
-     *     - `"running_script"` with information about the running script.
-     *     - `"engines"` with information about available engines and their stats.
-     *     - see example for more details.
-     *
+     * @returns A Record where the key is the node address and the value is a Record with two keys:
+     *          - `"running_script"`: Information about the running script, or `null` if no script is running.
+     *          - `"engines"`: Information about available engines and their stats.
+     *          - see example for more details.
      * @example
      * ```typescript
      * const response = await client.functionStats();
-     * console.log(response); // Output:
+     * console.log(response); // Example output:
      * // {
-     * //     "running_script":
-     * //     {
-     * //         "name": "deep_thought",
-     * //         "command": ["fcall", "deep_thought", "0"],
-     * //         "duration_ms": 5008
-     * //     },
-     * //     "engines":
-     * //     {
-     * //         "LUA":
-     * //         {
-     * //             "libraries_count": 2,
-     * //             "functions_count": 3
+     * //     "127.0.0.1:6379": {                // Response from the primary node
+     * //         "running_script": {
+     * //             "name": "foo",
+     * //             "command": ["FCALL", "foo", "0", "hello"],
+     * //             "duration_ms": 7758
+     * //         },
+     * //         "engines": {
+     * //             "LUA": {
+     * //                 "libraries_count": 1,
+     * //                 "functions_count": 1
+     * //             }
      * //         }
-     * //     }
-     * // }
-     * // Output if no scripts running:
-     * // {
-     * //     "running_script": null
-     * //     "engines":
-     * //     {
-     * //         "LUA":
-     * //         {
-     * //             "libraries_count": 2,
-     * //             "functions_count": 3
+     * //     },
+     * //     "127.0.0.1:6380": {                // Response from a replica node
+     * //         "running_script": null,
+     * //         "engines": {
+     * //             "LUA": {
+     * //                 "libraries_count": 1,
+     * //                 "functions_count": 1
+     * //             }
      * //         }
      * //     }
      * // }
      * ```
      */
-    public async functionStats(): Promise<FunctionStatsResponse> {
+    public async functionStats(): Promise<FunctionStatsFullResponse> {
         return this.createWritePromise(createFunctionStats());
     }
 
     /**
      * Kills a function that is currently executing.
      * `FUNCTION KILL` terminates read-only functions only.
+     * `FUNCTION KILL` runs on all nodes of the server, including primary and replicas.
      *
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
