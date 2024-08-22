@@ -761,16 +761,6 @@ describe("GlideClusterClient", () => {
                 "3",
                 "4",
             ]);
-            /*
-            // sort with store binary
-            expect(await client.sortStore(Buffer.from(key1), Buffer.from(key2))).toEqual(4);
-            expect(await client.lrange(key2, 0, -1)).toEqual([
-                "1",
-                "2",
-                "3",
-                "4",
-            ]);
-            */
 
             // SORT with strings require ALPHA
             expect(
