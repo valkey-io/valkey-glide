@@ -10,7 +10,7 @@ import { BaseClient, Decoder } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "src/GlideClusterClient";
+import { GlideClusterClient, Routes } from "src/GlideClusterClient";
 import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
@@ -96,6 +96,15 @@ export type DecoderOption = {
      * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      */
     decoder?: Decoder;
+};
+
+/** An extension to command option types with {@link Routes}. */
+export type RouteOption = {
+    /**
+     * Specifies the routing configuration for the command.
+     * The client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
 };
 
 /**

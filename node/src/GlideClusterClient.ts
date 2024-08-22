@@ -21,6 +21,7 @@ import {
     FunctionStatsResponse,
     InfoOptions,
     LolwutOptions,
+    RouteOption,
     SortClusterOptions,
     createClientGetName,
     createClientId,
@@ -1314,12 +1315,11 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns a random existing key name.
      *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
      * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for details.
      *
-     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided,
-     *     in which case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns A random existing key name.
      *
      * @example
@@ -1328,10 +1328,9 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: "key12" - "key12" is a random existing key name.
      * ```
      */
-    public async randomKey(options?: {
-        route?: Routes;
-        decoder?: Decoder;
-    }): Promise<GlideString | null> {
+    public async randomKey(
+        options?: DecoderOption & RouteOption,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), {
             route: toProtobufRoute(options?.route),
             decoder: options?.decoder,
