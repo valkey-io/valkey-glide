@@ -180,6 +180,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -220,7 +221,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import {
     ClosingError,
@@ -1650,7 +1650,7 @@ export class BaseClient {
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
      */
-    public hkeys(key: string): Promise<string[]> {
+    public async hkeys(key: string): Promise<string[]> {
         return this.createWritePromise(createHKeys(key));
     }
 
@@ -3913,7 +3913,7 @@ export class BaseClient {
      * console.log(result); // Output: ['member1']
      * ```
      */
-    public zinter(keys: string[]): Promise<string[]> {
+    public async zinter(keys: string[]): Promise<string[]> {
         return this.createWritePromise(createZInter(keys));
     }
 
@@ -3945,7 +3945,7 @@ export class BaseClient {
      * console.log(result2); // Output: {'member1': 10.5} - "member1" with score of 10.5 is the result.
      * ```
      */
-    public zinterWithScores(
+    public async zinterWithScores(
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<Record<string, number>> {
@@ -3977,7 +3977,7 @@ export class BaseClient {
      * console.log(result); // Output: ['member1', 'member2']
      * ```
      */
-    public zunion(keys: string[]): Promise<string[]> {
+    public async zunion(keys: string[]): Promise<string[]> {
         return this.createWritePromise(createZUnion(keys));
     }
 
@@ -4008,7 +4008,7 @@ export class BaseClient {
      * console.log(result2); // {'member1': 10.5, 'member2': 8.2}
      * ```
      */
-    public zunionWithScores(
+    public async zunionWithScores(
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<Record<string, number>> {
@@ -4668,7 +4668,7 @@ export class BaseClient {
      * // }
      * ```
      */
-    public xreadgroup(
+    public async xreadgroup(
         group: string,
         consumer: string,
         keys_and_ids: Record<string, string>,
