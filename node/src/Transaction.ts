@@ -219,6 +219,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -259,7 +260,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1354,7 +1354,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A set of members which are present in all given sets.
      * If one or more sets do not exist, an empty set will be returned.
      */
-    public sinter(keys: string[]): T {
+    public sinter(keys: GlideString[]): T {
         return this.addAndReturn(createSInter(keys), true);
     }
 
@@ -1368,7 +1368,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The cardinality of the intersection result. If one or more sets do not exist, `0` is returned.
      */
-    public sintercard(keys: string[], limit?: number): T {
+    public sintercard(keys: GlideString[], limit?: number): T {
         return this.addAndReturn(createSInterCard(keys, limit));
     }
 
@@ -1382,7 +1382,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of elements in the resulting set.
      */
-    public sinterstore(destination: string, keys: string[]): T {
+    public sinterstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createSInterStore(destination, keys));
     }
 
@@ -1396,7 +1396,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Set` of elements representing the difference between the sets.
      * If a key in `keys` does not exist, it is treated as an empty set.
      */
-    public sdiff(keys: string[]): T {
+    public sdiff(keys: GlideString[]): T {
         return this.addAndReturn(createSDiff(keys), true);
     }
 
@@ -1410,7 +1410,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of elements in the resulting set.
      */
-    public sdiffstore(destination: string, keys: string[]): T {
+    public sdiffstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createSDiffStore(destination, keys));
     }
 

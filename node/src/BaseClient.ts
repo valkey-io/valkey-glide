@@ -180,6 +180,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -220,7 +221,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import {
     ClosingError,
@@ -2644,6 +2644,8 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The `keys` of the sets to get the intersection.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - A set of members which are present in all given sets.
      * If one or more sets do not exist, an empty set will be returned.
      *
@@ -2661,10 +2663,13 @@ export class BaseClient {
      * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
      * ```
      */
-    public async sinter(keys: string[]): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSInter(keys)).then(
-            (sinter) => new Set<string>(sinter),
-        );
+    public async sinter(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(createSInter(keys), {
+            decoder: decoder,
+        }).then((sinter) => new Set<GlideString>(sinter));
     }
 
     /**
@@ -2689,7 +2694,7 @@ export class BaseClient {
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
-    public async sintercard(keys: string[], limit?: number): Promise<number> {
+    public async sintercard(keys: GlideString[], limit?: number): Promise<number> {
         return this.createWritePromise(createSInterCard(keys, limit));
     }
 
@@ -2710,8 +2715,8 @@ export class BaseClient {
      * ```
      */
     public async sinterstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSInterStore(destination, keys));
     }
@@ -2723,6 +2728,8 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The keys of the sets to diff.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A `Set` of elements representing the difference between the sets.
      * If a key in `keys` does not exist, it is treated as an empty set.
      *
@@ -2734,10 +2741,13 @@ export class BaseClient {
      * console.log(result); // Output: Set {"member1"} - "member2" is in "set1" but not "set2"
      * ```
      */
-    public async sdiff(keys: string[]): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSDiff(keys)).then(
-            (sdiff) => new Set<string>(sdiff),
-        );
+    public async sdiff(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(createSDiff(keys), {
+            decoder: decoder,
+        }).then((sdiff) => new Set<GlideString>(sdiff));
     }
 
     /**
@@ -2759,8 +2769,8 @@ export class BaseClient {
      * ```
      */
     public async sdiffstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSDiffStore(destination, keys));
     }
