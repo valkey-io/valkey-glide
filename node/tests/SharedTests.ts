@@ -2725,6 +2725,7 @@ export function runBaseTests(config: {
                 ).toEqual(
                     new Set([Buffer.from("member4"), Buffer.from("member5")]),
                 );
+                expect(await client.scard(Buffer.from(key))).toEqual(2);
             }, protocol);
         },
         config.timeout,
@@ -2791,6 +2792,18 @@ export function runBaseTests(config: {
                 await expect(
                     client.smove(string_key, key1, "_"),
                 ).rejects.toThrow();
+
+                // source, destination and member as binary buffers
+                expect(
+                    await client.smove(
+                        Buffer.from(key1),
+                        Buffer.from(key3),
+                        Buffer.from("3"),
+                    ),
+                ).toEqual(true);
+                expect(await client.smembers(key3)).toEqual(
+                    new Set(["2", "3"]),
+                );
             }, protocol);
         },
         config.timeout,
@@ -3380,6 +3393,12 @@ export function runBaseTests(config: {
                 expect(await client.sadd(key1, ["member1"])).toEqual(1);
                 expect(await client.sismember(key1, "member1")).toEqual(true);
                 expect(
+                    await client.sismember(
+                        Buffer.from(key1),
+                        Buffer.from("member1"),
+                    ),
+                ).toEqual(true);
+                expect(
                     await client.sismember(key1, "nonExistingMember"),
                 ).toEqual(false);
                 expect(
@@ -3412,6 +3431,13 @@ export function runBaseTests(config: {
                     true,
                     false,
                 ]);
+
+                expect(
+                    await client.smismember(Buffer.from(key), [
+                        Buffer.from("b"),
+                        Buffer.from("c"),
+                    ]),
+                ).toEqual([true, false]);
 
                 expect(await client.smismember(nonExistingKey, ["b"])).toEqual([
                     false,
@@ -3486,6 +3512,11 @@ export function runBaseTests(config: {
 
                 const result2 = await client.srandmember(key);
                 expect(members).toContain(result2);
+                const result3 = await client.srandmember(
+                    Buffer.from(key),
+                    Decoder.Bytes,
+                );
+                expect(members).toContain(result3?.toString());
                 expect(await client.srandmember("nonExistingKey")).toEqual(
                     null,
                 );
