@@ -2497,8 +2497,8 @@ export enum FlushMode {
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
-     * until the server has the required number of entries. Equivalent to `BLOCK`
-     * in the Redis API.
+     * until the server has the required number of entries. A value of `0` will block indefinitely.
+     * Equivalent to `BLOCK` in the Redis API.
      */
     block?: number;
     /**
