@@ -1986,6 +1986,7 @@ export function createZLexCount(
     return createCommand(RequestType.ZLexCount, args);
 }
 
+/** @internal */
 export function createZRank(
     key: string,
     member: string,
@@ -3356,13 +3357,25 @@ function convertGeoSearchOptionsToArgs(
     }
 
     if (resultOptions) {
-        if ("withCoord" in resultOptions && resultOptions.withCoord)
+        if (
+            "withCoord" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withCoord
+        )
             args.push("WITHCOORD");
-        if ("withDist" in resultOptions && resultOptions.withDist)
+        if (
+            "withDist" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withDist
+        )
             args.push("WITHDIST");
-        if ("withHash" in resultOptions && resultOptions.withHash)
+        if (
+            "withHash" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withHash
+        )
             args.push("WITHHASH");
-        if ("storeDist" in resultOptions && resultOptions.storeDist)
+        if (
+            "storeDist" in resultOptions &&
+            (resultOptions as GeoSearchStoreResultOptions).storeDist
+        )
             args.push("STOREDIST");
 
         if (resultOptions.count) {
