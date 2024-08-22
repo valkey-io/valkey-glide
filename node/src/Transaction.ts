@@ -3695,9 +3695,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key1 - The key that stores the first string.
      * @param key2 - The key that stores the second string.
-     * @param options - Additional parameters:
-     * - withMatchLen - (Optional) If `true`, include the length of the substring matched for the each match.
-     * - minMatchLen - (Optional) The minimum length of matches to include in the result.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `withMatchLen`: if `true`, include the length of the substring matched for the each match.
+     * - (Optional) `minMatchLen`: the minimum length of matches to include in the result.
      *
      * Command Response - A `Record` containing the indices of the longest common subsequences between the
      *     2 strings and the lengths of the longest common subsequences. The resulting map contains two

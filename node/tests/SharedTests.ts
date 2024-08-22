@@ -10937,7 +10937,7 @@ export function runBaseTests(config: {
 
                 expect(
                     await client.getex(key1, {
-                        cmdOptions: {
+                        expiry: {
                             type: TimeUnit.Seconds,
                             duration: 15,
                         },
@@ -10946,16 +10946,16 @@ export function runBaseTests(config: {
                 // test the binary option
                 expect(
                     await client.getex(Buffer.from(key1), {
-                        cmdOptions: {
+                        expiry: {
                             type: TimeUnit.Seconds,
                             duration: 1,
                         },
                     }),
                 ).toEqual(value);
                 expect(await client.ttl(key1)).toBeGreaterThan(0);
-                expect(
-                    await client.getex(key1, { cmdOptions: "persist" }),
-                ).toEqual(value);
+                expect(await client.getex(key1, { expiry: "persist" })).toEqual(
+                    value,
+                );
                 expect(await client.ttl(key1)).toBe(-1);
 
                 // non existent key
@@ -10964,7 +10964,7 @@ export function runBaseTests(config: {
                 // invalid time measurement
                 await expect(
                     client.getex(key1, {
-                        cmdOptions: {
+                        expiry: {
                             type: TimeUnit.Seconds,
                             duration: -10,
                         },
