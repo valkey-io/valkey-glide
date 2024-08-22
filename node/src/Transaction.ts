@@ -27,6 +27,7 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionRestorePolicy,
     FunctionStatsSingleResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -97,9 +98,11 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createGeoAdd,
     createGeoDist,
@@ -216,6 +219,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -256,7 +260,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -3014,7 +3017,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
      *     altered, then returns `1`. Otherwise, returns `0`.
      */
-    public pfadd(key: string, elements: string[]): T {
+    public pfadd(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
     }
 
@@ -3027,7 +3030,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The approximated cardinality of given HyperLogLog data structures.
      *     The cardinality of a key that does not exist is `0`.
      */
-    public pfcount(keys: string[]): T {
+    public pfcount(keys: GlideString[]): T {
         return this.addAndReturn(createPfCount(keys));
     }
 
@@ -3041,7 +3044,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
      * Command Response - A simple "OK" response.
      */
-    public pfmerge(destination: string, sourceKeys: string[]): T {
+    public pfmerge(destination: GlideString, sourceKeys: GlideString[]): T {
         return this.addAndReturn(createPfMerge(destination, sourceKeys));
     }
 
@@ -3231,6 +3234,34 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public functionStats(): T {
         return this.addAndReturn(createFunctionStats());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     * @remarks To execute a transaction with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * Command Response - The serialized payload of all loaded libraries.
+     */
+    public functionDump(): T {
+        return this.addAndReturn(createFunctionDump());
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries.
+     *
+     * Command Response - `"OK"`.
+     */
+    public functionRestore(payload: Buffer, policy?: FunctionRestorePolicy): T {
+        return this.addAndReturn(createFunctionRestore(payload, policy));
     }
 
     /**
