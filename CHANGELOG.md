@@ -1,5 +1,5 @@
 #### Changes
-* Node: Added binary variant to binary commands ([#2178](https://github.com/valkey-io/valkey-glide/pull/2178))
+* Node: Added binary variant to bitmap commands ([#2178](https://github.com/valkey-io/valkey-glide/pull/2178))
 * Node: Added binary variant to generic commands ([#2158](https://github.com/valkey-io/valkey-glide/pull/2158))
 * Node: Added binary variant to geo commands ([#2149](https://github.com/valkey-io/valkey-glide/pull/2149))
 * Node: Added binary variant to HYPERLOGLOG commands ([#2176](https://github.com/valkey-io/valkey-glide/pull/2176))
