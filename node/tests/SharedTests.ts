@@ -36,6 +36,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    ReturnType,
     ScoreFilter,
     Script,
     SignedEncoding,
@@ -10471,6 +10472,82 @@ export function runBaseTests(config: {
                 await expect(
                     client.xgroupDestroy(stringKey, groupName1),
                 ).rejects.toThrow(RequestError);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "check that blocking commands never time out %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient, cluster) => {
+                const key1 = "{blocking}-1-" + uuidv4();
+                const key2 = "{blocking}-2-" + uuidv4();
+                const key3 = "{blocking}-3-" + uuidv4(); // stream
+                const keyz = [key1, key2];
+
+                // create a group and a stream, so `xreadgroup` won't fail on missing group
+                await client.xgroupCreate(key3, "group", "0", {
+                    mkStream: true,
+                });
+
+                const promiseList: [string, Promise<ReturnType>][] = [
+                    ["bzpopmax", client.bzpopmax(keyz, 0)],
+                    ["bzpopmin", client.bzpopmin(keyz, 0)],
+                    ["blpop", client.blpop(keyz, 0)],
+                    ["brpop", client.brpop(keyz, 0)],
+                    ["xread", client.xread({ [key3]: "0-0" }, { block: 0 })],
+                    [
+                        "xreadgroup",
+                        client.xreadgroup(
+                            "group",
+                            "consumer",
+                            { [key3]: "0-0" },
+                            { block: 0 },
+                        ),
+                    ],
+                    ["wait", client.wait(42, 0)],
+                ];
+
+                if (!cluster.checkIfServerVersionLessThan("6.2.0")) {
+                    promiseList.push([
+                        "blmove",
+                        client.blmove(
+                            key1,
+                            key2,
+                            ListDirection.LEFT,
+                            ListDirection.LEFT,
+                            0,
+                        ),
+                    ]);
+                }
+
+                if (!cluster.checkIfServerVersionLessThan("7.0.0")) {
+                    promiseList.push(
+                        ["blmpop", client.blmpop(keyz, ListDirection.LEFT, 0)],
+                        ["bzmpop", client.bzmpop(keyz, ScoreFilter.MAX, 0)],
+                    );
+                }
+
+                try {
+                    for (const [name, promise] of promiseList) {
+                        const timeoutPromise = new Promise((resolve) => {
+                            setTimeout(resolve, 500, "timeOutPromiseWins");
+                        });
+                        // client has default request timeout 250 ms, we run all commands with infinite blocking
+                        // we expect that all commands will still await for the response even after 500 ms
+                        expect(
+                            await Promise.race([
+                                promise.finally(() =>
+                                    fail(`${name} didn't block infintely`),
+                                ),
+                                timeoutPromise,
+                            ]),
+                        ).toEqual("timeOutPromiseWins");
+                    }
+                } finally {
+                    client.close();
+                }
             }, protocol);
         },
         config.timeout,
