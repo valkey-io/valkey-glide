@@ -13,6 +13,7 @@ import {
     ReturnType,
 } from "./BaseClient";
 import {
+    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -228,12 +229,12 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
-     * @param message - (Optional) A message to include in the PING command.
-     * - If not provided, the server will respond with "PONG".
-     * - If provided, the server will respond with a copy of the message.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
-     * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `message` : a message to include in the `PING` command.
+     *   + If not provided, the server will respond with "PONG".
+     *   + If provided, the server will respond with a copy of the message.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
+     * @returns "PONG" if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
      * ```typescript
@@ -249,10 +250,11 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(options?: {
-        message?: GlideString;
-        decoder?: Decoder;
-    }): Promise<GlideString> {
+    public async ping(
+        options?: {
+            message?: GlideString;
+        } & DecoderOption,
+    ): Promise<GlideString> {
         return this.createWritePromise(createPing(options?.message), {
             decoder: options?.decoder,
         });
@@ -351,6 +353,12 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
      * @returns The ID of the connection.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientId();
+     * console.log("Connection id: " + result);
+     * ```
      */
     public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());

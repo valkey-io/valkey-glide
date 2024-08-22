@@ -1697,7 +1697,9 @@ describe("GlideClusterClient", () => {
             expect(await client.watch([key1, key2])).toEqual("OK");
             expect(await client.set(key2, "hello")).toEqual("OK");
             expect(await client.unwatch()).toEqual("OK");
-            expect(await client.unwatch("allPrimaries")).toEqual("OK");
+            expect(await client.unwatch({ route: "allPrimaries" })).toEqual(
+                "OK",
+            );
             setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
             const results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK"]);
