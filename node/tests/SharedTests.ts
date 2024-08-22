@@ -7708,6 +7708,13 @@ export function runBaseTests(config: {
                 // reverse traversal
                 expect(await client.lpos(key, "b", { rank: -2 })).toEqual(2);
 
+                // reverse traversal with binary key and element.
+                expect(
+                    await client.lpos(Buffer.from(key), Buffer.from("b"), {
+                        rank: -2,
+                    }),
+                ).toEqual(2);
+
                 // unlimited comparisons
                 expect(
                     await client.lpos(key, "a", { rank: 1, maxLength: 0 }),
