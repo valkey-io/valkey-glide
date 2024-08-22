@@ -2694,7 +2694,10 @@ export class BaseClient {
      * console.log(result2); // Output: 1 - The computation stops early as the intersection cardinality reaches the limit of 1.
      * ```
      */
-    public async sintercard(keys: GlideString[], limit?: number): Promise<number> {
+    public async sintercard(
+        keys: GlideString[],
+        limit?: number,
+    ): Promise<number> {
         return this.createWritePromise(createSInterCard(keys, limit));
     }
 

@@ -2751,9 +2751,12 @@ export function runBaseTests(config: {
                 );
 
                 // positive test case with keys and return value as buffers
-                expect(await client.sinter([Buffer.from(key1), Buffer.from(key2)], Decoder.Bytes)).toEqual(
-                    new Set([Buffer.from("c"), Buffer.from("d")]),
-                );
+                expect(
+                    await client.sinter(
+                        [Buffer.from(key1), Buffer.from(key2)],
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(new Set([Buffer.from("c"), Buffer.from("d")]));
 
                 // invalid argument - key list must not be empty
                 try {
@@ -2829,7 +2832,12 @@ export function runBaseTests(config: {
                 ).toEqual(0);
 
                 // with keys as binary buffers
-                expect(await client.sintercard([Buffer.from(key1), Buffer.from(key2)])).toEqual(3);
+                expect(
+                    await client.sintercard([
+                        Buffer.from(key1),
+                        Buffer.from(key2),
+                    ]),
+                ).toEqual(3);
 
                 // invalid argument - key list must not be empty
                 await expect(client.sintercard([])).rejects.toThrow(
@@ -2895,7 +2903,12 @@ export function runBaseTests(config: {
                 // with destination and keys as binary buffers
                 expect(await client.sadd(key1, ["a", "b", "c"]));
                 expect(await client.sadd(key2, ["c", "d", "e"]));
-                expect(await client.sinterstore(Buffer.from(key3), [Buffer.from(key1),Buffer.from(key2)])).toEqual(1);
+                expect(
+                    await client.sinterstore(Buffer.from(key3), [
+                        Buffer.from(key1),
+                        Buffer.from(key2),
+                    ]),
+                ).toEqual(1);
                 expect(await client.smembers(key3)).toEqual(new Set(["c"]));
             }, protocol);
         },
@@ -2930,13 +2943,19 @@ export function runBaseTests(config: {
                     new Set(),
                 );
 
-                // key and return value as binary buffers 
-                expect(await client.sdiff([Buffer.from(key1), Buffer.from(key2)], Decoder.Bytes)).toEqual(
-                    new Set([Buffer.from("a"), Buffer.from("b")]),
-                );
-                expect(await client.sdiff([Buffer.from(key2), Buffer.from(key1)], Decoder.Bytes)).toEqual(
-                    new Set([Buffer.from("d"), Buffer.from("e")]),
-                );
+                // key and return value as binary buffers
+                expect(
+                    await client.sdiff(
+                        [Buffer.from(key1), Buffer.from(key2)],
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(new Set([Buffer.from("a"), Buffer.from("b")]));
+                expect(
+                    await client.sdiff(
+                        [Buffer.from(key2), Buffer.from(key1)],
+                        Decoder.Bytes,
+                    ),
+                ).toEqual(new Set([Buffer.from("d"), Buffer.from("e")]));
 
                 // invalid arg - key list must not be empty
                 await expect(client.sdiff([])).rejects.toThrow();
@@ -3013,7 +3032,10 @@ export function runBaseTests(config: {
 
                 // with destination and keys as binary buffers
                 expect(
-                    await client.sdiffstore(Buffer.from(key3), [Buffer.from(key1), Buffer.from(key2)]),
+                    await client.sdiffstore(Buffer.from(key3), [
+                        Buffer.from(key1),
+                        Buffer.from(key2),
+                    ]),
                 ).toEqual(2);
                 expect(await client.smembers(key3)).toEqual(
                     new Set(["a", "b"]),
