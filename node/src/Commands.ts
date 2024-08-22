@@ -3301,7 +3301,7 @@ export type CoordOrigin = {
 /** The search origin represented by an existing member. */
 export type MemberOrigin = {
     /** Member (location) name stored in the sorted set to use as a search pivot. */
-    member: string;
+    member: GlideString;
 };
 
 /** @internal */

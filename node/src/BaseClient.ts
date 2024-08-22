@@ -6100,7 +6100,7 @@ export class BaseClient {
      * @example
      * ```typescript
      * const result = await client.geohash("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
-     * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * console.log(result); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
      * ```
      */
     public async geohash(
