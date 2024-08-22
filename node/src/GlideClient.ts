@@ -790,7 +790,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/sort/|valkey.io} for more details.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions} and {@link DecoderOption}.
+     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
      *
      * @returns An `Array` of sorted elements.
      *
@@ -824,7 +824,7 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
-     * @param options - The {@link SortOptions} and {@link DecoderOption}.
+     * @param options - (Optional) The {@link SortOptions} and {@link DecoderOption}.
      * @returns An `Array` of sorted elements
      *
      * @example
@@ -859,7 +859,7 @@ export class GlideClient extends BaseClient {
      *
      * @param key - The key of the list, set, or sorted set to be sorted.
      * @param destination - The key where the sorted result will be stored.
-     * @param options - The {@link SortOptions}.
+     * @param options - (Optional) The {@link SortOptions}.
      * @returns The number of elements in the sorted key stored at `destination`.
      *
      * @example

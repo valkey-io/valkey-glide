@@ -730,6 +730,7 @@ describe("GlideClusterClient", () => {
                 "3",
                 "4",
             ]);
+            // test binary decoder
             expect(await client.sort(key1, { decoder: Decoder.Bytes })).toEqual(
                 [
                     Buffer.from("1"),
@@ -745,6 +746,7 @@ describe("GlideClusterClient", () => {
                 expect(await client.sortReadOnly(Buffer.from(key3))).toEqual(
                     [],
                 );
+                // test binary decoder
                 expect(
                     await client.sortReadOnly(key1, { decoder: Decoder.Bytes }),
                 ).toEqual([

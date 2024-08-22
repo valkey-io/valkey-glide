@@ -3427,6 +3427,7 @@ export function runBaseTests(config: {
                     expect(await client.pexpiretime(key)).toBeGreaterThan(
                         Date.now(),
                     );
+                    // test Buffer input argument
                     expect(
                         await client.expiretime(Buffer.from(key)),
                     ).toBeGreaterThan(Math.floor(Date.now() / 1000));
@@ -3487,6 +3488,7 @@ export function runBaseTests(config: {
                             ExpireOptions.HasExistingExpiry,
                         ),
                     ).toEqual(false);
+                    // test Buffer input argument
                     expect(
                         await client.pexpireAt(
                             Buffer.from(key),

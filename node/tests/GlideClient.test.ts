@@ -1149,6 +1149,7 @@ describe("GlideClient", () => {
                 }),
             ).toEqual(["Eve", "40", "Charlie", "35"]);
 
+            // test binary decoder
             expect(
                 await client.sort(list, {
                     limit: { offset: 0, count: 2 },
@@ -1361,6 +1362,7 @@ describe("GlideClient", () => {
             expect(await client.set(key, "foo")).toEqual("OK");
             // `key` should be the only key in the database
             expect(await client.randomKey()).toEqual(key);
+            // test binary decoder
             expect(await client.randomKey(Decoder.Bytes)).toEqual(
                 Buffer.from(key),
             );
