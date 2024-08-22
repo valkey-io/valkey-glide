@@ -3017,7 +3017,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
      *     altered, then returns `1`. Otherwise, returns `0`.
      */
-    public pfadd(key: string, elements: string[]): T {
+    public pfadd(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
     }
 
@@ -3030,7 +3030,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The approximated cardinality of given HyperLogLog data structures.
      *     The cardinality of a key that does not exist is `0`.
      */
-    public pfcount(keys: string[]): T {
+    public pfcount(keys: GlideString[]): T {
         return this.addAndReturn(createPfCount(keys));
     }
 
@@ -3044,7 +3044,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
      * Command Response - A simple "OK" response.
      */
-    public pfmerge(destination: string, sourceKeys: string[]): T {
+    public pfmerge(destination: GlideString, sourceKeys: GlideString[]): T {
         return this.addAndReturn(createPfMerge(destination, sourceKeys));
     }
 
