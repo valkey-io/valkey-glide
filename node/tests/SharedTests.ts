@@ -239,7 +239,11 @@ export function runBaseTests(config: {
                 expect(result).toEqual("OK");
                 result = await client.set(key3, value);
                 expect(result).toEqual("OK");
-                let deletedKeysNum = await client.del([key1, key2, key3]);
+                let deletedKeysNum = await client.del([
+                    key1,
+                    Buffer.from(key2),
+                    key3,
+                ]);
                 expect(deletedKeysNum).toEqual(3);
                 deletedKeysNum = await client.del([uuidv4()]);
                 expect(deletedKeysNum).toEqual(0);
@@ -3337,7 +3341,11 @@ export function runBaseTests(config: {
                 expect(await client.exists([key1])).toEqual(1);
                 expect(await client.set(key2, value)).toEqual("OK");
                 expect(
-                    await client.exists([key1, "nonExistingKey", key2]),
+                    await client.exists([
+                        key1,
+                        "nonExistingKey",
+                        Buffer.from(key2),
+                    ]),
                 ).toEqual(2);
                 expect(await client.exists([key1, key1])).toEqual(2);
             }, protocol);
@@ -3357,7 +3365,12 @@ export function runBaseTests(config: {
                 expect(await client.set(key2, value)).toEqual("OK");
                 expect(await client.set(key3, value)).toEqual("OK");
                 expect(
-                    await client.unlink([key1, key2, "nonExistingKey", key3]),
+                    await client.unlink([
+                        key1,
+                        key2,
+                        "nonExistingKey",
+                        Buffer.from(key3),
+                    ]),
                 ).toEqual(3);
             }, protocol);
         },
@@ -3378,26 +3391,32 @@ export function runBaseTests(config: {
                     cluster.checkIfServerVersionLessThan("7.0.0");
 
                 if (versionLessThan) {
-                    expect(await client.pexpire(key, 10000)).toEqual(true);
+                    expect(
+                        await client.pexpire(Buffer.from(key), 10000),
+                    ).toEqual(true);
                 } else {
                     expect(
                         await client.pexpire(
-                            key,
+                            Buffer.from(key),
                             10000,
                             ExpireOptions.HasNoExpiry,
                         ),
                     ).toEqual(true);
                 }
 
-                expect(await client.ttl(key)).toBeLessThanOrEqual(10);
+                expect(await client.ttl(Buffer.from(key))).toBeLessThanOrEqual(
+                    10,
+                );
 
                 /// TTL will be updated to the new value = 15
                 if (versionLessThan) {
-                    expect(await client.expire(key, 15)).toEqual(true);
+                    expect(await client.expire(Buffer.from(key), 15)).toEqual(
+                        true,
+                    );
                 } else {
                     expect(
                         await client.expire(
-                            key,
+                            Buffer.from(key),
                             15,
                             ExpireOptions.HasExistingExpiry,
                         ),
@@ -3408,6 +3427,13 @@ export function runBaseTests(config: {
                     expect(await client.pexpiretime(key)).toBeGreaterThan(
                         Date.now(),
                     );
+                    // test Buffer input argument
+                    expect(
+                        await client.expiretime(Buffer.from(key)),
+                    ).toBeGreaterThan(Math.floor(Date.now() / 1000));
+                    expect(
+                        await client.pexpiretime(Buffer.from(key)),
+                    ).toBeGreaterThan(Date.now());
                 }
 
                 expect(await client.ttl(key)).toBeLessThanOrEqual(15);
@@ -3435,14 +3461,14 @@ export function runBaseTests(config: {
                 if (versionLessThan) {
                     expect(
                         await client.expireAt(
-                            key,
+                            Buffer.from(key),
                             Math.floor(Date.now() / 1000) + 50,
                         ),
                     ).toEqual(true);
                 } else {
                     expect(
                         await client.expireAt(
-                            key,
+                            Buffer.from(key),
                             Math.floor(Date.now() / 1000) + 50,
                             ExpireOptions.NewExpiryGreaterThanCurrent,
                         ),
@@ -3458,6 +3484,14 @@ export function runBaseTests(config: {
                     expect(
                         await client.pexpireAt(
                             key,
+                            Date.now() + 50000,
+                            ExpireOptions.HasExistingExpiry,
+                        ),
+                    ).toEqual(false);
+                    // test Buffer input argument
+                    expect(
+                        await client.pexpireAt(
+                            Buffer.from(key),
                             Date.now() + 50000,
                             ExpireOptions.HasExistingExpiry,
                         ),
@@ -5293,7 +5327,7 @@ export function runBaseTests(config: {
                 expect(await client.del([key])).toEqual(1);
 
                 expect(await client.lpush(key, ["value"])).toEqual(1);
-                expect(await client.type(key)).toEqual("list");
+                expect(await client.type(Buffer.from(key))).toEqual("list");
                 expect(await client.del([key])).toEqual(1);
 
                 expect(await client.sadd(key, ["value"])).toEqual(1);
@@ -5305,7 +5339,7 @@ export function runBaseTests(config: {
                 expect(await client.del([key])).toEqual(1);
 
                 expect(await client.hset(key, { field: "value" })).toEqual(1);
-                expect(await client.type(key)).toEqual("hash");
+                expect(await client.type(Buffer.from(key))).toEqual("hash");
                 expect(await client.del([key])).toEqual(1);
 
                 await client.xadd(key, [["field", "value"]]);
@@ -5634,7 +5668,7 @@ export function runBaseTests(config: {
                 expect(await client.pttl(key)).toEqual(-1);
 
                 expect(await client.expire(key, 10)).toEqual(true);
-                let result = await client.pttl(key);
+                let result = await client.pttl(Buffer.from(key));
                 expect(result).toBeGreaterThan(0);
                 expect(result).toBeLessThanOrEqual(10000);
 
@@ -5847,7 +5881,7 @@ export function runBaseTests(config: {
                 expect(await client.persist(key)).toEqual(false);
 
                 expect(await client.expire(key, 10)).toEqual(true);
-                expect(await client.persist(key)).toEqual(true);
+                expect(await client.persist(Buffer.from(key))).toEqual(true);
             }, protocol);
         },
         config.timeout,
@@ -6766,11 +6800,15 @@ export function runBaseTests(config: {
                 const key = uuidv4() + "{123}";
                 const newKey = uuidv4() + "{123}";
                 await client.set(key, "value");
-                await client.rename(key, newKey);
-                const result = await client.get(newKey);
-                expect(result).toEqual("value");
+                expect(await client.rename(key, newKey)).toEqual("OK");
+                expect(await client.get(newKey)).toEqual("value");
                 // If key doesn't exist it should throw, it also test that key has successfully been renamed
                 await expect(client.rename(key, newKey)).rejects.toThrow();
+                // rename back
+                expect(
+                    await client.rename(Buffer.from(newKey), Buffer.from(key)),
+                ).toEqual("OK");
+                expect(await client.get(key)).toEqual("value");
             }, protocol);
         },
         config.timeout,
@@ -6795,11 +6833,15 @@ export function runBaseTests(config: {
                 await client.set(key1, "key1");
                 await client.set(key3, "key3");
                 // Test that renamenx can rename key1 to key2 (non-existing value)
-                expect(await client.renamenx(key1, key2)).toEqual(true);
+                expect(await client.renamenx(Buffer.from(key1), key2)).toEqual(
+                    true,
+                );
                 // sanity check
                 expect(await client.get(key2)).toEqual("key1");
                 // Test that renamenx doesn't rename key2 to key3 (with an existing value)
-                expect(await client.renamenx(key2, key3)).toEqual(false);
+                expect(await client.renamenx(key2, Buffer.from(key3))).toEqual(
+                    false,
+                );
                 // sanity check
                 expect(await client.get(key3)).toEqual("key3");
             }, protocol);
@@ -6976,7 +7018,9 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 expect(await client.pfadd(key, [])).toEqual(1);
                 expect(await client.pfadd(key, ["one", "two"])).toEqual(1);
-                expect(await client.pfadd(key, ["two"])).toEqual(0);
+                expect(
+                    await client.pfadd(Buffer.from(key), [Buffer.from("two")]),
+                ).toEqual(0);
                 expect(await client.pfadd(key, [])).toEqual(0);
 
                 // key exists, but it is not a HyperLogLog
@@ -7000,7 +7044,7 @@ export function runBaseTests(config: {
                 expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
                 expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
                 expect(await client.pfcount([key1])).toEqual(3);
-                expect(await client.pfcount([key2])).toEqual(3);
+                expect(await client.pfcount([Buffer.from(key2)])).toEqual(3);
                 expect(await client.pfcount([key1, key2])).toEqual(4);
                 expect(
                     await client.pfcount([key1, key2, nonExistingKey]),
@@ -7041,11 +7085,15 @@ export function runBaseTests(config: {
                 expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
 
                 // merge into new HyperLogLog data set
-                expect(await client.pfmerge(key3, [key1, key2])).toEqual("OK");
+                expect(
+                    await client.pfmerge(Buffer.from(key3), [key1, key2]),
+                ).toEqual("OK");
                 expect(await client.pfcount([key3])).toEqual(4);
 
                 // merge into existing HyperLogLog data set
-                expect(await client.pfmerge(key1, [key2])).toEqual("OK");
+                expect(await client.pfmerge(key1, [Buffer.from(key2)])).toEqual(
+                    "OK",
+                );
                 expect(await client.pfcount([key1])).toEqual(4);
 
                 // non-existing source key
@@ -7433,7 +7481,9 @@ export function runBaseTests(config: {
                 expect(await client.objectEncoding(string_key)).toEqual("raw");
 
                 expect(await client.set(string_key, "2")).toEqual("OK");
-                expect(await client.objectEncoding(string_key)).toEqual("int");
+                expect(
+                    await client.objectEncoding(Buffer.from(string_key)),
+                ).toEqual("int");
 
                 expect(await client.set(string_key, "value")).toEqual("OK");
                 expect(await client.objectEncoding(string_key)).toEqual(
@@ -7524,7 +7574,9 @@ export function runBaseTests(config: {
 
                 if (versionLessThan7) {
                     expect(
-                        await client.objectEncoding(zset_listpack_key),
+                        await client.objectEncoding(
+                            Buffer.from(zset_listpack_key),
+                        ),
                     ).toEqual("ziplist");
                 } else {
                     expect(
@@ -7563,9 +7615,9 @@ export function runBaseTests(config: {
                         null,
                     );
                     expect(await client.set(key, "foobar")).toEqual("OK");
-                    expect(await client.objectFreq(key)).toBeGreaterThanOrEqual(
-                        0,
-                    );
+                    expect(
+                        await client.objectFreq(Buffer.from(key)),
+                    ).toBeGreaterThanOrEqual(0);
                 } finally {
                     expect(
                         await client.configSet({
@@ -7602,7 +7654,9 @@ export function runBaseTests(config: {
 
                     await wait(2000);
 
-                    expect(await client.objectIdletime(key)).toBeGreaterThan(0);
+                    expect(
+                        await client.objectIdletime(Buffer.from(key)),
+                    ).toBeGreaterThan(0);
                 } finally {
                     expect(
                         await client.configSet({
@@ -7630,9 +7684,9 @@ export function runBaseTests(config: {
 
                 expect(await client.objectRefcount(nonExistingKey)).toBeNull();
                 expect(await client.set(key, "foo")).toEqual("OK");
-                expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
-                    1,
-                );
+                expect(
+                    await client.objectRefcount(Buffer.from(key)),
+                ).toBeGreaterThanOrEqual(1);
             }, protocol);
         },
         config.timeout,
@@ -7701,6 +7755,13 @@ export function runBaseTests(config: {
 
                 // reverse traversal
                 expect(await client.lpos(key, "b", { rank: -2 })).toEqual(2);
+
+                // reverse traversal with binary key and element.
+                expect(
+                    await client.lpos(Buffer.from(key), Buffer.from("b"), {
+                        rank: -2,
+                    }),
+                ).toEqual(2);
 
                 // unlimited comparisons
                 expect(
@@ -8956,6 +9017,111 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `geo commands binary %p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{geo-bin}-1-" + uuidv4();
+                const key2 = "{geo-bin}-2-" + uuidv4();
+
+                const members = [
+                    "Catania",
+                    Buffer.from("Palermo"),
+                    "edge2",
+                    "edge1",
+                ];
+                const membersCoordinates: [number, number][] = [
+                    [15.087269, 37.502669],
+                    [13.361389, 38.115556],
+                    [17.24151, 38.788135],
+                    [12.758489, 38.788135],
+                ];
+
+                const membersGeoData: GeospatialData[] = [];
+
+                for (const [lon, lat] of membersCoordinates) {
+                    membersGeoData.push({ longitude: lon, latitude: lat });
+                }
+
+                const membersToCoordinates = new Map();
+
+                for (let i = 0; i < members.length; i++) {
+                    membersToCoordinates.set(members[i], membersGeoData[i]);
+                }
+
+                // geoadd
+                expect(
+                    await client.geoadd(
+                        Buffer.from(key1),
+                        membersToCoordinates,
+                    ),
+                ).toBe(4);
+                // geopos
+                const geopos = await client.geopos(Buffer.from(key1), [
+                    "Palermo",
+                    Buffer.from("Catania"),
+                    "New York",
+                ]);
+                // inner array is possibly null, we need a null check or a cast
+                expect(geopos[0]?.[0]).toBeCloseTo(13.361389, 5);
+                expect(geopos[0]?.[1]).toBeCloseTo(38.115556, 5);
+                expect(geopos[1]?.[0]).toBeCloseTo(15.087269, 5);
+                expect(geopos[1]?.[1]).toBeCloseTo(37.502669, 5);
+                expect(geopos[2]).toBeNull();
+                // geohash
+                const geohash = await client.geohash(Buffer.from(key1), [
+                    "Palermo",
+                    Buffer.from("Catania"),
+                    "New York",
+                ]);
+                expect(geohash).toEqual(["sqc8b49rny0", "sqdtr74hyu0", null]);
+                // geodist
+                expect(
+                    await client.geodist(
+                        Buffer.from(key1),
+                        Buffer.from("Palermo"),
+                        "Catania",
+                    ),
+                ).toBeCloseTo(166274.1516, 5);
+
+                // geosearch with binary decoder
+                let searchResult = await client.geosearch(
+                    Buffer.from(key1),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    { decoder: Decoder.Bytes },
+                );
+                // using set to compare, because results are reordrered
+                expect(new Set(searchResult)).toEqual(
+                    new Set(members.map((m) => Buffer.from(m))),
+                );
+                // repeat geosearch with string decoder
+                searchResult = await client.geosearch(
+                    Buffer.from(key1),
+                    { position: { longitude: 15, latitude: 37 } },
+                    { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                );
+                // using set to compare, because results are reordrered
+                expect(new Set(searchResult)).toEqual(
+                    new Set(members.map((m) => m.toString())),
+                );
+                // same with geosearchstore
+                expect(
+                    await client.geosearchstore(
+                        Buffer.from(key2),
+                        Buffer.from(key1),
+                        { position: { longitude: 15, latitude: 37 } },
+                        { width: 400, height: 400, unit: GeoUnit.KILOMETERS },
+                    ),
+                ).toEqual(4);
+                expect(
+                    await client.zrange(key2, { start: 0, stop: -1 }),
+                ).toEqual(searchResult);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `touch test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -8966,7 +9132,9 @@ export function runBaseTests(config: {
                 expect(
                     await client.mset({ [key1]: "value1", [key2]: "value2" }),
                 ).toEqual("OK");
-                expect(await client.touch([key1, key2])).toEqual(2);
+                expect(await client.touch([key1, Buffer.from(key2)])).toEqual(
+                    2,
+                );
                 expect(
                     await client.touch([key2, nonExistingKey, key1]),
                 ).toEqual(2);

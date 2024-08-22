@@ -1,5 +1,7 @@
 #### Changes
-* Node: Added FUNCTION DUMP and FUNCTION RESTORE commands (transaction) ([#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
+* Node: Added binary variant to generic commands ([#2158](https://github.com/valkey-io/valkey-glide/pull/2158))
+* Node: Added binary variant to geo commands ([#2149](https://github.com/valkey-io/valkey-glide/pull/2149))
+* Node: Added binary variant to HYPERLOGLOG commands ([#2176](https://github.com/valkey-io/valkey-glide/pull/2176))
 * Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129), [#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
 * Node: Added binary variant to FUNCTION commands ([#2172](https://github.com/valkey-io/valkey-glide/pull/2172))
 * Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))

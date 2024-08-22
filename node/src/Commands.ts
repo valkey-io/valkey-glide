@@ -10,7 +10,7 @@ import { BaseClient, Decoder } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "src/GlideClusterClient";
+import { GlideClusterClient, Routes } from "src/GlideClusterClient";
 import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
@@ -89,13 +89,22 @@ function createCommand(
     return singleCommand;
 }
 
-/** An extension to command option types. */
+/** An extension to command option types with {@link Decoder}. */
 export type DecoderOption = {
     /**
      * {@link Decoder} type which defines how to handle the response.
      * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      */
     decoder?: Decoder;
+};
+
+/** An extension to command option types with {@link Routes}. */
+export type RouteOption = {
+    /**
+     * Specifies the routing configuration for the command.
+     * The client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
 };
 
 /**
@@ -294,7 +303,7 @@ export function createInfo(options?: InfoOptions[]): command_request.Command {
 /**
  * @internal
  */
-export function createDel(keys: string[]): command_request.Command {
+export function createDel(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Del, keys);
 }
 
@@ -1239,14 +1248,14 @@ export function createHVals(key: GlideString): command_request.Command {
 /**
  * @internal
  */
-export function createExists(keys: string[]): command_request.Command {
+export function createExists(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
 
 /**
  * @internal
  */
-export function createUnlink(keys: string[]): command_request.Command {
+export function createUnlink(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Unlink, keys);
 }
 
@@ -1275,11 +1284,11 @@ export enum ExpireOptions {
  * @internal
  */
 export function createExpire(
-    key: string,
+    key: GlideString,
     seconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, seconds.toString()]
             : [key, seconds.toString(), option];
@@ -1290,11 +1299,11 @@ export function createExpire(
  * @internal
  */
 export function createExpireAt(
-    key: string,
+    key: GlideString,
     unixSeconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, unixSeconds.toString()]
             : [key, unixSeconds.toString(), option];
@@ -1304,7 +1313,7 @@ export function createExpireAt(
 /**
  * @internal
  */
-export function createExpireTime(key: string): command_request.Command {
+export function createExpireTime(key: GlideString): command_request.Command {
     return createCommand(RequestType.ExpireTime, [key]);
 }
 
@@ -1312,11 +1321,11 @@ export function createExpireTime(key: string): command_request.Command {
  * @internal
  */
 export function createPExpire(
-    key: string,
+    key: GlideString,
     milliseconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, milliseconds.toString()]
             : [key, milliseconds.toString(), option];
@@ -1327,11 +1336,11 @@ export function createPExpire(
  * @internal
  */
 export function createPExpireAt(
-    key: string,
+    key: GlideString,
     unixMilliseconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, unixMilliseconds.toString()]
             : [key, unixMilliseconds.toString(), option];
@@ -1341,14 +1350,14 @@ export function createPExpireAt(
 /**
  * @internal
  */
-export function createPExpireTime(key: string): command_request.Command {
+export function createPExpireTime(key: GlideString): command_request.Command {
     return createCommand(RequestType.PExpireTime, [key]);
 }
 
 /**
  * @internal
  */
-export function createTTL(key: string): command_request.Command {
+export function createTTL(key: GlideString): command_request.Command {
     return createCommand(RequestType.TTL, [key]);
 }
 
@@ -1852,7 +1861,7 @@ export function createZRangeStore(
 /**
  * @internal
  */
-export function createType(key: string): command_request.Command {
+export function createType(key: GlideString): command_request.Command {
     return createCommand(RequestType.Type, [key]);
 }
 
@@ -1931,7 +1940,7 @@ export function createEcho(message: string): command_request.Command {
 /**
  * @internal
  */
-export function createPTTL(key: string): command_request.Command {
+export function createPTTL(key: GlideString): command_request.Command {
     return createCommand(RequestType.PTTL, [key]);
 }
 
@@ -1979,7 +1988,7 @@ export function createZRemRangeByScore(
 }
 
 /** @internal */
-export function createPersist(key: string): command_request.Command {
+export function createPersist(key: GlideString): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
@@ -2815,8 +2824,8 @@ export function createXGroupDestroy(
  * @internal
  */
 export function createRename(
-    key: string,
-    newKey: string,
+    key: GlideString,
+    newKey: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
 }
@@ -2825,8 +2834,8 @@ export function createRename(
  * @internal
  */
 export function createRenameNX(
-    key: string,
-    newKey: string,
+    key: GlideString,
+    newKey: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.RenameNX, [key, newKey]);
 }
@@ -2835,8 +2844,8 @@ export function createRenameNX(
  * @internal
  */
 export function createPfAdd(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     const args = [key, ...elements];
     return createCommand(RequestType.PfAdd, args);
@@ -2845,7 +2854,7 @@ export function createPfAdd(
 /**
  * @internal
  */
-export function createPfCount(keys: string[]): command_request.Command {
+export function createPfCount(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.PfCount, keys);
 }
 
@@ -2853,8 +2862,8 @@ export function createPfCount(keys: string[]): command_request.Command {
  * @internal
  */
 export function createPfMerge(
-    destination: string,
-    sourceKey: string[],
+    destination: GlideString,
+    sourceKey: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PfMerge, [destination, ...sourceKey]);
 }
@@ -2862,28 +2871,34 @@ export function createPfMerge(
 /**
  * @internal
  */
-export function createObjectEncoding(key: string): command_request.Command {
+export function createObjectEncoding(
+    key: GlideString,
+): command_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
 
 /**
  * @internal
  */
-export function createObjectFreq(key: string): command_request.Command {
+export function createObjectFreq(key: GlideString): command_request.Command {
     return createCommand(RequestType.ObjectFreq, [key]);
 }
 
 /**
  * @internal
  */
-export function createObjectIdletime(key: string): command_request.Command {
+export function createObjectIdletime(
+    key: GlideString,
+): command_request.Command {
     return createCommand(RequestType.ObjectIdleTime, [key]);
 }
 
 /**
  * @internal
  */
-export function createObjectRefcount(key: string): command_request.Command {
+export function createObjectRefcount(
+    key: GlideString,
+): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
 }
 
@@ -2948,15 +2963,14 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
 }
 
 /**
- *
  * @internal
  */
 export function createCopy(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     options?: { destinationDB?: number; replace?: boolean },
 ): command_request.Command {
-    let args: string[] = [source, destination];
+    let args = [source, destination];
 
     if (options) {
         if (options.destinationDB !== undefined) {
@@ -2975,7 +2989,7 @@ export function createCopy(
  * @internal
  */
 export function createMove(
-    key: string,
+    key: GlideString,
     dbIndex: number,
 ): command_request.Command {
     return createCommand(RequestType.Move, [key, dbIndex.toString()]);
@@ -3070,11 +3084,11 @@ export type LPosOptions = {
  * @internal
  */
 export function createLPos(
-    key: string,
-    element: string,
+    key: GlideString,
+    element: GlideString,
     options?: LPosOptions,
 ): command_request.Command {
-    const args: string[] = [key, element];
+    const args: GlideString[] = [key, element];
 
     if (options) {
         if (options.rank !== undefined) {
@@ -3104,7 +3118,8 @@ export function createDBSize(): command_request.Command {
 }
 
 /**
- * An optional condition to the {@link BaseClient.geoadd} command.
+ * An optional condition to the {@link BaseClient.geoadd | geoadd},
+ * {@link BaseClient.zadd | zadd} and {@link BaseClient.set | set} commands.
  */
 export enum ConditionalChange {
     /**
@@ -3149,11 +3164,11 @@ export type GeoAddOptions = {
  * @internal
  */
 export function createGeoAdd(
-    key: string,
-    membersToGeospatialData: Map<string, GeospatialData>,
+    key: GlideString,
+    membersToGeospatialData: Map<GlideString, GeospatialData>,
     options?: GeoAddOptions,
 ): command_request.Command {
-    let args: string[] = [key];
+    let args: GlideString[] = [key];
 
     if (options) {
         if (options.updateMode) {
@@ -3191,8 +3206,8 @@ export enum GeoUnit {
  * @internal
  */
 export function createGeoPos(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.GeoPos, [key].concat(members));
 }
@@ -3201,12 +3216,12 @@ export function createGeoPos(
  * @internal
  */
 export function createGeoDist(
-    key: string,
-    member1: string,
-    member2: string,
+    key: GlideString,
+    member1: GlideString,
+    member2: GlideString,
     geoUnit?: GeoUnit,
 ): command_request.Command {
-    const args: string[] = [key, member1, member2];
+    const args = [key, member1, member2];
 
     if (geoUnit) {
         args.push(geoUnit);
@@ -3219,10 +3234,10 @@ export function createGeoDist(
  * @internal
  */
 export function createGeoHash(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
-    const args: string[] = [key].concat(members);
+    const args = [key].concat(members);
     return createCommand(RequestType.GeoHash, args);
 }
 
@@ -3303,12 +3318,12 @@ export type CoordOrigin = {
 /** The search origin represented by an existing member. */
 export type MemberOrigin = {
     /** Member (location) name stored in the sorted set to use as a search pivot. */
-    member: string;
+    member: GlideString;
 };
 
 /** @internal */
 export function createGeoSearch(
-    key: string,
+    key: GlideString,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchResultOptions,
@@ -3321,8 +3336,8 @@ export function createGeoSearch(
 
 /** @internal */
 export function createGeoSearchStore(
-    destination: string,
-    source: string,
+    destination: GlideString,
+    source: GlideString,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchStoreResultOptions,
@@ -3337,8 +3352,8 @@ function convertGeoSearchOptionsToArgs(
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchCommonResultOptions,
-): string[] {
-    let args: string[] = [];
+): GlideString[] {
+    let args: GlideString[] = [];
 
     if ("position" in searchFrom) {
         args = args.concat(
@@ -3501,7 +3516,7 @@ export type SortOptions = SortBaseOptions & {
      * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
      */
-    byPattern?: string;
+    byPattern?: GlideString;
 
     /**
      * A pattern used to retrieve external keys' values, instead of the elements at `key`.
@@ -3516,7 +3531,7 @@ export type SortOptions = SortBaseOptions & {
      * be used to include the actual element from `key` being sorted. If not provided, only
      * the sorted elements themselves are returned.
      */
-    getPatterns?: string[];
+    getPatterns?: GlideString[];
 };
 
 type SortBaseOptions = {
@@ -3557,16 +3572,16 @@ export type Limit = {
 
 /** @internal */
 export function createSort(
-    key: string,
+    key: GlideString,
     options?: SortOptions,
-    destination?: string,
+    destination?: GlideString,
 ): command_request.Command {
     return createSortImpl(RequestType.Sort, key, options, destination);
 }
 
 /** @internal */
 export function createSortReadOnly(
-    key: string,
+    key: GlideString,
     options?: SortOptions,
 ): command_request.Command {
     return createSortImpl(RequestType.SortReadOnly, key, options);
@@ -3575,11 +3590,11 @@ export function createSortReadOnly(
 /** @internal */
 function createSortImpl(
     cmd: RequestType,
-    key: string,
+    key: GlideString,
     options?: SortOptions,
-    destination?: string,
+    destination?: GlideString,
 ): command_request.Command {
-    const args: string[] = [key];
+    const args = [key];
 
     if (options) {
         if (options.limit) {
@@ -3704,7 +3719,7 @@ export function createLCS(
 /**
  * @internal
  */
-export function createTouch(keys: string[]): command_request.Command {
+export function createTouch(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Touch, keys);
 }
 
