@@ -261,7 +261,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
      * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
-     *     When no parameter is provided, the {@link InfoOptions.default|default option} is assumed.
+     *     When no parameter is provided, the {@link InfoOptions.Default|default option} is assumed.
      * @returns A string containing the information for the sections requested.
      */
     public async info(sections?: InfoOptions[]): Promise<string> {

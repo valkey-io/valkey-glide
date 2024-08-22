@@ -452,17 +452,17 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
-     * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
-     *     When no parameter is provided, the {@link InfoOptions.default|default option} is assumed.
-     * @param route - (Optional) Specifies the routing configuration for the command.
-     *     The client will route the command to the nodes defined by `route`.
-     * @returns A string containing the information for the sections requested. When specifying a route other than a single node,
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `sections`: a list of {@link InfoOptions} values specifying which sections of information to retrieve.
+     *     When no parameter is provided, the {@link InfoOptions.Default|default option} is assumed.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A string containing the information for the sections requested.
+     * When specifying a route other than a single node,
      *     it returns a dictionary where each address is the key and its corresponding node response is the value.
      */
-    public async info(options?: {
-        sections?: InfoOptions[];
-        route?: Routes;
-    }): Promise<ClusterResponse<string>> {
+    public async info(
+        options?: { sections?: InfoOptions[] } & RouteOption,
+    ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterResponse<string>>(
             createInfo(options?.sections),
             { route: toProtobufRoute(options?.route), decoder: Decoder.String },
@@ -1072,11 +1072,13 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
      * @see {@link https://valkey.io/commands/flushall/|valkey.io} for details.
      *
-     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * - (Optional) `route`: see {@link RouteOption}.
      * @returns `OK`.
      *
      * @example
@@ -1085,10 +1087,11 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async flushall(options?: {
-        mode?: FlushMode;
-        route?: Routes;
-    }): Promise<"OK"> {
+    public async flushall(
+        options?: {
+            mode?: FlushMode;
+        } & RouteOption,
+    ): Promise<"OK"> {
         return this.createWritePromise(createFlushAll(options?.mode), {
             route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
@@ -1098,11 +1101,13 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Deletes all the keys of the currently selected database. This command never fails.
      *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
      * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for details.
      *
-     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * - (Optional) `route`: see {@link RouteOption}.
      * @returns `OK`.
      *
      * @example
@@ -1111,10 +1116,11 @@ export class GlideClusterClient extends BaseClient {
      * console.log(result); // Output: 'OK'
      * ```
      */
-    public async flushdb(options?: {
-        mode?: FlushMode;
-        route?: Routes;
-    }): Promise<"OK"> {
+    public async flushdb(
+        options?: {
+            mode?: FlushMode;
+        } & RouteOption,
+    ): Promise<"OK"> {
         return this.createWritePromise(createFlushDB(options?.mode), {
             route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
