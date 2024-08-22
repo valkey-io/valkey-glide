@@ -665,13 +665,23 @@ describe("GlideClient", () => {
                 );
                 expect(await client.functionList()).toEqual([]);
 
-                expect(await client.functionLoad(Buffer.from(code))).toEqual(libName);
+                expect(await client.functionLoad(Buffer.from(code))).toEqual(
+                    libName,
+                );
 
                 expect(
-                    await client.fcall(Buffer.from(funcName), [], [Buffer.from("one"), "two"]),
+                    await client.fcall(
+                        Buffer.from(funcName),
+                        [],
+                        [Buffer.from("one"), "two"],
+                    ),
                 ).toEqual("one");
                 expect(
-                    await client.fcallReadonly(funcName, [], ["one", "two"]),
+                    await client.fcallReadonly(
+                        Buffer.from(funcName),
+                        [],
+                        ["one", Buffer.from("two")],
+                    ),
                 ).toEqual("one");
 
                 let functionStats = await client.functionStats();
@@ -681,7 +691,7 @@ describe("GlideClient", () => {
                 }
 
                 let functionList = await client.functionList({
-                    libNamePattern: libName,
+                    libNamePattern: Buffer.from(libName),
                 });
                 let expectedDescription = new Map<string, string | null>([
                     [funcName, null],
@@ -704,7 +714,9 @@ describe("GlideClient", () => {
                 );
 
                 // re-load library with replace
-                expect(await client.functionLoad(code, {replace: true})).toEqual(libName);
+                expect(
+                    await client.functionLoad(code, { replace: true }),
+                ).toEqual(libName);
 
                 // overwrite lib with new code
                 const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");
@@ -716,9 +728,9 @@ describe("GlideClient", () => {
                     ]),
                     true,
                 );
-                expect(await client.functionLoad(newCode, {replace: true})).toEqual(
-                    libName,
-                );
+                expect(
+                    await client.functionLoad(newCode, { replace: true }),
+                ).toEqual(libName);
 
                 functionList = await client.functionList({ withCode: true });
                 expectedDescription = new Map<string, string | null>([
@@ -872,7 +884,9 @@ describe("GlideClient", () => {
                 await expect(client.functionKill()).rejects.toThrow(/notbusy/i);
 
                 // load the lib
-                expect(await client.functionLoad(code, {replace: true})).toEqual(libName);
+                expect(
+                    await client.functionLoad(code, { replace: true }),
+                ).toEqual(libName);
 
                 try {
                     // call the function without await
@@ -944,7 +958,9 @@ describe("GlideClient", () => {
                 await expect(client.functionKill()).rejects.toThrow(/notbusy/i);
 
                 // load the lib
-                expect(await client.functionLoad(code, {replace: true})).toEqual(libName);
+                expect(
+                    await client.functionLoad(code, { replace: true }),
+                ).toEqual(libName);
 
                 let promise = null;
 
