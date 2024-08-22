@@ -219,6 +219,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -259,7 +260,6 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createXGroupSetid,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -1275,7 +1275,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the number of members that were added to the set, not including all the members already present in the set.
      */
-    public sadd(key: string, members: string[]): T {
+    public sadd(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createSAdd(key, members));
     }
 
@@ -1288,7 +1288,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of members that were removed from the set, not including non existing members.
      * If `key` does not exist, it is treated as an empty set and this command returns 0.
      */
-    public srem(key: string, members: string[]): T {
+    public srem(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createSRem(key, members));
     }
 
@@ -1316,7 +1316,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - all members of the set.
      * If `key` does not exist, it is treated as an empty set and this command returns empty list.
      */
-    public smembers(key: string): T {
+    public smembers(key: GlideString): T {
         return this.addAndReturn(createSMembers(key), true);
     }
 
@@ -1480,7 +1480,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the value of the popped member.
      * If `key` does not exist, null will be returned.
      */
-    public spop(key: string): T {
+    public spop(key: GlideString): T {
         return this.addAndReturn(createSPop(key));
     }
 
@@ -1493,7 +1493,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of popped elements will be returned depending on the set's length.
      * If `key` does not exist, empty list will be returned.
      */
-    public spopCount(key: string, count: number): T {
+    public spopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createSPop(key, count), true);
     }
 
