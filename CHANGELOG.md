@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added binary variant to HYPERLOGLOG commands ([#2176](https://github.com/valkey-io/valkey-glide/pull/2176))
 * Node: Added FUNCTION DUMP and FUNCTION RESTORE commands (transaction) ([#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
 * Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129), [#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
 * Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
