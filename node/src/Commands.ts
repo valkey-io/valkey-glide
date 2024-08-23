@@ -866,8 +866,8 @@ export function createLPush(
  * @internal
  */
 export function createLPushX(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.LPushX, [key].concat(elements));
 }
@@ -3826,11 +3826,11 @@ export function createAppend(
  * @internal
  */
 export function createLMPop(
-    keys: string[],
+    keys: GlideString[],
     direction: ListDirection,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [keys.length.toString(), ...keys, direction];
+    const args: GlideString[] = [keys.length.toString(), ...keys, direction];
 
     if (count !== undefined) {
         args.push("COUNT");

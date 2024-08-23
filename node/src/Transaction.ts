@@ -1041,7 +1041,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the list after the push operation.
      */
-    public lpushx(key: string, elements: string[]): T {
+    public lpushx(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createLPushX(key, elements));
     }
 
@@ -3757,7 +3757,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A `Record` of `key` name mapped array of popped elements.
      */
-    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+    public lmpop(
+        keys: GlideString[],
+        direction: ListDirection,
+        count?: number,
+    ): T {
         return this.addAndReturn(createLMPop(keys, direction, count));
     }
 
