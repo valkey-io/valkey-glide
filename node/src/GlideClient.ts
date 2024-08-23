@@ -224,15 +224,17 @@ export class GlideClient extends BaseClient {
         });
     }
 
-    /** Ping the Redis server.
+    /**
+     * Pings the server.
+     *
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
-     * @param message - An optional message to include in the PING command.
-     * If not provided, the server will respond with "PONG".
-     * If provided, the server will respond with a copy of the message.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
-     * @returns - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `message` : a message to include in the `PING` command.
+     *   + If not provided, the server will respond with `"PONG"`.
+     *   + If provided, the server will respond with a copy of the message.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
+     * @returns `"PONG"` if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
      * ```typescript
@@ -248,10 +250,11 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Hello'
      * ```
      */
-    public async ping(options?: {
-        message?: GlideString;
-        decoder?: Decoder;
-    }): Promise<GlideString> {
+    public async ping(
+        options?: {
+            message?: GlideString;
+        } & DecoderOption,
+    ): Promise<GlideString> {
         return this.createWritePromise(createPing(options?.message), {
             decoder: options?.decoder,
         });
@@ -268,11 +271,13 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createInfo(options));
     }
 
-    /** Change the currently selected Redis database.
+    /**
+     * Changes the currently selected database.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
-     * @returns A simple OK response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -282,13 +287,19 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async select(index: number): Promise<"OK"> {
-        return this.createWritePromise(createSelect(index));
+        return this.createWritePromise(createSelect(index), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Get the name of the primary's connection.
+    /**
+     * Gets the name of the primary's connection.
+     *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for more details.
      *
-     * @returns the name of the client connection as a string if a name is set, or null if no name is assigned.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @returns The name of the client connection as a string if a name is set, or `null` if no name is assigned.
      *
      * @example
      * ```typescript
@@ -297,8 +308,10 @@ export class GlideClient extends BaseClient {
      * console.log(result); // Output: 'Client Name'
      * ```
      */
-    public async clientGetName(): Promise<string | null> {
-        return this.createWritePromise(createClientGetName());
+    public async clientGetName(decoder?: Decoder): Promise<GlideString | null> {
+        return this.createWritePromise(createClientGetName(), {
+            decoder: decoder,
+        });
     }
 
     /** Rewrite the configuration file with the current configuration.
@@ -334,10 +347,18 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createConfigResetStat());
     }
 
-    /** Returns the current connection id.
+    /**
+     * Returns the current connection ID.
+     *
      * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
-     * @returns the id of the client.
+     * @returns The ID of the connection.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientId();
+     * console.log("Connection id: " + result);
+     * ```
      */
     public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());
@@ -382,10 +403,14 @@ export class GlideClient extends BaseClient {
         return this.createWritePromise(createConfigSet(parameters));
     }
 
-    /** Echoes the provided `message` back.
+    /**
+     * Echoes the provided `message` back.
+     *
      * @see {@link https://valkey.io/commands/echo|valkey.io} for more details.
      *
      * @param message - The message to be echoed back.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The provided `message`.
      *
      * @example
@@ -395,8 +420,13 @@ export class GlideClient extends BaseClient {
      * console.log(echoedMessage); // Output: 'valkey-glide'
      * ```
      */
-    public async echo(message: string): Promise<string> {
-        return this.createWritePromise(createEcho(message));
+    public async echo(
+        message: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString> {
+        return this.createWritePromise(createEcho(message), {
+            decoder,
+        });
     }
 
     /** Returns the server time
@@ -923,7 +953,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
      *
-     * @returns A simple "OK" response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -934,6 +964,8 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async unwatch(): Promise<"OK"> {
-        return this.createWritePromise(createUnWatch());
+        return this.createWritePromise(createUnWatch(), {
+            decoder: Decoder.String,
+        });
     }
 }

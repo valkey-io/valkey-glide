@@ -162,7 +162,19 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient) => {
-                    expect(await client.clientGetName()).toBe("TEST_CLIENT");
+                    expect(await client.clientGetName()).toEqual("TEST_CLIENT");
+
+                    if (client instanceof GlideClient) {
+                        expect(
+                            await client.clientGetName(Decoder.Bytes),
+                        ).toEqual(Buffer.from("TEST_CLIENT"));
+                    } else {
+                        expect(
+                            await client.clientGetName({
+                                decoder: Decoder.Bytes,
+                            }),
+                        ).toEqual(Buffer.from("TEST_CLIENT"));
+                    }
                 },
                 protocol,
                 { clientName: "TEST_CLIENT" },
@@ -492,11 +504,16 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const pongEncoded = Buffer.from("PONG");
-                const helloEncoded = Buffer.from("Hello");
                 expect(await client.ping()).toEqual("PONG");
                 expect(await client.ping({ message: "Hello" })).toEqual(
                     "Hello",
                 );
+                expect(
+                    await client.ping({
+                        message: pongEncoded,
+                        decoder: Decoder.String,
+                    }),
+                ).toEqual("PONG");
                 expect(await client.ping({ decoder: Decoder.Bytes })).toEqual(
                     pongEncoded,
                 );
@@ -505,7 +522,7 @@ export function runBaseTests(config: {
                         message: "Hello",
                         decoder: Decoder.Bytes,
                     }),
-                ).toEqual(helloEncoded);
+                ).toEqual(Buffer.from("Hello"));
             }, protocol);
         },
         config.timeout,
@@ -5382,6 +5399,33 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const message = uuidv4();
                 expect(await client.echo(message)).toEqual(message);
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(message, Decoder.String)
+                        : await client.echo(message, {
+                              decoder: Decoder.String,
+                          }),
+                ).toEqual(message);
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(message, Decoder.Bytes)
+                        : await client.echo(message, {
+                              decoder: Decoder.Bytes,
+                          }),
+                ).toEqual(Buffer.from(message));
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(
+                              Buffer.from(message),
+                              Decoder.String,
+                          )
+                        : await client.echo(Buffer.from(message), {
+                              decoder: Decoder.String,
+                          }),
+                ).toEqual(message);
+                expect(await client.echo(Buffer.from(message))).toEqual(
+                    message,
+                );
             }, protocol);
         },
         config.timeout,
