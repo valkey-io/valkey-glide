@@ -1383,8 +1383,8 @@ export class BaseClient {
      */
     public async bitop(
         operation: BitwiseOperation,
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(
             createBitOp(operation, destination, keys),
@@ -1408,7 +1408,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
      * ```
      */
-    public async getbit(key: string, offset: number): Promise<number> {
+    public async getbit(key: GlideString, offset: number): Promise<number> {
         return this.createWritePromise(createGetBit(key, offset));
     }
 
@@ -1432,7 +1432,7 @@ export class BaseClient {
      * ```
      */
     public async setbit(
-        key: string,
+        key: GlideString,
         offset: number,
         value: number,
     ): Promise<number> {
@@ -1464,7 +1464,7 @@ export class BaseClient {
      * ```
      */
     public async bitpos(
-        key: string,
+        key: GlideString,
         bit: number,
         start?: number,
     ): Promise<number> {
@@ -1505,7 +1505,7 @@ export class BaseClient {
      * ```
      */
     public async bitposInterval(
-        key: string,
+        key: GlideString,
         bit: number,
         start: number,
         end: number,
@@ -1548,7 +1548,7 @@ export class BaseClient {
      * ```
      */
     public async bitfield(
-        key: string,
+        key: GlideString,
         subcommands: BitFieldSubCommands[],
     ): Promise<(number | null)[]> {
         return this.createWritePromise(createBitField(key, subcommands));
@@ -1572,7 +1572,7 @@ export class BaseClient {
      * ```
      */
     public async bitfieldReadOnly(
-        key: string,
+        key: GlideString,
         subcommands: BitFieldGet[],
     ): Promise<number[]> {
         return this.createWritePromise(createBitField(key, subcommands, true));
@@ -2062,7 +2062,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that the list has two elements.
      * ```
      */
-    public async lpushx(key: string, elements: string[]): Promise<number> {
+    public async lpushx(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createLPushX(key, elements));
     }
 
@@ -5750,7 +5753,7 @@ export class BaseClient {
      * ```
      */
     public async bitcount(
-        key: string,
+        key: GlideString,
         options?: BitOffsetOptions,
     ): Promise<number> {
         return this.createWritePromise(createBitCount(key, options));
@@ -6439,7 +6442,7 @@ export class BaseClient {
      * ```
      */
     public async lmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         count?: number,
     ): Promise<Record<string, string[]>> {

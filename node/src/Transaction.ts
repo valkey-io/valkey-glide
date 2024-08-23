@@ -371,7 +371,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - substring extracted from the value stored at `key`.
      */
-    public getrange(key: string, start: number, end: number): T {
+    public getrange(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createGetRange(key, start, end));
     }
 
@@ -504,7 +504,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      */
-    public mget(keys: string[]): T {
+    public mget(keys: GlideString[]): T {
         return this.addAndReturn(createMGet(keys));
     }
 
@@ -618,8 +618,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public bitop(
         operation: BitwiseOperation,
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): T {
         return this.addAndReturn(createBitOp(operation, destination, keys));
     }
@@ -636,7 +636,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The bit at the given `offset` of the string. Returns `0` if the key is empty or if the
      * `offset` exceeds the length of the string.
      */
-    public getbit(key: string, offset: number): T {
+    public getbit(key: GlideString, offset: number): T {
         return this.addAndReturn(createGetBit(key, offset));
     }
 
@@ -654,7 +654,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The bit value that was previously stored at `offset`.
      */
-    public setbit(key: string, offset: number, value: number): T {
+    public setbit(key: GlideString, offset: number, value: number): T {
         return this.addAndReturn(createSetBit(key, offset, value));
     }
 
@@ -673,7 +673,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      */
-    public bitpos(key: string, bit: number, start?: number): T {
+    public bitpos(key: GlideString, bit: number, start?: number): T {
         return this.addAndReturn(createBitPos(key, bit, start));
     }
 
@@ -702,7 +702,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      binary value of the string held at `key`.
      */
     public bitposInterval(
-        key: string,
+        key: GlideString,
         bit: number,
         start: number,
         end: number,
@@ -735,7 +735,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
      *   does not contribute a value to the array response.
      */
-    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+    public bitfield(key: GlideString, subcommands: BitFieldSubCommands[]): T {
         return this.addAndReturn(createBitField(key, subcommands));
     }
 
@@ -751,7 +751,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of results from the {@link BitFieldGet} subcommands.
      *
      */
-    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+    public bitfieldReadOnly(key: GlideString, subcommands: BitFieldGet[]): T {
         return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
@@ -786,7 +786,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      */
-    public hget(key: string, field: string): T {
+    public hget(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHGet(key, field));
     }
 
@@ -932,7 +932,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - a list of values in the hash, or an empty list when the key does not exist.
      */
-    public hvals(key: string): T {
+    public hvals(key: GlideString): T {
         return this.addAndReturn(createHVals(key));
     }
 
@@ -1032,7 +1032,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the length of the list after the push operations.
      */
-    public lpush(key: string, elements: string[]): T {
+    public lpush(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createLPush(key, elements));
     }
 
@@ -1047,7 +1047,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the list after the push operation.
      */
-    public lpushx(key: string, elements: string[]): T {
+    public lpushx(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createLPushX(key, elements));
     }
 
@@ -1060,7 +1060,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The value of the first element.
      * If `key` does not exist null will be returned.
      */
-    public lpop(key: string): T {
+    public lpop(key: GlideString): T {
         return this.addAndReturn(createLPop(key));
     }
 
@@ -1073,7 +1073,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      */
-    public lpopCount(key: string, count: number): T {
+    public lpopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createLPop(key, count));
     }
 
@@ -1092,7 +1092,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
      * If `key` does not exist an empty list will be returned.
      */
-    public lrange(key: string, start: number, end: number): T {
+    public lrange(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createLRange(key, start, end));
     }
 
@@ -1104,7 +1104,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the length of the list at `key`.
      * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
      */
-    public llen(key: string): T {
+    public llen(key: GlideString): T {
         return this.addAndReturn(createLLen(key));
     }
 
@@ -1124,8 +1124,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The popped element, or `null` if `source` does not exist.
      */
     public lmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
     ): T {
@@ -1155,8 +1155,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
      */
     public blmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
@@ -1229,7 +1229,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the length of the list after the push operations.
      */
-    public rpush(key: string, elements: string[]): T {
+    public rpush(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createRPush(key, elements));
     }
 
@@ -1257,7 +1257,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The value of the last element.
      * If `key` does not exist null will be returned.
      */
-    public rpop(key: string): T {
+    public rpop(key: GlideString): T {
         return this.addAndReturn(createRPop(key));
     }
 
@@ -1270,7 +1270,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      */
-    public rpopCount(key: string, count: number): T {
+    public rpopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createRPop(key, count));
     }
 
@@ -2438,7 +2438,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The element at index in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      */
-    public lindex(key: string, index: number): T {
+    public lindex(key: GlideString, index: number): T {
         return this.addAndReturn(createLIndex(key, index));
     }
 
@@ -2458,10 +2458,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If the `pivot` wasn't found, returns `0`.
      */
     public linsert(
-        key: string,
+        key: GlideString,
         position: InsertPosition,
-        pivot: string,
-        element: string,
+        pivot: GlideString,
+        element: GlideString,
     ): T {
         return this.addAndReturn(createLInsert(key, position, pivot, element));
     }
@@ -3015,7 +3015,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
-    public brpop(keys: string[], timeout: number): T {
+    public brpop(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBRPop(keys, timeout));
     }
 
@@ -3033,7 +3033,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
-    public blpop(keys: string[], timeout: number): T {
+    public blpop(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBLPop(keys, timeout));
     }
 
@@ -3372,7 +3372,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
      *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
      */
-    public bitcount(key: string, options?: BitOffsetOptions): T {
+    public bitcount(key: GlideString, options?: BitOffsetOptions): T {
         return this.addAndReturn(createBitCount(key, options));
     }
 
@@ -3749,7 +3749,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the string after appending the value.
      */
-    public append(key: string, value: string): T {
+    public append(key: GlideString, value: GlideString): T {
         return this.addAndReturn(createAppend(key, value));
     }
 
@@ -3765,7 +3765,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A `Record` of `key` name mapped array of popped elements.
      */
-    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+    public lmpop(
+        keys: GlideString[],
+        direction: ListDirection,
+        count?: number,
+    ): T {
         return this.addAndReturn(createLMPop(keys, direction, count));
     }
 
