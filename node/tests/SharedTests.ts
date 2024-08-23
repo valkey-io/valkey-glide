@@ -4974,7 +4974,7 @@ export function runBaseTests(config: {
                 // Intersection results are aggregated by the MAX score of elements
                 const zinterWithScoresResults = await client.zinterWithScores(
                     [key1, key2],
-                    "MAX",
+                    { aggregationType: "MAX" },
                 );
                 const expectedMapMax = {
                     one: 1.5,
@@ -5003,7 +5003,7 @@ export function runBaseTests(config: {
                 // Intersection results are aggregated by the MIN score of elements
                 const zinterWithScoresResults = await client.zinterWithScores(
                     [key1, key2],
-                    "MIN",
+                    { aggregationType: "MIN" },
                 );
                 const expectedMapMin = {
                     one: 1.0,
@@ -5032,7 +5032,7 @@ export function runBaseTests(config: {
                 // Intersection results are aggregated by the SUM score of elements
                 const zinterWithScoresResults = await client.zinterWithScores(
                     [key1, key2],
-                    "SUM",
+                    { aggregationType: "SUM" },
                 );
                 const expectedMapSum = {
                     one: 2.5,
@@ -5064,7 +5064,7 @@ export function runBaseTests(config: {
                         [key1, 3],
                         [key2, 2],
                     ],
-                    "SUM",
+                    { aggregationType: "SUM" },
                 );
                 const expectedMapSum = {
                     one: 6,
@@ -8856,7 +8856,9 @@ export function runBaseTests(config: {
                     await client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1),
                 ).toEqual([key1, { b1: 2 }]);
                 expect(
-                    await client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10),
+                    await client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, {
+                        count: 10,
+                    }),
                 ).toEqual([key2, { a2: 0.1, b2: 0.2 }]);
 
                 // ensure that command doesn't time out even if timeout > request timeout (250ms by default)
@@ -8868,7 +8870,7 @@ export function runBaseTests(config: {
                         [nonExistingKey],
                         ScoreFilter.MAX,
                         0.55,
-                        1,
+                        { count: 1 },
                     ),
                 ).toBeNull();
 
@@ -8878,22 +8880,24 @@ export function runBaseTests(config: {
                     client.bzmpop([stringKey], ScoreFilter.MAX, 0.1),
                 ).rejects.toThrow(RequestError);
                 await expect(
-                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1, 1),
+                    client.bzmpop([stringKey], ScoreFilter.MAX, 0.1, {
+                        count: 1,
+                    }),
                 ).rejects.toThrow(RequestError);
 
                 // incorrect argument: key list should not be empty
                 await expect(
-                    client.bzmpop([], ScoreFilter.MAX, 0.1, 1),
+                    client.bzmpop([], ScoreFilter.MAX, 0.1, { count: 1 }),
                 ).rejects.toThrow(RequestError);
 
                 // incorrect argument: count should be greater than 0
                 await expect(
-                    client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0),
+                    client.bzmpop([key1], ScoreFilter.MAX, 0.1, { count: 0 }),
                 ).rejects.toThrow(RequestError);
 
                 // incorrect argument: timeout can not be a negative number
                 await expect(
-                    client.bzmpop([key1], ScoreFilter.MAX, -1, 10),
+                    client.bzmpop([key1], ScoreFilter.MAX, -1, { count: 10 }),
                 ).rejects.toThrow(RequestError);
 
                 // check that order of entries in the response is preserved
@@ -8909,7 +8913,7 @@ export function runBaseTests(config: {
                     [key2],
                     ScoreFilter.MIN,
                     0.1,
-                    10,
+                    { count: 10 },
                 );
 
                 if (result) {

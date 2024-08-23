@@ -3214,7 +3214,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
      * @param key - The key to return its timeout.
-     * @returns TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+     * @returns TTL in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      *
      * @example
      * ```typescript
@@ -3370,16 +3370,17 @@ export class BaseClient {
         return this.createWritePromise(createXRevRange(key, end, start, count));
     }
 
-    /** Adds members with their scores to the sorted set stored at `key`.
+    /**
+     * Adds members with their scores to the sorted set stored at `key`.
      * If a member is already a part of the sorted set, its score is updated.
      *
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @param membersScoresMap - A mapping of members to their corresponding scores.
-     * @param options - The ZAdd options.
+     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
      * @returns The number of elements added to the sorted set.
-     * If `changed` is set, returns the number of elements updated in the sorted set.
+     * If {@link ZAddOptions.changed|changed} is set, returns the number of elements updated in the sorted set.
      *
      * @example
      * ```typescript
@@ -3397,8 +3398,8 @@ export class BaseClient {
      * ```
      */
     public async zadd(
-        key: string,
-        membersScoresMap: Record<string, number>,
+        key: GlideString,
+        membersScoresMap: Record<string, number>, // TODO GlideString in Record
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
@@ -3472,13 +3473,14 @@ export class BaseClient {
         return this.createWritePromise(createZRem(key, members));
     }
 
-    /** Returns the cardinality (number of elements) of the sorted set stored at `key`.
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zcard/|valkey.io} for more details.
      *
      * @param key - The key of the sorted set.
      * @returns The number of elements in the sorted set.
-     * If `key` does not exist, it is treated as an empty sorted set, and this command returns 0.
+     * If `key` does not exist, it is treated as an empty sorted set, and this command returns `0`.
      *
      * @example
      * ```typescript
@@ -3494,7 +3496,7 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async zcard(key: string): Promise<number> {
+    public async zcard(key: GlideString): Promise<number> {
         return this.createWritePromise(createZCard(key));
     }
 
@@ -3516,7 +3518,10 @@ export class BaseClient {
      * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
      * ```
      */
-    public async zintercard(keys: string[], limit?: number): Promise<number> {
+    public async zintercard(
+        keys: GlideString[],
+        limit?: number,
+    ): Promise<number> {
         return this.createWritePromise(createZInterCard(keys, limit));
     }
 
@@ -3529,6 +3534,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` of elements representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      *
@@ -3541,8 +3547,11 @@ export class BaseClient {
      * console.log(result); // Output: ["member1"] - "member1" is in "zset1" but not "zset2" or "zset3".
      * ```
      */
-    public async zdiff(keys: string[]): Promise<string[]> {
-        return this.createWritePromise(createZDiff(keys));
+    public async zdiff(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createZDiff(keys), options);
     }
 
     /**
@@ -3554,6 +3563,7 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A map of elements and their scores representing the difference between the sorted sets.
      * If the first key does not exist, it is treated as an empty sorted set, and the command returns an empty `array`.
      *
@@ -3567,9 +3577,11 @@ export class BaseClient {
      * ```
      */
     public async zdiffWithScores(
-        keys: string[],
+        keys: GlideString[],
+        options?: DecoderOption,
     ): Promise<Record<string, number>> {
-        return this.createWritePromise(createZDiffWithScores(keys));
+        // TODO GlideString in Record
+        return this.createWritePromise(createZDiffWithScores(keys), options);
     }
 
     /**
@@ -3597,8 +3609,8 @@ export class BaseClient {
      * ```
      */
     public async zdiffstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createZDiffStore(destination, keys));
     }
@@ -3698,7 +3710,8 @@ export class BaseClient {
         return this.createWritePromise(createZMScore(key, members));
     }
 
-    /** Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
+    /**
+     * Returns the number of members in the sorted set stored at `key` with scores between `minScore` and `maxScore`.
      *
      * @see {@link https://valkey.io/commands/zcount/|valkey.io} for more details.
      *
@@ -3706,8 +3719,8 @@ export class BaseClient {
      * @param minScore - The minimum score to count from. Can be positive/negative infinity, or specific score and inclusivity.
      * @param maxScore - The maximum score to count up to. Can be positive/negative infinity, or specific score and inclusivity.
      * @returns The number of members in the specified score range.
-     * If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
-     * If `minScore` is greater than `maxScore`, 0 is returned.
+     * If `key` does not exist, it is treated as an empty sorted set, and the command returns `0`.
+     * If `minScore` is greater than `maxScore`, `0` is returned.
      *
      * @example
      * ```typescript
@@ -3724,7 +3737,7 @@ export class BaseClient {
      * ```
      */
     public async zcount(
-        key: string,
+        key: GlideString,
         minScore: Boundary<number>,
         maxScore: Boundary<number>,
     ): Promise<number> {
@@ -3873,8 +3886,8 @@ export class BaseClient {
      *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
-     *  string[] - for keys only.
-     *  KeyWeight[] - for weighted keys with score multipliers.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
      * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
      * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
@@ -3891,8 +3904,8 @@ export class BaseClient {
      * ```
      */
     public async zinterstore(
-        destination: string,
-        keys: string[] | KeyWeight[],
+        destination: GlideString,
+        keys: GlideString[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<number> {
         return this.createWritePromise(
@@ -3938,10 +3951,12 @@ export class BaseClient {
      * @remarks Since Valkey version 6.2.0.
      *
      * @param keys - The keys of the sorted sets with possible formats:
-     *  - string[] - for keys only.
-     *  - KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
-     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *  - `GlideString[]` - for keys only.
+     *  - `KeyWeight[]` - for weighted keys with score multipliers.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `aggregationType`: the aggregation strategy to apply when combining the scores of elements.
+     *     If `aggregationType` is not specified, defaults to `AggregationType.SUM`. See {@link AggregationType}.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The resulting sorted set with scores.
      *
      * @example
@@ -3955,11 +3970,11 @@ export class BaseClient {
      * ```
      */
     public async zinterWithScores(
-        keys: string[] | KeyWeight[],
-        aggregationType?: AggregationType,
+        keys: GlideString[] | KeyWeight[],
+        options?: { aggregationType?: AggregationType } & DecoderOption,
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
-            createZInter(keys, aggregationType, true),
+            createZInter(keys, options?.aggregationType, true),
         );
     }
 
@@ -4216,6 +4231,7 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
      *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      *
@@ -4226,10 +4242,11 @@ export class BaseClient {
      * ```
      */
     public async bzpopmin(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string, number] | null> {
-        return this.createWritePromise(createBZPopMin(keys, timeout));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString, number] | null> {
+        return this.createWritePromise(createBZPopMin(keys, timeout), options);
     }
 
     /** Removes and returns the members with the highest scores from the sorted set stored at `key`.
@@ -4277,6 +4294,7 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of
      *     `0` will block indefinitely. Since 6.0.0: timeout is interpreted as a double instead of an integer.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns An `array` containing the key where the member was popped out, the member, itself, and the member score.
      *     If no member could be popped and the `timeout` expired, returns `null`.
      *
@@ -4287,10 +4305,11 @@ export class BaseClient {
      * ```
      */
     public async bzpopmax(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string, number] | null> {
-        return this.createWritePromise(createBZPopMax(keys, timeout));
+        options?: DecoderOption,
+    ): Promise<[GlideString, GlideString, number] | null> {
+        return this.createWritePromise(createBZPopMax(keys, timeout), options);
     }
 
     /**
@@ -4299,7 +4318,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
      * @param key - The key to return its timeout.
-     * @returns TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
+     * @returns TTL in milliseconds, `-2` if `key` does not exist, `-1` if `key` exists but has no associated expire.
      *
      * @example
      * ```typescript
@@ -6028,7 +6047,9 @@ export class BaseClient {
      *     {@link ScoreFilter.MAX} to pop the member with the lowest/highest score accordingly.
      * @param timeout - The number of seconds to wait for a blocking operation to complete.
      *     A value of 0 will block indefinitely.
-     * @param count - (Optional) The number of elements to pop. If not supplied, only one element will be popped.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `count` : the number of elements to pop. If not supplied, only one element will be popped.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
      *     If no member could be popped, returns `null`.
@@ -6042,13 +6063,15 @@ export class BaseClient {
      * ```
      */
     public async bzmpop(
-        keys: string[],
+        keys: GlideString[],
         modifier: ScoreFilter,
         timeout: number,
-        count?: number,
-    ): Promise<[string, [Record<string, number>]] | null> {
+        options?: { count?: number } & DecoderOption,
+    ): Promise<[GlideString, Record<string, number>] | null> {
+        // TODO GlideString in Record
         return this.createWritePromise(
-            createBZMPop(keys, modifier, timeout, count),
+            createBZMPop(keys, modifier, timeout, options?.count),
+            options,
         );
     }
 
@@ -6078,9 +6101,9 @@ export class BaseClient {
      * ```
      */
     public async zincrby(
-        key: string,
+        key: GlideString,
         increment: number,
-        member: string,
+        member: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createZIncrBy(key, increment, member));
     }
