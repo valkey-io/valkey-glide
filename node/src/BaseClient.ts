@@ -1661,7 +1661,10 @@ export class BaseClient {
      * ```
      */
 
-    public async hkeys(key: GlideString, decoder?: Decoder): Promise<GlideString[]> {
+    public async hkeys(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
         return this.createWritePromise(createHKeys(key), { decoder: decoder });
     }
 
@@ -1715,7 +1718,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that two fields were successfully removed from the hash.
      * ```
      */
-    public async hdel(key: GlideString, fields: GlideString[]): Promise<number> {
+    public async hdel(
+        key: GlideString,
+        fields: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createHDel(key, fields));
     }
 
@@ -1741,7 +1747,9 @@ export class BaseClient {
         fields: GlideString[],
         decoder?: Decoder,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createHMGet(key, fields), { decoder: decoder });
+        return this.createWritePromise(createHMGet(key, fields), {
+            decoder: decoder,
+        });
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
@@ -1766,7 +1774,10 @@ export class BaseClient {
      * console.log(result); // Output: false
      * ```
      */
-    public async hexists(key: GlideString, field: GlideString): Promise<boolean> {
+    public async hexists(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createHExists(key, field));
     }
 
@@ -1905,7 +1916,10 @@ export class BaseClient {
      * console.log(result); // Output: 5
      * ```
      */
-    public async hstrlen(key: GlideString, field: GlideString): Promise<number> {
+    public async hstrlen(
+        key: GlideString,
+        field: GlideString,
+    ): Promise<number> {
         return this.createWritePromise(createHStrlen(key, field));
     }
 
@@ -1924,8 +1938,13 @@ export class BaseClient {
      * console.log(await client.hrandfield("myHash")); // Output: 'field'
      * ```
      */
-    public async hrandfield(key: GlideString, decoder?: Decoder): Promise<GlideString | null> {
-        return this.createWritePromise(createHRandField(key), { decoder: decoder });
+    public async hrandfield(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHRandField(key), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -1971,7 +1990,9 @@ export class BaseClient {
         options?: BaseScanOptions,
         decoder?: Decoder,
     ): Promise<[GlideString, GlideString[]]> {
-        return this.createWritePromise(createHScan(key, cursor, options), { decoder: decoder });
+        return this.createWritePromise(createHScan(key, cursor, options), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -1997,7 +2018,9 @@ export class BaseClient {
         count: number,
         decoder?: Decoder,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHRandField(key, count), { decoder: decoder });
+        return this.createWritePromise(createHRandField(key, count), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -2026,7 +2049,9 @@ export class BaseClient {
         count: number,
         decoder?: Decoder,
     ): Promise<[GlideString, GlideString][]> {
-        return this.createWritePromise(createHRandField(key, count, true), { decoder: decoder });
+        return this.createWritePromise(createHRandField(key, count, true), {
+            decoder: decoder,
+        });
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.

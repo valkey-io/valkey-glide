@@ -920,7 +920,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value of `field` in the hash stored at `key` after the increment.
      */
-    public hincrByFloat(key: GlideString, field: GlideString, amount: number): T {
+    public hincrByFloat(
+        key: GlideString,
+        field: GlideString,
+        amount: number,
+    ): T {
         return this.addAndReturn(createHIncrByFloat(key, field, amount));
     }
 
@@ -990,7 +994,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * hash held in `key`. The array in the second element is always a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
      */
-    public hscan(key: GlideString, cursor: GlideString, options?: BaseScanOptions): T {
+    public hscan(
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions,
+    ): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
