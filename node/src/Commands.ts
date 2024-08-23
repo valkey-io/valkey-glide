@@ -6,11 +6,11 @@ import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { BaseClient, Decoder } from "src/BaseClient";
+import { BaseClient } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient, Routes } from "src/GlideClusterClient";
+import { GlideClusterClient } from "src/GlideClusterClient";
 import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
@@ -88,24 +88,6 @@ function createCommand(
 
     return singleCommand;
 }
-
-/** An extension to command option types with {@link Decoder}. */
-export type DecoderOption = {
-    /**
-     * {@link Decoder} type which defines how to handle the response.
-     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
-     */
-    decoder?: Decoder;
-};
-
-/** An extension to command option types with {@link Routes}. */
-export type RouteOption = {
-    /**
-     * Specifies the routing configuration for the command.
-     * The client will route the command to the nodes defined by `route`.
-     */
-    route?: Routes;
-};
 
 /**
  * @internal

@@ -7,13 +7,13 @@ import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
+    DecoderOption,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
-    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,

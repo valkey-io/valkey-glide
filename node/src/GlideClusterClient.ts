@@ -7,13 +7,13 @@ import {
     BaseClient,
     BaseClientConfiguration,
     Decoder,
+    DecoderOption,
     GlideString,
     PubSubMsg,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
     ReturnType,
 } from "./BaseClient";
 import {
-    DecoderOption,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -21,7 +21,6 @@ import {
     FunctionStatsSingleResponse,
     InfoOptions,
     LolwutOptions,
-    RouteOption,
     SortClusterOptions,
     createClientGetName,
     createClientId,
@@ -61,6 +60,15 @@ import {
 import { RequestError } from "./Errors";
 import { command_request, connection_request } from "./ProtobufMessage";
 import { ClusterTransaction } from "./Transaction";
+
+/** An extension to command option types with {@link Routes}. */
+export type RouteOption = {
+    /**
+     * Specifies the routing configuration for the command.
+     * The client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
+};
 
 /**
  * Represents a manually configured interval for periodic checks.
