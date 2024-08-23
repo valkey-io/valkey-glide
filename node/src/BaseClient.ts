@@ -3398,8 +3398,8 @@ export class BaseClient {
      * ```
      */
     public async zadd(
-        key: GlideString,
-        membersScoresMap: Record<string, number>, // TODO GlideString in Record
+        key: string,
+        membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
@@ -3407,7 +3407,8 @@ export class BaseClient {
         );
     }
 
-    /** Increments the score of member in the sorted set stored at `key` by `increment`.
+    /**
+     * Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
      *
@@ -3416,7 +3417,7 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - The ZAdd options.
+     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
      * @returns The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
      *
@@ -3580,7 +3581,7 @@ export class BaseClient {
         keys: GlideString[],
         options?: DecoderOption,
     ): Promise<Record<string, number>> {
-        // TODO GlideString in Record
+        // TODO GlideString in Record and add a test
         return this.createWritePromise(createZDiffWithScores(keys), options);
     }
 
@@ -3925,6 +3926,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
      *
      * @param keys - The keys of the sorted sets.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns The resulting array of intersecting elements.
      *
      * @example
@@ -3935,8 +3937,11 @@ export class BaseClient {
      * console.log(result); // Output: ['member1']
      * ```
      */
-    public async zinter(keys: string[]): Promise<string[]> {
-        return this.createWritePromise(createZInter(keys));
+    public async zinter(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createZInter(keys), options);
     }
 
     /**
@@ -3973,8 +3978,10 @@ export class BaseClient {
         keys: GlideString[] | KeyWeight[],
         options?: { aggregationType?: AggregationType } & DecoderOption,
     ): Promise<Record<string, number>> {
+        // TODO Record with GlideString and add tests
         return this.createWritePromise(
             createZInter(keys, options?.aggregationType, true),
+            options,
         );
     }
 
@@ -6048,7 +6055,7 @@ export class BaseClient {
      * @param timeout - The number of seconds to wait for a blocking operation to complete.
      *     A value of 0 will block indefinitely.
      * @param options - (Optional) Additional parameters:
-     * - (Optional) `count` : the number of elements to pop. If not supplied, only one element will be popped.
+     * - (Optional) `count`: the number of elements to pop. If not supplied, only one element will be popped.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A two-element `array` containing the key name of the set from which the element
      *     was popped, and a member-score `Record` of the popped element.
@@ -6067,7 +6074,7 @@ export class BaseClient {
         modifier: ScoreFilter,
         timeout: number,
         options?: { count?: number } & DecoderOption,
-    ): Promise<[GlideString, Record<string, number>] | null> {
+    ): Promise<[string, Record<string, number>] | null> {
         // TODO GlideString in Record
         return this.createWritePromise(
             createBZMPop(keys, modifier, timeout, options?.count),

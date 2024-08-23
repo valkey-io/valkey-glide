@@ -1390,7 +1390,7 @@ export type ZAddOptions = {
  * @internal
  */
 export function createZAdd(
-    key: GlideString,
+    key: string,
     membersScoresMap: Record<string, number>,
     options?: ZAddOptions,
     incr: boolean = false,

@@ -1703,14 +1703,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If {@link ZAddOptions.changed|changed} is set, returns the number of elements updated in the sorted set.
      */
     public zadd(
-        key: GlideString,
-        membersScoresMap: Record<string, number>, // TODO GlideString in Record
+        key: string,
+        membersScoresMap: Record<string, number>,
         options?: ZAddOptions,
     ): T {
         return this.addAndReturn(createZAdd(key, membersScoresMap, options));
     }
 
-    /** Increments the score of member in the sorted set stored at `key` by `increment`.
+    /**
+     * Increments the score of member in the sorted set stored at `key` by `increment`.
      * If `member` does not exist in the sorted set, it is added with `increment` as its score (as if its previous score was 0.0).
      * If `key` does not exist, a new sorted set with the specified member as its sole member is created.
      * @see {@link https://valkey.io/commands/zadd/|valkey.io} for details.
@@ -1718,7 +1719,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key of the sorted set.
      * @param member - A member in the sorted set to increment.
      * @param increment - The score to increment the member.
-     * @param options - The ZAdd options.
+     * @param options - (Optional) The ZAdd options - see {@link ZAddOptions}.
      *
      * Command Response - The score of the member.
      * If there was a conflict with the options, the operation aborts and null is returned.
