@@ -311,7 +311,9 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info([InfoOptions.Commandstats]),
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
                           ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
@@ -320,7 +322,9 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info([InfoOptions.Commandstats]),
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
                           ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
@@ -339,9 +343,9 @@ export function runBaseTests(config: {
                 expect(await client.lastsave()).toBeGreaterThan(yesterday);
 
                 if (client instanceof GlideClusterClient) {
-                    Object.values(await client.lastsave("allNodes")).forEach(
-                        (v) => expect(v).toBeGreaterThan(yesterday),
-                    );
+                    Object.values(
+                        await client.lastsave({ route: "allNodes" }),
+                    ).forEach((v) => expect(v).toBeGreaterThan(yesterday));
                 }
 
                 const response =
@@ -7785,11 +7789,14 @@ export function runBaseTests(config: {
                         type: "primarySlotKey",
                         key: key,
                     };
-                    expect(await client.flushall(undefined, primaryRoute)).toBe(
+                    expect(await client.flushall({ route: primaryRoute })).toBe(
                         "OK",
                     );
                     expect(
-                        await client.flushall(FlushMode.ASYNC, primaryRoute),
+                        await client.flushall({
+                            mode: FlushMode.ASYNC,
+                            route: primaryRoute,
+                        }),
                     ).toBe("OK");
 
                     //Test FLUSHALL on replica (should fail)
@@ -7799,7 +7806,7 @@ export function runBaseTests(config: {
                         key: key2,
                     };
                     await expect(
-                        client.flushall(undefined, replicaRoute),
+                        client.flushall({ route: replicaRoute }),
                     ).rejects.toThrowError();
                 }
             }, protocol);
@@ -7935,7 +7942,9 @@ export function runBaseTests(config: {
                         type: "primarySlotKey",
                         key: key,
                     };
-                    expect(await client.dbsize(primaryRoute)).toBe(1);
+                    expect(await client.dbsize({ route: primaryRoute })).toBe(
+                        1,
+                    );
                 }
             }, protocol);
         },

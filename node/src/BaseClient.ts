@@ -24,7 +24,6 @@ import {
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
-    DecoderOption,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -288,6 +287,15 @@ export enum Decoder {
      */
     String,
 }
+
+/** An extension to command option types with {@link Decoder}. */
+export type DecoderOption = {
+    /**
+     * {@link Decoder} type which defines how to handle the response.
+     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     */
+    decoder?: Decoder;
+};
 
 /**
  * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
