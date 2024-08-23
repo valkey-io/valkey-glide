@@ -851,10 +851,10 @@ describe("GlideClusterClient", () => {
                                     ? { type: "primarySlotKey", key: "1" }
                                     : "allPrimaries";
 
-                                let functionList = await client.functionList(
-                                    { libNamePattern: libName },
-                                    route,
-                                );
+                                let functionList = await client.functionList({
+                                    libNamePattern: libName,
+                                    route: route,
+                                });
                                 checkClusterResponse(
                                     functionList as object,
                                     singleNodeRoute,
@@ -881,10 +881,10 @@ describe("GlideClusterClient", () => {
                                     libName,
                                 );
 
-                                functionList = await client.functionList(
-                                    { libNamePattern: libName },
-                                    route,
-                                );
+                                functionList = await client.functionList({
+                                    libNamePattern: libName,
+                                    route: route,
+                                });
                                 let expectedDescription = new Map<
                                     string,
                                     string | null
@@ -972,10 +972,11 @@ describe("GlideClusterClient", () => {
                                     }),
                                 ).toEqual(libName);
 
-                                functionList = await client.functionList(
-                                    { libNamePattern: libName, withCode: true },
-                                    route,
-                                );
+                                functionList = await client.functionList({
+                                    libNamePattern: libName,
+                                    withCode: true,
+                                    route: route,
+                                });
                                 expectedDescription = new Map<
                                     string,
                                     string | null
@@ -1074,8 +1075,7 @@ describe("GlideClusterClient", () => {
                                     : "allPrimaries";
 
                                 const functionList1 = await client.functionList(
-                                    {},
-                                    route,
+                                    { route: route },
                                 );
                                 checkClusterResponse(
                                     functionList1 as object,
@@ -1092,16 +1092,16 @@ describe("GlideClusterClient", () => {
 
                                 // flush functions
                                 expect(
-                                    await client.functionFlush(
-                                        FlushMode.SYNC,
-                                        route,
-                                    ),
+                                    await client.functionFlush({
+                                        mode: FlushMode.SYNC,
+                                        route: route,
+                                    }),
                                 ).toEqual("OK");
                                 expect(
-                                    await client.functionFlush(
-                                        FlushMode.ASYNC,
-                                        route,
-                                    ),
+                                    await client.functionFlush({
+                                        mode: FlushMode.ASYNC,
+                                        route: route,
+                                    }),
                                 ).toEqual("OK");
 
                                 const functionList2 =
@@ -1154,10 +1154,9 @@ describe("GlideClusterClient", () => {
                                 const route: Routes = singleNodeRoute
                                     ? { type: "primarySlotKey", key: "1" }
                                     : "allPrimaries";
-                                let functionList = await client.functionList(
-                                    {},
-                                    route,
-                                );
+                                let functionList = await client.functionList({
+                                    route: route,
+                                });
                                 checkClusterResponse(
                                     functionList as object,
                                     singleNodeRoute,
@@ -1175,10 +1174,11 @@ describe("GlideClusterClient", () => {
                                     await client.functionDelete(libName, route),
                                 ).toEqual("OK");
 
-                                functionList = await client.functionList(
-                                    { libNamePattern: libName, withCode: true },
-                                    route,
-                                );
+                                functionList = await client.functionList({
+                                    libNamePattern: libName,
+                                    withCode: true,
+                                    route: route,
+                                });
                                 checkClusterResponse(
                                     functionList as object,
                                     singleNodeRoute,
@@ -1314,7 +1314,10 @@ describe("GlideClusterClient", () => {
                             ? { type: "primarySlotKey", key: "1" }
                             : "allPrimaries";
                         expect(
-                            await client.functionFlush(FlushMode.SYNC, route),
+                            await client.functionFlush({
+                                mode: FlushMode.SYNC,
+                                route: route,
+                            }),
                         ).toEqual("OK");
 
                         try {
@@ -1347,10 +1350,10 @@ describe("GlideClusterClient", () => {
                                 }),
                             ).toEqual(name1);
 
-                            const flist = await client.functionList(
-                                { withCode: true },
-                                route,
-                            );
+                            const flist = await client.functionList({
+                                withCode: true,
+                                route: route,
+                            });
                             response = await client.functionDump(route);
                             const dump = (
                                 singleNodeRoute
@@ -1384,18 +1387,18 @@ describe("GlideClusterClient", () => {
                             ).toEqual("OK");
                             // but nothing changed - all code overwritten
                             expect(
-                                await client.functionList(
-                                    { withCode: true },
-                                    route,
-                                ),
+                                await client.functionList({
+                                    withCode: true,
+                                    route: route,
+                                }),
                             ).toEqual(flist);
 
                             // create lib with another name, but with the same function names
                             expect(
-                                await client.functionFlush(
-                                    FlushMode.SYNC,
-                                    route,
-                                ),
+                                await client.functionFlush({
+                                    mode: FlushMode.SYNC,
+                                    route: route,
+                                }),
                             ).toEqual("OK");
                             code = generateLuaLibCode(
                                 name2,
@@ -1428,10 +1431,10 @@ describe("GlideClusterClient", () => {
                                 }),
                             ).toEqual("OK");
                             expect(
-                                await client.functionList(
-                                    { withCode: true },
-                                    route,
-                                ),
+                                await client.functionList({
+                                    withCode: true,
+                                    route: route,
+                                }),
                             ).toEqual(flist);
 
                             // call restored functions

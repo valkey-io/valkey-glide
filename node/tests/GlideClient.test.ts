@@ -637,15 +637,17 @@ describe("GlideClient", () => {
                         Buffer.from(funcName),
                         [],
                         [Buffer.from("one"), "two"],
+                        Decoder.Bytes,
                     ),
-                ).toEqual("one");
+                ).toEqual(Buffer.from("one"));
                 expect(
                     await client.fcallReadonly(
                         Buffer.from(funcName),
                         [],
                         ["one", Buffer.from("two")],
+                        Decoder.Bytes,
                     ),
-                ).toEqual("one");
+                ).toEqual(Buffer.from("one"));
 
                 let functionStats = await client.functionStats();
 
@@ -671,15 +673,17 @@ describe("GlideClient", () => {
                 );
 
                 // re-load library without replace
-
                 await expect(client.functionLoad(code)).rejects.toThrow(
                     `Library '${libName}' already exists`,
                 );
 
                 // re-load library with replace
                 expect(
-                    await client.functionLoad(code, { replace: true }),
-                ).toEqual(libName);
+                    await client.functionLoad(code, {
+                        replace: true,
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from(libName));
 
                 // overwrite lib with new code
                 const func2Name = "myfunc2c" + uuidv4().replaceAll("-", "");

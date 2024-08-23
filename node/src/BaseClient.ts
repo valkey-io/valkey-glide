@@ -5671,9 +5671,9 @@ export class BaseClient {
         keys: GlideString[],
         args: GlideString[],
         decoder?: Decoder,
-    ): Promise<GlideString> {
+    ): Promise<ReturnType> {
         return this.createWritePromise(createFCall(func, keys, args), {
-            decoder: decoder,
+            decoder,
         });
     }
 
@@ -5704,9 +5704,9 @@ export class BaseClient {
         keys: GlideString[],
         args: GlideString[],
         decoder?: Decoder,
-    ): Promise<GlideString> {
+    ): Promise<ReturnType> {
         return this.createWritePromise(createFCallReadOnly(func, keys, args), {
-            decoder: decoder,
+            decoder,
         });
     }
 

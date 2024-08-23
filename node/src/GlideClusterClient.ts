@@ -743,10 +743,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -758,10 +755,7 @@ export class GlideClusterClient extends BaseClient {
     public async fcallWithRoute(
         func: GlideString,
         args: GlideString[],
-        options?: {
-            route?: Routes;
-            decoder?: Decoder;
-        },
+        options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCall(func, [], args), {
             route: toProtobufRoute(options?.route),
@@ -777,10 +771,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param func - The function name.
      * @param args - A list of `function` arguments and it should not represent names of keys.
-     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns The invoked function's return value.
      *
      * @example
@@ -793,10 +784,7 @@ export class GlideClusterClient extends BaseClient {
     public async fcallReadonlyWithRoute(
         func: GlideString,
         args: GlideString[],
-        options?: {
-            route?: Routes;
-            decoder?: Decoder;
-        },
+        options?: RouteOption & DecoderOption,
     ): Promise<ClusterResponse<ReturnType>> {
         return this.createWritePromise(createFCallReadOnly(func, [], args), {
             route: toProtobufRoute(options?.route),
@@ -813,7 +801,7 @@ export class GlideClusterClient extends BaseClient {
      * @param libraryCode - The library name to delete.
      * @param route - (Optional) The command will be routed to all primary node, unless `route` is provided, in which
      *     case the client will route the command to the nodes defined by `route`.
-     * @returns A simple `OK` response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -838,12 +826,11 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - (Optional) Whether the given library should overwrite a library with the same name if it
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: whether the given library should overwrite a library with the same name if it
      *     already exists.
-     * @param route - (Optional) The command will be routed to a random node, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The library name that was loaded.
      *
      * @example
@@ -857,9 +844,8 @@ export class GlideClusterClient extends BaseClient {
         libraryCode: GlideString,
         options?: {
             replace?: boolean;
-            route?: Routes;
-            decoder?: Decoder;
-        },
+        } & RouteOption &
+            DecoderOption,
     ): Promise<GlideString> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, options?.replace),
@@ -876,10 +862,10 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @param route - (Optional) The command will be routed to all primary nodes, unless `route` is provided, in which
-     *   case the client will route the command to the nodes defined by `route`.
-     * @returns A simple `OK` response.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -888,11 +874,12 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionFlush(
-        mode?: FlushMode,
-        route?: Routes,
+        options?: {
+            mode?: FlushMode;
+        } & RouteOption,
     ): Promise<"OK"> {
-        return this.createWritePromise(createFunctionFlush(mode), {
-            route: toProtobufRoute(route),
+        return this.createWritePromise(createFunctionFlush(options?.mode), {
+            route: toProtobufRoute(options?.route),
             decoder: Decoder.String,
         });
     }
@@ -903,9 +890,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - (Optional) {@link FunctionListOptions} and {@link DecoderOption}.
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed to a random node.
+     * @param options - (Optional) See {@link FunctionListOptions}, {@link DecoderOption}, and {@link RouteOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -928,11 +913,10 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async functionList(
-        options?: FunctionListOptions & DecoderOption,
-        route?: Routes,
+        options?: FunctionListOptions & DecoderOption & RouteOption,
     ): Promise<ClusterResponse<FunctionListResponse>> {
         return this.createWritePromise(createFunctionList(options), {
-            route: toProtobufRoute(route),
+            route: toProtobufRoute(options?.route),
             decoder: options?.decoder,
         });
     }
@@ -944,10 +928,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param route - (Optional) The command will be routed automatically to all nodes, unless `route` is provided, in which
-     *     case the client will route the command to the nodes defined by `route`.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption} and {@link RouteOption}.
      * @returns A `Record` with two keys:
      *     - `"running_script"` with information about the running script.
      *     - `"engines"` with information about available engines and their stats.
@@ -987,10 +968,9 @@ export class GlideClusterClient extends BaseClient {
      * // }
      * ```
      */
-    public async functionStats(options?: {
-        route?: Routes;
-        decoder?: Decoder;
-    }): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
+    public async functionStats(
+        options?: RouteOption & DecoderOption,
+    ): Promise<ClusterResponse<FunctionStatsSingleResponse>> {
         return this.createWritePromise(createFunctionStats(), {
             route: toProtobufRoute(options?.route),
             decoder: options?.decoder,
@@ -1006,7 +986,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param route - (Optional) The client will route the command to the nodes defined by `route`.
      *     If not defined, the command will be routed to all nodes.
-     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      *
      * @example
      * ```typescript
@@ -1040,8 +1020,8 @@ export class GlideClusterClient extends BaseClient {
         route?: Routes,
     ): Promise<ClusterResponse<Buffer>> {
         return this.createWritePromise(createFunctionDump(), {
-            decoder: Decoder.Bytes,
             route: toProtobufRoute(route),
+            decoder: Decoder.Bytes,
         });
     }
 
@@ -1052,11 +1032,11 @@ export class GlideClusterClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
-     * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `policy`: a policy for handling existing libraries, see {@link FunctionRestorePolicy}.
      *     {@link FunctionRestorePolicy.APPEND} is used by default.
-     * @param route - (Optional) The client will route the command to the nodes defined by `route`.
-     *     If not defined, the command will be routed all primary nodes.
-     * @returns `OK`.
+     * - (Optional) `route`: see {@link RouteOption}.
+     * @returns `"OK"`.
      *
      * @example
      * ```typescript
@@ -1065,13 +1045,13 @@ export class GlideClusterClient extends BaseClient {
      */
     public async functionRestore(
         payload: Buffer,
-        options?: { policy?: FunctionRestorePolicy; route?: Routes },
+        options?: { policy?: FunctionRestorePolicy } & RouteOption,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createFunctionRestore(payload, options?.policy),
             {
-                decoder: Decoder.String,
                 route: toProtobufRoute(options?.route),
+                decoder: Decoder.String,
             },
         );
     }

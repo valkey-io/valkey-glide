@@ -503,12 +503,12 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
-     * @returns A simple `OK` response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
      * const result = await client.functionDelete("libName");
-     * console.log(result); // Output: `OK`
+     * console.log(result); // Output: 'OK'
      * ```
      */
     public async functionDelete(libraryCode: GlideString): Promise<"OK"> {
@@ -539,10 +539,7 @@ export class GlideClient extends BaseClient {
      */
     public async functionLoad(
         libraryCode: GlideString,
-        options?: {
-            replace?: boolean;
-            decoder?: Decoder;
-        },
+        options?: { replace?: boolean } & DecoderOption,
     ): Promise<GlideString> {
         return this.createWritePromise(
             createFunctionLoad(libraryCode, options?.replace),
@@ -556,8 +553,8 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns A simple `OK` response.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -577,7 +574,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - (Optional) {@link FunctionListOptions} and {@link DecoderOption}.
+     * @param options - (Optional) See {@link FunctionListOptions} and {@link DecoderOption}.
      * @returns Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      *
      * @example
@@ -657,7 +654,7 @@ export class GlideClient extends BaseClient {
         decoder?: Decoder,
     ): Promise<FunctionStatsFullResponse> {
         return this.createWritePromise(createFunctionStats(), {
-            decoder: decoder,
+            decoder,
         });
     }
 
@@ -669,7 +666,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @returns `OK` if function is terminated. Otherwise, throws an error.
+     * @returns `"OK"` if function is terminated. Otherwise, throws an error.
      * @example
      * ```typescript
      * await client.functionKill();
@@ -710,7 +707,7 @@ export class GlideClient extends BaseClient {
      * @param payload - The serialized data from {@link functionDump}.
      * @param policy - (Optional) A policy for handling existing libraries, see {@link FunctionRestorePolicy}.
      *     {@link FunctionRestorePolicy.APPEND} is used by default.
-     * @returns `OK`.
+     * @returns `"OK"`.
      *
      * @example
      * ```typescript
