@@ -342,7 +342,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const message = uuidv4();
-            const echoDict = await client.echo(message, "allNodes");
+            const echoDict = await client.echo(message, { route: "allNodes" });
 
             expect(typeof echoDict).toBe("object");
             expect(intoArray(echoDict)).toEqual(
@@ -1675,7 +1675,9 @@ describe("GlideClusterClient", () => {
 
             // Transaction executes command successfully with a read command on the watch key before
             // transaction is executed.
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.watch([key1, key2, Buffer.from(key3)])).toEqual(
+                "OK",
+            );
             expect(await client.get(key2)).toEqual("hello");
             results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK", "OK"]);
@@ -1733,7 +1735,9 @@ describe("GlideClusterClient", () => {
             expect(await client.watch([key1, key2])).toEqual("OK");
             expect(await client.set(key2, "hello")).toEqual("OK");
             expect(await client.unwatch()).toEqual("OK");
-            expect(await client.unwatch("allPrimaries")).toEqual("OK");
+            expect(await client.unwatch({ route: "allPrimaries" })).toEqual(
+                "OK",
+            );
             setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
             const results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK"]);

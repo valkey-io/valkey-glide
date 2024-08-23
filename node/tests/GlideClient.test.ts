@@ -1418,7 +1418,9 @@ describe("GlideClient", () => {
             expect(await client.get(key3)).toEqual("foobar");
 
             // Transaction executes command successfully with unmodified watched keys
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.watch([key1, Buffer.from(key2), key3])).toEqual(
+                "OK",
+            );
             results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
