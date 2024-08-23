@@ -291,10 +291,9 @@ describe("GlideClient", () => {
             const result = await client.exec(transaction, decoder);
             expectedRes.push(["select(0)", "OK"]);
 
-            validateTransactionResponse(result, expectedRes);
-            client.close();
-        },
-    );
+        validateTransactionResponse(result, expectedRes);
+        client.close();
+    });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `dump and restore transactions_%p`,
@@ -346,7 +345,6 @@ describe("GlideClient", () => {
             client.close();
         },
     );
-
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transaction with default string decoder_%p`,

@@ -576,6 +576,8 @@ export async function transactionTest(
     decoder: Decoder,
 ): Promise<[string, GlideReturnType][]> {
     const isString = decoder == Decoder.String;
+
+    // initialize key values to work within the same hashslot
     const [
         key1, // string
         key2, // string
@@ -604,15 +606,28 @@ export async function transactionTest(
         key25, // Geospatial Data/ZSET
         key26, // sorted set
         key27, // sorted set
-    ] = Array.from({length: 27},
-        () => isString ? "{key}" + uuidv4() : Buffer.from("{key}" + uuidv4())
+    ] = Array.from({ length: 27 }, () => {
+        switch (decoder) {
+            case Decoder.String:
+                return "{key}" + uuidv4();
+            case Decoder.Bytes:
+                return Buffer.from("{key}" + uuidv4());
+        }
+    });
+
+    // initialize non-key values
+    const [field, value, groupName1, groupName2, consumer] = Array.from(
+        { length: 27 },
+        () => {
+            switch (decoder) {
+                case Decoder.String:
+                    return uuidv4();
+                case Decoder.Bytes:
+                    return Buffer.from(uuidv4());
+            }
+        },
     );
 
-    const field = isString ? uuidv4() : Buffer.from(uuidv4());
-    const value = isString ? uuidv4() : Buffer.from(uuidv4());
-    const groupName1 = isString ? uuidv4() : Buffer.from(uuidv4());
-    const groupName2 = isString ? uuidv4() : Buffer.from(uuidv4());
-    const consumer = isString ? uuidv4() : Buffer.from(uuidv4());
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
