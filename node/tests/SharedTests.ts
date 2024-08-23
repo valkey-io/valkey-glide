@@ -2080,6 +2080,23 @@ export function runBaseTests(config: {
                 await expect(client.lpushx(key2, [])).rejects.toThrow(
                     RequestError,
                 );
+
+                // test for binary key as input
+                const key4 = uuidv4();
+                expect(await client.lpush(key4, ["0"])).toEqual(1);
+                expect(
+                    await client.lpushx(Buffer.from(key4), [
+                        Buffer.from("1"),
+                        Buffer.from("2"),
+                        Buffer.from("3"),
+                    ]),
+                ).toEqual(4);
+                expect(await client.lrange(key4, 0, -1)).toEqual([
+                    "3",
+                    "2",
+                    "1",
+                    "0",
+                ]);
             }, protocol);
         },
         config.timeout,
@@ -10400,6 +10417,42 @@ export function runBaseTests(config: {
                 await expect(
                     client.lmpop([nonListKey], ListDirection.RIGHT),
                 ).rejects.toThrow(RequestError);
+
+                // Test with single binary key array as input
+                const key3 = "{key}" + uuidv4();
+                const singleKeyArrayWithKey3 = [Buffer.from(key3)];
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key3, lpushArgs)).toEqual(5);
+                const expectedWithKey3 = { [key3]: ["five"] };
+
+                // checking correct result from popping
+                expect(
+                    await client.lmpop(
+                        singleKeyArrayWithKey3,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual(expectedWithKey3);
+
+                // test with multiple binary keys array as input
+                const key4 = "{key}" + uuidv4();
+                const multiKeyArrayWithKey3AndKey4 = [
+                    Buffer.from(key4),
+                    Buffer.from(key3),
+                ];
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key4, lpushArgs)).toEqual(5);
+                const expectedWithKey4 = { [key4]: ["one", "two"] };
+
+                // checking correct result from popping
+                expect(
+                    await client.lmpop(
+                        multiKeyArrayWithKey3AndKey4,
+                        ListDirection.RIGHT,
+                        2,
+                    ),
+                ).toEqual(expectedWithKey4);
             }, protocol);
         },
         config.timeout,
