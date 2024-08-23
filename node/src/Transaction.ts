@@ -396,10 +396,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
      * @param message - (Optional) A message to include in the PING command.
-     * - If not provided, the server will respond with "PONG".
+     * - If not provided, the server will respond with `"PONG"`.
      * - If provided, the server will respond with a copy of the message.
      *
-     * Command Response - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * Command Response - `"PONG"` if `message` is not provided, otherwise return a copy of `message`.
      */
     public ping(message?: GlideString): T {
         return this.addAndReturn(createPing(message));

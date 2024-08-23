@@ -231,10 +231,10 @@ export class GlideClient extends BaseClient {
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `message` : a message to include in the `PING` command.
-     *   + If not provided, the server will respond with "PONG".
+     *   + If not provided, the server will respond with `"PONG"`.
      *   + If provided, the server will respond with a copy of the message.
      * - (Optional) `decoder`: see {@link DecoderOption}.
-     * @returns "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * @returns `"PONG"` if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
      * ```typescript
@@ -277,7 +277,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
-     * @returns A simple "OK" response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -425,7 +425,7 @@ export class GlideClient extends BaseClient {
         decoder?: Decoder,
     ): Promise<GlideString> {
         return this.createWritePromise(createEcho(message), {
-            decoder: decoder,
+            decoder,
         });
     }
 

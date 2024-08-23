@@ -417,11 +417,11 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `message` : a message to include in the `PING` command.
-     *   + If not provided, the server will respond with "PONG".
+     *   + If not provided, the server will respond with `"PONG"`.
      *   + If provided, the server will respond with a copy of the message.
      * - (Optional) `route`: see {@link RouteOption}.
      * - (Optional) `decoder`: see {@link DecoderOption}.
-     * @returns "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * @returns `"PONG"` if `message` is not provided, otherwise return a copy of `message`.
      *
      * @example
      * ```typescript
