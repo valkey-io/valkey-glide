@@ -2261,8 +2261,12 @@ export function createFCall(
     keys: GlideString[],
     args: GlideString[],
 ): command_request.Command {
-    let params: GlideString[] = [];
-    params = params.concat(func, keys.length.toString(), keys, args);
+    const params: GlideString[] = [
+        func,
+        keys.length.toString(),
+        ...keys,
+        ...args,
+    ];
     return createCommand(RequestType.FCall, params);
 }
 
@@ -2274,8 +2278,12 @@ export function createFCallReadOnly(
     keys: GlideString[],
     args: GlideString[],
 ): command_request.Command {
-    let params: GlideString[] = [];
-    params = params.concat(func, keys.length.toString(), keys, args);
+    const params: GlideString[] = [
+        func,
+        keys.length.toString(),
+        ...keys,
+        ...args,
+    ];
     return createCommand(RequestType.FCallReadOnly, params);
 }
 
