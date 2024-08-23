@@ -604,7 +604,7 @@ export async function transactionTest(
         key25, // Geospatial Data/ZSET
         key26, // sorted set
         key27, // sorted set
-    ] = Array.from({length: 2},
+    ] = Array.from({length: 27},
         () => isString ? "{key}" + uuidv4() : Buffer.from("{key}" + uuidv4())
     );
 
