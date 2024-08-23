@@ -385,7 +385,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link  https://valkey.io/commands/config-set/|valkey.io} for details.
      * @param parameters - A map consisting of configuration parameters and their respective values to set.
-     * @returns "OK" when the configuration was set properly. Otherwise an error is thrown.
+     * @returns `"OK"` when the configuration was set properly. Otherwise an error is thrown.
      *
      * @example
      * ```typescript
@@ -424,7 +424,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
-     * @returns The current server time as a two items `array`:
+     * @returns The current server time as an `array` with two items:
      * - A Unix timestamp,
      * - The amount of microseconds already elapsed in the current second.
      *
@@ -736,7 +736,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/flushall/|valkey.io} for more details.
      *
      * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns `OK`.
+     * @returns `"OK"`.
      *
      * @example
      * ```typescript
@@ -756,7 +756,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for more details.
      *
      * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * @returns `OK`.
+     * @returns `"OK"`.
      *
      * @example
      * ```typescript

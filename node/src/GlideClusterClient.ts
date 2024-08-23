@@ -512,7 +512,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param route - (Optional) Specifies the routing configuration for the command.
      *     The client will route the command to the nodes defined by `route`.
-     * @returns "OK" when the configuration was rewritten properly. Otherwise, an error is thrown.
+     * @returns `"OK"` when the configuration was rewritten properly. Otherwise, an error is thrown.
      *
      * @example
      * ```typescript
@@ -537,7 +537,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param route - (Optional) Specifies the routing configuration for the command.
      *     The client will route the command to the nodes defined by `route`.
-     * @returns always "OK".
+     * @returns always `"OK"`.
      *
      * @example
      * ```typescript
