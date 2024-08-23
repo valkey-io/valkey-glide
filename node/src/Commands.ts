@@ -490,8 +490,8 @@ export enum BitwiseOperation {
  */
 export function createBitOp(
     operation: BitwiseOperation,
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.BitOp, [operation, destination, ...keys]);
 }
@@ -500,7 +500,7 @@ export function createBitOp(
  * @internal
  */
 export function createGetBit(
-    key: string,
+    key: GlideString,
     offset: number,
 ): command_request.Command {
     return createCommand(RequestType.GetBit, [key, offset.toString()]);
@@ -510,7 +510,7 @@ export function createGetBit(
  * @internal
  */
 export function createSetBit(
-    key: string,
+    key: GlideString,
     offset: number,
     value: number,
 ): command_request.Command {
@@ -799,14 +799,14 @@ export class BitFieldOverflow implements BitFieldSubCommands {
  * @internal
  */
 export function createBitField(
-    key: string,
+    key: GlideString,
     subcommands: BitFieldSubCommands[],
     readOnly: boolean = false,
 ): command_request.Command {
     const requestType = readOnly
         ? RequestType.BitFieldReadOnly
         : RequestType.BitField;
-    let args: string[] = [key];
+    let args: GlideString[] = [key];
 
     for (const subcommand of subcommands) {
         args = args.concat(subcommand.toArgs());
@@ -2438,7 +2438,7 @@ export type BitOffsetOptions = {
  * @internal
  */
 export function createBitCount(
-    key: string,
+    key: GlideString,
     options?: BitOffsetOptions,
 ): command_request.Command {
     const args = [key];
@@ -2470,13 +2470,13 @@ export enum BitmapIndexType {
  * @internal
  */
 export function createBitPos(
-    key: string,
+    key: GlideString,
     bit: number,
     start?: number,
     end?: number,
     indexType?: BitmapIndexType,
 ): command_request.Command {
-    const args = [key, bit.toString()];
+    const args: GlideString[] = [key, bit.toString()];
 
     if (start !== undefined) {
         args.push(start.toString());

@@ -612,8 +612,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public bitop(
         operation: BitwiseOperation,
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): T {
         return this.addAndReturn(createBitOp(operation, destination, keys));
     }
@@ -630,7 +630,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The bit at the given `offset` of the string. Returns `0` if the key is empty or if the
      * `offset` exceeds the length of the string.
      */
-    public getbit(key: string, offset: number): T {
+    public getbit(key: GlideString, offset: number): T {
         return this.addAndReturn(createGetBit(key, offset));
     }
 
@@ -648,7 +648,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The bit value that was previously stored at `offset`.
      */
-    public setbit(key: string, offset: number, value: number): T {
+    public setbit(key: GlideString, offset: number, value: number): T {
         return this.addAndReturn(createSetBit(key, offset, value));
     }
 
@@ -667,7 +667,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      */
-    public bitpos(key: string, bit: number, start?: number): T {
+    public bitpos(key: GlideString, bit: number, start?: number): T {
         return this.addAndReturn(createBitPos(key, bit, start));
     }
 
@@ -696,7 +696,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      binary value of the string held at `key`.
      */
     public bitposInterval(
-        key: string,
+        key: GlideString,
         bit: number,
         start: number,
         end: number,
@@ -729,7 +729,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
      *   does not contribute a value to the array response.
      */
-    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+    public bitfield(key: GlideString, subcommands: BitFieldSubCommands[]): T {
         return this.addAndReturn(createBitField(key, subcommands));
     }
 
@@ -745,7 +745,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of results from the {@link BitFieldGet} subcommands.
      *
      */
-    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+    public bitfieldReadOnly(key: GlideString, subcommands: BitFieldGet[]): T {
         return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
@@ -3364,7 +3364,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
      *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
      */
-    public bitcount(key: string, options?: BitOffsetOptions): T {
+    public bitcount(key: GlideString, options?: BitOffsetOptions): T {
         return this.addAndReturn(createBitCount(key, options));
     }
 
