@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added binary variant to server management commands ([#2179](https://github.com/valkey-io/valkey-glide/pull/2179))
 * Node: Added/updated binary variant to connection management commands and WATCH/UNWATCH ([#2160](https://github.com/valkey-io/valkey-glide/pull/2160))
 * Java: Fix docs for stream commands ([#2086](https://github.com/valkey-io/valkey-glide/pull/2086))
 * Node: Added binary variant to bitmap commands ([#2178](https://github.com/valkey-io/valkey-glide/pull/2178))

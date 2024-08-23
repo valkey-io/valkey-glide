@@ -405,16 +405,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createPing(message));
     }
 
-    /** Get information and statistics about the Redis server.
+    /**
+     * Gets information and statistics about the server.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
-     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
-     * When no parameter is provided, the default option is assumed.
+     * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
+     *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      *
-     * Command Response - a string containing the information for the sections requested.
+     * Command Response - A string containing the information for the sections requested.
      */
-    public info(options?: InfoOptions[]): T {
-        return this.addAndReturn(createInfo(options));
+    public info(sections?: InfoOptions[]): T {
+        return this.addAndReturn(createInfo(sections));
     }
 
     /**
@@ -478,7 +480,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createClientGetName());
     }
 
-    /** Rewrite the configuration file with the current configuration.
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the transaction fails with an error.
@@ -487,7 +491,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createConfigRewrite());
     }
 
-    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+    /**
+     * Resets the statistics reported by Redis using the `INFO` and `LATENCY HISTOGRAM` commands.
+     *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
      * Command Response - always "OK".
@@ -755,7 +761,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
-    /** Reads the configuration parameters of a running Redis server.
+    /**
+     * Reads the configuration parameters of the running server.
+     *
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
@@ -767,14 +775,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createConfigGet(parameters));
     }
 
-    /** Set configuration parameters to the specified values.
+    /**
+     * Sets configuration parameters to the specified values.
+     *
      * @see {@link https://valkey.io/commands/config-set/|valkey.io} for details.
      *
-     * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
+     * @param parameters - A map consisting of configuration parameters and their respective values to set.
      *
      * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
      */
-    public configSet(parameters: Record<string, string>): T {
+    public configSet(parameters: Record<string, GlideString>): T {
         return this.addAndReturn(createConfigSet(parameters));
     }
 
@@ -2541,12 +2551,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createXInfoGroups(key));
     }
 
-    /** Returns the server time.
+    /**
+     * Returns the server time.
+     *
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
-     * Command Response - The current server time as a two items `array`:
-     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
-     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     * Command Response - The current server time as an `array` with two items:
+     * - A Unix timestamp,
+     * - The amount of microseconds already elapsed in the current second.
      */
     public time(): T {
         return this.addAndReturn(createTime());
@@ -3139,7 +3151,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for details.
      *
-     * @param options - The LOLWUT options.
+     * @param options - (Optional) The LOLWUT options - see {@link LolwutOptions}.
      *
      * Command Response - A piece of generative computer art along with the current server version.
      */
@@ -3304,9 +3316,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/flushall/|valkey.io} for details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      *
-     * Command Response - `OK`.
+     * Command Response - `"OK"`.
      */
     public flushall(mode?: FlushMode): T {
         return this.addAndReturn(createFlushAll(mode));
@@ -3317,9 +3329,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      *
-     * Command Response - `OK`.
+     * Command Response - `"OK"`.
      */
     public flushdb(mode?: FlushMode): T {
         return this.addAndReturn(createFlushDB(mode));
