@@ -3444,9 +3444,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
      * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
-     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
-     *     pairings with format <code>[[field, entry],
-     *     [field, entry], ...]</code>.
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream entry IDs, to an array
+     *     of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      */
     public <ArgType> T xread(@NonNull Map<ArgType, ArgType> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
@@ -3461,9 +3460,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String,
-     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream-ids, to an array of
-     *     pairings with format <code>[[field, entry],
-     *     [field, entry], ...]</code>.
+     *     String[][]>>}</code> with stream keys, to <code>Map</code> of stream entry IDs, to an array
+     *     of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      */
     public <ArgType> T xread(
             @NonNull Map<ArgType, ArgType> keysAndIds, @NonNull StreamReadOptions options) {
@@ -3535,25 +3533,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of pairings with format <code>[[field,
-     *     entry], [field, entry], ...]</code>.
+     *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end) {
@@ -3570,17 +3568,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
@@ -3588,8 +3586,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param count Maximum count of stream entries to return.
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of pairings with format <code>[[field,
-     *     entry], [field, entry], ...]</code>.
+     *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrange(
             @NonNull ArgType key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
@@ -3608,25 +3606,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of pairings with format <code>[[field,
-     *     entry], [field, entry], ...]</code>.
+     *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start) {
@@ -3645,17 +3643,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream entry IDs.
      *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
@@ -3664,6 +3662,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Maximum count of stream entries to return.
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
      *     an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *     Returns or <code>null</code> if <code>count</code> is non-positive.
      */
     public <ArgType> T xrevrange(
             @NonNull ArgType key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
@@ -3842,10 +3841,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if the consumer
-     *     group does not exist. Returns a <code>Map</code> with a value of code>null</code> if the
-     *     stream is empty.
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
+     *     [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public <ArgType> T xreadgroup(
             @NonNull Map<ArgType, ArgType> keysAndIds,
@@ -3867,10 +3866,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param consumer The newly created consumer.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
-     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *      [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if the consumer
-     *     group does not exist. Returns a <code>Map</code> with a value of code>null</code> if the
-     *     stream is empty.
+     *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
+     *     <code>
+     *      [[field, entry], [field, entry], ...]</code>. Returns <code>null</code> if there is no
+     *     stream that can be served.
      */
     public <ArgType> T xreadgroup(
             @NonNull Map<ArgType, ArgType> keysAndIds,
@@ -3942,17 +3941,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -3988,17 +3987,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param start Starting stream ID bound for range.
+     * @param start Starting stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @param end Ending stream ID bound for range.
+     * @param end Ending stream entry IDs bound for range.
      *     <ul>
-     *       <li>Use {@link IdBound#of} to specify a stream ID.
-     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link IdBound#of} to specify a stream entry IDs.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream entry IDs.
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
@@ -4262,7 +4261,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -4301,7 +4301,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Limits the number of claimed entries to the specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A mapping of the claimed entries, with the keys being the claimed entry IDs and the
@@ -4349,7 +4350,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.
@@ -4394,7 +4396,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count Limits the number of claimed entries to the specified value.
      * @return Command Response - An <code>array</code> containing the following elements:
      *     <ul>
-     *       <li>A stream ID to be used as the start argument for the next call to <code>XAUTOCLAIM
+     *       <li>A stream entry IDs to be used as the start argument for the next call to <code>
+     *           XAUTOCLAIM
      *           </code>. This ID is equivalent to the next ID in the stream after the entries that
      *           were scanned, or "0-0" if the entire stream was scanned.
      *       <li>A list of the IDs for the claimed entries.

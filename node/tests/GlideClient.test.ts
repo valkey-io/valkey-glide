@@ -517,13 +517,13 @@ describe("GlideClient", () => {
 
             // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
             expect(
-                await client.copy(source, destination, {
+                await client.copy(Buffer.from(source), destination, {
                     destinationDB: index1,
                     replace: false,
                 }),
             ).toEqual(false);
             expect(
-                await client.copy(source, destination, {
+                await client.copy(source, Buffer.from(destination), {
                     destinationDB: index2,
                     replace: false,
                 }),
@@ -539,10 +539,14 @@ describe("GlideClient", () => {
             // destination
             expect(await client.select(index0)).toEqual("OK");
             expect(
-                await client.copy(source, destination, {
-                    destinationDB: index1,
-                    replace: true,
-                }),
+                await client.copy(
+                    Buffer.from(source),
+                    Buffer.from(destination),
+                    {
+                        destinationDB: index1,
+                        replace: true,
+                    },
+                ),
             ).toEqual(true);
             expect(await client.select(index1)).toEqual("OK");
             expect(await client.get(destination)).toEqual(value2);
@@ -581,7 +585,7 @@ describe("GlideClient", () => {
 
             expect(await client.set(key1, value)).toEqual("OK");
             expect(await client.get(key1)).toEqual(value);
-            expect(await client.move(key1, 1)).toEqual(true);
+            expect(await client.move(Buffer.from(key1), 1)).toEqual(true);
             expect(await client.get(key1)).toEqual(null);
             expect(await client.select(1)).toEqual("OK");
             expect(await client.get(key1)).toEqual(value);
@@ -1129,7 +1133,7 @@ describe("GlideClient", () => {
             ).toEqual(["Alice", "Bob"]);
 
             expect(
-                await client.sort(list, {
+                await client.sort(Buffer.from(list), {
                     limit: { offset: 0, count: 2 },
                     getPatterns: [setPrefix + "*->name"],
                     orderBy: SortOrder.DESC,
@@ -1144,6 +1148,22 @@ describe("GlideClient", () => {
                     orderBy: SortOrder.DESC,
                 }),
             ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+            // test binary decoder
+            expect(
+                await client.sort(list, {
+                    limit: { offset: 0, count: 2 },
+                    byPattern: setPrefix + "*->age",
+                    getPatterns: [setPrefix + "*->name", setPrefix + "*->age"],
+                    orderBy: SortOrder.DESC,
+                    decoder: Decoder.Bytes,
+                }),
+            ).toEqual([
+                Buffer.from("Eve"),
+                Buffer.from("40"),
+                Buffer.from("Charlie"),
+                Buffer.from("35"),
+            ]);
 
             // Non-existent key in the BY pattern will result in skipping the sorting operation
             expect(await client.sort(list, { byPattern: "noSort" })).toEqual([
@@ -1186,11 +1206,12 @@ describe("GlideClient", () => {
                         limit: { offset: 0, count: 2 },
                         getPatterns: [setPrefix + "*->name"],
                         orderBy: SortOrder.DESC,
+                        decoder: Decoder.Bytes,
                     }),
-                ).toEqual(["Eve", "Dave"]);
+                ).toEqual([Buffer.from("Eve"), Buffer.from("Dave")]);
 
                 expect(
-                    await client.sortReadOnly(list, {
+                    await client.sortReadOnly(Buffer.from(list), {
                         limit: { offset: 0, count: 2 },
                         byPattern: setPrefix + "*->age",
                         getPatterns: [
@@ -1242,7 +1263,7 @@ describe("GlideClient", () => {
                 "Eve",
             ]);
             expect(
-                await client.sortStore(list, store, {
+                await client.sortStore(Buffer.from(list), store, {
                     byPattern: setPrefix + "*->age",
                     getPatterns: [setPrefix + "*->name"],
                 }),
@@ -1341,6 +1362,10 @@ describe("GlideClient", () => {
             expect(await client.set(key, "foo")).toEqual("OK");
             // `key` should be the only key in the database
             expect(await client.randomKey()).toEqual(key);
+            // test binary decoder
+            expect(await client.randomKey(Decoder.Bytes)).toEqual(
+                Buffer.from(key),
+            );
 
             // switch back to DB 0
             expect(await client.select(0)).toEqual("OK");
@@ -1393,7 +1418,9 @@ describe("GlideClient", () => {
             expect(await client.get(key3)).toEqual("foobar");
 
             // Transaction executes command successfully with unmodified watched keys
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.watch([key1, Buffer.from(key2), key3])).toEqual(
+                "OK",
+            );
             results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK", "OK"]);
             // sanity check
