@@ -2062,7 +2062,10 @@ export class BaseClient {
      * console.log(result); // Output: 2 - Indicates that the list has two elements.
      * ```
      */
-    public async lpushx(key: string, elements: string[]): Promise<number> {
+    public async lpushx(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createLPushX(key, elements));
     }
 
@@ -6437,7 +6440,7 @@ export class BaseClient {
      * ```
      */
     public async lmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         count?: number,
     ): Promise<Record<string, string[]>> {
