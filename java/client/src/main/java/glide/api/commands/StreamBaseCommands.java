@@ -199,9 +199,7 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
      *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>.
@@ -227,9 +225,7 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
      *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]</code>.
@@ -256,9 +252,7 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
      *     <code>Map</code> of stream entry IDs, to an array of pairings with format <code>
@@ -288,9 +282,7 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
      * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream entry IDs, to an array of pairings with format
@@ -998,10 +990,8 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new
-     *     messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream keys, to
@@ -1034,10 +1024,8 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal gs(">")}</code> to receive only new
-     *     messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal gs(">")}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with
@@ -1071,10 +1059,8 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new
-     *     messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
@@ -1112,10 +1098,8 @@ public interface StreamBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
-     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
-     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal gs(">")}</code> to receive only new
-     *     messages.
+     * @param keysAndIds A <code>Map</code> of keys and entry IDs to read from.<br>
+     *     Use the special ID of <code>{@literal gs(">")}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.

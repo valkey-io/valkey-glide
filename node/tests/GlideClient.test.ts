@@ -15,13 +15,16 @@ import { v4 as uuidv4 } from "uuid";
 import {
     Decoder,
     GlideClient,
-    ListDirection,
     ProtocolVersion,
     RequestError,
     Transaction,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { FlushMode, SortOrder } from "../build-ts/src/Commands";
+import {
+    FlushMode,
+    FunctionRestorePolicy,
+    SortOrder,
+} from "../build-ts/src/Commands";
 import { command_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
@@ -40,12 +43,6 @@ import {
     validateTransactionResponse,
     waitForNotBusy,
 } from "./TestUtilities";
-
-/* eslint-disable @typescript-eslint/no-var-requires */
-
-type Context = {
-    client: GlideClient;
-};
 
 const TIMEOUT = 50000;
 
@@ -133,48 +130,6 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "check that blocking commands returns never timeout_%p",
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    protocol,
-                    300,
-                ),
-            );
-
-            const promiseList = [
-                client.blmove(
-                    "source",
-                    "destination",
-                    ListDirection.LEFT,
-                    ListDirection.LEFT,
-                    0.1,
-                ),
-                client.blmpop(["key1", "key2"], ListDirection.LEFT, 0.1),
-                client.bzpopmax(["key1", "key2"], 0),
-                client.bzpopmin(["key1", "key2"], 0),
-            ];
-
-            try {
-                for (const promise of promiseList) {
-                    const timeoutPromise = new Promise((resolve) => {
-                        setTimeout(resolve, 500);
-                    });
-                    await Promise.race([promise, timeoutPromise]);
-                }
-            } finally {
-                for (const promise of promiseList) {
-                    await Promise.resolve([promise]);
-                }
-
-                client.close();
-            }
-        },
-        5000,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "select dbsize flushdb test %p",
         async (protocol) => {
             client = await GlideClient.createClient(
@@ -198,6 +153,7 @@ describe("GlideClient", () => {
             expect(await client.dbsize()).toBeGreaterThan(0);
             expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
             expect(await client.dbsize()).toEqual(0);
+            client.close();
         },
     );
 
@@ -221,6 +177,7 @@ describe("GlideClient", () => {
             expect(await client.get(key)).toEqual(valueEncoded);
             expect(await client.get(key, Decoder.String)).toEqual(value);
             expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            client.close();
         },
     );
 
@@ -244,6 +201,7 @@ describe("GlideClient", () => {
             expect(await client.get(key)).toEqual(value);
             expect(await client.get(key, Decoder.String)).toEqual(value);
             expect(await client.get(key, Decoder.Bytes)).toEqual(valueEncoded);
+            client.close();
         },
     );
 
@@ -263,6 +221,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -279,6 +238,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -302,6 +262,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -326,6 +287,7 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
@@ -555,13 +517,13 @@ describe("GlideClient", () => {
 
             // no REPLACE, copying to existing key on DB 1, non-existing key on DB 2
             expect(
-                await client.copy(source, destination, {
+                await client.copy(Buffer.from(source), destination, {
                     destinationDB: index1,
                     replace: false,
                 }),
             ).toEqual(false);
             expect(
-                await client.copy(source, destination, {
+                await client.copy(source, Buffer.from(destination), {
                     destinationDB: index2,
                     replace: false,
                 }),
@@ -577,10 +539,14 @@ describe("GlideClient", () => {
             // destination
             expect(await client.select(index0)).toEqual("OK");
             expect(
-                await client.copy(source, destination, {
-                    destinationDB: index1,
-                    replace: true,
-                }),
+                await client.copy(
+                    Buffer.from(source),
+                    Buffer.from(destination),
+                    {
+                        destinationDB: index1,
+                        replace: true,
+                    },
+                ),
             ).toEqual(true);
             expect(await client.select(index1)).toEqual("OK");
             expect(await client.get(destination)).toEqual(value2);
@@ -619,7 +585,7 @@ describe("GlideClient", () => {
 
             expect(await client.set(key1, value)).toEqual("OK");
             expect(await client.get(key1)).toEqual(value);
-            expect(await client.move(key1, 1)).toEqual(true);
+            expect(await client.move(Buffer.from(key1), 1)).toEqual(true);
             expect(await client.get(key1)).toEqual(null);
             expect(await client.select(1)).toEqual("OK");
             expect(await client.get(key1)).toEqual(value);
@@ -672,7 +638,10 @@ describe("GlideClient", () => {
                 ).toEqual("one");
 
                 let functionStats = await client.functionStats();
-                checkFunctionStatsResponse(functionStats, [], 1, 1);
+
+                for (const response of Object.values(functionStats)) {
+                    checkFunctionStatsResponse(response, [], 1, 1);
+                }
 
                 let functionList = await client.functionList({
                     libNamePattern: libName,
@@ -733,7 +702,10 @@ describe("GlideClient", () => {
                 );
 
                 functionStats = await client.functionStats();
-                checkFunctionStatsResponse(functionStats, [], 1, 2);
+
+                for (const response of Object.values(functionStats)) {
+                    checkFunctionStatsResponse(response, [], 1, 2);
+                }
 
                 expect(
                     await client.fcall(func2Name, [], ["one", "two"]),
@@ -744,7 +716,11 @@ describe("GlideClient", () => {
             } finally {
                 expect(await client.functionFlush()).toEqual("OK");
                 const functionStats = await client.functionStats();
-                checkFunctionStatsResponse(functionStats, [], 0, 0);
+
+                for (const response of Object.values(functionStats)) {
+                    checkFunctionStatsResponse(response, [], 0, 0);
+                }
+
                 client.close();
             }
         },
@@ -840,7 +816,7 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                10000,
+                { requestTimeout: 10000 },
             );
             const client = await GlideClient.createClient(config);
             const testClient = await GlideClient.createClient(config);
@@ -911,7 +887,7 @@ describe("GlideClient", () => {
             const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
-                10000,
+                { requestTimeout: 10000 },
             );
             const client = await GlideClient.createClient(config);
             const testClient = await GlideClient.createClient(config);
@@ -982,6 +958,147 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function dump function restore %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            const client = await GlideClient.createClient(config);
+            expect(await client.functionFlush()).toEqual("OK");
+
+            try {
+                // dumping an empty lib
+                expect(
+                    (await client.functionDump()).byteLength,
+                ).toBeGreaterThan(0);
+
+                const name1 = "Foster";
+                const name2 = "Dogster";
+                // function $name1 returns first argument
+                // function $name2 returns argument array len
+                let code = generateLuaLibCode(
+                    name1,
+                    new Map([
+                        [name1, "return args[1]"],
+                        [name2, "return #args"],
+                    ]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name1);
+
+                const flist = await client.functionList({ withCode: true });
+                const dump = await client.functionDump();
+
+                // restore without cleaning the lib and/or overwrite option causes an error
+                await expect(client.functionRestore(dump)).rejects.toThrow(
+                    `Library ${name1} already exists`,
+                );
+
+                // APPEND policy also fails for the same reason (name collision)
+                await expect(
+                    client.functionRestore(dump, FunctionRestorePolicy.APPEND),
+                ).rejects.toThrow(`Library ${name1} already exists`);
+
+                // REPLACE policy succeeds
+                expect(
+                    await client.functionRestore(
+                        dump,
+                        FunctionRestorePolicy.REPLACE,
+                    ),
+                ).toEqual("OK");
+                // but nothing changed - all code overwritten
+                expect(await client.functionList({ withCode: true })).toEqual(
+                    flist,
+                );
+
+                // create lib with another name, but with the same function names
+                expect(await client.functionFlush(FlushMode.SYNC)).toEqual(
+                    "OK",
+                );
+                code = generateLuaLibCode(
+                    name2,
+                    new Map([
+                        [name1, "return args[1]"],
+                        [name2, "return #args"],
+                    ]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name2);
+
+                // REPLACE policy now fails due to a name collision
+                await expect(client.functionRestore(dump)).rejects.toThrow(
+                    new RegExp(`Function ${name1}|${name2} already exists`),
+                );
+
+                // FLUSH policy succeeds, but deletes the second lib
+                expect(
+                    await client.functionRestore(
+                        dump,
+                        FunctionRestorePolicy.FLUSH,
+                    ),
+                ).toEqual("OK");
+                expect(await client.functionList({ withCode: true })).toEqual(
+                    flist,
+                );
+
+                // call restored functions
+                expect(await client.fcall(name1, [], ["meow", "woem"])).toEqual(
+                    "meow",
+                );
+                expect(await client.fcall(name2, [], ["meow", "woem"])).toEqual(
+                    2,
+                );
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "function dump function restore in transaction %p",
+        async (protocol) => {
+            if (cluster.checkIfServerVersionLessThan("7.0.0")) return;
+
+            const config = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
+            const client = await GlideClient.createClient(config);
+            expect(await client.functionFlush()).toEqual("OK");
+
+            try {
+                const name1 = "Foster";
+                const name2 = "Dogster";
+                // function returns first argument
+                const code = generateLuaLibCode(
+                    name1,
+                    new Map([[name2, "return args[1]"]]),
+                    false,
+                );
+                expect(await client.functionLoad(code)).toEqual(name1);
+
+                // Verify functionDump
+                let transaction = new Transaction().functionDump();
+                const result = await client.exec(transaction, Decoder.Bytes);
+                const data = result?.[0] as Buffer;
+
+                // Verify functionRestore
+                transaction = new Transaction()
+                    .functionRestore(data, FunctionRestorePolicy.REPLACE)
+                    .fcall(name2, [], ["meow"]);
+                expect(await client.exec(transaction)).toEqual(["OK", "meow"]);
+            } finally {
+                expect(await client.functionFlush()).toEqual("OK");
+                client.close();
+            }
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "sort sortstore sort_store sortro sort_ro sortreadonly test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
@@ -1016,7 +1133,7 @@ describe("GlideClient", () => {
             ).toEqual(["Alice", "Bob"]);
 
             expect(
-                await client.sort(list, {
+                await client.sort(Buffer.from(list), {
                     limit: { offset: 0, count: 2 },
                     getPatterns: [setPrefix + "*->name"],
                     orderBy: SortOrder.DESC,
@@ -1031,6 +1148,22 @@ describe("GlideClient", () => {
                     orderBy: SortOrder.DESC,
                 }),
             ).toEqual(["Eve", "40", "Charlie", "35"]);
+
+            // test binary decoder
+            expect(
+                await client.sort(list, {
+                    limit: { offset: 0, count: 2 },
+                    byPattern: setPrefix + "*->age",
+                    getPatterns: [setPrefix + "*->name", setPrefix + "*->age"],
+                    orderBy: SortOrder.DESC,
+                    decoder: Decoder.Bytes,
+                }),
+            ).toEqual([
+                Buffer.from("Eve"),
+                Buffer.from("40"),
+                Buffer.from("Charlie"),
+                Buffer.from("35"),
+            ]);
 
             // Non-existent key in the BY pattern will result in skipping the sorting operation
             expect(await client.sort(list, { byPattern: "noSort" })).toEqual([
@@ -1073,11 +1206,12 @@ describe("GlideClient", () => {
                         limit: { offset: 0, count: 2 },
                         getPatterns: [setPrefix + "*->name"],
                         orderBy: SortOrder.DESC,
+                        decoder: Decoder.Bytes,
                     }),
-                ).toEqual(["Eve", "Dave"]);
+                ).toEqual([Buffer.from("Eve"), Buffer.from("Dave")]);
 
                 expect(
-                    await client.sortReadOnly(list, {
+                    await client.sortReadOnly(Buffer.from(list), {
                         limit: { offset: 0, count: 2 },
                         byPattern: setPrefix + "*->age",
                         getPatterns: [
@@ -1129,7 +1263,7 @@ describe("GlideClient", () => {
                 "Eve",
             ]);
             expect(
-                await client.sortStore(list, store, {
+                await client.sortStore(Buffer.from(list), store, {
                     byPattern: setPrefix + "*->age",
                     getPatterns: [setPrefix + "*->name"],
                 }),
@@ -1228,6 +1362,10 @@ describe("GlideClient", () => {
             expect(await client.set(key, "foo")).toEqual("OK");
             // `key` should be the only key in the database
             expect(await client.randomKey()).toEqual(key);
+            // test binary decoder
+            expect(await client.randomKey(Decoder.Bytes)).toEqual(
+                Buffer.from(key),
+            );
 
             // switch back to DB 0
             expect(await client.select(0)).toEqual("OK");
@@ -1396,19 +1534,19 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    runBaseTests<Context>({
-        init: async (protocol, clientName?) => {
-            const options = getClientConfigurationOption(
+    runBaseTests({
+        init: async (protocol, configOverrides) => {
+            const config = getClientConfigurationOption(
                 cluster.getAddresses(),
                 protocol,
+                configOverrides,
             );
-            options.protocol = protocol;
-            options.clientName = clientName;
+
             testsFailed += 1;
-            client = await GlideClient.createClient(options);
-            return { client, context: { client }, cluster };
+            client = await GlideClient.createClient(config);
+            return { client, cluster };
         },
-        close: (context: Context, testSucceeded: boolean) => {
+        close: (testSucceeded: boolean) => {
             if (testSucceeded) {
                 testsFailed -= 1;
             }

@@ -865,7 +865,7 @@ public interface ScriptingAndFunctionsClusterCommands {
     /**
      * Kills a function that is currently executing.<br>
      * <code>FUNCTION KILL</code> terminates read-only functions only.<br>
-     * The command will be routed to all primary nodes.
+     * The command will be routed to all nodes.
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.

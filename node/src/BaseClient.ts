@@ -24,6 +24,7 @@ import {
     BitwiseOperation,
     Boundary,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    DecoderOption,
     ExpireOptions,
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -50,6 +51,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -170,6 +172,7 @@ import {
     createUnlink,
     createWait,
     createWatch,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -178,6 +181,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -185,6 +189,8 @@ import {
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
+    createXRevRange,
     createXTrim,
     createZAdd,
     createZCard,
@@ -193,6 +199,7 @@ import {
     createZDiffStore,
     createZDiffWithScores,
     createZIncrBy,
+    createZInter,
     createZInterCard,
     createZInterstore,
     createZLexCount,
@@ -213,6 +220,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnion,
+    createZUnionStore,
 } from "./Commands";
 import {
     ClosingError,
@@ -269,7 +278,7 @@ export type GlideString = string | Buffer;
 /**
  * Enum representing the different types of decoders.
  */
-export const enum Decoder {
+export enum Decoder {
     /**
      * Decodes the response into a buffer array.
      */
@@ -929,7 +938,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/get/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns If `key` exists, returns the value of `key`. Otherwise, return null.
      *
      * @example
@@ -980,7 +990,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/getdel/|valkey.io} for details.
      *
      * @param key - The key to retrieve from the database.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns If `key` exists, returns the `value` of `key`. Otherwise, return `null`.
      *
      * @example
@@ -1010,6 +1021,8 @@ export class BaseClient {
      * @param key - The key of the string.
      * @param start - The starting offset.
      * @param end - The ending offset.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A substring extracted from the value stored at `key`.
      *
      * @example
@@ -1026,11 +1039,14 @@ export class BaseClient {
      * ```
      */
     public async getrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string | null> {
-        return this.createWritePromise(createGetRange(key, start, end));
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createGetRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Set the given key with the given value. Return value is dependent on the passed options.
@@ -1071,12 +1087,13 @@ export class BaseClient {
         return this.createWritePromise(createSet(key, value, options));
     }
 
-    /** Removes the specified keys. A key is ignored if it does not exist.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
      *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
-     * @param keys - the keys we wanted to remove.
-     * @returns the number of keys that were removed.
+     * @param keys - The keys we wanted to remove.
+     * @returns The number of keys that were removed.
      *
      * @example
      * ```typescript
@@ -1093,14 +1110,14 @@ export class BaseClient {
      * console.log(result); // Output: 0
      * ```
      */
-    public async del(keys: string[]): Promise<number> {
+    public async del(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createDel(keys));
     }
 
     /**
      * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
      *
-     * @See {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
      *
      * @param key - The `key` to serialize.
      * @returns The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
@@ -1127,7 +1144,7 @@ export class BaseClient {
      * Create a `key` associated with a `value` that is obtained by deserializing the provided
      * serialized `value` (obtained via {@link dump}).
      *
-     * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
      * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
      *
      * @param key - The `key` to create.
@@ -1178,6 +1195,8 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - A list of keys to retrieve values for.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      *
@@ -1190,8 +1209,11 @@ export class BaseClient {
      * console.log(result); // Output: ['value1', 'value2']
      * ```
      */
-    public async mget(keys: string[]): Promise<(string | null)[]> {
-        return this.createWritePromise(createMGet(keys));
+    public async mget(
+        keys: GlideString[],
+        decoder?: Decoder,
+    ): Promise<(GlideString | null)[]> {
+        return this.createWritePromise(createMGet(keys), { decoder: decoder });
     }
 
     /** Set multiple keys to multiple values in a single operation.
@@ -1361,8 +1383,8 @@ export class BaseClient {
      */
     public async bitop(
         operation: BitwiseOperation,
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(
             createBitOp(operation, destination, keys),
@@ -1386,7 +1408,7 @@ export class BaseClient {
      * console.log(result); // Output: 1 - The second bit of the string stored at "key" is set to 1.
      * ```
      */
-    public async getbit(key: string, offset: number): Promise<number> {
+    public async getbit(key: GlideString, offset: number): Promise<number> {
         return this.createWritePromise(createGetBit(key, offset));
     }
 
@@ -1410,7 +1432,7 @@ export class BaseClient {
      * ```
      */
     public async setbit(
-        key: string,
+        key: GlideString,
         offset: number,
         value: number,
     ): Promise<number> {
@@ -1442,7 +1464,7 @@ export class BaseClient {
      * ```
      */
     public async bitpos(
-        key: string,
+        key: GlideString,
         bit: number,
         start?: number,
     ): Promise<number> {
@@ -1483,7 +1505,7 @@ export class BaseClient {
      * ```
      */
     public async bitposInterval(
-        key: string,
+        key: GlideString,
         bit: number,
         start: number,
         end: number,
@@ -1526,7 +1548,7 @@ export class BaseClient {
      * ```
      */
     public async bitfield(
-        key: string,
+        key: GlideString,
         subcommands: BitFieldSubCommands[],
     ): Promise<(number | null)[]> {
         return this.createWritePromise(createBitField(key, subcommands));
@@ -1550,7 +1572,7 @@ export class BaseClient {
      * ```
      */
     public async bitfieldReadOnly(
-        key: string,
+        key: GlideString,
         subcommands: BitFieldGet[],
     ): Promise<number[]> {
         return this.createWritePromise(createBitField(key, subcommands, true));
@@ -1562,6 +1584,8 @@ export class BaseClient {
      *
      * @param key - The key of the hash.
      * @param field - The field in the hash stored at `key` to retrieve from the database.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      *
      * @example
@@ -1579,8 +1603,14 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async hget(key: string, field: string): Promise<string | null> {
-        return this.createWritePromise(createHGet(key, field));
+    public async hget(
+        key: GlideString,
+        field: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createHGet(key, field), {
+            decoder: decoder,
+        });
     }
 
     /** Sets the specified fields to their respective values in the hash stored at `key`.
@@ -1622,7 +1652,7 @@ export class BaseClient {
      * console.log(result); // Output: ["field1", "field2", "field3"]  - Returns all the field names stored in the hash "my_hash".
      * ```
      */
-    public hkeys(key: string): Promise<string[]> {
+    public async hkeys(key: string): Promise<string[]> {
         return this.createWritePromise(createHKeys(key));
     }
 
@@ -1831,6 +1861,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hvals/|valkey.io} for more details.
      *
      * @param key - The key of the hash.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns a list of values in the hash, or an empty list when the key does not exist.
      *
      * @example
@@ -1840,8 +1872,11 @@ export class BaseClient {
      * console.log(result); // Output: ["value1", "value2", "value3"] - Returns all the values stored in the hash "my_hash".
      * ```
      */
-    public async hvals(key: string): Promise<string[]> {
-        return this.createWritePromise(createHVals(key));
+    public async hvals(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createHVals(key), { decoder: decoder });
     }
 
     /**
@@ -2005,7 +2040,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new list was created with one element
      * ```
      */
-    public async lpush(key: string, elements: string[]): Promise<number> {
+    public async lpush(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createLPush(key, elements));
     }
 
@@ -2034,6 +2072,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/lpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The value of the first element.
      * If `key` does not exist null will be returned.
      *
@@ -2051,8 +2091,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async lpop(key: string): Promise<string | null> {
-        return this.createWritePromise(createLPop(key));
+    public async lpop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createLPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` elements of the list stored at `key`, depending on the list's length.
@@ -2061,6 +2104,8 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2079,10 +2124,13 @@ export class BaseClient {
      * ```
      */
     public async lpopCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[] | null> {
-        return this.createWritePromise(createLPop(key, count));
+        decoder?: Decoder,
+    ): Promise<GlideString[] | null> {
+        return this.createWritePromise(createLPop(key, count), {
+            decoder: decoder,
+        });
     }
 
     /** Returns the specified elements of the list stored at `key`.
@@ -2095,6 +2143,8 @@ export class BaseClient {
      * @param key - The key of the list.
      * @param start - The starting point of the range.
      * @param end - The end of the range.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns list of elements in the specified range.
      * If `start` exceeds the end of the list, or if `start` is greater than `end`, an empty list will be returned.
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
@@ -2122,11 +2172,14 @@ export class BaseClient {
      * ```
      */
     public async lrange(
-        key: string,
+        key: GlideString,
         start: number,
         end: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createLRange(key, start, end));
+        decoder?: Decoder,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createLRange(key, start, end), {
+            decoder: decoder,
+        });
     }
 
     /** Returns the length of the list stored at `key`.
@@ -2144,7 +2197,7 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that there are 3 elements in the list.
      * ```
      */
-    public async llen(key: string): Promise<number> {
+    public async llen(key: GlideString): Promise<number> {
         return this.createWritePromise(createLLen(key));
     }
 
@@ -2160,6 +2213,8 @@ export class BaseClient {
      * @param destination - The key to the destination list.
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The popped element, or `null` if `source` does not exist.
      *
      * @example
@@ -2178,13 +2233,15 @@ export class BaseClient {
      * ```
      */
     public async lmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
-    ): Promise<string | null> {
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(
             createLMove(source, destination, whereFrom, whereTo),
+            { decoder: decoder },
         );
     }
 
@@ -2204,6 +2261,8 @@ export class BaseClient {
      * @param whereFrom - The {@link ListDirection} to remove the element from.
      * @param whereTo - The {@link ListDirection} to add the element to.
      * @param timeout - The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The popped element, or `null` if `source` does not exist or if the operation timed-out.
      *
      * @example
@@ -2221,14 +2280,16 @@ export class BaseClient {
      * ```
      */
     public async blmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
-    ): Promise<string | null> {
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
         return this.createWritePromise(
             createBLMove(source, destination, whereFrom, whereTo, timeout),
+            { decoder: decoder },
         );
     }
 
@@ -2336,7 +2397,10 @@ export class BaseClient {
      * console.log(result); // Output: 1
      * ```
      */
-    public async rpush(key: string, elements: string[]): Promise<number> {
+    public async rpush(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createRPush(key, elements));
     }
 
@@ -2365,6 +2429,8 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/rpop/|valkey.io} for details.
      *
      * @param key - The key of the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The value of the last element.
      * If `key` does not exist null will be returned.
      *
@@ -2382,8 +2448,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async rpop(key: string): Promise<string | null> {
-        return this.createWritePromise(createRPop(key));
+    public async rpop(
+        key: GlideString,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createRPop(key), { decoder: decoder });
     }
 
     /** Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
@@ -2392,6 +2461,8 @@ export class BaseClient {
      *
      * @param key - The key of the list.
      * @param count - The count of the elements to pop from the list.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      *
@@ -2410,10 +2481,13 @@ export class BaseClient {
      * ```
      */
     public async rpopCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[] | null> {
-        return this.createWritePromise(createRPop(key, count));
+        decoder?: Decoder,
+    ): Promise<GlideString[] | null> {
+        return this.createWritePromise(createRPop(key, count), {
+            decoder: decoder,
+        });
     }
 
     /** Adds the specified members to the set stored at `key`. Specified members that are already a member of this set are ignored.
@@ -2909,7 +2983,8 @@ export class BaseClient {
         return this.createWritePromise(createSRandMember(key, count));
     }
 
-    /** Returns the number of keys in `keys` that exist in the database.
+    /**
+     * Returns the number of keys in `keys` that exist in the database.
      *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
@@ -2924,13 +2999,14 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys exist in the database.
      * ```
      */
-    public async exists(keys: string[]): Promise<number> {
+    public async exists(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createExists(keys));
     }
 
-    /** Removes the specified keys. A key is ignored if it does not exist.
-     * This command, similar to DEL, removes specified keys and ignores non-existent ones.
-     * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
+     * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
      *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
@@ -2944,11 +3020,12 @@ export class BaseClient {
      * console.log(result); // Output: 3 - Indicates that all three keys were unlinked from the database.
      * ```
      */
-    public async unlink(keys: string[]): Promise<number> {
+    public async unlink(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createUnlink(keys));
     }
 
-    /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -2957,7 +3034,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -2976,14 +3053,15 @@ export class BaseClient {
      * ```
      */
     public async expire(
-        key: string,
+        key: GlideString,
         seconds: number,
         option?: ExpireOptions,
     ): Promise<boolean> {
         return this.createWritePromise(createExpire(key, seconds, option));
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -2992,7 +3070,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3004,7 +3082,7 @@ export class BaseClient {
      * ```
      */
     public async expireAt(
-        key: string,
+        key: GlideString,
         unixSeconds: number,
         option?: ExpireOptions,
     ): Promise<boolean> {
@@ -3037,11 +3115,12 @@ export class BaseClient {
      * console.log(result3); // Output: 123456 - the Unix timestamp (in seconds) when "myKey" will expire.
      * ```
      */
-    public async expiretime(key: string): Promise<number> {
+    public async expiretime(key: GlideString): Promise<number> {
         return this.createWritePromise(createExpireTime(key));
     }
 
-    /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -3050,7 +3129,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3062,7 +3141,7 @@ export class BaseClient {
      * ```
      */
     public async pexpire(
-        key: string,
+        key: GlideString,
         milliseconds: number,
         option?: ExpireOptions,
     ): Promise<boolean> {
@@ -3071,7 +3150,8 @@ export class BaseClient {
         );
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
@@ -3080,7 +3160,7 @@ export class BaseClient {
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      * @returns `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
      * or operation skipped due to the provided arguments.
      *
@@ -3092,7 +3172,7 @@ export class BaseClient {
      * ```
      */
     public async pexpireAt(
-        key: string,
+        key: GlideString,
         unixMilliseconds: number,
         option?: ExpireOptions,
     ): Promise<number> {
@@ -3124,11 +3204,12 @@ export class BaseClient {
      * console.log(result3); // Output: 123456789 - the Unix timestamp (in milliseconds) when "myKey" will expire.
      * ```
      */
-    public async pexpiretime(key: string): Promise<number> {
+    public async pexpiretime(key: GlideString): Promise<number> {
         return this.createWritePromise(createPExpireTime(key));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout.
      *
      * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
@@ -3156,7 +3237,7 @@ export class BaseClient {
      * console.log(result); // Output: -2 - Indicates that the key doesn't exist.
      * ```
      */
-    public async ttl(key: string): Promise<number> {
+    public async ttl(key: GlideString): Promise<number> {
         return this.createWritePromise(createTTL(key));
     }
 
@@ -3226,7 +3307,7 @@ export class BaseClient {
      *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
-     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      *
      * @example
      * ```typescript
@@ -3247,6 +3328,46 @@ export class BaseClient {
         count?: number,
     ): Promise<Record<string, [string, string][]> | null> {
         return this.createWritePromise(createXRange(key, start, end, count));
+    }
+
+    /**
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to {@link xrange} but returns the
+     * entries in reverse order.
+     *
+     * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param start - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     * @returns A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     *
+     * @example
+     * ```typescript
+     * await client.xadd("mystream", [["field1", "value1"]], {id: "0-1"});
+     * await client.xadd("mystream", [["field2", "value2"], ["field2", "value3"]], {id: "0-2"});
+     * console.log(await client.xrevrange("mystream", InfBoundary.PositiveInfinity, InfBoundary.NegativeInfinity));
+     * // Output:
+     * // {
+     * //     "0-2": [["field2", "value2"], ["field2", "value3"]],
+     * //     "0-1": [["field1", "value1"]],
+     * // } // Indicates the stream entry IDs and their associated field-value pairs for all stream entries in "mystream".
+     * ```
+     */
+    public async xrevrange(
+        key: string,
+        end: Boundary<string>,
+        start: Boundary<string>,
+        count?: number,
+    ): Promise<Record<string, [string, string][]> | null> {
+        return this.createWritePromise(createXRevRange(key, end, start, count));
     }
 
     /** Adds members with their scores to the sorted set stored at `key`.
@@ -3518,6 +3639,42 @@ export class BaseClient {
     }
 
     /**
+     * Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see {@link zunionWithScores}.
+     *
+     * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
+     * @remarks When in cluster mode, `destination` and all keys in `keys` both must map to the same hash slot.
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *         string[] - for keys only.
+     *         KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * * @example
+     * ```typescript
+     * // Example usage of zunionstore command with an existing key
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
+     * await client.zunionstore("my_sorted_set", ["key1", "key2"]) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
+     * await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
+     * await client.zunionstore("my_sorted_set", ["key1, "key2], {weights: [2, 1]}) // Output: 46
+     * ```
+     */
+    public async zunionstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZUnionStore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for more details.
@@ -3709,7 +3866,7 @@ export class BaseClient {
     /**
      * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
      * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-     * To get the result directly, see `zinter_withscores`.
+     * To get the result directly, see {@link zinterWithScores}.
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for more details.
      * @remarks When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
@@ -3718,7 +3875,8 @@ export class BaseClient {
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -3727,9 +3885,9 @@ export class BaseClient {
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
      * await client.zadd("key2", {"member1": 9.5})
      * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
      * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
      * ```
      */
     public async zinterstore(
@@ -3739,6 +3897,132 @@ export class BaseClient {
     ): Promise<number> {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @returns The resulting array of intersecting elements.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result = await client.zinter(["key1", "key2"]);
+     * console.log(result); // Output: ['member1']
+     * ```
+     */
+    public async zinter(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZInter(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @returns The resulting sorted set with scores.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result1 = await client.zinterWithScores(["key1", "key2"]);
+     * console.log(result1); // Output: {'member1': 20} - "member1" with score of 20 is the result
+     * const result2 = await client.zinterWithScores(["key1", "key2"], AggregationType.MAX)
+     * console.log(result2); // Output: {'member1': 10.5} - "member1" with score of 10.5 is the result.
+     * ```
+     */
+    public async zinterWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(
+            createZInter(keys, aggregationType, true),
+        );
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     * To get the scores as well, see {@link zunionWithScores}.
+     *
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     * @returns The resulting array of union elements.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result = await client.zunion(["key1", "key2"]);
+     * console.log(result); // Output: ['member1', 'member2']
+     * ```
+     */
+    public async zunion(keys: string[]): Promise<string[]> {
+        return this.createWritePromise(createZUnion(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
+     * To get the elements only, see {@link zunion}.
+     *
+     * @remarks When in cluster mode, all keys in `keys` must map to the same hash slot.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     * @returns The resulting sorted set with scores.
+     *
+     * @example
+     * ```typescript
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2});
+     * await client.zadd("key2", {"member1": 9.5});
+     * const result1 = await client.zunionWithScores(["key1", "key2"]);
+     * console.log(result1); // {'member1': 20, 'member2': 8.2}
+     * const result2 = await client.zunionWithScores(["key1", "key2"], "MAX");
+     * console.log(result2); // {'member1': 10.5, 'member2': 8.2}
+     * ```
+     */
+    public async zunionWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<Record<string, number>> {
+        return this.createWritePromise(
+            createZUnion(keys, aggregationType, true),
         );
     }
 
@@ -3857,7 +4141,8 @@ export class BaseClient {
         return this.createWritePromise(createStrlen(key));
     }
 
-    /** Returns the string representation of the type of the value stored at `key`.
+    /**
+     * Returns the string representation of the type of the value stored at `key`.
      *
      * @see {@link https://valkey.io/commands/type/|valkey.io} for more details.
      *
@@ -3880,8 +4165,10 @@ export class BaseClient {
      * console.log(type); // Output: 'list'
      * ```
      */
-    public async type(key: string): Promise<string> {
-        return this.createWritePromise(createType(key));
+    public async type(key: GlideString): Promise<string> {
+        return this.createWritePromise(createType(key), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes and returns the members with the lowest scores from the sorted set stored at `key`.
@@ -4006,7 +4293,8 @@ export class BaseClient {
         return this.createWritePromise(createBZPopMax(keys, timeout));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout, in milliseconds.
      *
      * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
@@ -4034,7 +4322,7 @@ export class BaseClient {
      * console.log(result); // Output: -1 - Indicates that the key "key" has no associated expire.
      * ```
      */
-    public async pttl(key: string): Promise<number> {
+    public async pttl(key: GlideString): Promise<number> {
         return this.createWritePromise(createPTTL(key));
     }
 
@@ -4336,9 +4624,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for more details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
-     * @returns A map of stream keys, to a map of stream ids, to an array of entries.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
+     * @returns A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
+     *
      * @example
      * ```typescript
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
@@ -4360,6 +4649,50 @@ export class BaseClient {
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, [string, string][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special entry ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     * @returns A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     *
+     * @example
+     * ```typescript
+     * const streamResults = await client.xreadgroup("my_group", "my_consumer", {"my_stream": "0-0", "writers_stream": "0-0", "readers_stream", ">"});
+     * console.log(result); // Output:
+     * // {
+     * //     "my_stream": {
+     * //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     * //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
+     * //     },
+     * //     "writers_stream": {
+     * //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     * //         "1526985685298-0": null,                                          // entry was deleted
+     * //     },
+     * //     "readers_stream": {}                                                  // stream is empty
+     * // }
+     * ```
+     */
+    public async xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): Promise<Record<
+        string,
+        Record<string, [string, string][] | null>
+    > | null> {
+        return this.createWritePromise(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**
@@ -4892,6 +5225,70 @@ export class BaseClient {
         preferReplica: connection_request.ReadFrom.PreferReplica,
     };
 
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     * @returns The number of messages that were successfully acknowledged.
+     *
+     * @example
+     * ```typescript
+     *  <pre>{@code
+     * const entryId = await client.xadd("mystream", ["myfield", "mydata"]);
+     * // read messages from streamId
+     * const readResult = await client.xreadgroup(["myfield", "mydata"], "mygroup", "my0consumer");
+     * // acknowledge messages on stream
+     * console.log(await client.xack("mystream", "mygroup", [entryId])); // Output: 1L
+     * </pre>
+     * ```
+     */
+    public async xack(
+        key: string,
+        group: string,
+        ids: string[],
+    ): Promise<number> {
+        return this.createWritePromise(createXAck(key, group, ids));
+    }
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
+     * @returns `"OK"`.
+     *
+     * * @example
+     * ```typescript
+     * console.log(await client.xgroupSetId("mystream", "mygroup", "0", 1L)); // Output is "OK"
+     * ```
+     */
+    public async xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+        decoder?: Decoder,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createXGroupSetid(key, groupName, id, entriesRead),
+            {
+                decoder: decoder,
+            },
+        );
+    }
+
     /** Returns the element at index `index` in the list stored at `key`.
      * The index is zero-based, so 0 means the first element, 1 the second element and so on.
      * Negative indices can be used to designate elements starting at the tail of the list.
@@ -4901,6 +5298,8 @@ export class BaseClient {
      *
      * @param key - The `key` of the list.
      * @param index - The `index` of the element in the list to retrieve.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - The element at `index` in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      *
@@ -4918,8 +5317,14 @@ export class BaseClient {
      * console.log(result); // Output: 'value3' - Returns the last element in the list stored at 'my_list'.
      * ```
      */
-    public async lindex(key: string, index: number): Promise<string | null> {
-        return this.createWritePromise(createLIndex(key, index));
+    public async lindex(
+        key: GlideString,
+        index: number,
+        decoder?: Decoder,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createLIndex(key, index), {
+            decoder: decoder,
+        });
     }
 
     /**
@@ -4943,17 +5348,18 @@ export class BaseClient {
      * ```
      */
     public async linsert(
-        key: string,
+        key: GlideString,
         position: InsertPosition,
-        pivot: string,
-        element: string,
+        pivot: GlideString,
+        element: GlideString,
     ): Promise<number> {
         return this.createWritePromise(
             createLInsert(key, position, pivot, element),
         );
     }
 
-    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+    /**
+     * Removes the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
      *
      * @see {@link https://valkey.io/commands/persist/|valkey.io} for more details.
@@ -4968,7 +5374,7 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates that the timeout associated with the key "my_key" was successfully removed.
      * ```
      */
-    public async persist(key: string): Promise<boolean> {
+    public async persist(key: GlideString): Promise<boolean> {
         return this.createWritePromise(createPersist(key));
     }
 
@@ -4991,8 +5397,10 @@ export class BaseClient {
      * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public async rename(key: string, newKey: string): Promise<"OK"> {
-        return this.createWritePromise(createRename(key, newKey));
+    public async rename(key: GlideString, newKey: GlideString): Promise<"OK"> {
+        return this.createWritePromise(createRename(key, newKey), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -5014,7 +5422,10 @@ export class BaseClient {
      * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public async renamenx(key: string, newKey: string): Promise<boolean> {
+    public async renamenx(
+        key: GlideString,
+        newKey: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createRenameNX(key, newKey));
     }
 
@@ -5029,6 +5440,8 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5040,10 +5453,13 @@ export class BaseClient {
      * ```
      */
     public async brpop(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBRPop(keys, timeout));
+        decoder?: Decoder,
+    ): Promise<[GlideString, GlideString] | null> {
+        return this.createWritePromise(createBRPop(keys, timeout), {
+            decoder: decoder,
+        });
     }
 
     /** Blocking list pop primitive.
@@ -5057,6 +5473,8 @@ export class BaseClient {
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      *
@@ -5067,10 +5485,13 @@ export class BaseClient {
      * ```
      */
     public async blpop(
-        keys: string[],
+        keys: GlideString[],
         timeout: number,
-    ): Promise<[string, string] | null> {
-        return this.createWritePromise(createBLPop(keys, timeout));
+        decoder?: Decoder,
+    ): Promise<[GlideString, GlideString] | null> {
+        return this.createWritePromise(createBLPop(keys, timeout), {
+            decoder: decoder,
+        });
     }
 
     /** Adds all elements to the HyperLogLog data structure stored at the specified `key`.
@@ -5091,7 +5512,10 @@ export class BaseClient {
      * console.log(result); // Output: 1 - Indicates that a new empty data structure was created
      * ```
      */
-    public async pfadd(key: string, elements: string[]): Promise<number> {
+    public async pfadd(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createPfAdd(key, elements));
     }
 
@@ -5110,7 +5534,7 @@ export class BaseClient {
      * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
      * ```
      */
-    public async pfcount(keys: string[]): Promise<number> {
+    public async pfcount(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createPfCount(keys));
     }
 
@@ -5136,43 +5560,51 @@ export class BaseClient {
      * ```
      */
     public async pfmerge(
-        destination: string,
-        sourceKeys: string[],
+        destination: GlideString,
+        sourceKeys: GlideString[],
     ): Promise<"OK"> {
-        return this.createWritePromise(createPfMerge(destination, sourceKeys));
+        return this.createWritePromise(createPfMerge(destination, sourceKeys), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Returns the internal encoding for the Valkey object stored at `key`.
+    /**
+     * Returns the internal encoding for the Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the internal encoding of.
      * @returns - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
-     *     Otherwise, returns None.
+     *     Otherwise, returns `null`.
+     *
      * @example
      * ```typescript
      * const result = await client.objectEncoding("my_hash");
      * console.log(result); // Output: "listpack"
      * ```
      */
-    public async objectEncoding(key: string): Promise<string | null> {
-        return this.createWritePromise(createObjectEncoding(key));
+    public async objectEncoding(key: GlideString): Promise<string | null> {
+        return this.createWritePromise(createObjectEncoding(key), {
+            decoder: Decoder.String,
+        });
     }
 
-    /** Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
      * @returns - If `key` exists, returns the logarithmic access frequency counter of the object
      *            stored at `key` as a `number`. Otherwise, returns `null`.
+     *
      * @example
      * ```typescript
      * const result = await client.objectFreq("my_hash");
      * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
      * ```
      */
-    public async objectFreq(key: string): Promise<number | null> {
+    public async objectFreq(key: GlideString): Promise<number | null> {
         return this.createWritePromise(createObjectFreq(key));
     }
 
@@ -5190,7 +5622,7 @@ export class BaseClient {
      * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
      * ```
      */
-    public async objectIdletime(key: string): Promise<number | null> {
+    public async objectIdletime(key: GlideString): Promise<number | null> {
         return this.createWritePromise(createObjectIdletime(key));
     }
 
@@ -5209,7 +5641,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
      * ```
      */
-    public async objectRefcount(key: string): Promise<number | null> {
+    public async objectRefcount(key: GlideString): Promise<number | null> {
         return this.createWritePromise(createObjectRefcount(key));
     }
 
@@ -5278,7 +5710,7 @@ export class BaseClient {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param options - (Optional) The LPOS options - see {@link LPosOptions}.
      * @returns The index of `element`, or `null` if `element` is not in the list. If the `count` option
      * is specified, then the function returns an `array` of indices of matching elements within the list.
      *
@@ -5290,8 +5722,8 @@ export class BaseClient {
      * ```
      */
     public async lpos(
-        key: string,
-        element: string,
+        key: GlideString,
+        element: GlideString,
         options?: LPosOptions,
     ): Promise<number | number[] | null> {
         return this.createWritePromise(createLPos(key, element, options));
@@ -5318,7 +5750,7 @@ export class BaseClient {
      * ```
      */
     public async bitcount(
-        key: string,
+        key: GlideString,
         options?: BitOffsetOptions,
     ): Promise<number> {
         return this.createWritePromise(createBitCount(key, options));
@@ -5349,8 +5781,8 @@ export class BaseClient {
      * ```
      */
     public async geoadd(
-        key: string,
-        membersToGeospatialData: Map<string, GeospatialData>,
+        key: GlideString,
+        membersToGeospatialData: Map<GlideString, GeospatialData>,
         options?: GeoAddOptions,
     ): Promise<number> {
         return this.createWritePromise(
@@ -5372,7 +5804,8 @@ export class BaseClient {
      * @param searchBy - The query's shape options, could be one of:
      * - {@link GeoCircleShape} to search inside circular area according to given radius.
      * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
-     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchResultOptions}.
+     * @param options - (Optional) Parameters to request additional information and configure sorting/limiting the results,
+     *     see {@link GeoSearchResultOptions} and {@link DecoderOption}.
      * @returns By default, returns an `Array` of members (locations) names.
      *     If any of `withCoord`, `withDist` or `withHash` are set to `true` in {@link GeoSearchResultOptions}, a 2D `Array` returned,
      *     where each sub-array represents a single item in the following order:
@@ -5383,7 +5816,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const data = new Map([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
+     * const data = new Map<GlideString, GeospatialData>([["Palermo", { longitude: 13.361389, latitude: 38.115556 }], ["Catania", { longitude: 15.087269, latitude: 37.502669 }]]);
      * await client.geoadd("mySortedSet", data);
      * // search for locations within 200 km circle around stored member named 'Palermo'
      * const result1 = await client.geosearch("mySortedSet", { member: "Palermo" }, { radius: 200, unit: GeoUnit.KILOMETERS });
@@ -5425,13 +5858,14 @@ export class BaseClient {
      * ```
      */
     public async geosearch(
-        key: string,
+        key: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
-        resultOptions?: GeoSearchResultOptions,
-    ): Promise<(string | (number | number[])[])[]> {
+        options?: GeoSearchResultOptions & DecoderOption,
+    ): Promise<[GlideString, [number?, number?, [number, number]?]?][]> {
         return this.createWritePromise(
-            createGeoSearch(key, searchFrom, searchBy, resultOptions),
+            createGeoSearch(key, searchFrom, searchBy, options),
+            { decoder: options?.decoder },
         );
     }
 
@@ -5455,7 +5889,8 @@ export class BaseClient {
      * @param searchBy - The query's shape options, could be one of:
      * - {@link GeoCircleShape} to search inside circular area according to given radius.
      * - {@link GeoBoxShape} to search inside an axis-aligned rectangle, determined by height and width.
-     * @param resultOptions - (Optional) Parameters to request additional information and configure sorting/limiting the results, see {@link GeoSearchStoreResultOptions}.
+     * @param options - (Optional) Parameters to request additional information and configure sorting/limiting the results,
+     *     see {@link GeoSearchStoreResultOptions}.
      * @returns The number of elements in the resulting sorted set stored at `destination`.
      *
      * @example
@@ -5495,11 +5930,11 @@ export class BaseClient {
      * ```
      */
     public async geosearchstore(
-        destination: string,
-        source: string,
+        destination: GlideString,
+        source: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
-        resultOptions?: GeoSearchStoreResultOptions,
+        options?: GeoSearchStoreResultOptions,
     ): Promise<number> {
         return this.createWritePromise(
             createGeoSearchStore(
@@ -5507,7 +5942,7 @@ export class BaseClient {
                 source,
                 searchFrom,
                 searchBy,
-                resultOptions,
+                options,
             ),
         );
     }
@@ -5531,13 +5966,18 @@ export class BaseClient {
      * const result = await client.geopos("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
      * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
      * // returned might not be exactly the same as the input values
-     * console.log(result); // Output: [[13.36138933897018433, 38.11555639549629859], [15.08726745843887329, 37.50266842333162032], null]
+     * console.log(result); // Output:
+     * // [
+     * //     [13.36138933897018433, 38.11555639549629859],
+     * //     [15.08726745843887329, 37.50266842333162032],
+     * //     null
+     * // ]
      * ```
      */
     public async geopos(
-        key: string,
-        members: string[],
-    ): Promise<(number[] | null)[]> {
+        key: GlideString,
+        members: GlideString[],
+    ): Promise<([number, number] | null)[]> {
         return this.createWritePromise(createGeoPos(key, members));
     }
 
@@ -5700,7 +6140,7 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param member1 - The name of the first member.
      * @param member2 - The name of the second member.
-     * @param geoUnit - The unit of distance measurement - see {@link GeoUnit}. If not specified, the default unit is {@link GeoUnit.METERS}.
+     * @param geoUnit - (Optional) The unit of distance measurement - see {@link GeoUnit}. If not specified, the {@link GeoUnit.METERS} is used as a default unit.
      * @returns The distance between `member1` and `member2`. Returns `null`, if one or both members do not exist,
      *     or if the key does not exist.
      *
@@ -5711,9 +6151,9 @@ export class BaseClient {
      * ```
      */
     public async geodist(
-        key: string,
-        member1: string,
-        member2: string,
+        key: GlideString,
+        member1: GlideString,
+        member2: GlideString,
         geoUnit?: GeoUnit,
     ): Promise<number | null> {
         return this.createWritePromise(
@@ -5729,23 +6169,21 @@ export class BaseClient {
      * @param key - The key of the sorted set.
      * @param members - The array of members whose `GeoHash` strings are to be retrieved.
      * @returns An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
-     *   If a member does not exist in the sorted set, a `null` value is returned for that member.
+     *     If a member does not exist in the sorted set, a `null` value is returned for that member.
      *
      * @example
      * ```typescript
-     * const result = await client.geohash("mySortedSet",["Palermo", "Catania", "NonExisting"]);
-     * console.log(num); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
+     * const result = await client.geohash("mySortedSet", ["Palermo", "Catania", "NonExisting"]);
+     * console.log(result); // Output: ["sqc8b49rny0", "sqdtr74hyu0", null]
      * ```
      */
     public async geohash(
-        key: string,
-        members: string[],
+        key: GlideString,
+        members: GlideString[],
     ): Promise<(string | null)[]> {
-        return this.createWritePromise<(string | null)[]>(
-            createGeoHash(key, members),
-        ).then((hashes) =>
-            hashes.map((hash) => (hash === null ? null : "" + hash)),
-        );
+        return this.createWritePromise(createGeoHash(key, members), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -5866,7 +6304,7 @@ export class BaseClient {
      * console.log(result); // Output: 2 - The last access time of 2 keys has been updated.
      * ```
      */
-    public async touch(keys: string[]): Promise<number> {
+    public async touch(keys: GlideString[]): Promise<number> {
         return this.createWritePromise(createTouch(keys));
     }
 
@@ -5974,7 +6412,7 @@ export class BaseClient {
      *     // new value of "Hello world" with a length of 11.
      * ```
      */
-    public async append(key: string, value: string): Promise<number> {
+    public async append(key: GlideString, value: GlideString): Promise<number> {
         return this.createWritePromise(createAppend(key, value));
     }
 

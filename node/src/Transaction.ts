@@ -27,7 +27,8 @@ import {
     FlushMode,
     FunctionListOptions,
     FunctionListResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
-    FunctionStatsResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
+    FunctionRestorePolicy,
+    FunctionStatsSingleResponse, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoAddOptions,
     GeoBoxShape, // eslint-disable-line @typescript-eslint/no-unused-vars
     GeoCircleShape, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -46,6 +47,7 @@ import {
     RangeByIndex,
     RangeByLex,
     RangeByScore,
+    RestoreOptions,
     ReturnTypeXinfoStream, // eslint-disable-line @typescript-eslint/no-unused-vars
     ScoreFilter,
     SearchOrigin,
@@ -56,6 +58,7 @@ import {
     StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
     TimeUnit,
@@ -84,6 +87,7 @@ import {
     createDecr,
     createDecrBy,
     createDel,
+    createDump,
     createEcho,
     createExists,
     createExpire,
@@ -94,9 +98,11 @@ import {
     createFlushAll,
     createFlushDB,
     createFunctionDelete,
+    createFunctionDump,
     createFunctionFlush,
     createFunctionList,
     createFunctionLoad,
+    createFunctionRestore,
     createFunctionStats,
     createGeoAdd,
     createGeoDist,
@@ -173,6 +179,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createRestore,
     createSAdd,
     createSCard,
     createSDiff,
@@ -203,6 +210,7 @@ import {
     createType,
     createUnlink,
     createWait,
+    createXAck,
     createXAdd,
     createXAutoClaim,
     createXClaim,
@@ -211,6 +219,7 @@ import {
     createXGroupCreateConsumer,
     createXGroupDelConsumer,
     createXGroupDestroy,
+    createXGroupSetid,
     createXInfoConsumers,
     createXInfoGroups,
     createXInfoStream,
@@ -218,6 +227,8 @@ import {
     createXPending,
     createXRange,
     createXRead,
+    createXReadGroup,
+    createXRevRange,
     createXTrim,
     createZAdd,
     createZCard,
@@ -226,6 +237,7 @@ import {
     createZDiffStore,
     createZDiffWithScores,
     createZIncrBy,
+    createZInter,
     createZInterCard,
     createZInterstore,
     createZLexCount,
@@ -246,6 +258,8 @@ import {
     createZRevRankWithScore,
     createZScan,
     createZScore,
+    createZUnion,
+    createZUnionStore,
 } from "./Commands";
 import { command_request } from "./ProtobufMessage";
 
@@ -357,7 +371,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - substring extracted from the value stored at `key`.
      */
-    public getrange(key: string, start: number, end: number): T {
+    public getrange(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createGetRange(key, start, end));
     }
 
@@ -401,15 +415,54 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createInfo(options));
     }
 
-    /** Remove the specified keys. A key is ignored if it does not exist.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
+     *
      * @see {@link https://valkey.io/commands/del/|valkey.io} for details.
      *
      * @param keys - A list of keys to be deleted from the database.
      *
-     * Command Response - the number of keys that were removed.
+     * Command Response - The number of keys that were removed.
      */
-    public del(keys: string[]): T {
+    public del(keys: GlideString[]): T {
         return this.addAndReturn(createDel(keys));
+    }
+
+    /**
+     * Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+     *
+     * @see {@link https://valkey.io/commands/dump/|valkey.io} for details.
+     * @remarks To execute a transaction with a `dump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * @param key - The `key` to serialize.
+     *
+     * Command Response - The serialized value of the data stored at `key`. If `key` does not exist, `null` will be returned.
+     */
+    public dump(key: GlideString): T {
+        return this.addAndReturn(createDump(key));
+    }
+
+    /**
+     * Create a `key` associated with a `value` that is obtained by deserializing the provided
+     * serialized `value` (obtained via {@link dump}).
+     *
+     * @see {@link https://valkey.io/commands/restore/|valkey.io} for details.
+     * @remarks `options.idletime` and `options.frequency` modifiers cannot be set at the same time.
+     *
+     * @param key - The `key` to create.
+     * @param ttl - The expiry time (in milliseconds). If `0`, the `key` will persist.
+     * @param value - The serialized value to deserialize and assign to `key`.
+     * @param options - (Optional) Restore options {@link RestoreOptions}.
+     *
+     * Command Response - Return "OK" if the `key` was successfully restored with a `value`.
+     */
+    public restore(
+        key: GlideString,
+        ttl: number,
+        value: Buffer,
+        options?: RestoreOptions,
+    ): T {
+        return this.addAndReturn(createRestore(key, ttl, value, options));
     }
 
     /** Get the name of the connection on which the transaction is being executed.
@@ -447,7 +500,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of values corresponding to the provided keys. If a key is not found,
      * its corresponding value in the list will be null.
      */
-    public mget(keys: string[]): T {
+    public mget(keys: GlideString[]): T {
         return this.addAndReturn(createMGet(keys));
     }
 
@@ -559,8 +612,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public bitop(
         operation: BitwiseOperation,
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): T {
         return this.addAndReturn(createBitOp(operation, destination, keys));
     }
@@ -577,7 +630,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The bit at the given `offset` of the string. Returns `0` if the key is empty or if the
      * `offset` exceeds the length of the string.
      */
-    public getbit(key: string, offset: number): T {
+    public getbit(key: GlideString, offset: number): T {
         return this.addAndReturn(createGetBit(key, offset));
     }
 
@@ -595,7 +648,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The bit value that was previously stored at `offset`.
      */
-    public setbit(key: string, offset: number, value: number): T {
+    public setbit(key: GlideString, offset: number, value: number): T {
         return this.addAndReturn(createSetBit(key, offset, value));
     }
 
@@ -614,7 +667,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      */
-    public bitpos(key: string, bit: number, start?: number): T {
+    public bitpos(key: GlideString, bit: number, start?: number): T {
         return this.addAndReturn(createBitPos(key, bit, start));
     }
 
@@ -643,7 +696,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      binary value of the string held at `key`.
      */
     public bitposInterval(
-        key: string,
+        key: GlideString,
         bit: number,
         start: number,
         end: number,
@@ -676,7 +729,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
      *   does not contribute a value to the array response.
      */
-    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+    public bitfield(key: GlideString, subcommands: BitFieldSubCommands[]): T {
         return this.addAndReturn(createBitField(key, subcommands));
     }
 
@@ -692,7 +745,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of results from the {@link BitFieldGet} subcommands.
      *
      */
-    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+    public bitfieldReadOnly(key: GlideString, subcommands: BitFieldGet[]): T {
         return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
@@ -727,7 +780,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the value associated with `field`, or null when `field` is not present in the hash or `key` does not exist.
      */
-    public hget(key: string, field: string): T {
+    public hget(key: GlideString, field: GlideString): T {
         return this.addAndReturn(createHGet(key, field));
     }
 
@@ -873,7 +926,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - a list of values in the hash, or an empty list when the key does not exist.
      */
-    public hvals(key: string): T {
+    public hvals(key: GlideString): T {
         return this.addAndReturn(createHVals(key));
     }
 
@@ -973,7 +1026,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the length of the list after the push operations.
      */
-    public lpush(key: string, elements: string[]): T {
+    public lpush(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createLPush(key, elements));
     }
 
@@ -1001,7 +1054,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The value of the first element.
      * If `key` does not exist null will be returned.
      */
-    public lpop(key: string): T {
+    public lpop(key: GlideString): T {
         return this.addAndReturn(createLPop(key));
     }
 
@@ -1014,7 +1067,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of the popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      */
-    public lpopCount(key: string, count: number): T {
+    public lpopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createLPop(key, count));
     }
 
@@ -1033,7 +1086,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
      * If `key` does not exist an empty list will be returned.
      */
-    public lrange(key: string, start: number, end: number): T {
+    public lrange(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createLRange(key, start, end));
     }
 
@@ -1045,7 +1098,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the length of the list at `key`.
      * If `key` does not exist, it is interpreted as an empty list and 0 is returned.
      */
-    public llen(key: string): T {
+    public llen(key: GlideString): T {
         return this.addAndReturn(createLLen(key));
     }
 
@@ -1065,8 +1118,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The popped element, or `null` if `source` does not exist.
      */
     public lmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
     ): T {
@@ -1096,8 +1149,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The popped element, or `null` if `source` does not exist or if the operation timed-out.
      */
     public blmove(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         whereFrom: ListDirection,
         whereTo: ListDirection,
         timeout: number,
@@ -1170,7 +1223,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the length of the list after the push operations.
      */
-    public rpush(key: string, elements: string[]): T {
+    public rpush(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createRPush(key, elements));
     }
 
@@ -1198,7 +1251,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The value of the last element.
      * If `key` does not exist null will be returned.
      */
-    public rpop(key: string): T {
+    public rpop(key: GlideString): T {
         return this.addAndReturn(createRPop(key));
     }
 
@@ -1211,7 +1264,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of popped elements will be returned depending on the list's length.
      * If `key` does not exist null will be returned.
      */
-    public rpopCount(key: string, count: number): T {
+    public rpopCount(key: GlideString, count: number): T {
         return this.addAndReturn(createRPop(key, count));
     }
 
@@ -1471,63 +1524,75 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSRandMember(key, count));
     }
 
-    /** Returns the number of keys in `keys` that exist in the database.
+    /**
+     * Returns the number of keys in `keys` that exist in the database.
+     *
      * @see {@link https://valkey.io/commands/exists/|valkey.io} for details.
      *
      * @param keys - The keys list to check.
      *
      * Command Response - the number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
-     * it will be counted multiple times.
+     *     it will be counted multiple times.
      */
-    public exists(keys: string[]): T {
+    public exists(keys: GlideString[]): T {
         return this.addAndReturn(createExists(keys));
     }
 
-    /** Removes the specified keys. A key is ignored if it does not exist.
-     * This command, similar to DEL, removes specified keys and ignores non-existent ones.
-     * However, this command does not block the server, while [DEL](https://valkey.io/commands/del) does.
+    /**
+     * Removes the specified keys. A key is ignored if it does not exist.
+     * This command, similar to {@link del}, removes specified keys and ignores non-existent ones.
+     * However, this command does not block the server, while {@link https://valkey.io/commands/del|`DEL`} does.
+     *
      * @see {@link https://valkey.io/commands/unlink/|valkey.io} for details.
      *
      * @param keys - The keys we wanted to unlink.
      *
-     * Command Response - the number of keys that were unlinked.
+     * Command Response - The number of keys that were unlinked.
      */
-    public unlink(keys: string[]): T {
+    public unlink(keys: GlideString[]): T {
         return this.addAndReturn(createUnlink(keys));
     }
 
-    /** Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `seconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/expire/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param seconds - The timeout in seconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
-    public expire(key: string, seconds: number, option?: ExpireOptions): T {
+    public expire(
+        key: GlideString,
+        seconds: number,
+        option?: ExpireOptions,
+    ): T {
         return this.addAndReturn(createExpire(key, seconds, option));
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the number of seconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/expireat/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixSeconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
     public expireAt(
-        key: string,
+        key: GlideString,
         unixSeconds: number,
         option?: ExpireOptions,
     ): T {
@@ -1545,46 +1610,50 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
-    public expireTime(key: string): T {
+    public expireTime(key: GlideString): T {
         return this.addAndReturn(createExpireTime(key));
     }
 
-    /** Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
+    /**
+     * Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * If `milliseconds` is non-positive number, the key will be deleted rather than expired.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/pexpire/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param milliseconds - The timeout in milliseconds.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
     public pexpire(
-        key: string,
+        key: GlideString,
         milliseconds: number,
         option?: ExpireOptions,
     ): T {
         return this.addAndReturn(createPExpire(key, milliseconds, option));
     }
 
-    /** Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
+    /**
+     * Sets a timeout on `key`. It takes an absolute Unix timestamp (milliseconds since January 1, 1970) instead of specifying the number of milliseconds.
      * A timestamp in the past will delete the key immediately. After the timeout has expired, the key will automatically be deleted.
      * If `key` already has an existing expire set, the time to live is updated to the new value.
      * The timeout will only be cleared by commands that delete or overwrite the contents of `key`.
+     *
      * @see {@link https://valkey.io/commands/pexpireat/|valkey.io} for details.
      *
      * @param key - The key to set timeout on it.
      * @param unixMilliseconds - The timeout in an absolute Unix timestamp.
-     * @param option - The expire option.
+     * @param option - (Optional) The expire option - see {@link ExpireOptions}.
      *
      * Command Response - `true` if the timeout was set. `false` if the timeout was not set. e.g. key doesn't exist,
-     * or operation skipped due to the provided arguments.
+     *     or operation skipped due to the provided arguments.
      */
     public pexpireAt(
-        key: string,
+        key: GlideString,
         unixMilliseconds: number,
         option?: ExpireOptions,
     ): T {
@@ -1603,18 +1672,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The expiration Unix timestamp in seconds, `-2` if `key` does not exist or `-1` if `key` exists but has no associated expire.
      */
-    public pexpireTime(key: string): T {
+    public pexpireTime(key: GlideString): T {
         return this.addAndReturn(createPExpireTime(key));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout.
+     *
      * @see {@link https://valkey.io/commands/ttl/|valkey.io} for details.
      *
      * @param key - The key to return its timeout.
      *
      * Command Response -  TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
      */
-    public ttl(key: string): T {
+    public ttl(key: GlideString): T {
         return this.addAndReturn(createTTL(key));
     }
 
@@ -1767,6 +1838,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see {@link zunionWithScores}.
+     *
+     * @see {@link https://valkey.io/commands/zunionstore/|valkey.io} for details.
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *        string[] - for keys only.
+     *        KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     *
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public zunionstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(
+            createZUnionStore(destination, keys, aggregationType),
+        );
+    }
+
+    /**
      * Returns the scores associated with the specified `members` in the sorted set stored at `key`.
      *
      * @see {@link https://valkey.io/commands/zmscore/|valkey.io} for details.
@@ -1886,11 +1981,15 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/zinterstore/|valkey.io} for details.
      *
+     * @remarks Since Valkey version 6.2.0.
+     *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
      *  string[] - for keys only.
      *  KeyWeight[] - for weighted keys with score multipliers.
-     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public zinterstore(
@@ -1901,6 +2000,88 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(
             createZInterstore(destination, keys, aggregationType),
         );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+     * To get the scores as well, see {@link zinterWithScores}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - The resulting array of intersecting elements.
+     */
+    public zinter(keys: string[]): T {
+        return this.addAndReturn(createZInter(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements with scores.
+     * To get the elements only, see {@link zinter}.
+     * To store the result in a key as a sorted set, see {@link zinterStore}.
+     *
+     * @see {@link https://valkey.io/commands/zinter/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
+     * Command Response - The resulting sorted set with scores.
+     */
+    public zinterWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(createZInter(keys, aggregationType, true));
+    }
+
+    /**
+     * Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+     * To get the scores as well, see {@link zunionWithScores}.
+     *
+     * To store the result in a key as a sorted set, see {@link zunionStore}.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @param keys - The keys of the sorted sets.
+     *
+     * Command Response - The resulting array of union elements.
+     */
+    public zunion(keys: string[]): T {
+        return this.addAndReturn(createZUnion(keys));
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and returns a list of union elements with scores.
+     * To get the elements only, see {@link zunion}.
+     *
+     * @see {@link https://valkey.io/commands/zunion/|valkey.io} for details.
+     *
+     * @remarks Since Valkey version 6.2.0.
+     *
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  - string[] - for keys only.
+     *  - KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - (Optional) Specifies the aggregation strategy to apply when combining the scores of elements. See {@link AggregationType}.
+     * If `aggregationType` is not specified, defaults to `AggregationType.SUM`.
+     *
+     * Command Response - The resulting sorted set with scores.
+     */
+    public zunionWithScores(
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(createZUnion(keys, aggregationType, true));
     }
 
     /**
@@ -1949,14 +2130,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRandMember(key, count, true));
     }
 
-    /** Returns the string representation of the type of the value stored at `key`.
+    /**
+     * Returns the string representation of the type of the value stored at `key`.
+     *
      * @see {@link https://valkey.io/commands/type/|valkey.io} for details.
      *
      * @param key - The key to check its data type.
      *
      * Command Response - If the key exists, the type of the stored value is returned. Otherwise, a "none" string is returned.
      */
-    public type(key: string): T {
+    public type(key: GlideString): T {
         return this.addAndReturn(createType(key));
     }
 
@@ -2053,14 +2236,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createEcho(message));
     }
 
-    /** Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+    /**
+     * Returns the remaining time to live of `key` that has a timeout, in milliseconds.
+     *
      * @see {@link https://valkey.io/commands/pttl/|valkey.io} for more details.
      *
      * @param key - The key to return its timeout.
      *
      * Command Response - TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
      */
-    public pttl(key: string): T {
+    public pttl(key: GlideString): T {
         return this.addAndReturn(createPTTL(key));
     }
 
@@ -2209,15 +2394,17 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZRevRankWithScore(key, member));
     }
 
-    /** Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
+    /**
+     * Removes the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
      * persistent (a key that will never expire as no timeout is associated).
+     *
      * @see {@link https://valkey.io/commands/persist/|valkey.io} for details.
      *
      * @param key - The key to remove the existing timeout on.
      *
      * Command Response - `false` if `key` does not exist or does not have an associated timeout, `true` if the timeout has been removed.
      */
-    public persist(key: string): T {
+    public persist(key: GlideString): T {
         return this.addAndReturn(createPersist(key));
     }
 
@@ -2243,7 +2430,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The element at index in the list stored at `key`.
      * If `index` is out of range or if `key` does not exist, null is returned.
      */
-    public lindex(key: string, index: number): T {
+    public lindex(key: GlideString, index: number): T {
         return this.addAndReturn(createLIndex(key, index));
     }
 
@@ -2263,10 +2450,10 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If the `pivot` wasn't found, returns `0`.
      */
     public linsert(
-        key: string,
+        key: GlideString,
         position: InsertPosition,
-        pivot: string,
-        element: string,
+        pivot: GlideString,
+        element: GlideString,
     ): T {
         return this.addAndReturn(createLInsert(key, position, pivot, element));
     }
@@ -2374,7 +2561,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param count - An optional argument specifying the maximum count of stream entries to return.
      *     If `count` is not provided, all stream entries in the range will be returned.
      *
-     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is negative.
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
      */
     public xrange(
         key: string,
@@ -2386,19 +2573,74 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns stream entries matching a given range of entry IDs in reverse order. Equivalent to {@link xrange} but returns the
+     * entries in reverse order.
+     *
+     * @see {@link https://valkey.io/commands/xrevrange/|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param end - The ending stream entry ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.PositiveInfinity` to end with the maximum available ID.
+     * @param start - The ending stream ID bound for the range.
+     *     - Use `value` to specify a stream entry ID.
+     *     - Use `isInclusive: false` to specify an exclusive bounded stream entry ID. This is only available starting with Valkey version 6.2.0.
+     *     - Use `InfBoundary.NegativeInfinity` to start with the minimum available ID.
+     * @param count - An optional argument specifying the maximum count of stream entries to return.
+     *     If `count` is not provided, all stream entries in the range will be returned.
+     *
+     * Command Response - A map of stream entry ids, to an array of entries, or `null` if `count` is non-positive.
+     */
+    public xrevrange(
+        key: string,
+        end: Boundary<string>,
+        start: Boundary<string>,
+        count?: number,
+    ): T {
+        return this.addAndReturn(createXRevRange(key, end, start, count));
+    }
+
+    /**
      * Reads entries from the given streams.
+     *
      * @see {@link https://valkey.io/commands/xread/|valkey.io} for details.
      *
-     * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
-     * @param options - options detailing how to read the stream.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadOptions}.
      *
-     * Command Response - A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * Command Response - A `Record` of stream keys, each key is mapped to a `Record` of stream ids, to an `Array` of entries.
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xreadgroup/|valkey.io} for details.
+     *
+     * @param group - The consumer group name.
+     * @param consumer - The group consumer.
+     * @param keys_and_ids - An object of stream keys and entry IDs to read from.
+     *     Use the special ID of `">"` to receive only new messages.
+     * @param options - (Optional) Parameters detailing how to read the stream - see {@link StreamReadGroupOptions}.
+     *
+     * Command Response - A map of stream keys, each key is mapped to a map of stream ids, which is mapped to an array of entries.
+     *     Returns `null` if there is no stream that can be served.
+     */
+    public xreadgroup(
+        group: string,
+        consumer: string,
+        keys_and_ids: Record<string, string>,
+        options?: StreamReadGroupOptions,
+    ): T {
+        return this.addAndReturn(
+            createXReadGroup(group, consumer, keys_and_ids, options),
+        );
     }
 
     /**
@@ -2682,10 +2924,48 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @see {@link https://valkey.io/commands/xack/|valkey.io} for details.
+     *
+     * @param key - The key of the stream.
+     * @param group - The consumer group name.
+     * @param ids - An array of entry ids.
+     *
+     * Command Response - The number of messages that were successfully acknowledged.
+     */
+    public xack(key: string, group: string, ids: string[]): T {
+        return this.addAndReturn(createXAck(key, group, ids));
+    }
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see {@link https://valkey.io/commands/xgroup-setid|valkey.io} for more details.
+     *
+     * @param key - The key of the stream.
+     * @param groupName - The consumer group name.
+     * @param id - The stream entry ID that should be set as the last delivered ID for the consumer group.
+     * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
+     *     This option can only be specified if you are using Valkey version 7.0.0 or above.
+     *
+     * Command Response - `"OK"`.
+     */
+    public xgroupSetId(
+        key: string,
+        groupName: string,
+        id: string,
+        entriesRead?: number,
+    ): T {
+        return this.addAndReturn(
+            createXGroupSetid(key, groupName, id, entriesRead),
+        );
+    }
+
+    /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
-     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      *
      * @see {@link https://valkey.io/commands/rename/|valkey.io} for details.
      *
@@ -2694,23 +2974,22 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
      */
-    public rename(key: string, newKey: string): T {
+    public rename(key: GlideString, newKey: GlideString): T {
         return this.addAndReturn(createRename(key, newKey));
     }
 
     /**
      * Renames `key` to `newkey` if `newkey` does not yet exist.
-     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
      *
      * @see {@link https://valkey.io/commands/renamenx/|valkey.io} for details.
      *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
+     *
      * Command Response - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
-     * If `key` does not exist, an error is thrown.
+     *     If `key` does not exist, an error is thrown.
      */
-    public renamenx(key: string, newKey: string): T {
+    public renamenx(key: GlideString, newKey: GlideString): T {
         return this.addAndReturn(createRenameNX(key, newKey));
     }
 
@@ -2728,7 +3007,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
-    public brpop(keys: string[], timeout: number): T {
+    public brpop(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBRPop(keys, timeout));
     }
 
@@ -2746,7 +3025,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `array` containing the `key` from which the element was popped and the value of the popped element,
      * formatted as [key, value]. If no element could be popped and the timeout expired, returns `null`.
      */
-    public blpop(keys: string[], timeout: number): T {
+    public blpop(keys: GlideString[], timeout: number): T {
         return this.addAndReturn(createBLPop(keys, timeout));
     }
 
@@ -2761,7 +3040,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
      *     altered, then returns `1`. Otherwise, returns `0`.
      */
-    public pfadd(key: string, elements: string[]): T {
+    public pfadd(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
     }
 
@@ -2774,7 +3053,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The approximated cardinality of given HyperLogLog data structures.
      *     The cardinality of a key that does not exist is `0`.
      */
-    public pfcount(keys: string[]): T {
+    public pfcount(keys: GlideString[]): T {
         return this.addAndReturn(createPfCount(keys));
     }
 
@@ -2788,31 +3067,35 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param sourceKeys - The keys of the HyperLogLog structures to be merged.
      * Command Response - A simple "OK" response.
      */
-    public pfmerge(destination: string, sourceKeys: string[]): T {
+    public pfmerge(destination: GlideString, sourceKeys: GlideString[]): T {
         return this.addAndReturn(createPfMerge(destination, sourceKeys));
     }
 
-    /** Returns the internal encoding for the Redis object stored at `key`.
+    /**
+     * Returns the internal encoding for the Redis object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-encoding/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the internal encoding of.
+     *
      * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
      *     Otherwise, returns None.
      */
-    public objectEncoding(key: string): T {
+    public objectEncoding(key: GlideString): T {
         return this.addAndReturn(createObjectEncoding(key));
     }
 
-    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+    /**
+     * Returns the logarithmic access frequency counter of a Redis object stored at `key`.
      *
      * @see {@link https://valkey.io/commands/object-freq/|valkey.io} for more details.
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     *
      * Command Response - If `key` exists, returns the logarithmic access frequency counter of
      *     the object stored at `key` as a `number`. Otherwise, returns `null`.
      */
-    public objectFreq(key: string): T {
+    public objectFreq(key: GlideString): T {
         return this.addAndReturn(createObjectFreq(key));
     }
 
@@ -2825,7 +3108,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
      */
-    public objectIdletime(key: string): T {
+    public objectIdletime(key: GlideString): T {
         return this.addAndReturn(createObjectIdletime(key));
     }
 
@@ -2837,9 +3120,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The `key` of the object to get the reference count of.
      *
      * Command Response - If `key` exists, returns the reference count of the object stored at `key` as a `number`.
-     * Otherwise, returns `null`.
+     *     Otherwise, returns `null`.
      */
-    public objectRefcount(key: string): T {
+    public objectRefcount(key: GlideString): T {
         return this.addAndReturn(createObjectRefcount(key));
     }
 
@@ -2971,13 +3254,41 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * Command Response - A `Record` of type {@link FunctionStatsResponse} with two keys:
+     * Command Response - A `Record` of type {@link FunctionStatsSingleResponse} with two keys:
      *
      * - `"running_script"` with information about the running script.
      * - `"engines"` with information about available engines and their stats.
      */
     public functionStats(): T {
         return this.addAndReturn(createFunctionStats());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     * @remarks To execute a transaction with a `functionDump` command, the `exec` command requires `Decoder.Bytes` to handle the response.
+     *
+     * Command Response - The serialized payload of all loaded libraries.
+     */
+    public functionDump(): T {
+        return this.addAndReturn(createFunctionDump());
+    }
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link functionDump}.
+     *
+     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @remarks Since Valkey version 7.0.0.
+     *
+     * @param payload - The serialized data from {@link functionDump}.
+     * @param policy - (Optional) A policy for handling existing libraries.
+     *
+     * Command Response - `"OK"`.
+     */
+    public functionRestore(payload: Buffer, policy?: FunctionRestorePolicy): T {
+        return this.addAndReturn(createFunctionRestore(payload, policy));
     }
 
     /**
@@ -3016,12 +3327,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The name of the list.
      * @param element - The value to search for within the list.
-     * @param options - The LPOS options.
+     * @param options - (Optional) The LPOS options - see {@link LPosOptions}.
      *
      * Command Response - The index of `element`, or `null` if `element` is not in the list. If the `count`
      * option is specified, then the function returns an `array` of indices of matching elements within the list.
      */
-    public lpos(key: string, element: string, options?: LPosOptions): T {
+    public lpos(
+        key: GlideString,
+        element: GlideString,
+        options?: LPosOptions,
+    ): T {
         return this.addAndReturn(createLPos(key, element, options));
     }
 
@@ -3049,7 +3364,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
      *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
      */
-    public bitcount(key: string, options?: BitOffsetOptions): T {
+    public bitcount(key: GlideString, options?: BitOffsetOptions): T {
         return this.addAndReturn(createBitCount(key, options));
     }
 
@@ -3069,8 +3384,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *    `true` in the options, returns the number of elements updated in the sorted set.
      */
     public geoadd(
-        key: string,
-        membersToGeospatialData: Map<string, GeospatialData>,
+        key: GlideString,
+        membersToGeospatialData: Map<GlideString, GeospatialData>,
         options?: GeoAddOptions,
     ): T {
         return this.addAndReturn(
@@ -3110,7 +3425,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * - The coordinates as a two item `array` of floating point `number`s.
      */
     public geosearch(
-        key: string,
+        key: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchResultOptions,
@@ -3144,8 +3459,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
     public geosearchstore(
-        destination: string,
-        source: string,
+        destination: GlideString,
+        source: GlideString,
         searchFrom: SearchOrigin,
         searchBy: GeoSearchShape,
         resultOptions?: GeoSearchStoreResultOptions,
@@ -3174,7 +3489,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     given members. The order of the returned positions matches the order of the input members.
      *     If a member does not exist, its position will be `null`.
      */
-    public geopos(key: string, members: string[]): T {
+    public geopos(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createGeoPos(key, members));
     }
 
@@ -3277,9 +3592,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     or if the key does not exist.
      */
     public geodist(
-        key: string,
-        member1: string,
-        member2: string,
+        key: GlideString,
+        member1: GlideString,
+        member2: GlideString,
         geoUnit?: GeoUnit,
     ): T {
         return this.addAndReturn(createGeoDist(key, member1, member2, geoUnit));
@@ -3296,7 +3611,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of `GeoHash` strings representing the positions of the specified members stored at `key`.
      *   If a member does not exist in the sorted set, a `null` value is returned for that member.
      */
-    public geohash(key: string, members: string[]): T {
+    public geohash(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createGeoHash(key, members));
     }
 
@@ -3383,7 +3698,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of keys that were updated. A key is ignored if it doesn't exist.
      */
-    public touch(keys: string[]): T {
+    public touch(keys: GlideString[]): T {
         return this.addAndReturn(createTouch(keys));
     }
 
@@ -3426,7 +3741,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the string after appending the value.
      */
-    public append(key: string, value: string): T {
+    public append(key: GlideString, value: GlideString): T {
         return this.addAndReturn(createAppend(key, value));
     }
 
@@ -3567,7 +3882,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * Command Response - An `Array` of sorted elements.
      */
-    public sort(key: string, options?: SortOptions): Transaction {
+    public sort(key: GlideString, options?: SortOptions): Transaction {
         return this.addAndReturn(createSort(key, options));
     }
 
@@ -3586,7 +3901,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * Command Response - An `Array` of sorted elements
      */
-    public sortReadOnly(key: string, options?: SortOptions): Transaction {
+    public sortReadOnly(key: GlideString, options?: SortOptions): Transaction {
         return this.addAndReturn(createSortReadOnly(key, options));
     }
 
@@ -3608,8 +3923,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - The number of elements in the sorted key stored at `destination`.
      */
     public sortStore(
-        key: string,
-        destination: string,
+        key: GlideString,
+        destination: GlideString,
         options?: SortOptions,
     ): Transaction {
         return this.addAndReturn(createSort(key, options, destination));
@@ -3634,8 +3949,8 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
      */
     public copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         options?: { destinationDB?: number; replace?: boolean },
     ): Transaction {
         return this.addAndReturn(createCopy(source, destination, options));
@@ -3652,7 +3967,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response - `true` if `key` was moved, or `false` if the `key` already exists in the destination
      *     database or does not exist in the source database.
      */
-    public move(key: string, dbIndex: number): Transaction {
+    public move(key: GlideString, dbIndex: number): Transaction {
         return this.addAndReturn(createMove(key, dbIndex));
     }
 
@@ -3700,7 +4015,10 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * Command Response - An `Array` of sorted elements.
      */
-    public sort(key: string, options?: SortClusterOptions): ClusterTransaction {
+    public sort(
+        key: GlideString,
+        options?: SortClusterOptions,
+    ): ClusterTransaction {
         return this.addAndReturn(createSort(key, options));
     }
 
@@ -3721,7 +4039,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - An `Array` of sorted elements
      */
     public sortReadOnly(
-        key: string,
+        key: GlideString,
         options?: SortClusterOptions,
     ): ClusterTransaction {
         return this.addAndReturn(createSortReadOnly(key, options));
@@ -3745,8 +4063,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - The number of elements in the sorted key stored at `destination`.
      */
     public sortStore(
-        key: string,
-        destination: string,
+        key: GlideString,
+        destination: GlideString,
         options?: SortClusterOptions,
     ): ClusterTransaction {
         return this.addAndReturn(createSort(key, options, destination));
@@ -3767,8 +4085,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - `true` if `source` was copied, `false` if the `source` was not copied.
      */
     public copy(
-        source: string,
-        destination: string,
+        source: GlideString,
+        destination: GlideString,
         replace?: boolean,
     ): ClusterTransaction {
         return this.addAndReturn(

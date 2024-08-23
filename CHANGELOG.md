@@ -1,5 +1,12 @@
 #### Changes
 * Java: Fix docs for stream commands ([#2086](https://github.com/valkey-io/valkey-glide/pull/2086))
+* Node: Added binary variant to bitmap commands ([#2178](https://github.com/valkey-io/valkey-glide/pull/2178))
+* Node: Added binary variant to generic commands ([#2158](https://github.com/valkey-io/valkey-glide/pull/2158))
+* Node: Added binary variant to geo commands ([#2149](https://github.com/valkey-io/valkey-glide/pull/2149))
+* Node: Added binary variant to HYPERLOGLOG commands ([#2176](https://github.com/valkey-io/valkey-glide/pull/2176))
+* Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129), [#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
+* Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
+* Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
 * Node: Added XINFO GROUPS command ([#2122](https://github.com/valkey-io/valkey-glide/pull/2122))
 * Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
 * Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
@@ -62,10 +69,12 @@
 * Node: Added ZINCRBY command ([#2009](https://github.com/valkey-io/valkey-glide/pull/2009))
 * Node: Added BZMPOP command ([#2018](https://github.com/valkey-io/valkey-glide/pull/2018))
 * Node: Added XRANGE command ([#2069](https://github.com/valkey-io/valkey-glide/pull/2069))
+* Node: Added XREVRANGE command ([#2148](https://github.com/valkey-io/valkey-glide/pull/2148))
 * Node: Added PFMERGE command ([#2053](https://github.com/valkey-io/valkey-glide/pull/2053))
 * Node: Added WATCH and UNWATCH commands ([#2076](https://github.com/valkey-io/valkey-glide/pull/2076))
 * Node: Added WAIT command ([#2113](https://github.com/valkey-io/valkey-glide/pull/2113))
 * Node: Added DUMP and RESTORE commands ([#2126](https://github.com/valkey-io/valkey-glide/pull/2126))
+* Node: Added transaction supports for DUMP and RESTORE ([#2159](https://github.com/valkey-io/valkey-glide/pull/2159))
 * Node: Added ZLEXCOUNT command ([#2022](https://github.com/valkey-io/valkey-glide/pull/2022))
 * Node: Added ZREMRANGEBYLEX command ([#2025](https://github.com/valkey-io/valkey-glide/pull/2025))
 * Node: Added ZRANGESTORE command ([#2068](https://github.com/valkey-io/valkey-glide/pull/2068))
@@ -80,12 +89,16 @@
 * Node: Added PUBSUB * commands ([#2090](https://github.com/valkey-io/valkey-glide/pull/2090))
 * Python: Added PUBSUB * commands ([#2043](https://github.com/valkey-io/valkey-glide/pull/2043))
 * Node: Added XGROUP CREATE & XGROUP DESTROY commands ([#2084](https://github.com/valkey-io/valkey-glide/pull/2084))
-* Node: Added BZPOPMAX & BZPOPMIN command ([#2077]((https://github.com/valkey-io/valkey-glide/pull/2077))
+* Node: Added BZPOPMAX & BZPOPMIN command ([#2077](https://github.com/valkey-io/valkey-glide/pull/2077))
 * Node: Added XGROUP CREATECONSUMER & XGROUP DELCONSUMER commands ([#2088](https://github.com/valkey-io/valkey-glide/pull/2088))
 * Node: Added GETEX command ([#2107]((https://github.com/valkey-io/valkey-glide/pull/2107))
+* Node: Added ZINTER and ZUNION commands ([#2146](https://github.com/aws/glide-for-redis/pull/2146))
+* Node: Added XACK commands ([#2112](https://github.com/valkey-io/valkey-glide/pull/2112))
+* Node: Added XGROUP SETID command ([#2135]((https://github.com/valkey-io/valkey-glide/pull/2135))
 
 #### Breaking Changes
 * Node: (Refactor) Convert classes to types ([#2005](https://github.com/valkey-io/valkey-glide/pull/2005))
+* Core: Change FUNCTION STATS command to return multi node response for standalone mode ([#2117](https://github.com/valkey-io/valkey-glide/pull/2117))
 
 #### Fixes
 * Java: Add overloads for XADD to allow duplicate entry keys ([#1970](https://github.com/valkey-io/valkey-glide/pull/1970))

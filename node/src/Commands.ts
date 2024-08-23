@@ -10,7 +10,7 @@ import { BaseClient, Decoder } from "src/BaseClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { GlideClient } from "src/GlideClient";
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-import { GlideClusterClient } from "src/GlideClusterClient";
+import { GlideClusterClient, Routes } from "src/GlideClusterClient";
 import { GlideString } from "./BaseClient";
 import { command_request } from "./ProtobufMessage";
 
@@ -89,6 +89,24 @@ function createCommand(
     return singleCommand;
 }
 
+/** An extension to command option types with {@link Decoder}. */
+export type DecoderOption = {
+    /**
+     * {@link Decoder} type which defines how to handle the response.
+     * If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     */
+    decoder?: Decoder;
+};
+
+/** An extension to command option types with {@link Routes}. */
+export type RouteOption = {
+    /**
+     * Specifies the routing configuration for the command.
+     * The client will route the command to the nodes defined by `route`.
+     */
+    route?: Routes;
+};
+
 /**
  * @internal
  */
@@ -107,7 +125,7 @@ export function createGetDel(key: GlideString): command_request.Command {
  * @internal
  */
 export function createGetRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -285,7 +303,7 @@ export function createInfo(options?: InfoOptions[]): command_request.Command {
 /**
  * @internal
  */
-export function createDel(keys: string[]): command_request.Command {
+export function createDel(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Del, keys);
 }
 
@@ -320,7 +338,7 @@ export function createConfigResetStat(): command_request.Command {
 /**
  * @internal
  */
-export function createMGet(keys: string[]): command_request.Command {
+export function createMGet(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.MGet, keys);
 }
 
@@ -402,8 +420,8 @@ export function createConfigSet(
  * @internal
  */
 export function createHGet(
-    key: string,
-    field: string,
+    key: GlideString,
+    field: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.HGet, [key, field]);
 }
@@ -472,8 +490,8 @@ export enum BitwiseOperation {
  */
 export function createBitOp(
     operation: BitwiseOperation,
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.BitOp, [operation, destination, ...keys]);
 }
@@ -482,7 +500,7 @@ export function createBitOp(
  * @internal
  */
 export function createGetBit(
-    key: string,
+    key: GlideString,
     offset: number,
 ): command_request.Command {
     return createCommand(RequestType.GetBit, [key, offset.toString()]);
@@ -492,7 +510,7 @@ export function createGetBit(
  * @internal
  */
 export function createSetBit(
-    key: string,
+    key: GlideString,
     offset: number,
     value: number,
 ): command_request.Command {
@@ -781,14 +799,14 @@ export class BitFieldOverflow implements BitFieldSubCommands {
  * @internal
  */
 export function createBitField(
-    key: string,
+    key: GlideString,
     subcommands: BitFieldSubCommands[],
     readOnly: boolean = false,
 ): command_request.Command {
     const requestType = readOnly
         ? RequestType.BitFieldReadOnly
         : RequestType.BitField;
-    let args: string[] = [key];
+    let args: GlideString[] = [key];
 
     for (const subcommand of subcommands) {
         args = args.concat(subcommand.toArgs());
@@ -838,8 +856,8 @@ export function createHGetAll(key: string): command_request.Command {
  * @internal
  */
 export function createLPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.LPush, [key].concat(elements));
 }
@@ -858,10 +876,11 @@ export function createLPushX(
  * @internal
  */
 export function createLPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.LPop, args);
 }
 
@@ -869,7 +888,7 @@ export function createLPop(
  * @internal
  */
 export function createLRange(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -883,7 +902,7 @@ export function createLRange(
 /**
  * @internal
  */
-export function createLLen(key: string): command_request.Command {
+export function createLLen(key: GlideString): command_request.Command {
     return createCommand(RequestType.LLen, [key]);
 }
 
@@ -905,8 +924,8 @@ export enum ListDirection {
  * @internal
  */
 export function createLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
 ): command_request.Command {
@@ -922,8 +941,8 @@ export function createLMove(
  * @internal
  */
 export function createBLMove(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     whereFrom: ListDirection,
     whereTo: ListDirection,
     timeout: number,
@@ -978,8 +997,8 @@ export function createLRem(
  * @internal
  */
 export function createRPush(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.RPush, [key].concat(elements));
 }
@@ -998,10 +1017,11 @@ export function createRPushX(
  * @internal
  */
 export function createRPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.RPop, args);
 }
 
@@ -1221,21 +1241,21 @@ export function createHLen(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createHVals(key: string): command_request.Command {
+export function createHVals(key: GlideString): command_request.Command {
     return createCommand(RequestType.HVals, [key]);
 }
 
 /**
  * @internal
  */
-export function createExists(keys: string[]): command_request.Command {
+export function createExists(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Exists, keys);
 }
 
 /**
  * @internal
  */
-export function createUnlink(keys: string[]): command_request.Command {
+export function createUnlink(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Unlink, keys);
 }
 
@@ -1264,11 +1284,11 @@ export enum ExpireOptions {
  * @internal
  */
 export function createExpire(
-    key: string,
+    key: GlideString,
     seconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, seconds.toString()]
             : [key, seconds.toString(), option];
@@ -1279,11 +1299,11 @@ export function createExpire(
  * @internal
  */
 export function createExpireAt(
-    key: string,
+    key: GlideString,
     unixSeconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, unixSeconds.toString()]
             : [key, unixSeconds.toString(), option];
@@ -1293,7 +1313,7 @@ export function createExpireAt(
 /**
  * @internal
  */
-export function createExpireTime(key: string): command_request.Command {
+export function createExpireTime(key: GlideString): command_request.Command {
     return createCommand(RequestType.ExpireTime, [key]);
 }
 
@@ -1301,11 +1321,11 @@ export function createExpireTime(key: string): command_request.Command {
  * @internal
  */
 export function createPExpire(
-    key: string,
+    key: GlideString,
     milliseconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, milliseconds.toString()]
             : [key, milliseconds.toString(), option];
@@ -1316,11 +1336,11 @@ export function createPExpire(
  * @internal
  */
 export function createPExpireAt(
-    key: string,
+    key: GlideString,
     unixMilliseconds: number,
     option?: ExpireOptions,
 ): command_request.Command {
-    const args: string[] =
+    const args =
         option == undefined
             ? [key, unixMilliseconds.toString()]
             : [key, unixMilliseconds.toString(), option];
@@ -1330,14 +1350,14 @@ export function createPExpireAt(
 /**
  * @internal
  */
-export function createPExpireTime(key: string): command_request.Command {
+export function createPExpireTime(key: GlideString): command_request.Command {
     return createCommand(RequestType.PExpireTime, [key]);
 }
 
 /**
  * @internal
  */
-export function createTTL(key: string): command_request.Command {
+export function createTTL(key: GlideString): command_request.Command {
     return createCommand(RequestType.TTL, [key]);
 }
 
@@ -1431,16 +1451,59 @@ export function createZInterstore(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): command_request.Command {
-    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    const args = createZCmdArgs(keys, {
+        aggregationType,
+        withScores: false,
+        destination,
+    });
     return createCommand(RequestType.ZInterStore, args);
 }
 
-function createZCmdStoreArgs(
-    destination: string,
+/**
+ * @internal
+ */
+export function createZInter(
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
+    withScores?: boolean,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
+    return createCommand(RequestType.ZInter, args);
+}
+
+/**
+ * @internal
+ */
+export function createZUnion(
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+    withScores?: boolean,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { aggregationType, withScores });
+    return createCommand(RequestType.ZUnion, args);
+}
+
+/**
+ * @internal
+ * Helper function for Zcommands (ZInter, ZinterStore, ZUnion..) that arranges arguments in the server's required order.
+ */
+function createZCmdArgs(
+    keys: string[] | KeyWeight[],
+    options: {
+        aggregationType?: AggregationType;
+        withScores?: boolean;
+        destination?: string;
+    },
 ): string[] {
-    const args: string[] = [destination, keys.length.toString()];
+    const args = [];
+
+    const destination = options.destination;
+
+    if (destination) {
+        args.push(destination);
+    }
+
+    args.push(keys.length.toString());
 
     if (typeof keys[0] === "string") {
         args.push(...(keys as string[]));
@@ -1451,8 +1514,14 @@ function createZCmdStoreArgs(
         args.push("WEIGHTS", ...weights);
     }
 
+    const aggregationType = options.aggregationType;
+
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
+    }
+
+    if (options.withScores) {
+        args.push("WITHSCORES");
     }
 
     return args;
@@ -1530,6 +1599,18 @@ export function createZScore(
     member: string,
 ): command_request.Command {
     return createCommand(RequestType.ZScore, [key, member]);
+}
+
+/**
+ * @internal
+ */
+export function createZUnionStore(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): command_request.Command {
+    const args = createZCmdArgs(keys, { destination, aggregationType });
+    return createCommand(RequestType.ZUnionStore, args);
 }
 
 /**
@@ -1651,10 +1732,10 @@ function getLexBoundaryArg(score: Boundary<number> | Boundary<string>): string {
     }
 
     if (score.isInclusive == false) {
-        return "(" + score.value.toString();
+        return "(" + score.value;
     }
 
-    return "[" + score.value.toString();
+    return "[" + score.value;
 }
 
 /** Returns a string representation of a stream boundary as a command argument. */
@@ -1780,7 +1861,7 @@ export function createZRangeStore(
 /**
  * @internal
  */
-export function createType(key: string): command_request.Command {
+export function createType(key: GlideString): command_request.Command {
     return createCommand(RequestType.Type, [key]);
 }
 
@@ -1795,7 +1876,7 @@ export function createStrlen(key: string): command_request.Command {
  * @internal
  */
 export function createLIndex(
-    key: string,
+    key: GlideString,
     index: number,
 ): command_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
@@ -1819,10 +1900,10 @@ export enum InsertPosition {
  * @internal
  */
 export function createLInsert(
-    key: string,
+    key: GlideString,
     position: InsertPosition,
-    pivot: string,
-    element: string,
+    pivot: GlideString,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
@@ -1859,7 +1940,7 @@ export function createEcho(message: string): command_request.Command {
 /**
  * @internal
  */
-export function createPTTL(key: string): command_request.Command {
+export function createPTTL(key: GlideString): command_request.Command {
     return createCommand(RequestType.PTTL, [key]);
 }
 
@@ -1907,7 +1988,7 @@ export function createZRemRangeByScore(
 }
 
 /** @internal */
-export function createPersist(key: string): command_request.Command {
+export function createPersist(key: GlideString): command_request.Command {
     return createCommand(RequestType.Persist, [key]);
 }
 
@@ -1923,6 +2004,7 @@ export function createZLexCount(
     return createCommand(RequestType.ZLexCount, args);
 }
 
+/** @internal */
 export function createZRank(
     key: string,
     member: string,
@@ -2084,6 +2166,25 @@ export function createXRange(
 /**
  * @internal
  */
+export function createXRevRange(
+    key: string,
+    start: Boundary<string>,
+    end: Boundary<string>,
+    count?: number,
+): command_request.Command {
+    const args = [key, getStreamBoundaryArg(start), getStreamBoundaryArg(end)];
+
+    if (count !== undefined) {
+        args.push("COUNT");
+        args.push(count.toString());
+    }
+
+    return createCommand(RequestType.XRevRange, args);
+}
+
+/**
+ * @internal
+ */
 export function createXGroupCreateConsumer(
     key: string,
     groupName: string,
@@ -2134,7 +2235,7 @@ export function createPublish(
  * @internal
  */
 export function createBRPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
@@ -2145,7 +2246,7 @@ export function createBRPop(
  * @internal
  */
 export function createBLPop(
-    keys: string[],
+    keys: GlideString[],
     timeout: number,
 ): command_request.Command {
     const args = [...keys, timeout.toString()];
@@ -2244,12 +2345,24 @@ export function createFunctionList(
     return createCommand(RequestType.FunctionList, args);
 }
 
-/** Type of the response of `FUNCTION STATS` command. */
-export type FunctionStatsResponse = Record<
+/** Response for `FUNCTION STATS` command on a single node.
+ *  The response is a map with 2 keys:
+ *  1. Information about the current running function/script (or null if none).
+ *  2. Details about the execution engines.
+ */
+export type FunctionStatsSingleResponse = Record<
     string,
     | null
-    | Record<string, string | string[] | number>
-    | Record<string, Record<string, number>>
+    | Record<string, string | string[] | number> // Running function/script information
+    | Record<string, Record<string, number>> // Execution engines information
+>;
+
+/** Full response for `FUNCTION STATS` command across multiple nodes.
+ *  It maps node addresses to the per-node response.
+ */
+export type FunctionStatsFullResponse = Record<
+    string, // Node address
+    FunctionStatsSingleResponse
 >;
 
 /** @internal */
@@ -2260,6 +2373,44 @@ export function createFunctionStats(): command_request.Command {
 /** @internal */
 export function createFunctionKill(): command_request.Command {
     return createCommand(RequestType.FunctionKill, []);
+}
+
+/** @internal */
+export function createFunctionDump(): command_request.Command {
+    return createCommand(RequestType.FunctionDump, []);
+}
+
+/**
+ * Option for `FUNCTION RESTORE` command: {@link GlideClient.functionRestore} and
+ * {@link GlideClusterClient.functionRestore}.
+ *
+ * @see {@link https://valkey.io/commands/function-restore/"|valkey.io} for more details.
+ */
+export enum FunctionRestorePolicy {
+    /**
+     * Appends the restored libraries to the existing libraries and aborts on collision. This is the
+     * default policy.
+     */
+    APPEND = "APPEND",
+    /** Deletes all existing libraries before restoring the payload. */
+    FLUSH = "FLUSH",
+    /**
+     * Appends the restored libraries to the existing libraries, replacing any existing ones in case
+     * of name collisions. Note that this policy doesn't prevent function name collisions, only
+     * libraries.
+     */
+    REPLACE = "REPLACE",
+}
+
+/** @internal */
+export function createFunctionRestore(
+    data: Buffer,
+    policy?: FunctionRestorePolicy,
+): command_request.Command {
+    return createCommand(
+        RequestType.FunctionRestore,
+        policy ? [data, policy] : [data],
+    );
 }
 
 /**
@@ -2287,7 +2438,7 @@ export type BitOffsetOptions = {
  * @internal
  */
 export function createBitCount(
-    key: string,
+    key: GlideString,
     options?: BitOffsetOptions,
 ): command_request.Command {
     const args = [key];
@@ -2319,13 +2470,13 @@ export enum BitmapIndexType {
  * @internal
  */
 export function createBitPos(
-    key: string,
+    key: GlideString,
     bit: number,
     start?: number,
     end?: number,
     indexType?: BitmapIndexType,
 ): command_request.Command {
-    const args = [key, bit.toString()];
+    const args: GlideString[] = [key, bit.toString()];
 
     if (start !== undefined) {
         args.push(start.toString());
@@ -2360,11 +2511,12 @@ export enum FlushMode {
     ASYNC = "ASYNC",
 }
 
+/** Optional arguments for {@link BaseClient.xread|xread} command. */
 export type StreamReadOptions = {
     /**
      * If set, the read request will block for the set amount of milliseconds or
-     * until the server has the required number of entries. Equivalent to `BLOCK`
-     * in the Redis API.
+     * until the server has the required number of entries. A value of `0` will block indefinitely.
+     * Equivalent to `BLOCK` in the Redis API.
      */
     block?: number;
     /**
@@ -2374,30 +2526,39 @@ export type StreamReadOptions = {
     count?: number;
 };
 
-function addReadOptions(options: StreamReadOptions, args: string[]) {
-    if (options.count !== undefined) {
+/** Optional arguments for {@link BaseClient.xreadgroup|xreadgroup} command. */
+export type StreamReadGroupOptions = StreamReadOptions & {
+    /**
+     * If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+     * acknowledging the message when it is read.
+     */
+    noAck?: boolean;
+};
+
+/** @internal */
+function addReadOptions(options?: StreamReadOptions): string[] {
+    const args = [];
+
+    if (options?.count !== undefined) {
         args.push("COUNT");
         args.push(options.count.toString());
     }
 
-    if (options.block !== undefined) {
+    if (options?.block !== undefined) {
         args.push("BLOCK");
         args.push(options.block.toString());
     }
+
+    return args;
 }
 
-function addStreamsArgs(keys_and_ids: Record<string, string>, args: string[]) {
-    args.push("STREAMS");
-
-    const pairs = Object.entries(keys_and_ids);
-
-    for (const [key] of pairs) {
-        args.push(key);
-    }
-
-    for (const [, id] of pairs) {
-        args.push(id);
-    }
+/** @internal */
+function addStreamsArgs(keys_and_ids: Record<string, string>): string[] {
+    return [
+        "STREAMS",
+        ...Object.keys(keys_and_ids),
+        ...Object.values(keys_and_ids),
+    ];
 }
 
 /**
@@ -2407,15 +2568,29 @@ export function createXRead(
     keys_and_ids: Record<string, string>,
     options?: StreamReadOptions,
 ): command_request.Command {
-    const args: string[] = [];
-
-    if (options) {
-        addReadOptions(options, args);
-    }
-
-    addStreamsArgs(keys_and_ids, args);
+    const args = addReadOptions(options);
+    args.push(...addStreamsArgs(keys_and_ids));
 
     return createCommand(RequestType.XRead, args);
+}
+
+/** @internal */
+export function createXReadGroup(
+    group: string,
+    consumer: string,
+    keys_and_ids: Record<string, string>,
+    options?: StreamReadGroupOptions,
+): command_request.Command {
+    const args: string[] = ["GROUP", group, consumer];
+
+    if (options) {
+        args.push(...addReadOptions(options));
+        if (options.noAck) args.push("NOACK");
+    }
+
+    args.push(...addStreamsArgs(keys_and_ids));
+
+    return createCommand(RequestType.XReadGroup, args);
 }
 
 /**
@@ -2467,11 +2642,11 @@ export function createXLen(key: string): command_request.Command {
 
 /** Optional arguments for {@link BaseClient.xpendingWithOptions|xpending}. */
 export type StreamPendingOptions = {
-    /** Filter pending entries by their idle time - in milliseconds */
+    /** Filter pending entries by their idle time - in milliseconds. Available since Valkey 6.2.0. */
     minIdleTime?: number;
-    /** Starting stream ID bound for range. */
+    /** Starting stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
     start: Boundary<string>;
-    /** Ending stream ID bound for range. */
+    /** Ending stream ID bound for range. Exclusive range is available since Valkey 6.2.0. */
     end: Boundary<string>;
     /** Limit the number of messages returned. */
     count: number;
@@ -2649,8 +2824,8 @@ export function createXGroupDestroy(
  * @internal
  */
 export function createRename(
-    key: string,
-    newKey: string,
+    key: GlideString,
+    newKey: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
 }
@@ -2659,8 +2834,8 @@ export function createRename(
  * @internal
  */
 export function createRenameNX(
-    key: string,
-    newKey: string,
+    key: GlideString,
+    newKey: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.RenameNX, [key, newKey]);
 }
@@ -2669,8 +2844,8 @@ export function createRenameNX(
  * @internal
  */
 export function createPfAdd(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     const args = [key, ...elements];
     return createCommand(RequestType.PfAdd, args);
@@ -2679,7 +2854,7 @@ export function createPfAdd(
 /**
  * @internal
  */
-export function createPfCount(keys: string[]): command_request.Command {
+export function createPfCount(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.PfCount, keys);
 }
 
@@ -2687,8 +2862,8 @@ export function createPfCount(keys: string[]): command_request.Command {
  * @internal
  */
 export function createPfMerge(
-    destination: string,
-    sourceKey: string[],
+    destination: GlideString,
+    sourceKey: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.PfMerge, [destination, ...sourceKey]);
 }
@@ -2696,28 +2871,34 @@ export function createPfMerge(
 /**
  * @internal
  */
-export function createObjectEncoding(key: string): command_request.Command {
+export function createObjectEncoding(
+    key: GlideString,
+): command_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
 
 /**
  * @internal
  */
-export function createObjectFreq(key: string): command_request.Command {
+export function createObjectFreq(key: GlideString): command_request.Command {
     return createCommand(RequestType.ObjectFreq, [key]);
 }
 
 /**
  * @internal
  */
-export function createObjectIdletime(key: string): command_request.Command {
+export function createObjectIdletime(
+    key: GlideString,
+): command_request.Command {
     return createCommand(RequestType.ObjectIdleTime, [key]);
 }
 
 /**
  * @internal
  */
-export function createObjectRefcount(key: string): command_request.Command {
+export function createObjectRefcount(
+    key: GlideString,
+): command_request.Command {
     return createCommand(RequestType.ObjectRefCount, [key]);
 }
 
@@ -2782,15 +2963,14 @@ export function createFlushDB(mode?: FlushMode): command_request.Command {
 }
 
 /**
- *
  * @internal
  */
 export function createCopy(
-    source: string,
-    destination: string,
+    source: GlideString,
+    destination: GlideString,
     options?: { destinationDB?: number; replace?: boolean },
 ): command_request.Command {
-    let args: string[] = [source, destination];
+    let args = [source, destination];
 
     if (options) {
         if (options.destinationDB !== undefined) {
@@ -2809,7 +2989,7 @@ export function createCopy(
  * @internal
  */
 export function createMove(
-    key: string,
+    key: GlideString,
     dbIndex: number,
 ): command_request.Command {
     return createCommand(RequestType.Move, [key, dbIndex.toString()]);
@@ -2904,11 +3084,11 @@ export type LPosOptions = {
  * @internal
  */
 export function createLPos(
-    key: string,
-    element: string,
+    key: GlideString,
+    element: GlideString,
     options?: LPosOptions,
 ): command_request.Command {
-    const args: string[] = [key, element];
+    const args: GlideString[] = [key, element];
 
     if (options) {
         if (options.rank !== undefined) {
@@ -2938,7 +3118,8 @@ export function createDBSize(): command_request.Command {
 }
 
 /**
- * An optional condition to the {@link BaseClient.geoadd} command.
+ * An optional condition to the {@link BaseClient.geoadd | geoadd},
+ * {@link BaseClient.zadd | zadd} and {@link BaseClient.set | set} commands.
  */
 export enum ConditionalChange {
     /**
@@ -2983,11 +3164,11 @@ export type GeoAddOptions = {
  * @internal
  */
 export function createGeoAdd(
-    key: string,
-    membersToGeospatialData: Map<string, GeospatialData>,
+    key: GlideString,
+    membersToGeospatialData: Map<GlideString, GeospatialData>,
     options?: GeoAddOptions,
 ): command_request.Command {
-    let args: string[] = [key];
+    let args: GlideString[] = [key];
 
     if (options) {
         if (options.updateMode) {
@@ -3025,8 +3206,8 @@ export enum GeoUnit {
  * @internal
  */
 export function createGeoPos(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.GeoPos, [key].concat(members));
 }
@@ -3035,12 +3216,12 @@ export function createGeoPos(
  * @internal
  */
 export function createGeoDist(
-    key: string,
-    member1: string,
-    member2: string,
+    key: GlideString,
+    member1: GlideString,
+    member2: GlideString,
     geoUnit?: GeoUnit,
 ): command_request.Command {
-    const args: string[] = [key, member1, member2];
+    const args = [key, member1, member2];
 
     if (geoUnit) {
         args.push(geoUnit);
@@ -3053,10 +3234,10 @@ export function createGeoDist(
  * @internal
  */
 export function createGeoHash(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
-    const args: string[] = [key].concat(members);
+    const args = [key].concat(members);
     return createCommand(RequestType.GeoHash, args);
 }
 
@@ -3137,12 +3318,12 @@ export type CoordOrigin = {
 /** The search origin represented by an existing member. */
 export type MemberOrigin = {
     /** Member (location) name stored in the sorted set to use as a search pivot. */
-    member: string;
+    member: GlideString;
 };
 
 /** @internal */
 export function createGeoSearch(
-    key: string,
+    key: GlideString,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchResultOptions,
@@ -3155,8 +3336,8 @@ export function createGeoSearch(
 
 /** @internal */
 export function createGeoSearchStore(
-    destination: string,
-    source: string,
+    destination: GlideString,
+    source: GlideString,
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchStoreResultOptions,
@@ -3171,8 +3352,8 @@ function convertGeoSearchOptionsToArgs(
     searchFrom: SearchOrigin,
     searchBy: GeoSearchShape,
     resultOptions?: GeoSearchCommonResultOptions,
-): string[] {
-    let args: string[] = [];
+): GlideString[] {
+    let args: GlideString[] = [];
 
     if ("position" in searchFrom) {
         args = args.concat(
@@ -3200,13 +3381,25 @@ function convertGeoSearchOptionsToArgs(
     }
 
     if (resultOptions) {
-        if ("withCoord" in resultOptions && resultOptions.withCoord)
+        if (
+            "withCoord" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withCoord
+        )
             args.push("WITHCOORD");
-        if ("withDist" in resultOptions && resultOptions.withDist)
+        if (
+            "withDist" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withDist
+        )
             args.push("WITHDIST");
-        if ("withHash" in resultOptions && resultOptions.withHash)
+        if (
+            "withHash" in resultOptions &&
+            (resultOptions as GeoSearchResultOptions).withHash
+        )
             args.push("WITHHASH");
-        if ("storeDist" in resultOptions && resultOptions.storeDist)
+        if (
+            "storeDist" in resultOptions &&
+            (resultOptions as GeoSearchStoreResultOptions).storeDist
+        )
             args.push("STOREDIST");
 
         if (resultOptions.count) {
@@ -3323,7 +3516,7 @@ export type SortOptions = SortBaseOptions & {
      * contains IDs of objects, `byPattern` can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
      */
-    byPattern?: string;
+    byPattern?: GlideString;
 
     /**
      * A pattern used to retrieve external keys' values, instead of the elements at `key`.
@@ -3338,7 +3531,7 @@ export type SortOptions = SortBaseOptions & {
      * be used to include the actual element from `key` being sorted. If not provided, only
      * the sorted elements themselves are returned.
      */
-    getPatterns?: string[];
+    getPatterns?: GlideString[];
 };
 
 type SortBaseOptions = {
@@ -3379,16 +3572,16 @@ export type Limit = {
 
 /** @internal */
 export function createSort(
-    key: string,
+    key: GlideString,
     options?: SortOptions,
-    destination?: string,
+    destination?: GlideString,
 ): command_request.Command {
     return createSortImpl(RequestType.Sort, key, options, destination);
 }
 
 /** @internal */
 export function createSortReadOnly(
-    key: string,
+    key: GlideString,
     options?: SortOptions,
 ): command_request.Command {
     return createSortImpl(RequestType.SortReadOnly, key, options);
@@ -3397,11 +3590,11 @@ export function createSortReadOnly(
 /** @internal */
 function createSortImpl(
     cmd: RequestType,
-    key: string,
+    key: GlideString,
     options?: SortOptions,
-    destination?: string,
+    destination?: GlideString,
 ): command_request.Command {
-    const args: string[] = [key];
+    const args = [key];
 
     if (options) {
         if (options.limit) {
@@ -3526,7 +3719,7 @@ export function createLCS(
 /**
  * @internal
  */
-export function createTouch(keys: string[]): command_request.Command {
+export function createTouch(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.Touch, keys);
 }
 
@@ -3623,8 +3816,8 @@ export function createSetRange(
 
 /** @internal */
 export function createAppend(
-    key: string,
-    value: string,
+    key: GlideString,
+    value: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.Append, [key, value]);
 }
@@ -3786,4 +3979,34 @@ export function createGetEx(
     }
 
     return createCommand(RequestType.GetEx, args);
+}
+
+/**
+ * @internal
+ */
+export function createXAck(
+    key: string,
+    group: string,
+    ids: string[],
+): command_request.Command {
+    return createCommand(RequestType.XAck, [key, group, ...ids]);
+}
+
+/**
+ * @internal
+ */
+export function createXGroupSetid(
+    key: string,
+    groupName: string,
+    id: string,
+    entriesRead?: number,
+): command_request.Command {
+    const args = [key, groupName, id];
+
+    if (entriesRead !== undefined) {
+        args.push("ENTRIESREAD");
+        args.push(entriesRead.toString());
+    }
+
+    return createCommand(RequestType.XGroupSetId, args);
 }
