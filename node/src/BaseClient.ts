@@ -6320,7 +6320,7 @@ export class BaseClient {
      * @remarks When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
      *
      * @param keys - The keys to watch.
-     * @returns A simple "OK" response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript
@@ -6339,8 +6339,10 @@ export class BaseClient {
      * console.log(result); // Output: null - null is returned when the watched key is modified before transaction execution.
      * ```
      */
-    public async watch(keys: string[]): Promise<"OK"> {
-        return this.createWritePromise(createWatch(keys));
+    public async watch(keys: GlideString[]): Promise<"OK"> {
+        return this.createWritePromise(createWatch(keys), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
