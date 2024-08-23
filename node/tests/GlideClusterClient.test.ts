@@ -111,12 +111,12 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const info_server = getFirstResult(
-                await client.info([InfoOptions.Server]),
+                await client.info({ sections: [InfoOptions.Server] }),
             );
             expect(info_server).toEqual(expect.stringContaining("# Server"));
 
             const infoReplicationValues = Object.values(
-                await client.info([InfoOptions.Replication]),
+                await client.info({ sections: [InfoOptions.Replication] }),
             );
 
             const replicationInfo = intoArray(infoReplicationValues);
@@ -135,10 +135,10 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const result = await client.info(
-                [InfoOptions.Server],
-                "randomNode",
-            );
+            const result = await client.info({
+                sections: [InfoOptions.Server],
+                route: "randomNode",
+            });
             expect(result).toEqual(expect.stringContaining("# Server"));
             expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
         },
@@ -216,9 +216,11 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             await expect(
-                client.info(undefined, {
-                    type: "routeByAddress",
-                    host: "foo",
+                client.info({
+                    route: {
+                        type: "routeByAddress",
+                        host: "foo",
+                    },
                 }),
             ).rejects.toThrowError(RequestError);
         },
@@ -342,7 +344,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const message = uuidv4();
-            const echoDict = await client.echo(message, "allNodes");
+            const echoDict = await client.echo(message, { route: "allNodes" });
 
             expect(typeof echoDict).toBe("object");
             expect(intoArray(echoDict)).toEqual(
@@ -571,29 +573,31 @@ describe("GlideClusterClient", () => {
             );
 
             // test with multi-node route
-            const result1 = await client.lolwut({}, "allNodes");
+            const result1 = await client.lolwut({ route: "allNodes" });
             expect(intoString(result1)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result2 = await client.lolwut(
-                { version: 2, parameters: [10, 20] },
-                "allNodes",
-            );
+            const result2 = await client.lolwut({
+                version: 2,
+                parameters: [10, 20],
+                route: "allNodes",
+            });
             expect(intoString(result2)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
             // test with single-node route
-            const result3 = await client.lolwut({}, "randomNode");
+            const result3 = await client.lolwut({ route: "randomNode" });
             expect(intoString(result3)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
 
-            const result4 = await client.lolwut(
-                { version: 2, parameters: [10, 20] },
-                "randomNode",
-            );
+            const result4 = await client.lolwut({
+                version: 2,
+                parameters: [10, 20],
+                route: "randomNode",
+            });
             expect(intoString(result4)).toEqual(
                 expect.stringContaining("Redis ver. "),
             );
@@ -698,12 +702,16 @@ describe("GlideClusterClient", () => {
 
             expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            expect(await client.flushdb(FlushMode.ASYNC)).toEqual("OK");
+            expect(await client.flushdb({ mode: FlushMode.ASYNC })).toEqual(
+                "OK",
+            );
             expect(await client.dbsize()).toEqual(0);
 
             expect(await client.set(uuidv4(), uuidv4())).toEqual("OK");
             expect(await client.dbsize()).toEqual(1);
-            expect(await client.flushdb(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushdb({ mode: FlushMode.SYNC })).toEqual(
+                "OK",
+            );
             expect(await client.dbsize()).toEqual(0);
 
             client.close();
@@ -1625,7 +1633,9 @@ describe("GlideClusterClient", () => {
             const key = uuidv4();
 
             // setup: delete all keys
-            expect(await client.flushall(FlushMode.SYNC)).toEqual("OK");
+            expect(await client.flushall({ mode: FlushMode.SYNC })).toEqual(
+                "OK",
+            );
 
             // no keys exist so randomKey returns null
             expect(await client.randomKey()).toBeNull();
@@ -1675,7 +1685,9 @@ describe("GlideClusterClient", () => {
 
             // Transaction executes command successfully with a read command on the watch key before
             // transaction is executed.
-            expect(await client.watch([key1, key2, key3])).toEqual("OK");
+            expect(await client.watch([key1, key2, Buffer.from(key3)])).toEqual(
+                "OK",
+            );
             expect(await client.get(key2)).toEqual("hello");
             results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK", "OK"]);
@@ -1733,7 +1745,9 @@ describe("GlideClusterClient", () => {
             expect(await client.watch([key1, key2])).toEqual("OK");
             expect(await client.set(key2, "hello")).toEqual("OK");
             expect(await client.unwatch()).toEqual("OK");
-            expect(await client.unwatch("allPrimaries")).toEqual("OK");
+            expect(await client.unwatch({ route: "allPrimaries" })).toEqual(
+                "OK",
+            );
             setFoobarTransaction.set(key1, "foobar").set(key2, "foobar");
             const results = await client.exec(setFoobarTransaction);
             expect(results).toEqual(["OK", "OK"]);

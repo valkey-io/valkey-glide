@@ -390,29 +390,33 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSet(key, value, options));
     }
 
-    /** Ping the Redis server.
+    /**
+     * Pings the server.
+     *
      * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
      *
-     * @param message - An optional message to include in the PING command.
-     * If not provided, the server will respond with "PONG".
-     * If provided, the server will respond with a copy of the message.
+     * @param message - (Optional) A message to include in the PING command.
+     * - If not provided, the server will respond with `"PONG"`.
+     * - If provided, the server will respond with a copy of the message.
      *
-     * Command Response - "PONG" if `message` is not provided, otherwise return a copy of `message`.
+     * Command Response - `"PONG"` if `message` is not provided, otherwise return a copy of `message`.
      */
     public ping(message?: GlideString): T {
         return this.addAndReturn(createPing(message));
     }
 
-    /** Get information and statistics about the Redis server.
+    /**
+     * Gets information and statistics about the server.
+     *
      * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
      *
-     * @param options - A list of InfoSection values specifying which sections of information to retrieve.
-     * When no parameter is provided, the default option is assumed.
+     * @param sections - (Optional) A list of {@link InfoOptions} values specifying which sections of information to retrieve.
+     *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      *
-     * Command Response - a string containing the information for the sections requested.
+     * Command Response - A string containing the information for the sections requested.
      */
-    public info(options?: InfoOptions[]): T {
-        return this.addAndReturn(createInfo(options));
+    public info(sections?: InfoOptions[]): T {
+        return this.addAndReturn(createInfo(sections));
     }
 
     /**
@@ -465,16 +469,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createRestore(key, ttl, value, options));
     }
 
-    /** Get the name of the connection on which the transaction is being executed.
+    /**
+     * Gets the name of the connection on which the transaction is being executed.
+     *
      * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
      *
-     * Command Response - the name of the client connection as a string if a name is set, or null if no name is assigned.
+     * Command Response - The name of the client connection as a string if a name is set, or null if no name is assigned.
      */
     public clientGetName(): T {
         return this.addAndReturn(createClientGetName());
     }
 
-    /** Rewrite the configuration file with the current configuration.
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * Command Response - "OK" when the configuration was rewritten properly. Otherwise, the transaction fails with an error.
@@ -483,7 +491,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createConfigRewrite());
     }
 
-    /** Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+    /**
+     * Resets the statistics reported by Redis using the `INFO` and `LATENCY HISTOGRAM` commands.
+     *
      * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
      *
      * Command Response - always "OK".
@@ -566,10 +576,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createIncrByFloat(key, amount));
     }
 
-    /** Returns the current connection id.
+    /**
+     * Returns the current connection ID.
+     *
      * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
      *
-     * Command Response - the id of the client.
+     * Command Response - The ID of the connection.
      */
     public clientId(): T {
         return this.addAndReturn(createClientId());
@@ -612,8 +624,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public bitop(
         operation: BitwiseOperation,
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): T {
         return this.addAndReturn(createBitOp(operation, destination, keys));
     }
@@ -630,7 +642,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The bit at the given `offset` of the string. Returns `0` if the key is empty or if the
      * `offset` exceeds the length of the string.
      */
-    public getbit(key: string, offset: number): T {
+    public getbit(key: GlideString, offset: number): T {
         return this.addAndReturn(createGetBit(key, offset));
     }
 
@@ -648,7 +660,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The bit value that was previously stored at `offset`.
      */
-    public setbit(key: string, offset: number, value: number): T {
+    public setbit(key: GlideString, offset: number, value: number): T {
         return this.addAndReturn(createSetBit(key, offset, value));
     }
 
@@ -667,7 +679,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The position of the first occurrence of `bit` in the binary value of the string held at `key`.
      *      If `start` was provided, the search begins at the offset indicated by `start`.
      */
-    public bitpos(key: string, bit: number, start?: number): T {
+    public bitpos(key: GlideString, bit: number, start?: number): T {
         return this.addAndReturn(createBitPos(key, bit, start));
     }
 
@@ -696,7 +708,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *      binary value of the string held at `key`.
      */
     public bitposInterval(
-        key: string,
+        key: GlideString,
         bit: number,
         start: number,
         end: number,
@@ -729,7 +741,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *   subcommands when an overflow or underflow occurs. {@link BitFieldOverflow} does not return a value and
      *   does not contribute a value to the array response.
      */
-    public bitfield(key: string, subcommands: BitFieldSubCommands[]): T {
+    public bitfield(key: GlideString, subcommands: BitFieldSubCommands[]): T {
         return this.addAndReturn(createBitField(key, subcommands));
     }
 
@@ -745,11 +757,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An array of results from the {@link BitFieldGet} subcommands.
      *
      */
-    public bitfieldReadOnly(key: string, subcommands: BitFieldGet[]): T {
+    public bitfieldReadOnly(key: GlideString, subcommands: BitFieldGet[]): T {
         return this.addAndReturn(createBitField(key, subcommands, true));
     }
 
-    /** Reads the configuration parameters of a running Redis server.
+    /**
+     * Reads the configuration parameters of the running server.
+     *
      * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
@@ -761,14 +775,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createConfigGet(parameters));
     }
 
-    /** Set configuration parameters to the specified values.
+    /**
+     * Sets configuration parameters to the specified values.
+     *
      * @see {@link https://valkey.io/commands/config-set/|valkey.io} for details.
      *
-     * @param parameters - A List of keyValuePairs consisting of configuration parameters and their respective values to set.
+     * @param parameters - A map consisting of configuration parameters and their respective values to set.
      *
      * Command Response - "OK" when the configuration was set properly. Otherwise, the transaction fails with an error.
      */
-    public configSet(parameters: Record<string, string>): T {
+    public configSet(parameters: Record<string, GlideString>): T {
         return this.addAndReturn(createConfigSet(parameters));
     }
 
@@ -1041,7 +1057,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the list after the push operation.
      */
-    public lpushx(key: string, elements: string[]): T {
+    public lpushx(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createLPushX(key, elements));
     }
 
@@ -2230,14 +2246,16 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createBZPopMax(keys, timeout));
     }
 
-    /** Echoes the provided `message` back.
+    /**
+     * Echoes the provided `message` back
+     *
      * @see {@link https://valkey.io/commands/echo/|valkey.io} for more details.
      *
      * @param message - The message to be echoed back.
      *
      * Command Response - The provided `message`.
      */
-    public echo(message: string): T {
+    public echo(message: GlideString): T {
         return this.addAndReturn(createEcho(message));
     }
 
@@ -2538,12 +2556,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createXInfoGroups(key));
     }
 
-    /** Returns the server time.
+    /**
+     * Returns the server time.
+     *
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
-     * Command Response - The current server time as a two items `array`:
-     * A Unix timestamp and the amount of microseconds already elapsed in the current second.
-     * The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
+     * Command Response - The current server time as an `array` with two items:
+     * - A Unix timestamp,
+     * - The amount of microseconds already elapsed in the current second.
      */
     public time(): T {
         return this.addAndReturn(createTime());
@@ -3136,7 +3156,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for details.
      *
-     * @param options - The LOLWUT options.
+     * @param options - (Optional) The LOLWUT options - see {@link LolwutOptions}.
      *
      * Command Response - A piece of generative computer art along with the current server version.
      */
@@ -3301,9 +3321,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/flushall/|valkey.io} for details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      *
-     * Command Response - `OK`.
+     * Command Response - `"OK"`.
      */
     public flushall(mode?: FlushMode): T {
         return this.addAndReturn(createFlushAll(mode));
@@ -3314,9 +3334,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for details.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
      *
-     * Command Response - `OK`.
+     * Command Response - `"OK"`.
      */
     public flushdb(mode?: FlushMode): T {
         return this.addAndReturn(createFlushDB(mode));
@@ -3369,7 +3389,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If `options` is not provided, returns the number of set bits in the string stored at `key`.
      *     Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
      */
-    public bitcount(key: string, options?: BitOffsetOptions): T {
+    public bitcount(key: GlideString, options?: BitOffsetOptions): T {
         return this.addAndReturn(createBitCount(key, options));
     }
 
@@ -3766,7 +3786,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - A `Record` of `key` name mapped array of popped elements.
      */
-    public lmpop(keys: string[], direction: ListDirection, count?: number): T {
+    public lmpop(
+        keys: GlideString[],
+        direction: ListDirection,
+        count?: number,
+    ): T {
         return this.addAndReturn(createLMPop(keys, direction, count));
     }
 
@@ -3865,12 +3889,14 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
 export class Transaction extends BaseTransaction<Transaction> {
     /// TODO: add MOVE, SLAVEOF and all SENTINEL commands
 
-    /** Change the currently selected Redis database.
+    /**
+     * Change the currently selected database.
+     *
      * @see {@link https://valkey.io/commands/select/|valkey.io} for details.
      *
      * @param index - The index of the database to select.
      *
-     * Command Response - A simple OK response.
+     * Command Response - A simple `"OK"` response.
      */
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));

@@ -162,7 +162,19 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient) => {
-                    expect(await client.clientGetName()).toBe("TEST_CLIENT");
+                    expect(await client.clientGetName()).toEqual("TEST_CLIENT");
+
+                    if (client instanceof GlideClient) {
+                        expect(
+                            await client.clientGetName(Decoder.Bytes),
+                        ).toEqual(Buffer.from("TEST_CLIENT"));
+                    } else {
+                        expect(
+                            await client.clientGetName({
+                                decoder: Decoder.Bytes,
+                            }),
+                        ).toEqual(Buffer.from("TEST_CLIENT"));
+                    }
                 },
                 protocol,
                 { clientName: "TEST_CLIENT" },
@@ -299,7 +311,9 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info([InfoOptions.Commandstats]),
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
                           ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
@@ -308,7 +322,9 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info([InfoOptions.Commandstats]),
+                              await client.info({
+                                  sections: [InfoOptions.Commandstats],
+                              }),
                           ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
@@ -327,9 +343,9 @@ export function runBaseTests(config: {
                 expect(await client.lastsave()).toBeGreaterThan(yesterday);
 
                 if (client instanceof GlideClusterClient) {
-                    Object.values(await client.lastsave("allNodes")).forEach(
-                        (v) => expect(v).toBeGreaterThan(yesterday),
-                    );
+                    Object.values(
+                        await client.lastsave({ route: "allNodes" }),
+                    ).forEach((v) => expect(v).toBeGreaterThan(yesterday));
                 }
 
                 const response =
@@ -492,11 +508,16 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const pongEncoded = Buffer.from("PONG");
-                const helloEncoded = Buffer.from("Hello");
                 expect(await client.ping()).toEqual("PONG");
                 expect(await client.ping({ message: "Hello" })).toEqual(
                     "Hello",
                 );
+                expect(
+                    await client.ping({
+                        message: pongEncoded,
+                        decoder: Decoder.String,
+                    }),
+                ).toEqual("PONG");
                 expect(await client.ping({ decoder: Decoder.Bytes })).toEqual(
                     pongEncoded,
                 );
@@ -505,7 +526,7 @@ export function runBaseTests(config: {
                         message: "Hello",
                         decoder: Decoder.Bytes,
                     }),
-                ).toEqual(helloEncoded);
+                ).toEqual(Buffer.from("Hello"));
             }, protocol);
         },
         config.timeout,
@@ -591,6 +612,7 @@ export function runBaseTests(config: {
                 const key2 = `{key}-${uuidv4()}`;
                 const key3 = `{key}-${uuidv4()}`;
                 const keys = [key1, key2];
+                const keysEncoded = [Buffer.from(key1), Buffer.from(key2)];
                 const destination = `{key}-${uuidv4()}`;
                 const nonExistingKey1 = `{key}-${uuidv4()}`;
                 const nonExistingKey2 = `{key}-${uuidv4()}`;
@@ -611,7 +633,11 @@ export function runBaseTests(config: {
                 ).toEqual(6);
                 expect(await client.get(destination)).toEqual("`bc`ab");
                 expect(
-                    await client.bitop(BitwiseOperation.OR, destination, keys),
+                    await client.bitop(
+                        BitwiseOperation.OR,
+                        destination,
+                        keysEncoded,
+                    ),
                 ).toEqual(6);
                 expect(await client.get(destination)).toEqual("goofev");
 
@@ -725,7 +751,7 @@ export function runBaseTests(config: {
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.getbit(key, 1)).toEqual(1);
                 // When offset is beyond the string length, the string is assumed to be a contiguous space with 0 bits.
-                expect(await client.getbit(key, 1000)).toEqual(0);
+                expect(await client.getbit(Buffer.from(key), 1000)).toEqual(0);
                 // When key does not exist it is assumed to be an empty string, so offset is always out of range and the
                 // value is also assumed to be a contiguous space with 0 bits.
                 expect(await client.getbit(nonExistingKey, 1)).toEqual(0);
@@ -753,7 +779,7 @@ export function runBaseTests(config: {
                 const setKey = `{key}-${uuidv4()}`;
 
                 expect(await client.setbit(key, 1, 1)).toEqual(0);
-                expect(await client.setbit(key, 1, 0)).toEqual(1);
+                expect(await client.setbit(Buffer.from(key), 1, 0)).toEqual(1);
 
                 // invalid argument - offset can't be negative
                 await expect(client.setbit(key, -1, 1)).rejects.toThrow(
@@ -786,9 +812,12 @@ export function runBaseTests(config: {
 
                 expect(await client.set(key, value)).toEqual("OK");
                 expect(await client.bitpos(key, 0)).toEqual(0);
-                expect(await client.bitpos(key, 1)).toEqual(2);
+                expect(await client.bitpos(Buffer.from(key), 1)).toEqual(2);
                 expect(await client.bitpos(key, 1, 1)).toEqual(9);
                 expect(await client.bitposInterval(key, 0, 3, 5)).toEqual(24);
+                expect(
+                    await client.bitposInterval(Buffer.from(key), 0, 3, 5),
+                ).toEqual(24);
 
                 // -1 is returned if start > end
                 expect(await client.bitposInterval(key, 0, 1, 0)).toEqual(-1);
@@ -947,7 +976,7 @@ export function runBaseTests(config: {
 
                 // INCRBY tests
                 expect(
-                    await client.bitfield(key1, [
+                    await client.bitfield(Buffer.from(key1), [
                         // binary value becomes:
                         // 0(11)00011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
                         new BitFieldIncrBy(u2, offset1, 1),
@@ -1104,7 +1133,7 @@ export function runBaseTests(config: {
                 // offset is greater than current length of string: the operation is performed like the missing part all
                 // consists of bits set to 0.
                 expect(
-                    await client.bitfieldReadOnly(key, [
+                    await client.bitfieldReadOnly(Buffer.from(key), [
                         new BitFieldGet(
                             new UnsignedEncoding(3),
                             new BitOffset(100),
@@ -2072,6 +2101,23 @@ export function runBaseTests(config: {
                 await expect(client.lpushx(key2, [])).rejects.toThrow(
                     RequestError,
                 );
+
+                // test for binary key as input
+                const key4 = uuidv4();
+                expect(await client.lpush(key4, ["0"])).toEqual(1);
+                expect(
+                    await client.lpushx(Buffer.from(key4), [
+                        Buffer.from("1"),
+                        Buffer.from("2"),
+                        Buffer.from("3"),
+                    ]),
+                ).toEqual(4);
+                expect(await client.lrange(key4, 0, -1)).toEqual([
+                    "3",
+                    "2",
+                    "1",
+                    "0",
+                ]);
             }, protocol);
         },
         config.timeout,
@@ -5394,6 +5440,33 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const message = uuidv4();
                 expect(await client.echo(message)).toEqual(message);
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(message, Decoder.String)
+                        : await client.echo(message, {
+                              decoder: Decoder.String,
+                          }),
+                ).toEqual(message);
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(message, Decoder.Bytes)
+                        : await client.echo(message, {
+                              decoder: Decoder.Bytes,
+                          }),
+                ).toEqual(Buffer.from(message));
+                expect(
+                    client instanceof GlideClient
+                        ? await client.echo(
+                              Buffer.from(message),
+                              Decoder.String,
+                          )
+                        : await client.echo(Buffer.from(message), {
+                              decoder: Decoder.String,
+                          }),
+                ).toEqual(message);
+                expect(await client.echo(Buffer.from(message))).toEqual(
+                    message,
+                );
             }, protocol);
         },
         config.timeout,
@@ -7761,11 +7834,14 @@ export function runBaseTests(config: {
                         type: "primarySlotKey",
                         key: key,
                     };
-                    expect(await client.flushall(undefined, primaryRoute)).toBe(
+                    expect(await client.flushall({ route: primaryRoute })).toBe(
                         "OK",
                     );
                     expect(
-                        await client.flushall(FlushMode.ASYNC, primaryRoute),
+                        await client.flushall({
+                            mode: FlushMode.ASYNC,
+                            route: primaryRoute,
+                        }),
                     ).toBe("OK");
 
                     //Test FLUSHALL on replica (should fail)
@@ -7775,7 +7851,7 @@ export function runBaseTests(config: {
                         key: key2,
                     };
                     await expect(
-                        client.flushall(undefined, replicaRoute),
+                        client.flushall({ route: replicaRoute }),
                     ).rejects.toThrowError();
                 }
             }, protocol);
@@ -7911,7 +7987,9 @@ export function runBaseTests(config: {
                         type: "primarySlotKey",
                         key: key,
                     };
-                    expect(await client.dbsize(primaryRoute)).toBe(1);
+                    expect(await client.dbsize({ route: primaryRoute })).toBe(
+                        1,
+                    );
                 }
             }, protocol);
         },
@@ -7929,7 +8007,10 @@ export function runBaseTests(config: {
                 expect(await client.set(key1, value)).toEqual("OK");
                 expect(await client.bitcount(key1)).toEqual(26);
                 expect(
-                    await client.bitcount(key1, { start: 1, end: 1 }),
+                    await client.bitcount(Buffer.from(key1), {
+                        start: 1,
+                        end: 1,
+                    }),
                 ).toEqual(6);
                 expect(
                     await client.bitcount(key1, { start: 0, end: -5 }),
@@ -10445,6 +10526,42 @@ export function runBaseTests(config: {
                 await expect(
                     client.lmpop([nonListKey], ListDirection.RIGHT),
                 ).rejects.toThrow(RequestError);
+
+                // Test with single binary key array as input
+                const key3 = "{key}" + uuidv4();
+                const singleKeyArrayWithKey3 = [Buffer.from(key3)];
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key3, lpushArgs)).toEqual(5);
+                const expectedWithKey3 = { [key3]: ["five"] };
+
+                // checking correct result from popping
+                expect(
+                    await client.lmpop(
+                        singleKeyArrayWithKey3,
+                        ListDirection.LEFT,
+                    ),
+                ).toEqual(expectedWithKey3);
+
+                // test with multiple binary keys array as input
+                const key4 = "{key}" + uuidv4();
+                const multiKeyArrayWithKey3AndKey4 = [
+                    Buffer.from(key4),
+                    Buffer.from(key3),
+                ];
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key4, lpushArgs)).toEqual(5);
+                const expectedWithKey4 = { [key4]: ["one", "two"] };
+
+                // checking correct result from popping
+                expect(
+                    await client.lmpop(
+                        multiKeyArrayWithKey3AndKey4,
+                        ListDirection.RIGHT,
+                        2,
+                    ),
+                ).toEqual(expectedWithKey4);
             }, protocol);
         },
         config.timeout,
