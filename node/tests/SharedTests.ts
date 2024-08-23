@@ -1297,7 +1297,7 @@ export function runBaseTests(config: {
                 const valueEncoded = Buffer.from(value);
 
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hget(key, field1)).toEqual(value);
+                expect(await client.hget(Buffer.from(key), Buffer.from(field1))).toEqual(value);
                 expect(await client.hget(key, field2)).toEqual(value);
                 expect(await client.hget(key, "nonExistingField")).toEqual(
                     null,
@@ -1339,7 +1339,7 @@ export function runBaseTests(config: {
 
                 // remove one key
                 expect(await client.hdel(key, [field1])).toEqual(1);
-                expect(await client.hkeys(key)).toEqual([field2]);
+                expect(await client.hkeys(Buffer.from(key))).toEqual([field2]);
 
                 // non-existing key returns an empty list
                 expect(await client.hkeys("nonExistingKey")).toEqual([]);
@@ -1407,7 +1407,7 @@ export function runBaseTests(config: {
                 expect(allValuesIncluded).toEqual(true);
 
                 // Test hscan with match
-                result = await client.hscan(key1, initialCursor, {
+                result = await client.hscan(Buffer.from(key1), Buffer.from(initialCursor), {
                     match: "a",
                 });
 
@@ -1622,7 +1622,7 @@ export function runBaseTests(config: {
                 };
 
                 expect(await client.hset(key, fieldValueMap)).toEqual(3);
-                expect(await client.hdel(key, [field1, field2])).toEqual(2);
+                expect(await client.hdel(Buffer.from(key), [field1, field2])).toEqual(2);
                 expect(await client.hdel(key, ["nonExistingField"])).toEqual(0);
                 expect(await client.hdel("nonExistingKey", [field3])).toEqual(
                     0,
@@ -1653,7 +1653,7 @@ export function runBaseTests(config: {
                     ]),
                 ).toEqual([value, null, value]);
                 expect(
-                    await client.hmget("nonExistingKey", [field1, field2]),
+                    await client.hmget(Buffer.from("nonExistingKey"), [field1, field2]),
                 ).toEqual([null, null]);
             }, protocol);
         },
@@ -1672,7 +1672,7 @@ export function runBaseTests(config: {
                     [field2]: "value2",
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
-                expect(await client.hexists(key, field1)).toEqual(true);
+                expect(await client.hexists(Buffer.from(key), Buffer.from(field1))).toEqual(true);
                 expect(await client.hexists(key, "nonExistingField")).toEqual(
                     false,
                 );
@@ -1703,7 +1703,7 @@ export function runBaseTests(config: {
                     [field2]: value,
                 });
 
-                expect(await client.hgetall("nonExistingKey")).toEqual({});
+                expect(await client.hgetall(Buffer.from("nonExistingKey"))).toEqual({});
             }, protocol);
         },
         config.timeout,
@@ -1720,8 +1720,8 @@ export function runBaseTests(config: {
                 };
                 expect(await client.hset(key, fieldValueMap)).toEqual(1);
                 expect(await client.hincrBy(key, field, 1)).toEqual(11);
-                expect(await client.hincrBy(key, field, 4)).toEqual(15);
-                expect(await client.hincrByFloat(key, field, 1.5)).toEqual(
+                expect(await client.hincrBy(Buffer.from(key), Buffer.from(field), 4)).toEqual(15);
+                expect(await client.hincrByFloat(Buffer.from(key), Buffer.from(field), 1.5)).toEqual(
                     16.5,
                 );
             }, protocol);
@@ -1803,7 +1803,7 @@ export function runBaseTests(config: {
                 expect(await client.hset(key1, fieldValueMap)).toEqual(2);
                 expect(await client.hlen(key1)).toEqual(2);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
-                expect(await client.hlen(key1)).toEqual(1);
+                expect(await client.hlen(Buffer.from(key1))).toEqual(1);
                 expect(await client.hlen("nonExistingHash")).toEqual(0);
             }, protocol);
         },
@@ -1826,10 +1826,10 @@ export function runBaseTests(config: {
                 const value1Encoded = Buffer.from("value1");
                 const value2Encoded = Buffer.from("value2");
 
-                expect(await client.hset(key1, fieldValueMap)).toEqual(2);
+                expect(await client.hset(Buffer.from(key1), fieldValueMap)).toEqual(2);
                 expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
-                expect(await client.hvals(key1)).toEqual(["value2"]);
+                expect(await client.hvals(Buffer.from(key1))).toEqual(["value2"]);
                 expect(await client.hvals("nonExistingHash")).toEqual([]);
 
                 //hvals with binary buffers
@@ -1856,7 +1856,7 @@ export function runBaseTests(config: {
                 const field = uuidv4();
 
                 expect(await client.hsetnx(key1, field, "value")).toEqual(true);
-                expect(await client.hsetnx(key1, field, "newValue")).toEqual(
+                expect(await client.hsetnx(Buffer.from(key1), Buffer.from(field), "newValue")).toEqual(
                     false,
                 );
                 expect(await client.hget(key1, field)).toEqual("value");
@@ -1889,7 +1889,7 @@ export function runBaseTests(config: {
 
                 // key exists but holds non hash type value
                 expect(await client.set(key2, "value")).toEqual("OK");
-                await expect(client.hstrlen(key2, field)).rejects.toThrow(
+                await expect(client.hstrlen(Buffer.from(key2), Buffer.from(field))).rejects.toThrow(
                     RequestError,
                 );
             }, protocol);
@@ -1910,7 +1910,7 @@ export function runBaseTests(config: {
 
                 // key does not exist
                 expect(await client.hrandfield(key1)).toBeNull();
-                expect(await client.hrandfieldCount(key1, 5)).toEqual([]);
+                expect(await client.hrandfieldCount(Buffer.from(key1), 5)).toEqual([]);
                 expect(await client.hrandfieldWithValues(key1, 5)).toEqual([]);
 
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
@@ -1925,12 +1925,12 @@ export function runBaseTests(config: {
                 expect(result).toEqual(fields);
 
                 // With Count - negative count
-                result = await client.hrandfieldCount(key1, -5);
+                result = await client.hrandfieldCount(Buffer.from(key1), -5);
                 expect(result.length).toEqual(5);
                 result.map((r) => expect(fields).toContain(r));
 
                 // With values - positive count
-                let result2 = await client.hrandfieldWithValues(key1, 5);
+                let result2 = await client.hrandfieldWithValues(Buffer.from(key1), 5);
                 expect(result2).toEqual(entries);
 
                 // With values - negative count
