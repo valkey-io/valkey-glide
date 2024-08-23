@@ -5,6 +5,7 @@
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
 import { gte } from "semver";
+import { Decoder } from "src/BaseClient";
 import { v4 as uuidv4 } from "uuid";
 import {
     BaseClient,
@@ -572,39 +573,46 @@ export async function encodableTransactionTest(
 export async function transactionTest(
     baseTransaction: Transaction | ClusterTransaction,
     version: string,
+    decoder: Decoder,
 ): Promise<[string, GlideReturnType][]> {
-    const key1 = "{key}" + uuidv4(); // string
-    const key2 = "{key}" + uuidv4(); // string
-    const key3 = "{key}" + uuidv4(); // string
-    const key4 = "{key}" + uuidv4(); // hash
-    const key5 = "{key}" + uuidv4();
-    const key6 = "{key}" + uuidv4();
-    const key7 = "{key}" + uuidv4();
-    const key8 = "{key}" + uuidv4();
-    const key9 = "{key}" + uuidv4();
-    const key10 = "{key}" + uuidv4();
-    const key11 = "{key}" + uuidv4(); // hyper log log
-    const key12 = "{key}" + uuidv4();
-    const key13 = "{key}" + uuidv4();
-    const key14 = "{key}" + uuidv4(); // sorted set
-    const key15 = "{key}" + uuidv4(); // list
-    const key16 = "{key}" + uuidv4(); // list
-    const key17 = "{key}" + uuidv4(); // bitmap
-    const key18 = "{key}" + uuidv4(); // Geospatial Data/ZSET
-    const key19 = "{key}" + uuidv4(); // bitmap
-    const key20 = "{key}" + uuidv4(); // list
-    const key21 = "{key}" + uuidv4(); // list for sort
-    const key22 = "{key}" + uuidv4(); // list for sort
-    const key23 = "{key}" + uuidv4(); // zset random
-    const key24 = "{key}" + uuidv4(); // list value
-    const key25 = "{key}" + uuidv4(); // Geospatial Data/ZSET
-    const key26 = "{key}" + uuidv4(); // sorted set
-    const key27 = "{key}" + uuidv4(); // sorted set
-    const field = uuidv4();
-    const value = uuidv4();
-    const groupName1 = uuidv4();
-    const groupName2 = uuidv4();
-    const consumer = uuidv4();
+    const isString = decoder == Decoder.String;
+    const [
+        key1, // string
+        key2, // string
+        key3, // string
+        key4, // hash
+        key5, // list
+        key6, // list
+        key7, // set
+        key8, // sorted set
+        key9, // stream
+        key10, // string
+        key11, // hyper log log
+        key12, // sorted set
+        key13, // sorted set
+        key14, // sorted set
+        key15, // list
+        key16, // list
+        key17, // bitmap
+        key18, // Geospatial Data/ZSET
+        key19, // bitmap
+        key20, // list
+        key21, // list for sort
+        key22, // list for sort
+        key23, // zset random
+        key24, // list value
+        key25, // Geospatial Data/ZSET
+        key26, // sorted set
+        key27, // sorted set
+    ] = Array.from({length: 2},
+        () => isString ? "{key}" + uuidv4() : Buffer.from("{key}" + uuidv4())
+    );
+
+    const field = isString ? uuidv4() : Buffer.from(uuidv4());
+    const value = isString ? uuidv4() : Buffer.from(uuidv4());
+    const groupName1 = isString ? uuidv4() : Buffer.from(uuidv4());
+    const groupName2 = isString ? uuidv4() : Buffer.from(uuidv4());
+    const consumer = isString ? uuidv4() : Buffer.from(uuidv4());
     // array of tuples - first element is test name/description, second - expected return value
     const responseData: [string, GlideReturnType][] = [];
 
