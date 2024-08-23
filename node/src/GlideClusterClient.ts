@@ -455,7 +455,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `sections`: a list of {@link InfoOptions} values specifying which sections of information to retrieve.
-     *     When no parameter is provided, the {@link InfoOptions.Default|default option} is assumed.
+     *     When no parameter is provided, {@link InfoOptions.Default|Default} is assumed.
      * - (Optional) `route`: see {@link RouteOption}.
      * @returns A string containing the information for the sections requested.
      * When specifying a route other than a single node,
@@ -673,7 +673,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * @param options - (Optional) See {@link RouteOption}.
      *
-     * @returns The current server time as a two items `array`:
+     * @returns The current server time as an `array` with two items:
      * - A Unix timestamp,
      * - The amount of microseconds already elapsed in the current second.
      *

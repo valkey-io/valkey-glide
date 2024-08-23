@@ -2522,7 +2522,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
      *
-     * Command Response - The current server time as a two items `array`:
+     * Command Response - The current server time as an `array` with two items:
      * - A Unix timestamp,
      * - The amount of microseconds already elapsed in the current second.
      */
