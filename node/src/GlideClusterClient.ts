@@ -1373,7 +1373,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
      *
      * @param options - (Optional) See {@link RouteOption}.
-     * @returns A simple "OK" response.
+     * @returns A simple `"OK"` response.
      *
      * @example
      * ```typescript

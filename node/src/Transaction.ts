@@ -3871,7 +3871,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      *
      * @param index - The index of the database to select.
      *
-     * Command Response - A simple OK response.
+     * Command Response - A simple `"OK"` response.
      */
     public select(index: number): Transaction {
         return this.addAndReturn(createSelect(index));
