@@ -263,7 +263,7 @@ describe("GlideClient", () => {
             const stringTransaction = new Transaction();
             await DumpAndRestureTest(stringTransaction, "value");
             stringTransaction.select(0);
-            
+
             // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
             await expect(
                 client.exec(stringTransaction, Decoder.String),
@@ -291,16 +291,11 @@ describe("GlideClient", () => {
                 "value",
             );
             transaction.select(0);
+            const result = await client.exec(transaction);
+            expectedRes.push(["select(0)", "OK"]);
 
-            try {
-                const result = await client.exec(transaction);
-                expectedRes.push(["select(0)", "OK"]);
-
-                validateTransactionResponse(result, expectedRes);
-                client.close();
-            } catch (error) {
-                console.error("expected error: ", error);
-            }
+            validateTransactionResponse(result, expectedRes);
+            client.close();
         },
     );
 
