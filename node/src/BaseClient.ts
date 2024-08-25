@@ -2613,8 +2613,8 @@ export class BaseClient {
         decoder?: Decoder,
     ): Promise<Set<GlideString>> {
         return this.createWritePromise<GlideString[]>(createSMembers(key), {
-            decoder: decoder,
-        }).then((smembes) => new Set<GlideString>(smembes));
+            decoder,
+        }).then((smembers) => new Set<GlideString>(smembers));
     }
 
     /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
@@ -2920,7 +2920,7 @@ export class BaseClient {
         key: GlideString,
         decoder?: Decoder,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createSPop(key), { decoder: decoder });
+        return this.createWritePromise(createSPop(key), { decoder });
     }
 
     /** Removes and returns up to `count` random members from the set value store at `key`, depending on the set's length.
@@ -2954,7 +2954,7 @@ export class BaseClient {
         decoder?: Decoder,
     ): Promise<Set<GlideString>> {
         return this.createWritePromise<GlideString[]>(createSPop(key, count), {
-            decoder: decoder,
+            decoder,
         }).then((spop) => new Set<GlideString>(spop));
     }
 

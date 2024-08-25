@@ -3350,6 +3350,7 @@ export function runBaseTests(config: {
                     new Set(),
                 );
 
+                // with keys and return values as buffers
                 const result3 = await client.spop(key2Encoded, Decoder.Bytes);
                 expect(members2).toContain(result3?.toString());
 
