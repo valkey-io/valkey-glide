@@ -1190,7 +1190,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - Always "OK".
      */
-    public lset(key: string, index: number, element: string): T {
+    public lset(key: GlideString, index: number, element: GlideString): T {
         return this.addAndReturn(createLSet(key, index, element));
     }
 
@@ -1209,7 +1209,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
      */
-    public ltrim(key: string, start: number, end: number): T {
+    public ltrim(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createLTrim(key, start, end));
     }
 
@@ -1225,7 +1225,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of the removed elements.
      * If `key` does not exist, 0 is returned.
      */
-    public lrem(key: string, count: number, element: string): T {
+    public lrem(key: GlideString, count: number, element: string): T {
         return this.addAndReturn(createLRem(key, count, element));
     }
 
@@ -1254,7 +1254,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the list after the push operation.
      */
-    public rpushx(key: string, elements: string[]): T {
+    public rpushx(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createRPushX(key, elements));
     }
 
@@ -3802,12 +3802,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If no member could be popped and the timeout expired, returns `null`.
      */
     public blmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         timeout: number,
         count?: number,
     ): T {
-        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
+        return this.addAndReturn(createBLMPop(keys, direction, timeout, count));
     }
 
     /**

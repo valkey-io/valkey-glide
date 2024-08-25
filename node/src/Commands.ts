@@ -942,9 +942,9 @@ export function createBLMove(
  * @internal
  */
 export function createLSet(
-    key: string,
+    key: GlideString,
     index: number,
-    element: string,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LSet, [key, index.toString(), element]);
 }
@@ -953,7 +953,7 @@ export function createLSet(
  * @internal
  */
 export function createLTrim(
-    key: string,
+    key: GlideString,
     start: number,
     end: number,
 ): command_request.Command {
@@ -968,9 +968,9 @@ export function createLTrim(
  * @internal
  */
 export function createLRem(
-    key: string,
+    key: GlideString,
     count: number,
-    element: string,
+    element: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.LRem, [key, count.toString(), element]);
 }
@@ -989,8 +989,8 @@ export function createRPush(
  * @internal
  */
 export function createRPushX(
-    key: string,
-    elements: string[],
+    key: GlideString,
+    elements: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.RPushX, [key].concat(elements));
 }
@@ -3821,12 +3821,12 @@ export function createLMPop(
  * @internal
  */
 export function createBLMPop(
-    timeout: number,
-    keys: string[],
+    keys: GlideString[],
     direction: ListDirection,
+    timeout: number,
     count?: number,
 ): command_request.Command {
-    const args: string[] = [
+    const args: GlideString[] = [
         timeout.toString(),
         keys.length.toString(),
         ...keys,
