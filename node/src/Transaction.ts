@@ -1540,7 +1540,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *                If `count` is negative, allows for duplicates members.
      * Command Response - A list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      */
-    public srandmemberCount(key: string, count: number): T {
+    public srandmemberCount(key: GlideString, count: number): T {
         return this.addAndReturn(createSRandMember(key, count));
     }
 
