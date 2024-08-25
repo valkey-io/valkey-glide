@@ -2744,8 +2744,8 @@ export function runBaseTests(config: {
                 expect(await client.sadd(key1, ["1", "2", "3"])).toEqual(3);
                 expect(await client.sadd(key2, ["2", "3"])).toEqual(2);
 
-                // move an element
-                expect(await client.smove(key1, key2, "1"));
+                // move an element, test key as buffer
+                expect(await client.smove(Buffer.from(key1), key2, "1"));
                 expect(await client.smembers(key1)).toEqual(
                     new Set(["2", "3"]),
                 );
@@ -2753,8 +2753,8 @@ export function runBaseTests(config: {
                     new Set(["1", "2", "3"]),
                 );
 
-                // moved element already exists in the destination set
-                expect(await client.smove(key2, key1, "2"));
+                // moved element already exists in the destination set, test member as buffer
+                expect(await client.smove(key2, key1, Buffer.from("2")));
                 expect(await client.smembers(key1)).toEqual(
                     new Set(["2", "3"]),
                 );
@@ -2792,18 +2792,6 @@ export function runBaseTests(config: {
                 await expect(
                     client.smove(string_key, key1, "_"),
                 ).rejects.toThrow();
-
-                // source, destination and member as binary buffers
-                expect(
-                    await client.smove(
-                        Buffer.from(key1),
-                        Buffer.from(key3),
-                        Buffer.from("3"),
-                    ),
-                ).toEqual(true);
-                expect(await client.smembers(key3)).toEqual(
-                    new Set(["2", "3"]),
-                );
             }, protocol);
         },
         config.timeout,
@@ -3427,15 +3415,10 @@ export function runBaseTests(config: {
                 const nonExistingKey = uuidv4();
 
                 expect(await client.sadd(key, ["a", "b"])).toEqual(2);
-                expect(await client.smismember(key, ["b", "c"])).toEqual([
-                    true,
-                    false,
-                ]);
-
                 expect(
                     await client.smismember(Buffer.from(key), [
                         Buffer.from("b"),
-                        Buffer.from("c"),
+                        "c",
                     ]),
                 ).toEqual([true, false]);
 
@@ -3512,19 +3495,28 @@ export function runBaseTests(config: {
 
                 const result2 = await client.srandmember(key);
                 expect(members).toContain(result2);
-                const result3 = await client.srandmember(
-                    Buffer.from(key),
-                    Decoder.Bytes,
-                );
-                expect(members).toContain(result3?.toString());
                 expect(await client.srandmember("nonExistingKey")).toEqual(
                     null,
                 );
+
+                // with key and return value as buffers
+                const result3 = await client.srandmember(Buffer.from(key), {
+                    decoder: Decoder.Bytes,
+                });
+                expect(members).toContain(result3?.toString());
 
                 // unique values are expected as count is positive
                 let result = await client.srandmemberCount(key, 4);
                 expect(result.length).toEqual(3);
                 expect(new Set(result)).toEqual(new Set(members));
+
+                // with key and return value as buffers
+                result = await client.srandmemberCount(Buffer.from(key), 4, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(new Set(result)).toEqual(
+                    new Set(members.map((member) => Buffer.from(member))),
+                );
 
                 // duplicate values are expected as count is negative
                 result = await client.srandmemberCount(key, -4);

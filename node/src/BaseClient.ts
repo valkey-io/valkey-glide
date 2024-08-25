@@ -3003,8 +3003,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/srandmember/|valkey.io} for more details.
      *
      * @param key - The key from which to retrieve the set member.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random element from the set, or null if `key` does not exist.
      *
      * @example
@@ -3023,11 +3022,9 @@ export class BaseClient {
      */
     public async srandmember(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createSRandMember(key), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createSRandMember(key), options);
     }
 
     /**
@@ -3039,6 +3036,7 @@ export class BaseClient {
      * @param count - The number of members to return.
      *                If `count` is positive, returns unique members.
      *                If `count` is negative, allows for duplicates members.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      *
      * @example
@@ -3056,10 +3054,11 @@ export class BaseClient {
      * ```
      */
     public async srandmemberCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createSRandMember(key, count));
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createSRandMember(key, count), options);
     }
 
     /**
