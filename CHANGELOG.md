@@ -1,5 +1,11 @@
 #### Changes
-* Node: Added FUNCTION DUMP and FUNCTION RESTORE commands (transaction) ([#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
+* Node: Added binary variant to server management commands ([#2179](https://github.com/valkey-io/valkey-glide/pull/2179))
+* Node: Added/updated binary variant to connection management commands and WATCH/UNWATCH ([#2160](https://github.com/valkey-io/valkey-glide/pull/2160))
+* Java: Fix docs for stream commands ([#2086](https://github.com/valkey-io/valkey-glide/pull/2086))
+* Node: Added binary variant to bitmap commands ([#2178](https://github.com/valkey-io/valkey-glide/pull/2178))
+* Node: Added binary variant to generic commands ([#2158](https://github.com/valkey-io/valkey-glide/pull/2158))
+* Node: Added binary variant to geo commands ([#2149](https://github.com/valkey-io/valkey-glide/pull/2149))
+* Node: Added binary variant to HYPERLOGLOG commands ([#2176](https://github.com/valkey-io/valkey-glide/pull/2176))
 * Node: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#2129](https://github.com/valkey-io/valkey-glide/pull/2129), [#2173](https://github.com/valkey-io/valkey-glide/pull/2173))
 * Node: Added ZUNIONSTORE command ([#2145](https://github.com/valkey-io/valkey-glide/pull/2145))
 * Node: Added XREADGROUP command ([#2124](https://github.com/valkey-io/valkey-glide/pull/2124))
