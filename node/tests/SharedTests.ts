@@ -2665,7 +2665,9 @@ export function runBaseTests(config: {
                     await client.srem(keyEncoded, [Buffer.from("member2")]),
                 ).toEqual(1);
                 expect(
-                    await client.smembers(keyEncoded, {decoder:Decoder.Bytes}),
+                    await client.smembers(keyEncoded, {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(
                     new Set([Buffer.from("member4"), Buffer.from("member5")]),
                 );
@@ -3351,17 +3353,17 @@ export function runBaseTests(config: {
                 );
 
                 // with keys and return values as buffers
-                const result3 = await client.spop(key2Encoded, {decoder: Decoder.Bytes});
+                const result3 = await client.spop(key2Encoded, {
+                    decoder: Decoder.Bytes,
+                });
                 expect(members2).toContain(result3?.toString());
 
                 members2 = members2.filter(
                     (item) => item != result3?.toString(),
                 );
-                const result4 = await client.spopCount(
-                    key2Encoded,
-                    2,
-                    {decoder: Decoder.Bytes},
-                );
+                const result4 = await client.spopCount(key2Encoded, 2, {
+                    decoder: Decoder.Bytes,
+                });
                 expect(result4).toEqual(
                     new Set(members2.map((item) => Buffer.from(item))),
                 );

@@ -2611,7 +2611,10 @@ export class BaseClient {
         key: GlideString,
         options?: DecoderOption,
     ): Promise<Set<GlideString>> {
-        return this.createWritePromise<GlideString[]>(createSMembers(key), options).then((smembers) => new Set<GlideString>(smembers));
+        return this.createWritePromise<GlideString[]>(
+            createSMembers(key),
+            options,
+        ).then((smembers) => new Set<GlideString>(smembers));
     }
 
     /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
@@ -2948,7 +2951,10 @@ export class BaseClient {
         count: number,
         options?: DecoderOption,
     ): Promise<Set<GlideString>> {
-        return this.createWritePromise<GlideString[]>(createSPop(key, count), options).then((spop) => new Set<GlideString>(spop));
+        return this.createWritePromise<GlideString[]>(
+            createSPop(key, count),
+            options,
+        ).then((spop) => new Set<GlideString>(spop));
     }
 
     /**
