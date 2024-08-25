@@ -699,7 +699,11 @@ export class BaseClient {
 
                         resolve(resolveAns);
                     } catch (err) {
-                        console.log(err);
+                        Logger.log(
+                            "error",
+                            "Decoder",
+                            `Decoding error: '${err}'`,
+                        );
                         reject(err);
                     }
                 },
