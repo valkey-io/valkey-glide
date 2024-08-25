@@ -2657,8 +2657,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The `keys` of the sets to get the intersection.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns - A set of members which are present in all given sets.
      * If one or more sets do not exist, an empty set will be returned.
      *
@@ -2678,11 +2677,12 @@ export class BaseClient {
      */
     public async sinter(
         keys: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<Set<GlideString>> {
-        return this.createWritePromise<GlideString[]>(createSInter(keys), {
-            decoder: decoder,
-        }).then((sinter) => new Set<GlideString>(sinter));
+        return this.createWritePromise<GlideString[]>(
+            createSInter(keys),
+            options,
+        ).then((sinter) => new Set<GlideString>(sinter));
     }
 
     /**
@@ -2744,8 +2744,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The keys of the sets to diff.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A `Set` of elements representing the difference between the sets.
      * If a key in `keys` does not exist, it is treated as an empty set.
      *
@@ -2759,11 +2758,12 @@ export class BaseClient {
      */
     public async sdiff(
         keys: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<Set<GlideString>> {
-        return this.createWritePromise<GlideString[]>(createSDiff(keys), {
-            decoder: decoder,
-        }).then((sdiff) => new Set<GlideString>(sdiff));
+        return this.createWritePromise<GlideString[]>(
+            createSDiff(keys),
+            options,
+        ).then((sdiff) => new Set<GlideString>(sdiff));
     }
 
     /**

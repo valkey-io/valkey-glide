@@ -2805,7 +2805,7 @@ export function runBaseTests(config: {
                 expect(
                     await client.sinter(
                         [Buffer.from(key1), Buffer.from(key2)],
-                        Decoder.Bytes,
+                        { decoder: Decoder.Bytes },
                     ),
                 ).toEqual(new Set([Buffer.from("c"), Buffer.from("d")]));
 
@@ -2996,16 +2996,14 @@ export function runBaseTests(config: {
 
                 // key and return value as binary buffers
                 expect(
-                    await client.sdiff(
-                        [Buffer.from(key1), Buffer.from(key2)],
-                        Decoder.Bytes,
-                    ),
+                    await client.sdiff([Buffer.from(key1), Buffer.from(key2)], {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(new Set([Buffer.from("a"), Buffer.from("b")]));
                 expect(
-                    await client.sdiff(
-                        [Buffer.from(key2), Buffer.from(key1)],
-                        Decoder.Bytes,
-                    ),
+                    await client.sdiff([Buffer.from(key2), Buffer.from(key1)], {
+                        decoder: Decoder.Bytes,
+                    }),
                 ).toEqual(new Set([Buffer.from("d"), Buffer.from("e")]));
 
                 // invalid arg - key list must not be empty
