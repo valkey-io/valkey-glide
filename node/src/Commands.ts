@@ -3745,7 +3745,7 @@ export type BaseScanOptions = {
      * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
      * represent the results as compact single-allocation packed encoding.
      */
-    readonly count?: string;
+    readonly count?: number;
 };
 
 /**
