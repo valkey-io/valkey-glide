@@ -4731,14 +4731,20 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param values - field-value pairs to be added to the entry.
      * @param options - options detailing how to add to the stream.
+     * @param options - (Optional) Additional Parameters:
+     * - (Optional) options detailing how to add to the stream.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
     public async xadd(
-        key: string,
-        values: [string, string][],
-        options?: StreamAddOptions,
-    ): Promise<string | null> {
-        return this.createWritePromise(createXAdd(key, values, options));
+        key: GlideString,
+        values: [GlideString, GlideString][],
+        options?: StreamAddOptions & DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(
+            createXAdd(key, values, options),
+            options,
+        );
     }
 
     /**
@@ -4757,7 +4763,7 @@ export class BaseClient {
      * // Output is 2 since the stream marked 2 entries as deleted.
      * ```
      */
-    public async xdel(key: string, ids: string[]): Promise<number> {
+    public async xdel(key: GlideString, ids: GlideString[]): Promise<number> {
         return this.createWritePromise(createXDel(key, ids));
     }
 
@@ -5024,7 +5030,9 @@ export class BaseClient {
      * @param consumer - The group consumer.
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param ids - An array of entry ids.
-     * @param options - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * @param options - Additional Parameters:
+     * - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `Record` of message entries that are claimed by the consumer.
      *
      * @example
@@ -5038,13 +5046,14 @@ export class BaseClient {
      * ```
      */
     public async xclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        ids: string[],
-        options?: StreamClaimOptions,
+        ids: GlideString[],
+        options?: StreamClaimOptions & DecoderOption,
     ): Promise<Record<string, [string, string][]>> {
+        // TODO: convert Record return type to Object array
         return this.createWritePromise(
             createXClaim(key, group, consumer, minIdleTime, ids, options),
         );
@@ -5093,13 +5102,14 @@ export class BaseClient {
      * ```
      */
     public async xautoclaim(
-        key: string,
-        group: string,
-        consumer: string,
+        key: GlideString,
+        group: GlideString,
+        consumer: GlideString,
         minIdleTime: number,
-        start: string,
+        start: GlideString,
         count?: number,
     ): Promise<[string, Record<string, [string, string][]>, string[]?]> {
+        // TODO: convert Record return type to Object array
         return this.createWritePromise(
             createXAutoClaim(key, group, consumer, minIdleTime, start, count),
         );
@@ -5207,8 +5217,10 @@ export class BaseClient {
      *
      * @param key - The key of the stream.
      * @param groupName - The newly created consumer group name.
-     * @param id - Stream entry ID that specifies the last delivered entry in the stream from the new
+     * @param id - Additional Parameters:
+     * - (Optional) Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns `"OK"`.
      *
      * @example
@@ -5218,13 +5230,14 @@ export class BaseClient {
      * ```
      */
     public async xgroupCreate(
-        key: string,
-        groupName: string,
-        id: string,
-        options?: StreamGroupOptions,
-    ): Promise<string> {
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
+        options?: StreamGroupOptions & DecoderOption,
+    ): Promise<GlideString> {
         return this.createWritePromise(
             createXGroupCreate(key, groupName, id, options),
+            options,
         );
     }
 
@@ -5244,8 +5257,8 @@ export class BaseClient {
      * ```
      */
     public async xgroupDestroy(
-        key: string,
-        groupName: string,
+        key: GlideString,
+        groupName: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(createXGroupDestroy(key, groupName));
     }
@@ -5340,9 +5353,9 @@ export class BaseClient {
      * ```
      */
     public async xgroupCreateConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(
             createXGroupCreateConsumer(key, groupName, consumerName),
@@ -5366,9 +5379,9 @@ export class BaseClient {
      * ```
      */
     public async xgroupDelConsumer(
-        key: string,
-        groupName: string,
-        consumerName: string,
+        key: GlideString,
+        groupName: GlideString,
+        consumerName: GlideString,
     ): Promise<number> {
         return this.createWritePromise(
             createXGroupDelConsumer(key, groupName, consumerName),
@@ -5406,9 +5419,9 @@ export class BaseClient {
      * ```
      */
     public async xack(
-        key: string,
-        group: string,
-        ids: string[],
+        key: GlideString,
+        group: GlideString,
+        ids: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createXAck(key, group, ids));
     }
@@ -5424,7 +5437,6 @@ export class BaseClient {
      *     group.
      * @param entriesRead - (Optional) A value representing the number of stream entries already read by the group.
      *     This option can only be specified if you are using Valkey version 7.0.0 or above.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response. If not set, the default decoder from the client config will be used.
      * @returns `"OK"`.
      *
      * * @example
@@ -5433,16 +5445,15 @@ export class BaseClient {
      * ```
      */
     public async xgroupSetId(
-        key: string,
-        groupName: string,
-        id: string,
+        key: GlideString,
+        groupName: GlideString,
+        id: GlideString,
         entriesRead?: number,
-        decoder?: Decoder,
     ): Promise<"OK"> {
         return this.createWritePromise(
             createXGroupSetid(key, groupName, id, entriesRead),
             {
-                decoder: decoder,
+                decoder: Decoder.String,
             },
         );
     }
