@@ -995,8 +995,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * where the value is at even indices and the value is at odd indices.
      */
     public hscan(
-        key: GlideString,
-        cursor: GlideString,
+        key: string,
+        cursor: string,
         options?: BaseScanOptions,
     ): T {
         return this.addAndReturn(createHScan(key, cursor, options));

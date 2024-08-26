@@ -1985,14 +1985,11 @@ export class BaseClient {
      * ```
      */
     public async hscan(
-        key: GlideString,
-        cursor: GlideString,
+        key: string,
+        cursor: string,
         options?: BaseScanOptions,
-        decoder?: Decoder,
-    ): Promise<[GlideString, GlideString[]]> {
-        return this.createWritePromise(createHScan(key, cursor, options), {
-            decoder: decoder,
-        });
+    ): Promise<[string, string[]]> {
+        return this.createWritePromise(createHScan(key, cursor, options));
     }
 
     /**

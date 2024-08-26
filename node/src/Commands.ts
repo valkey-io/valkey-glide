@@ -3630,11 +3630,11 @@ export function createHRandField(
  * @internal
  */
 export function createHScan(
-    key: GlideString,
-    cursor: GlideString,
+    key: string,
+    cursor: string,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: GlideString[] = [key, cursor];
+    let args: string[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
@@ -3739,22 +3739,20 @@ export type BaseScanOptions = {
      * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
      * that it will only fetch and match `10` items from the list.
      */
-    readonly match?: GlideString;
+    readonly match?: string;
     /**
      * `COUNT` is a just a hint for the command for how many elements to fetch from the
      * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
      * represent the results as compact single-allocation packed encoding.
      */
-    readonly count?: GlideString;
+    readonly count?: string;
 };
 
 /**
  * @internal
  */
-function convertBaseScanOptionsToArgsArray(
-    options: BaseScanOptions,
-): GlideString[] {
-    const args: GlideString[] = [];
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): GlideString[] {
+    const args: string[] = [];
 
     if (options.match) {
         args.push("MATCH", options.match);

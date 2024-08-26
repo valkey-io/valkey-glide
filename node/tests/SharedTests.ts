@@ -1444,8 +1444,8 @@ export function runBaseTests(config: {
 
                 // Test hscan with match
                 result = await client.hscan(
-                    Buffer.from(key1),
-                    Buffer.from(initialCursor),
+                    key1,
+                    initialCursor,
                     {
                         match: "a",
                     },
