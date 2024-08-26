@@ -1443,13 +1443,9 @@ export function runBaseTests(config: {
                 expect(allValuesIncluded).toEqual(true);
 
                 // Test hscan with match
-                result = await client.hscan(
-                    key1,
-                    initialCursor,
-                    {
-                        match: "a",
-                    },
-                );
+                result = await client.hscan(key1, initialCursor, {
+                    match: "a",
+                });
 
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual(["a", "0"]);

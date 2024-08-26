@@ -994,11 +994,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * hash held in `key`. The array in the second element is always a flattened series of string pairs,
      * where the value is at even indices and the value is at odd indices.
      */
-    public hscan(
-        key: string,
-        cursor: string,
-        options?: BaseScanOptions,
-    ): T {
+    public hscan(key: string, cursor: string, options?: BaseScanOptions): T {
         return this.addAndReturn(createHScan(key, cursor, options));
     }
 
