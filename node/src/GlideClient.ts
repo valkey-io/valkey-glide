@@ -524,10 +524,10 @@ export class GlideClient extends BaseClient {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - (Optional) Whether the given library should overwrite a library with the same name if it
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `replace`: Whether the given library should overwrite a library with the same name if it
      *     already exists.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The library name that was loaded.
      *
      * @example
