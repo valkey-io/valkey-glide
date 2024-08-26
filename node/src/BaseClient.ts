@@ -2338,11 +2338,13 @@ export class BaseClient {
      * ```
      */
     public async lset(
-        key: string,
+        key: GlideString,
         index: number,
-        element: string,
+        element: GlideString,
     ): Promise<"OK"> {
-        return this.createWritePromise(createLSet(key, index, element));
+        return this.createWritePromise(createLSet(key, index, element), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.
@@ -2367,8 +2369,14 @@ export class BaseClient {
      * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
-    public async ltrim(key: string, start: number, end: number): Promise<"OK"> {
-        return this.createWritePromise(createLTrim(key, start, end));
+    public async ltrim(
+        key: GlideString,
+        start: number,
+        end: number,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createLTrim(key, start, end), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
@@ -2390,9 +2398,9 @@ export class BaseClient {
      * ```
      */
     public async lrem(
-        key: string,
+        key: GlideString,
         count: number,
-        element: string,
+        element: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
     }
@@ -2443,7 +2451,10 @@ export class BaseClient {
      * console.log(result);  // Output: 2 - Indicates that the list has two elements.
      * ```
      * */
-    public async rpushx(key: string, elements: string[]): Promise<number> {
+    public async rpushx(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createRPushX(key, elements));
     }
 
@@ -6506,13 +6517,13 @@ export class BaseClient {
      * ```
      */
     public async blmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         timeout: number,
         count?: number,
     ): Promise<Record<string, string[]>> {
         return this.createWritePromise(
-            createBLMPop(timeout, keys, direction, count),
+            createBLMPop(keys, direction, timeout, count),
         );
     }
 
