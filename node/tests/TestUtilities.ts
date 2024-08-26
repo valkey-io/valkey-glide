@@ -462,7 +462,7 @@ export function checkFunctionListResponse(
  */
 export function checkFunctionStatsResponse(
     response: FunctionStatsSingleResponse,
-    runningFunction: string[],
+    runningFunction: GlideString[],
     libCount: number,
     functionCount: number,
 ) {
