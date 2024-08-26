@@ -1552,8 +1552,8 @@ export function runBaseTests(config: {
                 expect(result[resultCollectionIndex]).toEqual([]);
 
                 let result2 = await client.sscan(key1, initialCursor);
-                expect(result[resultCursorIndex]).toEqual(initialCursor);
-                expect(result[resultCollectionIndex]).toEqual([]);
+                expect(result2[resultCursorIndex]).toEqual(initialCursor);
+                expect(result2[resultCollectionIndex]).toEqual([]);
 
                 // Negative cursor
                 if (cluster.checkIfServerVersionLessThan("7.9.0")) {
@@ -1562,8 +1562,8 @@ export function runBaseTests(config: {
                     expect(result[resultCollectionIndex]).toEqual([]);
 
                     result2 = await client.sscan(key1, "-1");
-                    expect(result[resultCursorIndex]).toEqual(initialCursor);
-                    expect(result[resultCollectionIndex]).toEqual([]);
+                    expect(result2[resultCursorIndex]).toEqual(initialCursor);
+                    expect(result2[resultCollectionIndex]).toEqual([]);
                 } else {
                     await expect(client.hscan(key1, "-1")).rejects.toThrow(
                         RequestError,
