@@ -3821,7 +3821,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      */
-    public pubsubChannels(pattern?: string): T {
+    public pubsubChannels(pattern?: GlideString): T {
         return this.addAndReturn(createPubSubChannels(pattern));
     }
 
@@ -4007,7 +4007,7 @@ export class Transaction extends BaseTransaction<Transaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      * Note that this value does not include subscriptions that configured on replicas.
      */
-    public publish(message: string, channel: string): Transaction {
+    public publish(message: GlideString, channel: GlideString): Transaction {
         return this.addAndReturn(createPublish(message, channel));
     }
 }
@@ -4134,8 +4134,8 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response -  Number of subscriptions in primary node that received the message.
      */
     public publish(
-        message: string,
-        channel: string,
+        message: GlideString,
+        channel: GlideString,
         sharded: boolean = false,
     ): ClusterTransaction {
         return this.addAndReturn(createPublish(message, channel, sharded));
@@ -4152,7 +4152,7 @@ export class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Command Response - A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      */
-    public pubsubShardChannels(pattern?: string): ClusterTransaction {
+    public pubsubShardChannels(pattern?: GlideString): ClusterTransaction {
         return this.addAndReturn(createPubsubShardChannels(pattern));
     }
 

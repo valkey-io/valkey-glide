@@ -2970,7 +2970,7 @@ describe("PubSub", () => {
 
                     expect(
                         await (publishingClient as GlideClusterClient).publish(
-                            message,
+                            Buffer.from(message),
                             channel,
                             true,
                         ),
@@ -2979,7 +2979,7 @@ describe("PubSub", () => {
                     expect(
                         await (publishingClient as GlideClusterClient).publish(
                             message2,
-                            channel,
+                            Buffer.from(channel),
                             true,
                         ),
                     ).toEqual(1);
