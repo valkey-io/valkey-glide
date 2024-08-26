@@ -3634,7 +3634,7 @@ export function createHScan(
     cursor: GlideString,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
@@ -3739,13 +3739,13 @@ export type BaseScanOptions = {
      * items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
      * that it will only fetch and match `10` items from the list.
      */
-    readonly match?: string;
+    readonly match?: GlideString;
     /**
      * `COUNT` is a just a hint for the command for how many elements to fetch from the
      * sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
      * represent the results as compact single-allocation packed encoding.
      */
-    readonly count?: number;
+    readonly count?: GlideString;
 };
 
 /**
