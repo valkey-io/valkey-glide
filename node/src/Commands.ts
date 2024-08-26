@@ -3751,7 +3751,7 @@ export type BaseScanOptions = {
 /**
  * @internal
  */
-function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): GlideString[] {
+function convertBaseScanOptionsToArgsArray(options: BaseScanOptions): string[] {
     const args: string[] = [];
 
     if (options.match) {
