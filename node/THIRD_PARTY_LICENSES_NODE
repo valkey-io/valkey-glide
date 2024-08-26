@@ -7382,7 +7382,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: flate2:1.0.32
+Package: flate2:1.0.33
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19485,7 +19485,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: quote:1.0.36
+Package: quote:1.0.37
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23778,7 +23778,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde:1.0.208
+Package: serde:1.0.209
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24007,7 +24007,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: serde_derive:1.0.208
+Package: serde_derive:1.0.209
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25110,7 +25110,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.75
+Package: syn:2.0.76
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36014,7 +36014,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: eslint-module-utils:2.8.1
+Package: eslint-module-utils:2.8.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37510,7 +37510,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobufjs:7.3.3
+Package: protobufjs:7.4.0
 
 The following copyrights and licenses were found in the source code of this package:
 

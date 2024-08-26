@@ -410,11 +410,15 @@ export type ScriptOptions = {
     /**
      * The keys that are used in the script.
      */
-    keys?: (string | Uint8Array)[];
+    keys?: GlideString[];
     /**
      * The arguments for the script.
      */
-    args?: (string | Uint8Array)[];
+    args?: GlideString[];
+    /**
+     * {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
+     */
+    decoder?: Decoder;
 };
 
 function getRequestErrorClass(
@@ -676,23 +680,32 @@ export class BaseClient {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns: T) => {
-                    if (resolveAns instanceof PointerResponse) {
-                        if (typeof resolveAns === "number") {
-                            resolveAns = valueFromSplitPointer(
-                                0,
-                                resolveAns,
-                                stringDecoder,
-                            ) as T;
-                        } else {
-                            resolveAns = valueFromSplitPointer(
-                                resolveAns.high!,
-                                resolveAns.low!,
-                                stringDecoder,
-                            ) as T;
+                    try {
+                        if (resolveAns instanceof PointerResponse) {
+                            if (typeof resolveAns === "number") {
+                                resolveAns = valueFromSplitPointer(
+                                    0,
+                                    resolveAns,
+                                    stringDecoder,
+                                ) as T;
+                            } else {
+                                resolveAns = valueFromSplitPointer(
+                                    resolveAns.high!,
+                                    resolveAns.low!,
+                                    stringDecoder,
+                                ) as T;
+                            }
                         }
-                    }
 
-                    resolve(resolveAns);
+                        resolve(resolveAns);
+                    } catch (err) {
+                        Logger.log(
+                            "error",
+                            "Decoder",
+                            `Decoding error: '${err}'`,
+                        );
+                        reject(err);
+                    }
                 },
                 reject,
             ];
@@ -1088,8 +1101,8 @@ export class BaseClient {
      * ```
      */
     public async set(
-        key: string | Uint8Array,
-        value: string | Uint8Array,
+        key: GlideString,
+        value: GlideString,
         options?: SetOptions,
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
@@ -3293,24 +3306,26 @@ export class BaseClient {
             hash: script.getHash(),
             keys: option?.keys?.map((item) => {
                 if (typeof item === "string") {
-                    // Convert the string to a Uint8Array
+                    // Convert the string to a Buffer
                     return Buffer.from(item);
                 } else {
-                    // If it's already a Uint8Array, just return it
+                    // If it's already a Buffer, just return it
                     return item;
                 }
             }),
             args: option?.args?.map((item) => {
                 if (typeof item === "string") {
-                    // Convert the string to a Uint8Array
+                    // Convert the string to a Buffer
                     return Buffer.from(item);
                 } else {
-                    // If it's already a Uint8Array, just return it
+                    // If it's already a Buffer, just return it
                     return item;
                 }
             }),
         });
-        return this.createWritePromise(scriptInvocation);
+        return this.createWritePromise(scriptInvocation, {
+            decoder: option?.decoder,
+        });
     }
 
     /**
