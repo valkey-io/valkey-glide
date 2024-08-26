@@ -602,6 +602,43 @@ export async function encodedTransactionTest(
     return responseData;
 }
 
+/** Populates a transaction with dump and restore commands
+ *
+ * @param baseTransaction - A transaction
+ * @param valueResponse - Represents the encoded response of "value" to compare
+ * @returns Array of tuples, where first element is a test name/description, second - expected return value.
+ */
+export async function DumpAndRestureTest(
+    baseTransaction: Transaction,
+    valueResponse: GlideString,
+): Promise<[string, ReturnType][]> {
+    const key = "dumpKey";
+    const dumpResult = Buffer.from([
+        0, 5, 118, 97, 108, 117, 101, 11, 0, 232, 41, 124, 75, 60, 53, 114, 231,
+    ]);
+    const value = "value";
+    // array of tuples - first element is test name/description, second - expected return value
+    const responseData: [string, ReturnType][] = [];
+
+    baseTransaction.set(key, value);
+    responseData.push(["set(key, value)", "OK"]);
+    baseTransaction.customCommand(["DUMP", key]);
+    responseData.push(['customCommand(["DUMP", key])', dumpResult]);
+    baseTransaction.del([key]);
+    responseData.push(["del(key)", 1]);
+    baseTransaction.get(key);
+    responseData.push(["get(key)", null]);
+    baseTransaction.customCommand(["RESTORE", key, "0", dumpResult]);
+    responseData.push([
+        'customCommand(["RESTORE", key, "0", dumpResult])',
+        "OK",
+    ]);
+    baseTransaction.get(key);
+    responseData.push(["get(key)", valueResponse]);
+
+    return responseData;
+}
+
 /**
  * Populates a transaction with commands to test.
  * @param baseTransaction - A transaction.

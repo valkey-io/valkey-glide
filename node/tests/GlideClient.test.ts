@@ -32,6 +32,7 @@ import {
     checkFunctionStatsResponse,
     convertStringArrayToBuffer,
     createLuaLibWithLongRunningFunction,
+    DumpAndRestureTest,
     encodableTransactionTest,
     encodedTransactionTest,
     flushAndCloseClient,
@@ -238,6 +239,38 @@ describe("GlideClient", () => {
             expectedRes.push(["select(0)", "OK"]);
 
             validateTransactionResponse(result, expectedRes);
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `dump and restore transactions_%p`,
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const bytesTransaction = new Transaction();
+            const expectedBytesRes = await DumpAndRestureTest(
+                bytesTransaction,
+                Buffer.from("value"),
+            );
+            bytesTransaction.select(0);
+            const result = await client.exec(bytesTransaction, Decoder.Bytes);
+            expectedBytesRes.push(["select(0)", "OK"]);
+
+            validateTransactionResponse(result, expectedBytesRes);
+
+            const stringTransaction = new Transaction();
+            await DumpAndRestureTest(stringTransaction, "value");
+            stringTransaction.select(0);
+
+            // Since DUMP gets binary results, we cannot use the string decoder here, so we expected to get an error.
+            await expect(
+                client.exec(stringTransaction, Decoder.String),
+            ).rejects.toThrowError(
+                "invalid utf-8 sequence of 1 bytes from index 9",
+            );
+
             client.close();
         },
     );
