@@ -100,7 +100,6 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	}
 
 	cArgs, argLengths := toCStrings(args)
-	// defer freeCStrings(cArgs)
 
 	resultChannel := make(chan payload)
 	resultChannelPtr := uintptr(unsafe.Pointer(&resultChannel))
@@ -120,14 +119,14 @@ func (client *baseClient) executeCommand(requestType C.RequestType, args []strin
 	return payload.value, nil
 }
 
-// / Convert `s` of type `string` into `[]byte`
+// Convert `s` of type `string` into `[]byte`
 func StringToBytes(s string) []byte {
 	p := unsafe.StringData(s)
 	b := unsafe.Slice(p, len(s))
 	return b
 }
 
-// TODO: Handle passing the arguments as strings without assuming null termination assumption.
+// Zero copying conversion from go's []string into C pointers
 func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 	cStrings := make([]C.uintptr_t, len(args))
 	stringLengths := make([]C.ulong, len(args))
@@ -138,12 +137,6 @@ func toCStrings(args []string) ([]C.uintptr_t, []C.ulong) {
 		stringLengths[i] = C.size_t(len(str))
 	}
 	return cStrings, stringLengths
-}
-
-func freeCStrings(cArgs []*C.char) {
-	for _, arg := range cArgs {
-		C.free(unsafe.Pointer(arg))
-	}
 }
 
 func (client *baseClient) Set(key string, value string) (string, error) {
