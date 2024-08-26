@@ -2552,7 +2552,7 @@ export class BaseClient {
      *
      * @param key - The key of the set.
      * @param cursor - The cursor that points to the next iteration of results. A value of `"0"` indicates the start of the search.
-     * @param options - The (Optional) {@link BaseScanOptions}.
+     * @param options - The (Optional) {@link BaseScanOptions} and {@link DecoderOption}.
      * @returns An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
      * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
      *
@@ -2582,11 +2582,13 @@ export class BaseClient {
      * ```
      */
     public async sscan(
-        key: string,
-        cursor: string,
-        options?: BaseScanOptions,
-    ): Promise<[string, string[]]> {
-        return this.createWritePromise(createSScan(key, cursor, options));
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions & DecoderOption,
+    ): Promise<[GlideString, GlideString[]]> {
+        return this.createWritePromise(createSScan(key, cursor, options), {
+            decoder: options?.decoder,
+        });
     }
 
     /** Returns all the members of the set value stored at `key`.
@@ -2789,6 +2791,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The keys of the sets.
+     * @param options - The (Optional) {@link DecoderOption}.
      * @returns A `Set` of members which are present in at least one of the given sets.
      * If none of the sets exist, an empty `Set` will be returned.
      *
@@ -2803,10 +2806,13 @@ export class BaseClient {
      * console.log(result2); // Output: Set {'member1', 'member2'}
      * ```
      */
-    public async sunion(keys: string[]): Promise<Set<string>> {
-        return this.createWritePromise<string[]>(createSUnion(keys)).then(
-            (sunion) => new Set<string>(sunion),
-        );
+    public async sunion(
+        keys: GlideString[],
+        options?: DecoderOption,
+    ): Promise<Set<GlideString>> {
+        return this.createWritePromise<GlideString[]>(createSUnion(keys), {
+            decoder: options?.decoder,
+        }).then((sunion) => new Set<GlideString>(sunion));
     }
 
     /**
@@ -2827,8 +2833,8 @@ export class BaseClient {
      * ```
      */
     public async sunionstore(
-        destination: string,
-        keys: string[],
+        destination: GlideString,
+        keys: GlideString[],
     ): Promise<number> {
         return this.createWritePromise(createSUnionStore(destination, keys));
     }
@@ -4154,7 +4160,7 @@ export class BaseClient {
      * console.log(len2); // Output: 0
      * ```
      */
-    public async strlen(key: string): Promise<number> {
+    public async strlen(key: GlideString): Promise<number> {
         return this.createWritePromise(createStrlen(key));
     }
 

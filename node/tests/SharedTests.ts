@@ -30,6 +30,7 @@ import {
     GeospatialData,
     GlideClient,
     GlideClusterClient,
+    GlideString,
     InfBoundary,
     InfoOptions,
     InsertPosition,
@@ -1550,7 +1551,7 @@ export function runBaseTests(config: {
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual([]);
 
-                result = await client.sscan(key1, initialCursor);
+                let result2 = await client.sscan(key1, initialCursor);
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex]).toEqual([]);
 
@@ -1560,7 +1561,7 @@ export function runBaseTests(config: {
                     expect(result[resultCursorIndex]).toEqual(initialCursor);
                     expect(result[resultCollectionIndex]).toEqual([]);
 
-                    result = await client.sscan(key1, "-1");
+                    result2 = await client.sscan(key1, "-1");
                     expect(result[resultCursorIndex]).toEqual(initialCursor);
                     expect(result[resultCollectionIndex]).toEqual([]);
                 } else {
@@ -3081,6 +3082,20 @@ export function runBaseTests(config: {
                 );
                 expect(allResultMember).toEqual(true);
 
+                // Test with key, cursor, result value as binary buffers
+                const encodedResult = await client.sscan(
+                    Buffer.from(key1),
+                    Buffer.from(initialCursor),
+                    { decoder: Decoder.Bytes },
+                );
+                const encodedResultMembers = encodedResult[
+                    resultCollectionIndex
+                ] as GlideString[];
+                const allEncodedResultMembers = encodedResultMembers.every(
+                    (member) => charMembersSet.has(member.toString()),
+                );
+                expect(allEncodedResultMembers).toEqual(true);
+
                 // Testing sscan with match
                 result = await client.sscan(key1, initialCursor, {
                     match: "a",
@@ -3094,7 +3109,7 @@ export function runBaseTests(config: {
                 );
 
                 let resultCursor = "0";
-                let secondResultValues: string[] = [];
+                let secondResultValues: GlideString[] = [];
 
                 let isFirstLoop = true;
 
@@ -3174,6 +3189,19 @@ export function runBaseTests(config: {
                     new Set(["a", "b", "c", "d", "e"]),
                 );
 
+                // with return value as binary buffers
+                expect(
+                    await client.sunion([key1, Buffer.from(key2)], {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(
+                    new Set(
+                        ["a", "b", "c", "d", "e"].map((member) =>
+                            Buffer.from(member),
+                        ),
+                    ),
+                );
+
                 // invalid argument - key list must not be empty
                 await expect(client.sunion([])).rejects.toThrow();
 
@@ -3211,8 +3239,13 @@ export function runBaseTests(config: {
                     new Set(["a", "b", "c", "d", "e"]),
                 );
 
-                // overwrite existing set
-                expect(await client.sunionstore(key1, [key4, key2])).toEqual(5);
+                // overwrite existing set, test with binary option
+                expect(
+                    await client.sunionstore(Buffer.from(key1), [
+                        Buffer.from(key4),
+                        Buffer.from(key2),
+                    ]),
+                ).toEqual(5);
                 expect(await client.smembers(key1)).toEqual(
                     new Set(["a", "b", "c", "d", "e"]),
                 );
@@ -5507,7 +5540,9 @@ export function runBaseTests(config: {
                 expect(await client.set(key1, key1Value)).toEqual("OK");
                 expect(await client.strlen(key1)).toEqual(key1ValueLength);
 
-                expect(await client.strlen("nonExistKey")).toEqual(0);
+                expect(await client.strlen(Buffer.from("nonExistKey"))).toEqual(
+                    0,
+                );
 
                 const listName = "myList";
                 const listKey1Value = uuidv4();
