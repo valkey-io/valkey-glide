@@ -250,7 +250,8 @@ pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut Comman
 ///
 /// # Safety
 ///
-/// `free_error_message` can only be called once per `error_message`. Calling it twice is undefined behavior, since the address will be freed twice.
+/// `free_error_message` can only be called once per `error_message`. Calling it twice is undefined
+/// behavior, since the address will be freed twice.
 #[no_mangle]
 pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
     assert!(!error_message.is_null());
@@ -258,17 +259,17 @@ pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
 }
 
 /// Converts a double pointer to a vec.
-unsafe fn convert_double_pointer_to_vec(
-    data: *const *const c_char,
+unsafe fn convert_double_pointer_to_vec<'a>(
+    data: *const *const c_void,
     len: c_ulong,
     data_len: *const c_ulong,
-) -> Vec<Vec<u8>> {
+) -> Vec<&'a [u8]> {
     let string_ptrs = unsafe { from_raw_parts(data, len as usize) };
     let string_lengths = unsafe { from_raw_parts(data_len, len as usize) };
-    let mut result: Vec<Vec<u8>> = Vec::new();
+    let mut result = Vec::<&[u8]>::with_capacity(string_ptrs.len());
     for (i, &str_ptr) in string_ptrs.iter().enumerate() {
         let slice = unsafe { from_raw_parts(str_ptr as *const u8, string_lengths[i] as usize) };
-        result.push(slice.to_vec());
+        result.push(slice);
     }
     result
 }
@@ -293,25 +294,30 @@ pub unsafe extern "C" fn command(
     channel: usize,
     command_type: RequestType,
     arg_count: c_ulong,
-    args: *const *const c_char,
+    args: *const usize,
     args_len: *const c_ulong,
 ) {
     let client_adapter =
         unsafe { Box::leak(Box::from_raw(client_adapter_ptr as *mut ClientAdapter)) };
-    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before all operations have completed.
+    // The safety of this needs to be ensured by the calling code. Cannot dispose of the pointer before
+    // all operations have completed.
     let ptr_address = client_adapter_ptr as usize;
 
-    let arg_vec = unsafe { convert_double_pointer_to_vec(args, arg_count, args_len) };
+    let arg_vec =
+        unsafe { convert_double_pointer_to_vec(args as *const *const c_void, arg_count, args_len) };
 
     let mut client_clone = client_adapter.client.clone();
-    client_adapter.runtime.spawn(async move {
-        let mut cmd = command_type
-            .get_command()
-            .expect("Couldn't fetch command type");
-        for slice in arg_vec {
-            cmd.arg(slice);
-        }
 
+    // Create the command outside of the task to ensure that the command arguments passed
+    // from "go" are still valid
+    let mut cmd = command_type
+        .get_command()
+        .expect("Couldn't fetch command type");
+    for command_arg in arg_vec {
+        cmd.arg(command_arg);
+    }
+
+    client_adapter.runtime.spawn(async move {
         let result = client_clone.send_command(&cmd, None).await;
         let client_adapter = unsafe { Box::leak(Box::from_raw(ptr_address as *mut ClientAdapter)) };
         let value = match result {
