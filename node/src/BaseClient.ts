@@ -4732,7 +4732,7 @@ export class BaseClient {
      * @param values - field-value pairs to be added to the entry.
      * @param options - options detailing how to add to the stream.
      * @param options - (Optional) Additional Parameters:
-     * - (Optional) options detailing how to add to the stream.
+     * - (Optional) `StreamAddOptoins`: options detailing how to add to the stream.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns The id of the added entry, or `null` if `options.makeStream` is set to `false` and no stream with the matching `key` exists.
      */
@@ -5031,7 +5031,7 @@ export class BaseClient {
      * @param minIdleTime - The minimum idle time for the message to be claimed.
      * @param ids - An array of entry ids.
      * @param options - Additional Parameters:
-     * - (Optional) Stream claim options {@link StreamClaimOptions}.
+     * - (Optional) `StreamAddOptoins`: Stream claim options {@link StreamClaimOptions}.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A `Record` of message entries that are claimed by the consumer.
      *
@@ -5218,7 +5218,7 @@ export class BaseClient {
      * @param key - The key of the stream.
      * @param groupName - The newly created consumer group name.
      * @param id - Additional Parameters:
-     * - (Optional) Stream entry ID that specifies the last delivered entry in the stream from the new
+     * - (Optional) `StreamAddOptoins`: Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID `"$"` can be used to specify the last entry in the stream.
      * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns `"OK"`.
