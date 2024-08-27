@@ -2747,7 +2747,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - An `Array` of `Records`, where each mapping contains the attributes
      *     of a consumer for the given consumer group of the stream at `key`.
      */
-    public xinfoConsumers(key: string, group: string): T {
+    public xinfoConsumers(key: GlideString, group: GlideString): T {
         return this.addAndReturn(createXInfoConsumers(key, group));
     }
 
