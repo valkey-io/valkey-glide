@@ -3353,14 +3353,14 @@ describe("PubSub", () => {
 
                 // Test pubsubChannels with pattern
                 const channelsWithPattern =
-                    await client2.pubsubChannels(pattern);
+                    await client2.pubsubChannels({ pattern: pattern });
                 expect(new Set(channelsWithPattern)).toEqual(
                     new Set([channel1, channel2]),
                 );
 
                 // Test with non-matching pattern
                 const nonMatchingChannels =
-                    await client2.pubsubChannels("non_matching_*");
+                    await client2.pubsubChannels({ pattern: "non_matching_*" });
                 expect(nonMatchingChannels.length).toBe(0);
             } finally {
                 if (client1) {
@@ -3695,7 +3695,7 @@ describe("PubSub", () => {
                 // Test pubsubShardchannels with pattern
                 const channelsWithPattern = await (
                     client2 as GlideClusterClient
-                ).pubsubShardChannels(pattern);
+                ).pubsubShardChannels({ pattern: pattern });
                 expect(new Set(channelsWithPattern)).toEqual(
                     new Set([channel1, channel2]),
                 );
@@ -3703,7 +3703,7 @@ describe("PubSub", () => {
                 // Test with non-matching pattern
                 const nonMatchingChannels = await (
                     client2 as GlideClusterClient
-                ).pubsubShardChannels("non_matching_*");
+                ).pubsubShardChannels({ pattern: "non_matching_*" });
                 expect(nonMatchingChannels).toEqual([]);
             } finally {
                 if (client1) {
