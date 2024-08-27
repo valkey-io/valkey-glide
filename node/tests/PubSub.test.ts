@@ -3352,15 +3352,17 @@ describe("PubSub", () => {
                 );
 
                 // Test pubsubChannels with pattern
-                const channelsWithPattern =
-                    await client2.pubsubChannels({ pattern: pattern });
+                const channelsWithPattern = await client2.pubsubChannels({
+                    pattern: pattern,
+                });
                 expect(new Set(channelsWithPattern)).toEqual(
                     new Set([channel1, channel2]),
                 );
 
                 // Test with non-matching pattern
-                const nonMatchingChannels =
-                    await client2.pubsubChannels({ pattern: "non_matching_*" });
+                const nonMatchingChannels = await client2.pubsubChannels({
+                    pattern: "non_matching_*",
+                });
                 expect(nonMatchingChannels.length).toBe(0);
             } finally {
                 if (client1) {
