@@ -2697,17 +2697,34 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const keyEncoded = Buffer.from(key);
                 const valueList = ["member1", "member2", "member3", "member4"];
                 expect(await client.sadd(key, valueList)).toEqual(4);
                 expect(
                     await client.srem(key, ["member3", "nonExistingMember"]),
                 ).toEqual(1);
+
                 /// compare the 2 sets.
                 expect(await client.smembers(key)).toEqual(
                     new Set(["member1", "member2", "member4"]),
                 );
                 expect(await client.srem(key, ["member1"])).toEqual(1);
                 expect(await client.scard(key)).toEqual(2);
+
+                // with key and members as buffers
+                expect(
+                    await client.sadd(keyEncoded, [Buffer.from("member5")]),
+                ).toEqual(1);
+                expect(
+                    await client.srem(keyEncoded, [Buffer.from("member2")]),
+                ).toEqual(1);
+                expect(
+                    await client.smembers(keyEncoded, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(
+                    new Set([Buffer.from("member4"), Buffer.from("member5")]),
+                );
             }, protocol);
         },
         config.timeout,
@@ -3369,19 +3386,40 @@ export function runBaseTests(config: {
         `spop and spopCount test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key1 = uuidv4();
+                const key2 = uuidv4();
+                const key2Encoded = Buffer.from(key2);
                 let members = ["member1", "member2", "member3"];
-                expect(await client.sadd(key, members)).toEqual(3);
+                let members2 = ["member1", "member2", "member3"];
 
-                const result1 = await client.spop(key);
+                expect(await client.sadd(key1, members)).toEqual(3);
+                expect(await client.sadd(key2, members2)).toEqual(3);
+
+                const result1 = await client.spop(key1);
                 expect(members).toContain(result1);
 
                 members = members.filter((item) => item != result1);
-                const result2 = await client.spopCount(key, 2);
+                const result2 = await client.spopCount(key1, 2);
                 expect(result2).toEqual(new Set(members));
                 expect(await client.spop("nonExistingKey")).toEqual(null);
                 expect(await client.spopCount("nonExistingKey", 1)).toEqual(
                     new Set(),
+                );
+
+                // with keys and return values as buffers
+                const result3 = await client.spop(key2Encoded, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(members2).toContain(result3?.toString());
+
+                members2 = members2.filter(
+                    (item) => item != result3?.toString(),
+                );
+                const result4 = await client.spopCount(key2Encoded, 2, {
+                    decoder: Decoder.Bytes,
+                });
+                expect(result4).toEqual(
+                    new Set(members2.map((item) => Buffer.from(item))),
                 );
             }, protocol);
         },
