@@ -2659,9 +2659,9 @@ export class BaseClient {
      * ```
      */
     public async smove(
-        source: string,
-        destination: string,
-        member: string,
+        source: GlideString,
+        destination: GlideString,
+        member: GlideString,
     ): Promise<boolean> {
         return this.createWritePromise(
             createSMove(source, destination, member),
@@ -2682,7 +2682,7 @@ export class BaseClient {
      * console.log(result); // Output: 3
      * ```
      */
-    public async scard(key: string): Promise<number> {
+    public async scard(key: GlideString): Promise<number> {
         return this.createWritePromise(createSCard(key));
     }
 
@@ -2900,7 +2900,10 @@ export class BaseClient {
      * console.log(result); // Output: false - Indicates that "non_existing_member" does not exist in the set "my_set".
      * ```
      */
-    public async sismember(key: string, member: string): Promise<boolean> {
+    public async sismember(
+        key: GlideString,
+        member: GlideString,
+    ): Promise<boolean> {
         return this.createWritePromise(createSIsMember(key, member));
     }
 
@@ -2922,8 +2925,8 @@ export class BaseClient {
      * ```
      */
     public async smismember(
-        key: string,
-        members: string[],
+        key: GlideString,
+        members: GlideString[],
     ): Promise<boolean[]> {
         return this.createWritePromise(createSMIsMember(key, members));
     }
@@ -3000,6 +3003,7 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/srandmember/|valkey.io} for more details.
      *
      * @param key - The key from which to retrieve the set member.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns A random element from the set, or null if `key` does not exist.
      *
      * @example
@@ -3016,8 +3020,11 @@ export class BaseClient {
      * console.log(result); // Output: null
      * ```
      */
-    public async srandmember(key: string): Promise<string | null> {
-        return this.createWritePromise(createSRandMember(key));
+    public async srandmember(
+        key: GlideString,
+        options?: DecoderOption,
+    ): Promise<GlideString | null> {
+        return this.createWritePromise(createSRandMember(key), options);
     }
 
     /**
@@ -3029,6 +3036,7 @@ export class BaseClient {
      * @param count - The number of members to return.
      *                If `count` is positive, returns unique members.
      *                If `count` is negative, allows for duplicates members.
+     * @param options - (Optional) See {@link DecoderOption}.
      * @returns a list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      *
      * @example
@@ -3046,10 +3054,11 @@ export class BaseClient {
      * ```
      */
     public async srandmemberCount(
-        key: string,
+        key: GlideString,
         count: number,
-    ): Promise<string[]> {
-        return this.createWritePromise(createSRandMember(key, count));
+        options?: DecoderOption,
+    ): Promise<GlideString[]> {
+        return this.createWritePromise(createSRandMember(key, count), options);
     }
 
     /**

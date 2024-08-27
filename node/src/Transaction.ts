@@ -1348,7 +1348,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
      */
-    public smove(source: string, destination: string, member: string): T {
+    public smove(
+        source: GlideString,
+        destination: GlideString,
+        member: GlideString,
+    ): T {
         return this.addAndReturn(createSMove(source, destination, member));
     }
 
@@ -1359,7 +1363,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - the cardinality (number of elements) of the set, or 0 if key does not exist.
      */
-    public scard(key: string): T {
+    public scard(key: GlideString): T {
         return this.addAndReturn(createSCard(key));
     }
 
@@ -1470,7 +1474,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - `true` if the member exists in the set, `false` otherwise.
      * If `key` doesn't exist, it is treated as an empty set and the command returns `false`.
      */
-    public sismember(key: string, member: string): T {
+    public sismember(key: GlideString, member: GlideString): T {
         return this.addAndReturn(createSIsMember(key, member));
     }
 
@@ -1485,7 +1489,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - An `array` of `boolean` values, each indicating if the respective member exists in the set.
      */
-    public smismember(key: string, members: string[]): T {
+    public smismember(key: GlideString, members: GlideString[]): T {
         return this.addAndReturn(createSMIsMember(key, members));
     }
 
@@ -1522,7 +1526,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key - The key from which to retrieve the set member.
      * Command Response - A random element from the set, or null if `key` does not exist.
      */
-    public srandmember(key: string): T {
+    public srandmember(key: GlideString): T {
         return this.addAndReturn(createSRandMember(key));
     }
 
@@ -1536,7 +1540,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *                If `count` is negative, allows for duplicates members.
      * Command Response - A list of members from the set. If the set does not exist or is empty, an empty list will be returned.
      */
-    public srandmemberCount(key: string, count: number): T {
+    public srandmemberCount(key: GlideString, count: number): T {
         return this.addAndReturn(createSRandMember(key, count));
     }
 

@@ -1056,9 +1056,9 @@ export function createSMembers(key: GlideString): command_request.Command {
  * @internal
  */
 export function createSMove(
-    source: string,
-    destination: string,
-    member: string,
+    source: GlideString,
+    destination: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SMove, [source, destination, member]);
 }
@@ -1066,7 +1066,7 @@ export function createSMove(
 /**
  * @internal
  */
-export function createSCard(key: string): command_request.Command {
+export function createSCard(key: GlideString): command_request.Command {
     return createCommand(RequestType.SCard, [key]);
 }
 
@@ -1142,8 +1142,8 @@ export function createSUnionStore(
  * @internal
  */
 export function createSIsMember(
-    key: string,
-    member: string,
+    key: GlideString,
+    member: GlideString,
 ): command_request.Command {
     return createCommand(RequestType.SIsMember, [key, member]);
 }
@@ -1152,8 +1152,8 @@ export function createSIsMember(
  * @internal
  */
 export function createSMIsMember(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SMIsMember, [key].concat(members));
 }
@@ -1174,10 +1174,11 @@ export function createSPop(
  * @internal
  */
 export function createSRandMember(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.SRandMember, args);
 }
 
