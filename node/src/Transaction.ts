@@ -1322,7 +1322,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response -  An array of the cursor and the subset of the set held by `key`. The first element is always the `cursor` and for the next iteration of results.
      * The `cursor` will be `"0"` on the last iteration of the set. The second element is always an array of the subset of the set held in `key`.
      */
-    public sscan(key: string, cursor: string, options?: BaseScanOptions): T {
+    public sscan(
+        key: GlideString,
+        cursor: GlideString,
+        options?: BaseScanOptions,
+    ): T {
         return this.addAndReturn(createSScan(key, cursor, options));
     }
 
@@ -1446,7 +1450,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - A `Set` of members which are present in at least one of the given sets.
      * If none of the sets exist, an empty `Set` will be returned.
      */
-    public sunion(keys: string[]): T {
+    public sunion(keys: GlideString[]): T {
         return this.addAndReturn(createSUnion(keys), true);
     }
 
@@ -1461,7 +1465,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The number of elements in the resulting set.
      */
-    public sunionstore(destination: string, keys: string[]): T {
+    public sunionstore(destination: GlideString, keys: GlideString[]): T {
         return this.addAndReturn(createSUnionStore(destination, keys));
     }
 
@@ -2171,7 +2175,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - The length of the string value stored at `key`
      * If `key` does not exist, it is treated as an empty string, and the command returns 0.
      */
-    public strlen(key: string): T {
+    public strlen(key: GlideString): T {
         return this.addAndReturn(createStrlen(key));
     }
 
