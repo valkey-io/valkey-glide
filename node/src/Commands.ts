@@ -1073,7 +1073,7 @@ export function createSCard(key: string): command_request.Command {
 /**
  * @internal
  */
-export function createSInter(keys: string[]): command_request.Command {
+export function createSInter(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.SInter, keys);
 }
 
@@ -1081,10 +1081,10 @@ export function createSInter(keys: string[]): command_request.Command {
  * @internal
  */
 export function createSInterCard(
-    keys: string[],
+    keys: GlideString[],
     limit?: number,
 ): command_request.Command {
-    let args: string[] = keys;
+    let args: GlideString[] = keys;
     args.unshift(keys.length.toString());
 
     if (limit != undefined) {
@@ -1098,8 +1098,8 @@ export function createSInterCard(
  * @internal
  */
 export function createSInterStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SInterStore, [destination].concat(keys));
 }
@@ -1107,7 +1107,7 @@ export function createSInterStore(
 /**
  * @internal
  */
-export function createSDiff(keys: string[]): command_request.Command {
+export function createSDiff(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.SDiff, keys);
 }
 
@@ -1115,8 +1115,8 @@ export function createSDiff(keys: string[]): command_request.Command {
  * @internal
  */
 export function createSDiffStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SDiffStore, [destination].concat(keys));
 }
