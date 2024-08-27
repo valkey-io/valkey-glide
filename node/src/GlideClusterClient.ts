@@ -1227,10 +1227,10 @@ export class GlideClusterClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-shardchannels/|valkey.io} for details.
      *
-     * @param pattern - A glob-style pattern to match active shard channels.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active shard channels.
      *     If not provided, all active shard channels are returned.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active shard channels matching the given pattern.
      *          If no pattern is specified, all active shard channels are returned.
      *
@@ -1244,12 +1244,16 @@ export class GlideClusterClient extends BaseClient {
      * ```
      */
     public async pubsubShardChannels(
-        pattern?: GlideString,
-        decoder?: Decoder,
+        options?: {
+            pattern?: GlideString;
+        } & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createPubsubShardChannels(pattern), {
-            decoder,
-        });
+        return this.createWritePromise(
+            createPubsubShardChannels(options?.pattern),
+            {
+                decoder: options?.decoder,
+            },
+        );
     }
 
     /**

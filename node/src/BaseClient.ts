@@ -6512,10 +6512,10 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/pubsub-channels/|valkey.io} for more details.
      *
-     * @param pattern - A glob-style pattern to match active channels.
+     * @param options - (Optional) Additional parameters:
+     * - (Optional) `pattern`: A glob-style pattern to match active channels.
      *     If not provided, all active channels are returned.
-     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
-     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
+     * - (Optional) `decoder`: see {@link DecoderOption}.
      * @returns A list of currently active channels matching the given pattern.
      *          If no pattern is specified, all active channels are returned.
      *
@@ -6529,11 +6529,10 @@ export class BaseClient {
      * ```
      */
     public async pubsubChannels(
-        pattern?: GlideString,
-        decoder?: Decoder,
+        options?: { pattern?: GlideString } & DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createPubSubChannels(pattern), {
-            decoder,
+        return this.createWritePromise(createPubSubChannels(options?.pattern), {
+            decoder: options?.decoder,
         });
     }
 
