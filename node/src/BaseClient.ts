@@ -1663,9 +1663,9 @@ export class BaseClient {
 
     public async hkeys(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHKeys(key), { decoder: decoder });
+        return this.createWritePromise(createHKeys(key), options);
     }
 
     /** Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -1745,11 +1745,9 @@ export class BaseClient {
     public async hmget(
         key: GlideString,
         fields: GlideString[],
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<(GlideString | null)[]> {
-        return this.createWritePromise(createHMGet(key, fields), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHMGet(key, fields), options);
     }
 
     /** Returns if `field` is an existing field in the hash stored at `key`.
@@ -1940,11 +1938,9 @@ export class BaseClient {
      */
     public async hrandfield(
         key: GlideString,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString | null> {
-        return this.createWritePromise(createHRandField(key), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHRandField(key), options);
     }
 
     /**
@@ -2013,11 +2009,9 @@ export class BaseClient {
     public async hrandfieldCount(
         key: GlideString,
         count: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<GlideString[]> {
-        return this.createWritePromise(createHRandField(key, count), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHRandField(key, count), options);
     }
 
     /**
@@ -2044,11 +2038,9 @@ export class BaseClient {
     public async hrandfieldWithValues(
         key: GlideString,
         count: number,
-        decoder?: Decoder,
+        options?: DecoderOption,
     ): Promise<[GlideString, GlideString][]> {
-        return this.createWritePromise(createHRandField(key, count, true), {
-            decoder: decoder,
-        });
+        return this.createWritePromise(createHRandField(key, count, true), options);
     }
 
     /** Inserts all the specified values at the head of the list stored at `key`.
