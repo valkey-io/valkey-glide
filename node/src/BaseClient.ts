@@ -410,11 +410,15 @@ export type ScriptOptions = {
     /**
      * The keys that are used in the script.
      */
-    keys?: (string | Uint8Array)[];
+    keys?: GlideString[];
     /**
      * The arguments for the script.
      */
-    args?: (string | Uint8Array)[];
+    args?: GlideString[];
+    /**
+     * {@link Decoder} type which defines how to handle the responses. If not set, the default decoder from the client config will be used.
+     */
+    decoder?: Decoder;
 };
 
 function getRequestErrorClass(
@@ -676,23 +680,32 @@ export class BaseClient {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [
                 (resolveAns: T) => {
-                    if (resolveAns instanceof PointerResponse) {
-                        if (typeof resolveAns === "number") {
-                            resolveAns = valueFromSplitPointer(
-                                0,
-                                resolveAns,
-                                stringDecoder,
-                            ) as T;
-                        } else {
-                            resolveAns = valueFromSplitPointer(
-                                resolveAns.high!,
-                                resolveAns.low!,
-                                stringDecoder,
-                            ) as T;
+                    try {
+                        if (resolveAns instanceof PointerResponse) {
+                            if (typeof resolveAns === "number") {
+                                resolveAns = valueFromSplitPointer(
+                                    0,
+                                    resolveAns,
+                                    stringDecoder,
+                                ) as T;
+                            } else {
+                                resolveAns = valueFromSplitPointer(
+                                    resolveAns.high!,
+                                    resolveAns.low!,
+                                    stringDecoder,
+                                ) as T;
+                            }
                         }
-                    }
 
-                    resolve(resolveAns);
+                        resolve(resolveAns);
+                    } catch (err) {
+                        Logger.log(
+                            "error",
+                            "Decoder",
+                            `Decoding error: '${err}'`,
+                        );
+                        reject(err);
+                    }
                 },
                 reject,
             ];
@@ -1088,8 +1101,8 @@ export class BaseClient {
      * ```
      */
     public async set(
-        key: string | Uint8Array,
-        value: string | Uint8Array,
+        key: GlideString,
+        value: GlideString,
         options?: SetOptions,
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));
@@ -2344,11 +2357,13 @@ export class BaseClient {
      * ```
      */
     public async lset(
-        key: string,
+        key: GlideString,
         index: number,
-        element: string,
+        element: GlideString,
     ): Promise<"OK"> {
-        return this.createWritePromise(createLSet(key, index, element));
+        return this.createWritePromise(createLSet(key, index, element), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Trim an existing list so that it will contain only the specified range of elements specified.
@@ -2373,8 +2388,14 @@ export class BaseClient {
      * console.log(result); // Output: 'OK' - Indicates that the list has been trimmed to contain elements from 0 to 1.
      * ```
      */
-    public async ltrim(key: string, start: number, end: number): Promise<"OK"> {
-        return this.createWritePromise(createLTrim(key, start, end));
+    public async ltrim(
+        key: GlideString,
+        start: number,
+        end: number,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createLTrim(key, start, end), {
+            decoder: Decoder.String,
+        });
     }
 
     /** Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
@@ -2396,9 +2417,9 @@ export class BaseClient {
      * ```
      */
     public async lrem(
-        key: string,
+        key: GlideString,
         count: number,
-        element: string,
+        element: GlideString,
     ): Promise<number> {
         return this.createWritePromise(createLRem(key, count, element));
     }
@@ -2449,7 +2470,10 @@ export class BaseClient {
      * console.log(result);  // Output: 2 - Indicates that the list has two elements.
      * ```
      * */
-    public async rpushx(key: string, elements: string[]): Promise<number> {
+    public async rpushx(
+        key: GlideString,
+        elements: GlideString[],
+    ): Promise<number> {
         return this.createWritePromise(createRPushX(key, elements));
     }
 
@@ -3301,24 +3325,26 @@ export class BaseClient {
             hash: script.getHash(),
             keys: option?.keys?.map((item) => {
                 if (typeof item === "string") {
-                    // Convert the string to a Uint8Array
+                    // Convert the string to a Buffer
                     return Buffer.from(item);
                 } else {
-                    // If it's already a Uint8Array, just return it
+                    // If it's already a Buffer, just return it
                     return item;
                 }
             }),
             args: option?.args?.map((item) => {
                 if (typeof item === "string") {
-                    // Convert the string to a Uint8Array
+                    // Convert the string to a Buffer
                     return Buffer.from(item);
                 } else {
-                    // If it's already a Uint8Array, just return it
+                    // If it's already a Buffer, just return it
                     return item;
                 }
             }),
         });
-        return this.createWritePromise(scriptInvocation);
+        return this.createWritePromise(scriptInvocation, {
+            decoder: option?.decoder,
+        });
     }
 
     /**
@@ -5686,6 +5712,8 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The invoked function's return value.
      *
      * @example
@@ -5695,11 +5723,14 @@ export class BaseClient {
      * ```
      */
     public async fcall(
-        func: string,
-        keys: string[],
-        args: string[],
-    ): Promise<string> {
-        return this.createWritePromise(createFCall(func, keys, args));
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+        decoder?: Decoder,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(createFCall(func, keys, args), {
+            decoder,
+        });
     }
 
     /**
@@ -5713,6 +5744,8 @@ export class BaseClient {
      * @param keys - A list of `keys` accessed by the function. To ensure the correct execution of functions,
      *     all names of keys that a function accesses must be explicitly provided as `keys`.
      * @param args - A list of `function` arguments and it should not represent names of keys.
+     * @param decoder - (Optional) {@link Decoder} type which defines how to handle the response.
+     *     If not set, the {@link BaseClientConfiguration.defaultDecoder|default decoder} will be used.
      * @returns The invoked function's return value.
      *
      * @example
@@ -5723,11 +5756,14 @@ export class BaseClient {
      * ```
      */
     public async fcallReadonly(
-        func: string,
-        keys: string[],
-        args: string[],
-    ): Promise<string> {
-        return this.createWritePromise(createFCallReadOnly(func, keys, args));
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+        decoder?: Decoder,
+    ): Promise<ReturnType> {
+        return this.createWritePromise(createFCallReadOnly(func, keys, args), {
+            decoder,
+        });
     }
 
     /**
@@ -6500,13 +6536,13 @@ export class BaseClient {
      * ```
      */
     public async blmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         timeout: number,
         count?: number,
     ): Promise<Record<string, string[]>> {
         return this.createWritePromise(
-            createBLMPop(timeout, keys, direction, count),
+            createBLMPop(keys, direction, timeout, count),
         );
     }
 

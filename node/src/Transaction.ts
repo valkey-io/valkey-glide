@@ -1194,7 +1194,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - Always "OK".
      */
-    public lset(key: string, index: number, element: string): T {
+    public lset(key: GlideString, index: number, element: GlideString): T {
         return this.addAndReturn(createLSet(key, index, element));
     }
 
@@ -1213,7 +1213,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * If `end` exceeds the actual end of the list, it will be treated like the last element of the list.
      * If `key` does not exist the command will be ignored.
      */
-    public ltrim(key: string, start: number, end: number): T {
+    public ltrim(key: GlideString, start: number, end: number): T {
         return this.addAndReturn(createLTrim(key, start, end));
     }
 
@@ -1229,7 +1229,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - the number of the removed elements.
      * If `key` does not exist, 0 is returned.
      */
-    public lrem(key: string, count: number, element: string): T {
+    public lrem(key: GlideString, count: number, element: string): T {
         return this.addAndReturn(createLRem(key, count, element));
     }
 
@@ -1258,7 +1258,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The length of the list after the push operation.
      */
-    public rpushx(key: string, elements: string[]): T {
+    public rpushx(key: GlideString, elements: GlideString[]): T {
         return this.addAndReturn(createRPushX(key, elements));
     }
 
@@ -3193,7 +3193,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The invoked function's return value.
      */
-    public fcall(func: string, keys: string[], args: string[]): T {
+    public fcall(
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): T {
         return this.addAndReturn(createFCall(func, keys, args));
     }
 
@@ -3210,7 +3214,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * Command Response - The invoked function's return value.
      */
-    public fcallReadonly(func: string, keys: string[], args: string[]): T {
+    public fcallReadonly(
+        func: GlideString,
+        keys: GlideString[],
+        args: GlideString[],
+    ): T {
         return this.addAndReturn(createFCallReadOnly(func, keys, args));
     }
 
@@ -3222,9 +3230,9 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param libraryCode - The library name to delete.
      *
-     * Command Response - `OK`.
+     * Command Response - `"OK"`.
      */
-    public functionDelete(libraryCode: string): T {
+    public functionDelete(libraryCode: GlideString): T {
         return this.addAndReturn(createFunctionDelete(libraryCode));
     }
 
@@ -3235,12 +3243,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
-     * @param replace - Whether the given library should overwrite a library with the same name if it
+     * @param replace - (Optional) Whether the given library should overwrite a library with the same name if it
      *     already exists.
      *
      * Command Response - The library name that was loaded.
      */
-    public functionLoad(libraryCode: string, replace?: boolean): T {
+    public functionLoad(libraryCode: GlideString, replace?: boolean): T {
         return this.addAndReturn(createFunctionLoad(libraryCode, replace));
     }
 
@@ -3250,8 +3258,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param mode - The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
-     * Command Response - `OK`.
+     * @param mode - (Optional) The flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
+     * Command Response - `"OK"`.
      */
     public functionFlush(mode?: FlushMode): T {
         return this.addAndReturn(createFunctionFlush(mode));
@@ -3263,7 +3271,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
      * @remarks Since Valkey version 7.0.0.
      *
-     * @param options - Parameters to filter and request additional info.
+     * @param options - (Optional) Parameters to filter and request additional info.
      *
      * Command Response - Info about all or selected libraries and their functions in {@link FunctionListResponse} format.
      */
@@ -3806,12 +3814,12 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *     If no member could be popped and the timeout expired, returns `null`.
      */
     public blmpop(
-        keys: string[],
+        keys: GlideString[],
         direction: ListDirection,
         timeout: number,
         count?: number,
     ): T {
-        return this.addAndReturn(createBLMPop(timeout, keys, direction, count));
+        return this.addAndReturn(createBLMPop(keys, direction, timeout, count));
     }
 
     /**

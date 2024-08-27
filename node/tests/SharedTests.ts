@@ -2112,7 +2112,6 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const key3 = uuidv4();
-
                 expect(await client.lpush(key1, ["0"])).toEqual(1);
                 expect(await client.lpushx(key1, ["1", "2", "3"])).toEqual(4);
                 expect(await client.lrange(key1, 0, -1)).toEqual([
@@ -2505,6 +2504,17 @@ export function runBaseTests(config: {
                 await expect(client.lset(nonListKey, 0, "b")).rejects.toThrow(
                     RequestError,
                 );
+
+                //test lset for binary key and element values
+                const key2 = uuidv4();
+                expect(await client.lpush(key2, lpushArgs)).toEqual(4);
+                // assert lset result
+                expect(
+                    await client.lset(Buffer.from(key2), index, element),
+                ).toEqual("OK");
+                expect(await client.lrange(key2, 0, negativeIndex)).toEqual(
+                    expectedList,
+                );
             }, protocol);
         },
         config.timeout,
@@ -2536,6 +2546,17 @@ export function runBaseTests(config: {
                         "Operation against a key holding the wrong kind of value",
                     );
                 }
+
+                //test for binary key as input to the command
+                const key2 = uuidv4();
+                expect(await client.lpush(key2, valueList)).toEqual(4);
+                expect(await client.ltrim(Buffer.from(key2), 0, 1)).toEqual(
+                    "OK",
+                );
+                expect(await client.lrange(key2, 0, -1)).toEqual([
+                    "value1",
+                    "value2",
+                ]);
             }, protocol);
         },
         config.timeout,
@@ -2545,7 +2566,7 @@ export function runBaseTests(config: {
         `lrem with existing key and non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
+                const key1 = uuidv4();
                 const valueList = [
                     "value1",
                     "value2",
@@ -2553,23 +2574,39 @@ export function runBaseTests(config: {
                     "value1",
                     "value2",
                 ];
-                expect(await client.lpush(key, valueList)).toEqual(5);
-                expect(await client.lrem(key, 2, "value1")).toEqual(2);
-                expect(await client.lrange(key, 0, -1)).toEqual([
+                expect(await client.lpush(key1, valueList)).toEqual(5);
+                expect(await client.lrem(key1, 2, "value1")).toEqual(2);
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "value2",
                     "value2",
                     "value1",
                 ]);
-                expect(await client.lrem(key, -1, "value2")).toEqual(1);
-                expect(await client.lrange(key, 0, -1)).toEqual([
+                expect(await client.lrem(key1, -1, "value2")).toEqual(1);
+                expect(await client.lrange(key1, 0, -1)).toEqual([
                     "value2",
                     "value1",
                 ]);
-                expect(await client.lrem(key, 0, "value2")).toEqual(1);
-                expect(await client.lrange(key, 0, -1)).toEqual(["value1"]);
+                expect(await client.lrem(key1, 0, "value2")).toEqual(1);
+                expect(await client.lrange(key1, 0, -1)).toEqual(["value1"]);
                 expect(await client.lrem("nonExistingKey", 2, "value")).toEqual(
                     0,
                 );
+
+                // test for binary key and element as input to the command
+                const key2 = uuidv4();
+                expect(await client.lpush(key2, valueList)).toEqual(5);
+                expect(
+                    await client.lrem(
+                        Buffer.from(key2),
+                        2,
+                        Buffer.from("value1"),
+                    ),
+                ).toEqual(2);
+                expect(await client.lrange(key2, 0, -1)).toEqual([
+                    "value2",
+                    "value2",
+                    "value1",
+                ]);
             }, protocol);
         },
         config.timeout,
@@ -2667,6 +2704,23 @@ export function runBaseTests(config: {
                 await expect(client.rpushx(key2, [])).rejects.toThrow(
                     RequestError,
                 );
+
+                //test for binary key and elemnts as inputs to the command.
+                const key4 = uuidv4();
+                expect(await client.rpush(key4, ["0"])).toEqual(1);
+                expect(
+                    await client.rpushx(Buffer.from(key4), [
+                        Buffer.from("1"),
+                        Buffer.from("2"),
+                        Buffer.from("3"),
+                    ]),
+                ).toEqual(4);
+                expect(await client.lrange(key4, 0, -1)).toEqual([
+                    "0",
+                    "1",
+                    "2",
+                    "3",
+                ]);
             }, protocol);
         },
         config.timeout,
@@ -3653,7 +3707,69 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `script test_%p`,
+        `script test_decoder_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = Buffer.from(uuidv4());
+                const key2 = Buffer.from(uuidv4());
+
+                let script = new Script(Buffer.from("return 'Hello'"));
+                expect(
+                    await client.invokeScript(script, {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("Hello"));
+
+                script = new Script(
+                    Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
+                );
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key1],
+                        args: [Buffer.from("value1")],
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual("OK");
+
+                /// Reuse the same script with different parameters.
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key2],
+                        args: [Buffer.from("value2")],
+                    }),
+                ).toEqual("OK");
+
+                script = new Script(
+                    Buffer.from("return redis.call('GET', KEYS[1])"),
+                );
+                expect(
+                    await client.invokeScript(script, { keys: [key1] }),
+                ).toEqual("value1");
+
+                expect(
+                    await client.invokeScript(script, { keys: [key2] }),
+                ).toEqual("value2");
+                // Get bytes rsponse
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key1],
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("value1"));
+
+                expect(
+                    await client.invokeScript(script, {
+                        keys: [key2],
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual(Buffer.from("value2"));
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script test_binary_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = Buffer.from(uuidv4());
@@ -3696,7 +3812,7 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `script test_binary_%p`,
+        `script test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
@@ -10601,6 +10717,44 @@ export function runBaseTests(config: {
                 await expect(
                     client.blmpop([nonListKey], ListDirection.RIGHT, 0.1, 1),
                 ).rejects.toThrow(RequestError);
+
+                // Test with single binary key array as input
+                const key3 = "{key}" + uuidv4();
+                const singleKeyArrayWithKey3 = [Buffer.from(key3)];
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key3, lpushArgs)).toEqual(5);
+                const expectedWithKey3 = { [key3]: ["five"] };
+
+                // checking correct result from popping
+                expect(
+                    await client.blmpop(
+                        singleKeyArrayWithKey3,
+                        ListDirection.LEFT,
+                        0.1,
+                    ),
+                ).toEqual(expectedWithKey3);
+
+                // test with multiple binary keys array as input
+                const key4 = "{key}" + uuidv4();
+                const multiKeyArrayWithKey3AndKey4 = [
+                    Buffer.from(key4),
+                    Buffer.from(key3),
+                ];
+
+                // pushing to the arrays to be popped
+                expect(await client.lpush(key4, lpushArgs)).toEqual(5);
+                const expectedWithKey4 = { [key4]: ["one", "two"] };
+
+                // checking correct result from popping
+                expect(
+                    await client.blmpop(
+                        multiKeyArrayWithKey3AndKey4,
+                        ListDirection.RIGHT,
+                        0.1,
+                        2,
+                    ),
+                ).toEqual(expectedWithKey4);
             }, protocol);
         },
         config.timeout,
