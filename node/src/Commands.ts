@@ -1011,8 +1011,8 @@ export function createRPop(
  * @internal
  */
 export function createSAdd(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SAdd, [key].concat(members));
 }
@@ -1021,8 +1021,8 @@ export function createSAdd(
  * @internal
  */
 export function createSRem(
-    key: string,
-    members: string[],
+    key: GlideString,
+    members: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SRem, [key].concat(members));
 }
@@ -1047,7 +1047,7 @@ export function createSScan(
 /**
  * @internal
  */
-export function createSMembers(key: string): command_request.Command {
+export function createSMembers(key: GlideString): command_request.Command {
     return createCommand(RequestType.SMembers, [key]);
 }
 
@@ -1162,10 +1162,11 @@ export function createSMIsMember(
  * @internal
  */
 export function createSPop(
-    key: string,
+    key: GlideString,
     count?: number,
 ): command_request.Command {
-    const args: string[] = count == undefined ? [key] : [key, count.toString()];
+    const args: GlideString[] =
+        count == undefined ? [key] : [key, count.toString()];
     return createCommand(RequestType.SPop, args);
 }
 
