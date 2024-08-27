@@ -1031,11 +1031,11 @@ export function createSRem(
  * @internal
  */
 export function createSScan(
-    key: string,
-    cursor: string,
+    key: GlideString,
+    cursor: GlideString,
     options?: BaseScanOptions,
 ): command_request.Command {
-    let args: string[] = [key, cursor];
+    let args: GlideString[] = [key, cursor];
 
     if (options) {
         args = args.concat(convertBaseScanOptionsToArgsArray(options));
@@ -1124,7 +1124,7 @@ export function createSDiffStore(
 /**
  * @internal
  */
-export function createSUnion(keys: string[]): command_request.Command {
+export function createSUnion(keys: GlideString[]): command_request.Command {
     return createCommand(RequestType.SUnion, keys);
 }
 
@@ -1132,8 +1132,8 @@ export function createSUnion(keys: string[]): command_request.Command {
  * @internal
  */
 export function createSUnionStore(
-    destination: string,
-    keys: string[],
+    destination: GlideString,
+    keys: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.SUnionStore, [destination].concat(keys));
 }
@@ -1852,7 +1852,7 @@ export function createType(key: GlideString): command_request.Command {
 /**
  * @internal
  */
-export function createStrlen(key: string): command_request.Command {
+export function createStrlen(key: GlideString): command_request.Command {
     return createCommand(RequestType.Strlen, [key]);
 }
 
