@@ -2004,7 +2004,7 @@ export function runBaseTests(config: {
                     decoder: Decoder.Bytes,
                 });
                 expect(result.length).toEqual(5);
-                result.map((r) => expect(encodedFields).toContain(r));
+                result.map((r) => expect(encodedFields).toContainEqual(r));
 
                 // With values - positive count
                 let result2 = await client.hrandfieldWithValues(
