@@ -1375,7 +1375,11 @@ export function runBaseTests(config: {
 
                 // remove one key
                 expect(await client.hdel(key, [field1])).toEqual(1);
-                expect(await client.hkeys(Buffer.from(key), { decoder: Decoder.Bytes })).toEqual([field2]);
+                expect(
+                    await client.hkeys(Buffer.from(key), {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toEqual([field2]);
 
                 // non-existing key returns an empty list
                 expect(await client.hkeys("nonExistingKey")).toEqual([]);
@@ -1691,10 +1695,11 @@ export function runBaseTests(config: {
                     ]),
                 ).toEqual([value, null, value]);
                 expect(
-                    await client.hmget(Buffer.from("nonExistingKey"), [
-                        field1,
-                        field2,
-                    ], { decoder: Decoder.Bytes }),
+                    await client.hmget(
+                        Buffer.from("nonExistingKey"),
+                        [field1, field2],
+                        { decoder: Decoder.Bytes },
+                    ),
                 ).toEqual([null, null]);
             }, protocol);
         },
@@ -1972,10 +1977,12 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
 
                 // key does not exist
-                expect(await client.hrandfield(Buffer.from(key1), { decoder: Decoder.Bytes })).toBeNull();
                 expect(
-                    await client.hrandfieldCount(key1, 5),
-                ).toEqual([]);
+                    await client.hrandfield(Buffer.from(key1), {
+                        decoder: Decoder.Bytes,
+                    }),
+                ).toBeNull();
+                expect(await client.hrandfieldCount(key1, 5)).toEqual([]);
                 expect(await client.hrandfieldWithValues(key1, 5)).toEqual([]);
 
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
@@ -1990,7 +1997,9 @@ export function runBaseTests(config: {
                 expect(result).toEqual(fields);
 
                 // With Count - negative count
-                result = await client.hrandfieldCount(Buffer.from(key1), -5, { decoder: Decoder.Bytes });
+                result = await client.hrandfieldCount(Buffer.from(key1), -5, {
+                    decoder: Decoder.Bytes,
+                });
                 expect(result.length).toEqual(5);
                 result.map((r) => expect(fields).toContain(r));
 
@@ -1998,7 +2007,7 @@ export function runBaseTests(config: {
                 let result2 = await client.hrandfieldWithValues(
                     Buffer.from(key1),
                     5,
-                    { decoder: Decoder.Bytes }
+                    { decoder: Decoder.Bytes },
                 );
                 expect(result2).toEqual(entries);
 
