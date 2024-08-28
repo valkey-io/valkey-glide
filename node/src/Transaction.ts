@@ -5,6 +5,7 @@
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     GlideString,
+    HashDataType,
     ReadFrom, // eslint-disable-line @typescript-eslint/no-unused-vars
 } from "./BaseClient";
 
@@ -804,13 +805,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
+     * @param fieldValueList - A list of objects with field and value as keys of the objects. See - @type {HashDataType}
      * to be set in the hash stored at the specified key.
      *
      * Command Response - The number of fields that were added.
      */
-    public hset(key: GlideString, fieldValueMap: Record<string, string>): T {
-        return this.addAndReturn(createHSet(key, fieldValueMap));
+    public hset(key: GlideString, fieldValueList: HashDataType): T {
+        return this.addAndReturn(createHSet(key, fieldValueList));
     }
 
     /**

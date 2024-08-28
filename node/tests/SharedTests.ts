@@ -31,6 +31,7 @@ import {
     GlideClient,
     GlideClusterClient,
     GlideString,
+    HashDataType,
     InfBoundary,
     InfoOptions,
     InsertPosition,
@@ -312,10 +313,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(oldResult).toContain("cmdstat_set");
                 expect(await client.configResetStat()).toEqual("OK");
 
@@ -323,10 +324,10 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.info([InfoOptions.Commandstats])
                         : Object.values(
-                              await client.info({
-                                  sections: [InfoOptions.Commandstats],
-                              }),
-                          ).join();
+                            await client.info({
+                                sections: [InfoOptions.Commandstats],
+                            }),
+                        ).join();
                 expect(result).not.toContain("cmdstat_set");
             }, protocol);
         },
@@ -353,8 +354,8 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.exec(new Transaction().lastsave())
                         : await client.exec(
-                              new ClusterTransaction().lastsave(),
-                          );
+                            new ClusterTransaction().lastsave(),
+                        );
                 expect(response?.[0]).toBeGreaterThan(yesterday);
             }, protocol);
         },
@@ -1332,13 +1333,19 @@ export function runBaseTests(config: {
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const value = uuidv4();
-                const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value,
-                };
+                const fieldValueList: HashDataType = [
+                    {
+                        field: field1,
+                        value,
+                    },
+                    {
+                        field: field2,
+                        value,
+                    },
+                ];
                 const valueEncoded = Buffer.from(value);
 
-                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(await client.hset(key, fieldValueList)).toEqual(2);
                 expect(
                     await client.hget(Buffer.from(key), Buffer.from(field1)),
                 ).toEqual(value);
@@ -1372,14 +1379,20 @@ export function runBaseTests(config: {
                 const field2 = uuidv4();
                 const value = uuidv4();
                 const value2 = uuidv4();
-                const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value2,
-                };
+                const fieldValueList = [
+                    {
+                        field: field1,
+                        value,
+                    },
+                    {
+                        field: field2,
+                        value: value2,
+                    },
+                ];
                 const field2Encoded = Buffer.from(field2);
 
                 // set up hash with two keys/values
-                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                expect(await client.hset(key, fieldValueList)).toEqual(2);
                 expect(await client.hkeys(key)).toEqual([field1, field2]);
 
                 // remove one key
@@ -1400,7 +1413,7 @@ export function runBaseTests(config: {
         },
         config.timeout,
     );
-
+    // TO DO: fix this test.
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `hscan test_%p`,
         async (protocol) => {
@@ -1412,27 +1425,33 @@ export function runBaseTests(config: {
                 const resultCollectionIndex = 1;
 
                 // Setup test data - use a large number of entries to force an iterative cursor.
-                const numberMap: Record<string, string> = {};
+                const numberFieldList: HashDataType = [];
 
                 for (let i = 0; i < 50000; i++) {
-                    numberMap[i.toString()] = "num" + i;
+                    numberFieldList.push({
+                        field: i.toString(),
+                        value: "num" + i,
+                    });
                 }
 
                 const charMembers = ["a", "b", "c", "d", "e"];
-                const charMap: Record<string, string> = {};
-
+                const charFieldList: HashDataType = [];
                 for (let i = 0; i < charMembers.length; i++) {
-                    charMap[charMembers[i]] = i.toString();
+                    charFieldList.push({
+                        field: charMembers[i],
+                        value: i.toString(),
+                    });
                 }
 
                 // Result contains the whole set
-                expect(await client.hset(key1, charMap)).toEqual(
+                expect(await client.hset(key1, charFieldList)).toEqual(
                     charMembers.length,
                 );
                 let result = await client.hscan(key1, initialCursor);
+                console.log("result=====", result);
                 expect(result[resultCursorIndex]).toEqual(initialCursor);
                 expect(result[resultCollectionIndex].length).toEqual(
-                    Object.keys(charMap).length * 2, // Length includes the score which is twice the map size
+                    charFieldList.length * 2, // Length includes the score which is twice the map size
                 );
 
                 const resultArray = result[resultCollectionIndex];
@@ -1445,14 +1464,15 @@ export function runBaseTests(config: {
                 }
 
                 // Verify if all keys from charMap are in resultKeys
+                const fieldValuesArray = charFieldList.map((o) => o.field);
                 const allKeysIncluded = resultKeys.every(
-                    (key) => key in charMap,
+                    (key) => key in fieldValuesArray,
                 );
                 expect(allKeysIncluded).toEqual(true);
-
-                const allValuesIncluded = Object.values(charMap).every(
-                    (value) => value in resultValues,
-                );
+                //TO DO: remove toString() after updating string in return type of hscan to GlideString
+                const allValuesIncluded = charFieldList
+                    .map((o) => o.value)
+                    .every((value) => value.toString() in resultValues);
                 expect(allValuesIncluded).toEqual(true);
 
                 // Test hscan with match
@@ -1464,8 +1484,8 @@ export function runBaseTests(config: {
                 expect(result[resultCollectionIndex]).toEqual(["a", "0"]);
 
                 // Set up testing data with the numberMap set to be used for the next set test keys and test results.
-                expect(await client.hset(key1, numberMap)).toEqual(
-                    Object.keys(numberMap).length,
+                expect(await client.hset(key1, numberFieldList)).toEqual(
+                    numberFieldList.length,
                 );
 
                 let resultCursor = initialCursor;
@@ -1510,14 +1530,16 @@ export function runBaseTests(config: {
                 } while (resultCursor != initialCursor); // 0 is returned for the cursor of the last iteration.
 
                 // Verify all data is found in hscan
-                const allSecondResultKeys = Object.keys(numberMap).every(
-                    (key) => key in secondResultAllKeys,
-                );
+                const allSecondResultKeys = numberFieldList
+                    .map((o) => o.field)
+                    .every((key) => key.toString() in secondResultAllKeys);
                 expect(allSecondResultKeys).toEqual(true);
 
-                const allSecondResultValues = Object.keys(numberMap).every(
-                    (value) => value in secondResultAllValues,
-                );
+                const allSecondResultValues = numberFieldList
+                    .map((o) => o.value)
+                    .every(
+                        (value) => value.toString() in secondResultAllValues,
+                    );
                 expect(allSecondResultValues).toEqual(true);
 
                 // Test match pattern
@@ -1664,13 +1686,22 @@ export function runBaseTests(config: {
                 const field2 = uuidv4();
                 const field3 = uuidv4();
                 const value = uuidv4();
-                const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value,
-                    [field3]: value,
-                };
+                const fieldValueList = [
+                    {
+                        field: field1,
+                        value,
+                    },
+                    {
+                        field: field2,
+                        value,
+                    },
+                    {
+                        field: field3,
+                        value,
+                    },
+                ];
 
-                expect(await client.hset(key, fieldValueMap)).toEqual(3);
+                expect(await client.hset(key, fieldValueList)).toEqual(3);
                 expect(
                     await client.hdel(Buffer.from(key), [field1, field2]),
                 ).toEqual(2);
@@ -1691,10 +1722,16 @@ export function runBaseTests(config: {
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const value = uuidv4();
-                const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value,
-                };
+                const fieldValueMap = [
+                    {
+                        field: field1,
+                        value,
+                    },
+                    {
+                        field: field2,
+                        value,
+                    },
+                ];
                 expect(await client.hset(key, fieldValueMap)).toEqual(2);
                 expect(
                     await client.hmget(key, [
@@ -1722,11 +1759,12 @@ export function runBaseTests(config: {
                 const key = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const fieldValueMap = {
-                    [field1]: "value1",
-                    [field2]: "value2",
-                };
-                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                const fieldValueList = [{
+                    field: field1, value: "value1"
+                }, {
+                    field: field2, value: "value2",
+                }];
+                expect(await client.hset(key, fieldValueList)).toEqual(2);
                 expect(
                     await client.hexists(Buffer.from(key), Buffer.from(field1)),
                 ).toEqual(true);
@@ -1749,11 +1787,17 @@ export function runBaseTests(config: {
                 const field1 = uuidv4();
                 const field2 = uuidv4();
                 const value = uuidv4();
-                const fieldValueMap = {
-                    [field1]: value,
-                    [field2]: value,
-                };
-                expect(await client.hset(key, fieldValueMap)).toEqual(2);
+                const fieldValueList = [
+                    {
+                        field: field1,
+                        value,
+                    },
+                    {
+                        field: field2,
+                        value,
+                    },
+                ];
+                expect(await client.hset(key, fieldValueList)).toEqual(2);
 
                 expect(await client.hgetall(key)).toEqual({
                     [field1]: value,
@@ -1774,10 +1818,13 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field = uuidv4();
-                const fieldValueMap = {
-                    [field]: "10",
-                };
-                expect(await client.hset(key, fieldValueMap)).toEqual(1);
+                const fieldValueList = [
+                    {
+                        field,
+                        value: "10",
+                    },
+                ];
+                expect(await client.hset(key, fieldValueList)).toEqual(1);
                 expect(await client.hincrBy(key, field, 1)).toEqual(11);
                 expect(
                     await client.hincrBy(
@@ -1805,17 +1852,20 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
                 const field = uuidv4();
-                const fieldValueMap = {
-                    [field]: "10",
-                };
+                const fieldValueList = [
+                    {
+                        field,
+                        value: "10",
+                    },
+                ];
                 expect(
                     await client.hincrBy("nonExistingKey", field, 1),
                 ).toEqual(1);
-                expect(await client.hset(key1, fieldValueMap)).toEqual(1);
+                expect(await client.hset(key1, fieldValueList)).toEqual(1);
                 expect(
                     await client.hincrBy(key1, "nonExistingField", 2),
                 ).toEqual(2);
-                expect(await client.hset(key2, fieldValueMap)).toEqual(1);
+                expect(await client.hset(key2, fieldValueList)).toEqual(1);
                 expect(
                     await client.hincrByFloat(key2, "nonExistingField", -0.5),
                 ).toEqual(-0.5);
@@ -1830,10 +1880,13 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
                 const field = uuidv4();
-                const fieldValueMap = {
-                    [field]: "foo",
-                };
-                expect(await client.hset(key, fieldValueMap)).toEqual(1);
+                const fieldValueList = [
+                    {
+                        field,
+                        value: "foo",
+                    },
+                ];
+                expect(await client.hset(key, fieldValueList)).toEqual(1);
 
                 try {
                     expect(await client.hincrBy(key, field, 2)).toThrow();
@@ -1864,12 +1917,18 @@ export function runBaseTests(config: {
                 const key1 = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const fieldValueMap = {
-                    [field1]: "value1",
-                    [field2]: "value2",
-                };
+                const fieldValueList = [
+                    {
+                        field: field1,
+                        value: "value1",
+                    },
+                    {
+                        field: field2,
+                        value: "value2",
+                    },
+                ];
 
-                expect(await client.hset(key1, fieldValueMap)).toEqual(2);
+                expect(await client.hset(key1, fieldValueList)).toEqual(2);
                 expect(await client.hlen(key1)).toEqual(2);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
                 expect(await client.hlen(Buffer.from(key1))).toEqual(1);
@@ -1887,16 +1946,21 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
-                const fieldValueMap = {
-                    [field1]: "value1",
-                    [field2]: "value2",
-                };
-
+                const fieldValueList = [
+                    {
+                        field: field1,
+                        value: "value1",
+                    },
+                    {
+                        field: field2,
+                        value: "value2",
+                    },
+                ];
                 const value1Encoded = Buffer.from("value1");
                 const value2Encoded = Buffer.from("value2");
 
                 expect(
-                    await client.hset(Buffer.from(key1), fieldValueMap),
+                    await client.hset(Buffer.from(key1), fieldValueList),
                 ).toEqual(2);
                 expect(await client.hvals(key1)).toEqual(["value1", "value2"]);
                 expect(await client.hdel(key1, [field1])).toEqual(1);
@@ -1906,7 +1970,7 @@ export function runBaseTests(config: {
                 expect(await client.hvals("nonExistingHash")).toEqual([]);
 
                 //hvals with binary buffers
-                expect(await client.hset(key2, fieldValueMap)).toEqual(2);
+                expect(await client.hset(key2, fieldValueList)).toEqual(2);
                 expect(await client.hvals(key2, Decoder.Bytes)).toEqual([
                     value1Encoded,
                     value2Encoded,
@@ -1955,8 +2019,10 @@ export function runBaseTests(config: {
                 const key2 = uuidv4();
                 const field = uuidv4();
 
-                expect(await client.hset(key1, { field: "value" })).toBe(1);
-                expect(await client.hstrlen(key1, "field")).toBe(5);
+                expect(
+                    await client.hset(key1, [{ field, value: "value" }]),
+                ).toBe(1);
+                expect(await client.hstrlen(key1, field)).toBe(5);
 
                 // missing value
                 expect(await client.hstrlen(key1, "nonExistingField")).toBe(0);
@@ -1997,9 +2063,12 @@ export function runBaseTests(config: {
                 const data = { "f 1": "v 1", "f 2": "v 2", "f 3": "v 3" };
                 const fields = Object.keys(data);
                 const entries = Object.entries(data);
+                const dataList: HashDataType = entries.map((e) => {
+                    return { field: e[0], value: e[1] };
+                });
                 const encodedFields = fields.map(Buffer.from);
                 const encodedEntries = entries.map((e) => e.map(Buffer.from));
-                expect(await client.hset(key1, data)).toEqual(3);
+                expect(await client.hset(key1, dataList)).toEqual(3);
 
                 expect(fields).toContain(await client.hrandfield(key1));
 
@@ -5735,7 +5804,11 @@ export function runBaseTests(config: {
                 expect(await client.type(key)).toEqual("zset");
                 expect(await client.del([key])).toEqual(1);
 
-                expect(await client.hset(key, { field: "value" })).toEqual(1);
+                expect(
+                    await client.hset(key, [
+                        { field: "field", value: "value" },
+                    ]),
+                ).toEqual(1);
                 expect(await client.type(Buffer.from(key))).toEqual("hash");
                 expect(await client.del([key])).toEqual(1);
 
@@ -5758,25 +5831,25 @@ export function runBaseTests(config: {
                     client instanceof GlideClient
                         ? await client.echo(message, Decoder.String)
                         : await client.echo(message, {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(message, Decoder.Bytes)
                         : await client.echo(message, {
-                              decoder: Decoder.Bytes,
-                          }),
+                            decoder: Decoder.Bytes,
+                        }),
                 ).toEqual(Buffer.from(message));
                 expect(
                     client instanceof GlideClient
                         ? await client.echo(
-                              Buffer.from(message),
-                              Decoder.String,
-                          )
+                            Buffer.from(message),
+                            Decoder.String,
+                        )
                         : await client.echo(Buffer.from(message), {
-                              decoder: Decoder.String,
-                          }),
+                            decoder: Decoder.String,
+                        }),
                 ).toEqual(message);
                 expect(await client.echo(Buffer.from(message))).toEqual(
                     message,
@@ -7395,13 +7468,13 @@ export function runBaseTests(config: {
                 let response =
                     client instanceof GlideClient
                         ? await client.exec(
-                              new Transaction().dump(key1),
-                              Decoder.Bytes,
-                          )
+                            new Transaction().dump(key1),
+                            Decoder.Bytes,
+                        )
                         : await client.exec(
-                              new ClusterTransaction().dump(key1),
-                              { decoder: Decoder.Bytes },
-                          );
+                            new ClusterTransaction().dump(key1),
+                            { decoder: Decoder.Bytes },
+                        );
                 expect(response?.[0]).not.toBeNull();
                 data = response?.[0] as Buffer;
 
@@ -7409,17 +7482,17 @@ export function runBaseTests(config: {
                 response =
                     client instanceof GlideClient
                         ? await client.exec(
-                              new Transaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              Decoder.String,
-                          )
+                            new Transaction()
+                                .restore(key4, 0, data)
+                                .get(key4),
+                            Decoder.String,
+                        )
                         : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key4, 0, data)
-                                  .get(key4),
-                              { decoder: Decoder.String },
-                          );
+                            new ClusterTransaction()
+                                .restore(key4, 0, data)
+                                .get(key4),
+                            { decoder: Decoder.String },
+                        );
                 expect(response?.[0]).toEqual("OK");
                 expect(response?.[1]).toEqual(value);
 
@@ -7427,17 +7500,17 @@ export function runBaseTests(config: {
                 response =
                     client instanceof GlideClient
                         ? await client.exec(
-                              new Transaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              Decoder.Bytes,
-                          )
+                            new Transaction()
+                                .restore(key5, 0, data)
+                                .get(key5),
+                            Decoder.Bytes,
+                        )
                         : await client.exec(
-                              new ClusterTransaction()
-                                  .restore(key5, 0, data)
-                                  .get(key5),
-                              { decoder: Decoder.Bytes },
-                          );
+                            new ClusterTransaction()
+                                .restore(key5, 0, data)
+                                .get(key5),
+                            { decoder: Decoder.Bytes },
+                        );
                 expect(response?.[0]).toEqual("OK");
                 expect(response?.[1]).toEqual(valueEncode);
             }, protocol);
@@ -7824,13 +7897,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
                 conditionalSet: "onlyIfDoesNotExist",
             });
 
@@ -7850,13 +7923,13 @@ export function runBaseTests(config: {
                 expiry: expiryVal as
                     | "keepExisting"
                     | {
-                          type:
-                              | TimeUnit.Seconds
-                              | TimeUnit.Milliseconds
-                              | TimeUnit.UnixSeconds
-                              | TimeUnit.UnixMilliseconds;
-                          count: number;
-                      },
+                        type:
+                        | TimeUnit.Seconds
+                        | TimeUnit.Milliseconds
+                        | TimeUnit.UnixSeconds
+                        | TimeUnit.UnixMilliseconds;
+                        count: number;
+                    },
 
                 conditionalSet: "onlyIfExists",
                 returnOldValue: true,
@@ -7967,9 +8040,12 @@ export function runBaseTests(config: {
                 // The default value of hash-max-listpack-entries is 512
                 for (let i = 0; i < 513; i++) {
                     expect(
-                        await client.hset(hash_hashtable_key, {
-                            [String(i)]: "2",
-                        }),
+                        await client.hset(hash_hashtable_key, [
+                            {
+                                field: i.toString(),
+                                value: "2",
+                            },
+                        ]),
                     ).toEqual(1);
                 }
 
@@ -7978,7 +8054,9 @@ export function runBaseTests(config: {
                 );
 
                 expect(
-                    await client.hset(hash_listpack_key, { "1": "2" }),
+                    await client.hset(hash_listpack_key, [
+                        { field: "1", value: "2" },
+                    ]),
                 ).toEqual(1);
 
                 if (versionLessThan7) {
@@ -10092,23 +10170,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(
@@ -10145,23 +10223,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 0,
-                                  pending: 0,
-                                  "last-delivered-id": "0-0",
-                                  "entries-read": null,
-                                  lag: 3,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 0,
+                                pending: 0,
+                                "last-delivered-id": "0-0",
+                                "entries-read": null,
+                                lag: 3,
+                            },
+                        ],
                 );
 
                 expect(
@@ -10191,23 +10269,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 3,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 3,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 expect(
@@ -10222,23 +10300,23 @@ export function runBaseTests(config: {
                 expect(await client.xinfoGroups(key)).toEqual(
                     cluster.checkIfServerVersionLessThan("7.0.0")
                         ? [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                              },
-                          ]
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                            },
+                        ]
                         : [
-                              {
-                                  name: groupName1,
-                                  consumers: 1,
-                                  pending: 2,
-                                  "last-delivered-id": streamId3,
-                                  "entries-read": 3,
-                                  lag: 0,
-                              },
-                          ],
+                            {
+                                name: groupName1,
+                                consumers: 1,
+                                pending: 2,
+                                "last-delivered-id": streamId3,
+                                "entries-read": 3,
+                                lag: 0,
+                            },
+                        ],
                 );
 
                 // key exists, but it is not a stream
@@ -10430,16 +10508,16 @@ export function runBaseTests(config: {
                     group,
                     cluster.checkIfServerVersionLessThan("6.2.0")
                         ? {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                          }
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                        }
                         : {
-                              start: InfBoundary.NegativeInfinity,
-                              end: InfBoundary.PositiveInfinity,
-                              count: 1,
-                              minIdleTime: 42,
-                          },
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                            minIdleTime: 42,
+                        },
                 );
                 result[0][2] = 0; // overwrite msec counter to avoid test flakyness
                 expect(result).toEqual([["0-1", "consumer", 0, 1]]);

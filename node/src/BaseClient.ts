@@ -319,6 +319,17 @@ class PointerResponse {
     }
 }
 
+/**
+ * Data type which represents how data are returned from hashes or insterted there.
+ * Similar to `Record<GlideString, GlideString>` - see {@link GlideRecord}.
+ */
+export type HashDataType = {
+    /** The hash element name. */
+    field: GlideString;
+    /** The hash element value. */
+    value: GlideString;
+}[];
+
 /** Represents the credentials for connecting to a server. */
 export type RedisCredentials = {
     /**
@@ -1650,22 +1661,21 @@ export class BaseClient {
      * @see {@link https://valkey.io/commands/hset/|valkey.io} for details.
      *
      * @param key - The key of the hash.
-     * @param fieldValueMap - A field-value map consisting of fields and their corresponding values
-     * to be set in the hash stored at the specified key.
+     * @param fieldValueList - A list of objects with field and value as keys of the objects. See - @type {HashDataType}
      * @returns The number of fields that were added.
      *
      * @example
      * ```typescript
      * // Example usage of the hset method
-     * const result = await client.hset("my_hash", {"field": "value", "field2": "value2"});
+     * const result = await client.hset("my_hash", [{"field": "field1", "value": "value1"}, {"field": "field2", "value": "value2"}]);
      * console.log(result); // Output: 2 - Indicates that 2 fields were successfully set in the hash "my_hash".
      * ```
      */
     public async hset(
         key: GlideString,
-        fieldValueMap: Record<string, string>,
+        fieldValueList: HashDataType,
     ): Promise<number> {
-        return this.createWritePromise(createHSet(key, fieldValueMap));
+        return this.createWritePromise(createHSet(key, fieldValueList));
     }
 
     /**
