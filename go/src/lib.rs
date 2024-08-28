@@ -259,6 +259,12 @@ pub unsafe extern "C" fn free_error_message(error_message: *mut c_char) {
 }
 
 /// Converts a double pointer to a vec.
+///
+/// # Safety
+///
+/// `convert_double_pointer_to_vec` returns a `Vec` of u8 slice which holds pointers of `go`
+/// strings. The returned `Vec<&'a [u8]>` is meant to be copied into Rust code. Storing them
+/// for later use will cause the program to crash as the pointers will be freed by go's gc
 unsafe fn convert_double_pointer_to_vec<'a>(
     data: *const *const c_void,
     len: c_ulong,
